@@ -12,6 +12,8 @@
 # No Setup Wizard needed - the system auto-initializes on first run.
 # =============================================================================
 
+name: sub2api
+
 services:
   # ===========================================================================
   # Sub2API Application
