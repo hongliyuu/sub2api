@@ -179,12 +179,16 @@ gateway:
   # Auto-update User-Agent from npm registry (recommended for staying current)
   # 从 npm registry 自动更新 User-Agent（推荐，保持最新）
   user_agent_auto_update: true
-  # Learn and update from client requests (automatically adopt newer claude-cli versions)
-  # 从客户端请求中学习并更新（自动采用更新的 claude-cli 版本）
+  # Learn and update from client requests per-account (adopt newer claude-cli versions)
+  # 从客户端请求中学习并更新（按账号隔离，自动采用更新的 claude-cli 版本）
   user_agent_learn_from_requests: true
   # Auto-update check interval in hours (default: 24)
   # 自动更新检查间隔（小时），默认 24 小时
   user_agent_update_interval_hours: 24
+  # User-Agent cache key prefix (for multi-env isolation)
+  # User-Agent 缓存 key 前缀（用于多环境隔离）
+  # Example: "sub2api:prod"
+  # user_agent_cache_key_prefix: "sub2api:prod"
 
 # =============================================================================
 # Concurrency Wait Configuration

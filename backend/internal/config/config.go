@@ -228,12 +228,16 @@ type GatewayConfig struct {
 	// UserAgentAutoUpdate: 是否启用自动更新 User-Agent（从 npm registry 获取最新版本）
 	UserAgentAutoUpdate bool `mapstructure:"user_agent_auto_update"`
 
-	// UserAgentLearnFromRequests: 是否从客户端请求中学习更新的 User-Agent
+	// UserAgentLearnFromRequests: 是否从客户端请求中学习更新的 User-Agent（按账号隔离）
 	// 当检测到客户端使用更新的 claude-cli 版本时，自动更新
 	UserAgentLearnFromRequests bool `mapstructure:"user_agent_learn_from_requests"`
 
 	// UserAgentUpdateIntervalHours: 自动更新检查间隔（小时），默认 24 小时
 	UserAgentUpdateIntervalHours int `mapstructure:"user_agent_update_interval_hours"`
+
+	// UserAgentCacheKeyPrefix: User-Agent 缓存 key 前缀（用于多环境隔离）
+	// 示例: "sub2api:prod"
+	UserAgentCacheKeyPrefix string `mapstructure:"user_agent_cache_key_prefix"`
 }
 
 // GatewaySchedulingConfig accounts scheduling configuration.

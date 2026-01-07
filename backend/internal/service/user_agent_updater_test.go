@@ -14,9 +14,10 @@ import (
 
 // mockUserAgentCache 模拟缓存
 type mockUserAgentCache struct {
-	userAgent string
-	setError  error
-	getError  error
+	userAgent         string
+	accountUserAgents map[int64]string
+	setError          error
+	getError          error
 }
 
 func (m *mockUserAgentCache) GetLatestUserAgent(ctx context.Context) (string, error) {
@@ -31,6 +32,53 @@ func (m *mockUserAgentCache) SetLatestUserAgent(ctx context.Context, userAgent s
 		return m.setError
 	}
 	m.userAgent = userAgent
+	return nil
+}
+
+func (m *mockUserAgentCache) GetLatestUserAgentForAccount(ctx context.Context, accountID int64) (string, error) {
+	if m.getError != nil {
+		return "", m.getError
+	}
+	if m.accountUserAgents == nil {
+		return "", nil
+	}
+	return m.accountUserAgents[accountID], nil
+}
+
+func (m *mockUserAgentCache) SetLatestUserAgentForAccount(ctx context.Context, accountID int64, userAgent string, ttl time.Duration) error {
+	if m.setError != nil {
+		return m.setError
+	}
+	if m.accountUserAgents == nil {
+		m.accountUserAgents = make(map[int64]string)
+	}
+	m.accountUserAgents[accountID] = userAgent
+	return nil
+}
+
+type notifyUserAgentCache struct {
+	userAgent string
+	called    chan struct{}
+}
+
+func (n *notifyUserAgentCache) GetLatestUserAgent(ctx context.Context) (string, error) {
+	select {
+	case n.called <- struct{}{}:
+	default:
+	}
+	return n.userAgent, nil
+}
+
+func (n *notifyUserAgentCache) SetLatestUserAgent(ctx context.Context, userAgent string, ttl time.Duration) error {
+	n.userAgent = userAgent
+	return nil
+}
+
+func (n *notifyUserAgentCache) GetLatestUserAgentForAccount(ctx context.Context, accountID int64) (string, error) {
+	return "", nil
+}
+
+func (n *notifyUserAgentCache) SetLatestUserAgentForAccount(ctx context.Context, accountID int64, userAgent string, ttl time.Duration) error {
 	return nil
 }
 
@@ -166,6 +214,93 @@ func TestIsNewerVersion(t *testing.T) {
 	}
 }
 
+func TestUpdateGlobalIfNewer_AllowReplaceInvalid(t *testing.T) {
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			DefaultUserAgent: "custom-agent/1.0",
+		},
+	}
+	updater := NewUserAgentUpdater(cfg, &mockUserAgentCache{})
+
+	updated, _ := updater.updateGlobalIfNewer("claude-cli/2.0.0 (external, cli)", false)
+	assert.False(t, updated, "should not replace invalid current without allow flag")
+
+	updated, _ = updater.updateGlobalIfNewer("claude-cli/2.0.0 (external, cli)", true)
+	assert.True(t, updated, "should replace invalid current when allow flag enabled")
+	assert.Equal(t, "claude-cli/2.0.0 (external, cli)", updater.GetUserAgent())
+}
+
+func TestGetUserAgentForAccount_FallbackToGlobal(t *testing.T) {
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			DefaultUserAgent: "claude-cli/2.0.1 (external, cli)",
+		},
+	}
+	updater := NewUserAgentUpdater(cfg, &mockUserAgentCache{})
+
+	ctx := context.Background()
+	got := updater.GetUserAgentForAccount(ctx, 123)
+	assert.Equal(t, cfg.Gateway.DefaultUserAgent, got)
+}
+
+func TestGetUserAgentForAccount_UsesCache(t *testing.T) {
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			DefaultUserAgent: "claude-cli/2.0.1 (external, cli)",
+		},
+	}
+	cache := &mockUserAgentCache{
+		accountUserAgents: map[int64]string{
+			1: "claude-cli/2.0.7 (external, cli)",
+		},
+	}
+	updater := NewUserAgentUpdater(cfg, cache)
+
+	ctx := context.Background()
+	got := updater.GetUserAgentForAccount(ctx, 1)
+	assert.Equal(t, "claude-cli/2.0.7 (external, cli)", got)
+}
+
+func TestUpdateAccountIfNewer_PreventsDowngrade(t *testing.T) {
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			DefaultUserAgent: "claude-cli/2.0.1 (external, cli)",
+		},
+	}
+	updater := NewUserAgentUpdater(cfg, &mockUserAgentCache{})
+	ctx := context.Background()
+	accountID := int64(1)
+
+	updated, _ := updater.updateAccountIfNewer(ctx, accountID, "claude-cli/2.0.5 (external, cli)", true)
+	require.True(t, updated)
+
+	updated, _ = updater.updateAccountIfNewer(ctx, accountID, "claude-cli/2.0.4 (external, cli)", true)
+	assert.False(t, updated)
+	assert.Equal(t, "claude-cli/2.0.5 (external, cli)", updater.GetUserAgentForAccount(ctx, accountID))
+}
+
+func TestLearnFromRequest_RejectsAboveRegistry(t *testing.T) {
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			DefaultUserAgent:           "claude-cli/2.0.1 (external, cli)",
+			UserAgentLearnFromRequests: true,
+		},
+	}
+
+	cache := &mockUserAgentCache{}
+	updater := NewUserAgentUpdater(cfg, cache)
+	updater.latestUA = "claude-cli/2.0.5 (external, cli)"
+	updater.latestUAAt = time.Now()
+
+	ctx := context.Background()
+	accountID := int64(1)
+	updater.LearnFromRequest(ctx, accountID, "claude-cli/2.0.9 (external, cli)")
+
+	accountUA := updater.getAccountUserAgent(ctx, accountID)
+	assert.Equal(t, "", accountUA, "should not learn version above registry")
+	assert.Equal(t, "claude-cli/2.0.1 (external, cli)", updater.GetUserAgentForAccount(ctx, accountID))
+}
+
 // TestLearnFromRequest 测试从请求中学习
 func TestLearnFromRequest(t *testing.T) {
 	tests := []struct {
@@ -220,6 +355,8 @@ func TestLearnFromRequest(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			accountID := int64(1)
+			ctx := context.Background()
 			cfg := &config.Config{
 				Gateway: config.GatewayConfig{
 					DefaultUserAgent:           tt.initialUA,
@@ -229,12 +366,14 @@ func TestLearnFromRequest(t *testing.T) {
 
 			cache := &mockUserAgentCache{}
 			updater := NewUserAgentUpdater(cfg, cache)
+			updater.latestUA = "claude-cli/9.9.9 (external, cli)"
+			updater.latestUAAt = time.Now()
 
 			// 学习新版本
-			updater.LearnFromRequest(tt.clientUA)
+			updater.LearnFromRequest(ctx, accountID, tt.clientUA)
 
 			// 验证结果
-			got := updater.GetUserAgent()
+			got := updater.GetUserAgentForAccount(ctx, accountID)
 			assert.Equal(t, tt.expectedUA, got)
 		})
 	}
@@ -434,6 +573,34 @@ func TestIsLearningEnabled(t *testing.T) {
 	}
 }
 
+func TestStartLoadsCacheWhenLearningEnabled(t *testing.T) {
+	cache := &notifyUserAgentCache{
+		userAgent: "claude-cli/2.0.99 (external, cli)",
+		called:    make(chan struct{}, 1),
+	}
+
+	cfg := &config.Config{
+		Gateway: config.GatewayConfig{
+			DefaultUserAgent:           "custom-agent/1.0",
+			UserAgentAutoUpdate:        false,
+			UserAgentLearnFromRequests: true,
+		},
+	}
+
+	updater := NewUserAgentUpdater(cfg, cache)
+	updater.Start(context.Background())
+
+	select {
+	case <-cache.called:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("expected cache to be loaded when learning enabled")
+	}
+
+	require.Eventually(t, func() bool {
+		return updater.GetUserAgent() == cache.userAgent
+	}, time.Second, 10*time.Millisecond)
+}
+
 // TestConcurrentAccess 测试并发访问安全
 func TestConcurrentAccess(t *testing.T) {
 	cfg := &config.Config{
@@ -445,6 +612,10 @@ func TestConcurrentAccess(t *testing.T) {
 
 	cache := &mockUserAgentCache{}
 	updater := NewUserAgentUpdater(cfg, cache)
+	updater.latestUA = "claude-cli/9.9.9 (external, cli)"
+	updater.latestUAAt = time.Now()
+	ctx := context.Background()
+	accountID := int64(1)
 
 	// 并发读写测试
 	done := make(chan bool)
@@ -455,7 +626,7 @@ func TestConcurrentAccess(t *testing.T) {
 
 			// 写入
 			ua := fmt.Sprintf("claude-cli/2.0.%d (external, cli)", version)
-			updater.LearnFromRequest(ua)
+			updater.LearnFromRequest(ctx, accountID, ua)
 
 			done <- true
 		}(i)
@@ -467,7 +638,7 @@ func TestConcurrentAccess(t *testing.T) {
 	}
 
 	// 验证最终状态有效
-	finalUA := updater.GetUserAgent()
+	finalUA := updater.GetUserAgentForAccount(ctx, accountID)
 	assert.Contains(t, finalUA, "claude-cli/")
 }
 
@@ -607,10 +778,14 @@ func BenchmarkLearnFromRequest(b *testing.B) {
 	cache := &mockUserAgentCache{}
 	updater := NewUserAgentUpdater(cfg, cache)
 	clientUA := "claude-cli/2.0.70 (external, cli)"
+	updater.latestUA = "claude-cli/9.9.9 (external, cli)"
+	updater.latestUAAt = time.Now()
+	ctx := context.Background()
+	accountID := int64(1)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		updater.LearnFromRequest(clientUA)
+		updater.LearnFromRequest(ctx, accountID, clientUA)
 	}
 }
 

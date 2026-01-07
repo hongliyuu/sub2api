@@ -22,6 +22,8 @@ import (
 type UserAgentCache interface {
 	GetLatestUserAgent(ctx context.Context) (string, error)
 	SetLatestUserAgent(ctx context.Context, userAgent string, ttl time.Duration) error
+	GetLatestUserAgentForAccount(ctx context.Context, accountID int64) (string, error)
+	SetLatestUserAgentForAccount(ctx context.Context, accountID int64, userAgent string, ttl time.Duration) error
 }
 
 // UserAgentUpdater 自动更新 User-Agent 服务
@@ -30,9 +32,12 @@ type UserAgentUpdater struct {
 	cache         UserAgentCache
 	mu            sync.RWMutex
 	currentUA     string
+	accountUAs    map[int64]string
 	stopCh        chan struct{}
 	httpClient    *http.Client
 	learningRegex *regexp.Regexp
+	latestUA      string
+	latestUAAt    time.Time
 }
 
 // NewUserAgentUpdater 创建 User-Agent 更新服务
@@ -41,8 +46,9 @@ func NewUserAgentUpdater(cfg *config.Config, cache UserAgentCache) *UserAgentUpd
 		cfg:   cfg,
 		cache: cache,
 		// 初始化为配置的默认值
-		currentUA: getConfiguredUserAgent(cfg),
-		stopCh:    make(chan struct{}),
+		currentUA:  getConfiguredUserAgent(cfg),
+		accountUAs: make(map[int64]string),
+		stopCh:     make(chan struct{}),
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -53,18 +59,20 @@ func NewUserAgentUpdater(cfg *config.Config, cache UserAgentCache) *UserAgentUpd
 
 // Start 启动自动更新服务
 func (u *UserAgentUpdater) Start(ctx context.Context) {
-	if !u.isAutoUpdateEnabled() {
-		log.Println("[UserAgentUpdater] Auto-update disabled, using configured value")
+	if !u.isAutoUpdateEnabled() && !u.isLearningEnabled() {
+		log.Println("[UserAgentUpdater] Auto-update and learning disabled, using configured value")
 		return
 	}
 
-	log.Println("[UserAgentUpdater] Starting auto-update service")
+	log.Println("[UserAgentUpdater] Starting User-Agent updater")
 
-	// 立即尝试从缓存加载
+	// 立即尝试从缓存加载（学习启用时也需要）
 	go u.loadFromCache(ctx)
 
-	// 启动后台更新任务
-	go u.updateLoop(ctx)
+	if u.isAutoUpdateEnabled() {
+		// 启动后台更新任务
+		go u.updateLoop(ctx)
+	}
 }
 
 // Stop 停止更新服务
@@ -84,10 +92,26 @@ func (u *UserAgentUpdater) GetUserAgent() string {
 	return u.currentUA
 }
 
-// LearnFromRequest 从客户端请求中学习 User-Agent
+// GetUserAgentForAccount 获取账号范围内的 User-Agent（无账号配置时回退到全局）
+func (u *UserAgentUpdater) GetUserAgentForAccount(ctx context.Context, accountID int64) string {
+	if accountID <= 0 {
+		return u.GetUserAgent()
+	}
+
+	if ua := u.getAccountUserAgent(ctx, accountID); ua != "" {
+		return ua
+	}
+
+	return u.GetUserAgent()
+}
+
+// LearnFromRequest 从客户端请求中学习 User-Agent（按账号隔离）
 // 当检测到更新的 claude-cli 版本时，自动更新
-func (u *UserAgentUpdater) LearnFromRequest(userAgent string) {
+func (u *UserAgentUpdater) LearnFromRequest(ctx context.Context, accountID int64, userAgent string) {
 	if !u.isLearningEnabled() {
+		return
+	}
+	if accountID <= 0 {
 		return
 	}
 
@@ -102,9 +126,23 @@ func (u *UserAgentUpdater) LearnFromRequest(userAgent string) {
 		return
 	}
 
+	latestUA, err := u.getLatestRegistryUA(ctx)
+	if err != nil {
+		log.Printf("[UserAgentUpdater] Skip learning, registry unavailable: %v", err)
+		return
+	}
+	latestVersion := u.extractVersion(latestUA)
+	if latestVersion == "" {
+		return
+	}
+	if u.isNewerVersion(matches[1], latestVersion) {
+		log.Printf("[UserAgentUpdater] Skip learning, version %s > registry %s", matches[1], latestVersion)
+		return
+	}
+
 	// 如果客户端版本更新，则更新（原子比较 + 更新）
-	if updated, previous := u.updateIfNewer(userAgent); updated {
-		log.Printf("[UserAgentUpdater] Learned newer version from request: %s (previous: %s)", userAgent, previous)
+	if updated, previous := u.updateAccountIfNewer(ctx, accountID, userAgent, true); updated {
+		log.Printf("[UserAgentUpdater] Learned newer version for account %d: %s (previous: %s)", accountID, userAgent, previous)
 	}
 }
 
@@ -139,7 +177,7 @@ func (u *UserAgentUpdater) checkAndUpdate(ctx context.Context) {
 	log.Println("[UserAgentUpdater] Checking for updates...")
 
 	// 从 npm registry 获取最新版本
-	latestUA, err := u.fetchLatestFromRegistry(ctx)
+	latestUA, err := u.getLatestRegistryUA(ctx)
 	if err != nil {
 		log.Printf("[UserAgentUpdater] Failed to fetch from npm registry: %v", err)
 		return
@@ -149,7 +187,7 @@ func (u *UserAgentUpdater) checkAndUpdate(ctx context.Context) {
 		return
 	}
 
-	if updated, previous := u.updateIfNewer(latestUA); updated {
+	if updated, previous := u.updateGlobalIfNewer(latestUA, true); updated {
 		log.Printf("[UserAgentUpdater] Updating User-Agent: %s -> %s", previous, latestUA)
 	} else if latestUA == u.GetUserAgent() {
 		log.Println("[UserAgentUpdater] Already using latest version")
@@ -203,7 +241,33 @@ func (u *UserAgentUpdater) fetchLatestFromRegistry(ctx context.Context) (string,
 	// 构建 User-Agent
 	// Claude Code 的标准格式：claude-cli/x.y.z (external, cli)
 	userAgent := fmt.Sprintf("claude-cli/%s (external, cli)", pkgInfo.Version)
+	u.setLatestRegistryUA(userAgent)
 	return userAgent, nil
+}
+
+// getLatestRegistryUA 获取缓存的 registry 最新版本（过期则刷新）
+func (u *UserAgentUpdater) getLatestRegistryUA(ctx context.Context) (string, error) {
+	cacheTTL := u.getRegistryCacheTTL()
+	if cacheTTL > 0 {
+		u.mu.RLock()
+		cachedUA := u.latestUA
+		cachedAt := u.latestUAAt
+		u.mu.RUnlock()
+		if cachedUA != "" && time.Since(cachedAt) < cacheTTL {
+			return cachedUA, nil
+		}
+	}
+	return u.fetchLatestFromRegistry(ctx)
+}
+
+func (u *UserAgentUpdater) setLatestRegistryUA(userAgent string) {
+	if strings.TrimSpace(userAgent) == "" {
+		return
+	}
+	u.mu.Lock()
+	u.latestUA = userAgent
+	u.latestUAAt = time.Now()
+	u.mu.Unlock()
 }
 
 // updateUserAgent 更新 User-Agent 并缓存
@@ -232,15 +296,15 @@ func (u *UserAgentUpdater) loadFromCache(ctx context.Context) {
 	}
 
 	if cachedUA != "" {
-		if updated, _ := u.updateIfNewer(cachedUA); updated {
+		if updated, _ := u.updateGlobalIfNewer(cachedUA, true); updated {
 			log.Printf("[UserAgentUpdater] Loaded from cache: %s", cachedUA)
 		}
 	}
 }
 
-// updateIfNewer 在同一把锁内完成比较与更新，避免并发覆盖
+// updateGlobalIfNewer 在同一把锁内完成比较与更新，避免并发覆盖
 // 返回是否更新，以及更新前的 User-Agent
-func (u *UserAgentUpdater) updateIfNewer(newUA string) (bool, string) {
+func (u *UserAgentUpdater) updateGlobalIfNewer(newUA string, allowReplaceInvalid bool) (bool, string) {
 	newUA = strings.TrimSpace(newUA)
 	if newUA == "" {
 		return false, ""
@@ -254,7 +318,12 @@ func (u *UserAgentUpdater) updateIfNewer(newUA string) (bool, string) {
 	u.mu.Lock()
 	previous := u.currentUA
 	currentVersion := u.extractVersion(previous)
-	if !u.isNewerVersion(newVersion, currentVersion) {
+	if currentVersion == "" {
+		if !allowReplaceInvalid {
+			u.mu.Unlock()
+			return false, previous
+		}
+	} else if !u.isNewerVersion(newVersion, currentVersion) {
 		u.mu.Unlock()
 		return false, previous
 	}
@@ -262,6 +331,54 @@ func (u *UserAgentUpdater) updateIfNewer(newUA string) (bool, string) {
 	u.mu.Unlock()
 
 	u.cacheUserAgentIfCurrent(newUA)
+	return true, previous
+}
+
+// updateAccountIfNewer 在账号维度完成比较与更新（避免跨租户污染）
+// 返回是否更新，以及更新前的 User-Agent
+func (u *UserAgentUpdater) updateAccountIfNewer(ctx context.Context, accountID int64, newUA string, allowReplaceInvalid bool) (bool, string) {
+	if accountID <= 0 {
+		return false, ""
+	}
+
+	newUA = strings.TrimSpace(newUA)
+	if newUA == "" {
+		return false, ""
+	}
+
+	newVersion := u.extractVersion(newUA)
+	if newVersion == "" {
+		return false, ""
+	}
+
+	if ctx != nil {
+		_ = u.getAccountUserAgent(ctx, accountID)
+	}
+
+	u.mu.Lock()
+	previous := u.accountUAs[accountID]
+	if previous == "" {
+		previous = u.currentUA
+	}
+
+	currentVersion := u.extractVersion(previous)
+	if currentVersion == "" {
+		if !allowReplaceInvalid {
+			u.mu.Unlock()
+			return false, previous
+		}
+	} else if !u.isNewerVersion(newVersion, currentVersion) {
+		u.mu.Unlock()
+		return false, previous
+	}
+
+	if u.accountUAs == nil {
+		u.accountUAs = make(map[int64]string)
+	}
+	u.accountUAs[accountID] = newUA
+	u.mu.Unlock()
+
+	u.cacheUserAgentForAccountIfCurrent(ctx, accountID, newUA)
 	return true, previous
 }
 
@@ -280,6 +397,53 @@ func (u *UserAgentUpdater) cacheUserAgentIfCurrent(userAgent string) {
 	if err := u.cache.SetLatestUserAgent(ctx, userAgent, 24*time.Hour); err != nil {
 		log.Printf("[UserAgentUpdater] Failed to cache User-Agent: %v", err)
 	}
+}
+
+func (u *UserAgentUpdater) cacheUserAgentForAccountIfCurrent(ctx context.Context, accountID int64, userAgent string) {
+	if u.cache == nil || accountID <= 0 {
+		return
+	}
+	if u.getAccountUserAgent(ctx, accountID) != userAgent {
+		return
+	}
+
+	cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := u.cache.SetLatestUserAgentForAccount(cacheCtx, accountID, userAgent, 24*time.Hour); err != nil {
+		log.Printf("[UserAgentUpdater] Failed to cache User-Agent for account %d: %v", accountID, err)
+	}
+}
+
+func (u *UserAgentUpdater) getAccountUserAgent(ctx context.Context, accountID int64) string {
+	if accountID <= 0 {
+		return ""
+	}
+
+	u.mu.RLock()
+	ua := u.accountUAs[accountID]
+	u.mu.RUnlock()
+	if strings.TrimSpace(ua) != "" {
+		return ua
+	}
+
+	if u.cache == nil {
+		return ""
+	}
+
+	cachedUA, err := u.cache.GetLatestUserAgentForAccount(ctx, accountID)
+	if err != nil || cachedUA == "" {
+		return ""
+	}
+
+	u.mu.Lock()
+	if u.accountUAs == nil {
+		u.accountUAs = make(map[int64]string)
+	}
+	u.accountUAs[accountID] = cachedUA
+	u.mu.Unlock()
+
+	return cachedUA
 }
 
 // extractVersion 从 User-Agent 中提取版本号
@@ -353,6 +517,14 @@ func (u *UserAgentUpdater) getUpdateInterval() time.Duration {
 		return 24 * time.Hour // 默认每天检查一次
 	}
 	return time.Duration(u.cfg.Gateway.UserAgentUpdateIntervalHours) * time.Hour
+}
+
+func (u *UserAgentUpdater) getRegistryCacheTTL() time.Duration {
+	interval := u.getUpdateInterval()
+	if interval <= 0 {
+		return 6 * time.Hour
+	}
+	return interval
 }
 
 // getConfiguredUserAgent 获取配置的 User-Agent

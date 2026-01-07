@@ -1,10 +1,10 @@
 # =============================================================================
-# Sub2API Docker Compose Test Configuration (Local Build)
+# Sub2API Docker Compose Host Configuration (Local Build)
 # =============================================================================
 # Quick Start:
 #   1. Copy .env.example to .env and configure
-#   2. docker-compose -f docker-compose-test.yml up -d --build
-#   3. Check logs: docker-compose -f docker-compose-test.yml logs -f sub2api
+#   2. docker-compose -f docker-compose-host.yml up -d --build
+#   3. Check logs: docker-compose -f docker-compose-host.yml logs -f sub2api
 #   4. Access: http://localhost:8080
 #
 # This configuration builds the image from source (Dockerfile in project root).
@@ -17,7 +17,7 @@ services:
   # Sub2API Application
   # ===========================================================================
   sub2api:
-    image: sub2api:latest
+    image: weishaw/sub2api:latest
     build:
       context: ..
       dockerfile: Dockerfile
@@ -50,8 +50,9 @@ services:
       # =======================================================================
       # Database Configuration (PostgreSQL)
       # =======================================================================
+      # Using host network: point to host/external DB by DATABASE_HOST/DATABASE_PORT
       - DATABASE_HOST=${DATABASE_HOST:-127.0.0.1}
-      - DATABASE_PORT=5432
+      - DATABASE_PORT=${DATABASE_PORT:-5432}
       - DATABASE_USER=${POSTGRES_USER:-sub2api}
       - DATABASE_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       - DATABASE_DBNAME=${POSTGRES_DB:-sub2api}
@@ -60,8 +61,9 @@ services:
       # =======================================================================
       # Redis Configuration
       # =======================================================================
+      # Using host network: point to host/external Redis by REDIS_HOST/REDIS_PORT
       - REDIS_HOST=${REDIS_HOST:-127.0.0.1}
-      - REDIS_PORT=6379
+      - REDIS_PORT=${REDIS_PORT:-6379}
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
       - REDIS_DB=${REDIS_DB:-0}
 
@@ -133,13 +135,17 @@ services:
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       - POSTGRES_DB=${POSTGRES_DB:-sub2api}
       - TZ=${TZ:-Asia/Shanghai}
+    command:
+      - "postgres"
+      - "-c"
+      - "listen_addresses=127.0.0.1"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sub2api} -d ${POSTGRES_DB:-sub2api}"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
-    # Note: host network mode binds PostgreSQL to host ports (default 5432).
+    # Note: bound to localhost only; not exposed to external network by default.
 
   # ===========================================================================
   # Redis Cache
@@ -157,6 +163,7 @@ services:
       - redis_data:/data
     command: >
       redis-server
+      --bind 127.0.0.1
       --save 60 1
       --appendonly yes
       --appendfsync everysec

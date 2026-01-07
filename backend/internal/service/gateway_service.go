@@ -316,11 +316,11 @@ func (s *GatewayService) hashContent(content string) string {
 }
 
 // getDefaultUserAgent 获取有效的默认 User-Agent
-// 优先级：自动更新器 > 配置文件 > 环境变量 DEFAULT_USER_AGENT > 内置默认值
-func (s *GatewayService) getDefaultUserAgent() string {
-	// 1. 如果启用了自动更新，使用更新器的值
+// 优先级：更新器（账号级） > 配置文件 > 环境变量 DEFAULT_USER_AGENT > 内置默认值
+func (s *GatewayService) getDefaultUserAgent(ctx context.Context, accountID int64) string {
+	// 1. 如果启用了更新器，使用账号级别值
 	if s.userAgentUpdater != nil {
-		return s.userAgentUpdater.GetUserAgent()
+		return s.userAgentUpdater.GetUserAgentForAccount(ctx, accountID)
 	}
 	// 2. 使用配置文件中的值
 	if s.cfg != nil && strings.TrimSpace(s.cfg.Gateway.DefaultUserAgent) != "" {
@@ -1433,8 +1433,8 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 	// 从客户端请求中学习 User-Agent（如果启用了学习功能）
 	if s.userAgentUpdater != nil {
 		clientUA := c.GetHeader("User-Agent")
-		if clientUA != "" {
-			s.userAgentUpdater.LearnFromRequest(clientUA)
+		if clientUA != "" && account != nil {
+			s.userAgentUpdater.LearnFromRequest(ctx, account.ID, clientUA)
 		}
 	}
 
@@ -1452,7 +1452,11 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 	}
 	// 确保有 User-Agent（非 OAuth 账号使用配置的默认 User-Agent）
 	if req.Header.Get("user-agent") == "" || req.Header.Get("user-agent") == "Go-http-client/1.1" {
-		req.Header.Set("user-agent", s.getDefaultUserAgent())
+		accountID := int64(0)
+		if account != nil {
+			accountID = account.ID
+		}
+		req.Header.Set("user-agent", s.getDefaultUserAgent(ctx, accountID))
 	}
 
 	// 处理anthropic-beta header（OAuth账号需要特殊处理）
@@ -2347,8 +2351,8 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 	// 从客户端请求中学习 User-Agent（如果启用了学习功能）
 	if s.userAgentUpdater != nil {
 		clientUA := c.GetHeader("User-Agent")
-		if clientUA != "" {
-			s.userAgentUpdater.LearnFromRequest(clientUA)
+		if clientUA != "" && account != nil {
+			s.userAgentUpdater.LearnFromRequest(ctx, account.ID, clientUA)
 		}
 	}
 
@@ -2369,7 +2373,11 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 	}
 	// 确保有 User-Agent（非 OAuth 账号使用配置的默认 User-Agent）
 	if req.Header.Get("user-agent") == "" || req.Header.Get("user-agent") == "Go-http-client/1.1" {
-		req.Header.Set("user-agent", s.getDefaultUserAgent())
+		accountID := int64(0)
+		if account != nil {
+			accountID = account.ID
+		}
+		req.Header.Set("user-agent", s.getDefaultUserAgent(ctx, accountID))
 	}
 
 	// OAuth 账号：处理 anthropic-beta header

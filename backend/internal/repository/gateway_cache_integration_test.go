@@ -20,7 +20,7 @@ type GatewayCacheSuite struct {
 
 func (s *GatewayCacheSuite) SetupTest() {
 	s.IntegrationRedisSuite.SetupTest()
-	s.cache = NewGatewayCache(s.rdb)
+	s.cache = NewGatewayCache(s.rdb, nil)
 }
 
 func (s *GatewayCacheSuite) TestGetSessionAccountID_Missing() {

@@ -14,7 +14,8 @@ import (
 
 // 简单的缓存实现，用于测试
 type testCache struct {
-	userAgent string
+	userAgent         string
+	accountUserAgents map[int64]string
 }
 
 func (c *testCache) GetLatestUserAgent(ctx context.Context) (string, error) {
@@ -30,13 +31,30 @@ func (c *testCache) SetLatestUserAgent(ctx context.Context, userAgent string, tt
 	return nil
 }
 
+func (c *testCache) GetLatestUserAgentForAccount(ctx context.Context, accountID int64) (string, error) {
+	if c.accountUserAgents == nil {
+		return "", nil
+	}
+	return c.accountUserAgents[accountID], nil
+}
+
+func (c *testCache) SetLatestUserAgentForAccount(ctx context.Context, accountID int64, userAgent string, ttl time.Duration) error {
+	if c.accountUserAgents == nil {
+		c.accountUserAgents = make(map[int64]string)
+	}
+	c.accountUserAgents[accountID] = userAgent
+	fmt.Printf("✅ 账号缓存已更新: %d -> %s (TTL: %v)\n", accountID, userAgent, ttl)
+	return nil
+}
+
 func main() {
 	// 命令行参数
 	var (
-		testMode = flag.String("mode", "fetch", "测试模式: fetch, learn, compare, version")
-		clientUA = flag.String("client-ua", "", "客户端 User-Agent（用于 learn 模式）")
-		ver1     = flag.String("ver1", "", "版本号1（用于 compare 模式）")
-		ver2     = flag.String("ver2", "", "版本号2（用于 compare 模式）")
+		testMode  = flag.String("mode", "fetch", "测试模式: fetch, learn, compare, version")
+		clientUA  = flag.String("client-ua", "", "客户端 User-Agent（用于 learn 模式）")
+		ver1      = flag.String("ver1", "", "版本号1（用于 compare 模式）")
+		ver2      = flag.String("ver2", "", "版本号2（用于 compare 模式）")
+		accountID = flag.Int64("account-id", 1, "账号 ID（用于 learn/compare 模式）")
 	)
 	flag.Parse()
 
@@ -65,11 +83,11 @@ func main() {
 	case "fetch":
 		testFetchFromRegistry(updater)
 	case "learn":
-		testLearnFromRequest(updater, *clientUA)
+		testLearnFromRequest(updater, *clientUA, *accountID)
 	case "compare":
-		testCompareVersions(updater, *ver1, *ver2)
+		testCompareVersions(updater, *ver1, *ver2, *accountID)
 	case "version":
-		testExtractVersion(updater, *clientUA)
+		testExtractVersion(updater, *clientUA, *accountID)
 	default:
 		fmt.Printf("❌ 未知的测试模式: %s\n", *testMode)
 		fmt.Println()
@@ -115,7 +133,7 @@ func testFetchFromRegistry(updater *service.UserAgentUpdater) {
 }
 
 // testLearnFromRequest 测试从客户端请求学习
-func testLearnFromRequest(updater *service.UserAgentUpdater, clientUA string) {
+func testLearnFromRequest(updater *service.UserAgentUpdater, clientUA string, accountID int64) {
 	fmt.Println("🎓 测试从客户端请求学习功能")
 	fmt.Println(repeatString("-", 60))
 	fmt.Println()
@@ -134,9 +152,10 @@ func testLearnFromRequest(updater *service.UserAgentUpdater, clientUA string) {
 	fmt.Println()
 
 	fmt.Println("🔄 执行学习...")
-	updater.LearnFromRequest(clientUA)
+	ctx := context.Background()
+	updater.LearnFromRequest(ctx, accountID, clientUA)
 
-	newUA := updater.GetUserAgent()
+	newUA := updater.GetUserAgentForAccount(ctx, accountID)
 	fmt.Println()
 	fmt.Printf("📊 最终状态:\n")
 	fmt.Printf("   系统 User-Agent: %s\n", newUA)
@@ -151,7 +170,7 @@ func testLearnFromRequest(updater *service.UserAgentUpdater, clientUA string) {
 }
 
 // testCompareVersions 测试版本比较
-func testCompareVersions(updater *service.UserAgentUpdater, ver1, ver2 string) {
+func testCompareVersions(updater *service.UserAgentUpdater, ver1, ver2 string, accountID int64) {
 	fmt.Println("🔍 测试版本比较功能")
 	fmt.Println(repeatString("-", 60))
 	fmt.Println()
@@ -173,12 +192,13 @@ func testCompareVersions(updater *service.UserAgentUpdater, ver1, ver2 string) {
 	// 实际使用中，我们通过构造 User-Agent 来间接测试
 	ua1 := fmt.Sprintf("claude-cli/%s (external, cli)", ver1)
 	ua2 := fmt.Sprintf("claude-cli/%s (external, cli)", ver2)
+	ctx := context.Background()
 
 	fmt.Println("🔄 测试场景1: 版本1 是否比版本2 新")
-	updater.LearnFromRequest(ua2) // 设置为版本2
-	oldUA := updater.GetUserAgent()
-	updater.LearnFromRequest(ua1) // 尝试学习版本1
-	newUA := updater.GetUserAgent()
+	updater.LearnFromRequest(ctx, accountID, ua2) // 设置为版本2
+	oldUA := updater.GetUserAgentForAccount(ctx, accountID)
+	updater.LearnFromRequest(ctx, accountID, ua1) // 尝试学习版本1
+	newUA := updater.GetUserAgentForAccount(ctx, accountID)
 
 	if newUA != oldUA {
 		fmt.Printf("   结果: %s > %s ✅\n", ver1, ver2)
@@ -188,10 +208,10 @@ func testCompareVersions(updater *service.UserAgentUpdater, ver1, ver2 string) {
 	fmt.Println()
 
 	fmt.Println("🔄 测试场景2: 版本2 是否比版本1 新")
-	updater.LearnFromRequest(ua1) // 设置为版本1
-	oldUA = updater.GetUserAgent()
-	updater.LearnFromRequest(ua2) // 尝试学习版本2
-	newUA = updater.GetUserAgent()
+	updater.LearnFromRequest(ctx, accountID, ua1) // 设置为版本1
+	oldUA = updater.GetUserAgentForAccount(ctx, accountID)
+	updater.LearnFromRequest(ctx, accountID, ua2) // 尝试学习版本2
+	newUA = updater.GetUserAgentForAccount(ctx, accountID)
 
 	if newUA != oldUA {
 		fmt.Printf("   结果: %s > %s ✅\n", ver2, ver1)
@@ -202,7 +222,7 @@ func testCompareVersions(updater *service.UserAgentUpdater, ver1, ver2 string) {
 }
 
 // testExtractVersion 测试版本号提取
-func testExtractVersion(updater *service.UserAgentUpdater, userAgent string) {
+func testExtractVersion(updater *service.UserAgentUpdater, userAgent string, accountID int64) {
 	fmt.Println("🔧 测试版本号提取功能")
 	fmt.Println(repeatString("-", 60))
 	fmt.Println()
@@ -217,8 +237,9 @@ func testExtractVersion(updater *service.UserAgentUpdater, userAgent string) {
 	fmt.Println()
 
 	// 通过更新器间接测试（设置后再获取）
-	updater.LearnFromRequest(userAgent)
-	result := updater.GetUserAgent()
+	ctx := context.Background()
+	updater.LearnFromRequest(ctx, accountID, userAgent)
+	result := updater.GetUserAgentForAccount(ctx, accountID)
 
 	if result == userAgent {
 		fmt.Println("✅ 格式有效，成功提取版本号")
@@ -253,10 +274,10 @@ func printUsage() {
 	fmt.Println("     go run main.go -mode fetch")
 	fmt.Println()
 	fmt.Println("  2. 测试从客户端学习:")
-	fmt.Println("     go run main.go -mode learn -client-ua \"claude-cli/2.0.99 (external, cli)\"")
+	fmt.Println("     go run main.go -mode learn -client-ua \"claude-cli/2.0.99 (external, cli)\" -account-id 1")
 	fmt.Println()
 	fmt.Println("  3. 测试版本比较:")
-	fmt.Println("     go run main.go -mode compare -ver1 2.0.70 -ver2 2.0.62")
+	fmt.Println("     go run main.go -mode compare -ver1 2.0.70 -ver2 2.0.62 -account-id 1")
 	fmt.Println()
 	fmt.Println("  4. 测试版本提取:")
 	fmt.Println("     go run main.go -mode version -client-ua \"claude-cli/2.0.62 (external, cli)\"")
