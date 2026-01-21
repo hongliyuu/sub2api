@@ -6,6 +6,7 @@
 import { apiClient } from './client'
 import type {
   LoginRequest,
+  LDAPLoginRequest,
   RegisterRequest,
   AuthResponse,
   CurrentUserResponse,
@@ -43,6 +44,21 @@ export function clearAuthToken(): void {
  */
 export async function login(credentials: LoginRequest): Promise<AuthResponse> {
   const { data } = await apiClient.post<AuthResponse>('/auth/login', credentials)
+
+  // Store token and user data
+  setAuthToken(data.access_token)
+  localStorage.setItem('auth_user', JSON.stringify(data.user))
+
+  return data
+}
+
+/**
+ * LDAP user login
+ * @param credentials - LDAP username and password
+ * @returns Authentication response with token and user data
+ */
+export async function ldapLogin(credentials: LDAPLoginRequest): Promise<AuthResponse> {
+  const { data } = await apiClient.post<AuthResponse>('/auth/ldap/login', credentials)
 
   // Store token and user data
   setAuthToken(data.access_token)
@@ -135,6 +151,7 @@ export async function validatePromoCode(code: string): Promise<ValidatePromoCode
 
 export const authAPI = {
   login,
+  ldapLogin,
   register,
   getCurrentUser,
   logout,

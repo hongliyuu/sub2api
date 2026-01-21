@@ -49,6 +49,12 @@ export interface LoginRequest {
   turnstile_token?: string
 }
 
+export interface LDAPLoginRequest {
+  username: string
+  password: string
+}
+
+
 export interface RegisterRequest {
   email: string
   password: string
