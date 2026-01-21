@@ -62,6 +62,7 @@ type Config struct {
 	Timezone     string                     `mapstructure:"timezone"` // e.g. "Asia/Shanghai", "UTC"
 	Gemini       GeminiConfig               `mapstructure:"gemini"`
 	Update       UpdateConfig               `mapstructure:"update"`
+	LDAP         LDAPConfig                 `mapstructure:"ldap"`
 }
 
 type GeminiConfig struct {
@@ -92,6 +93,43 @@ type UpdateConfig struct {
 	// 例如: "http://127.0.0.1:7890", "socks5://127.0.0.1:1080"
 	ProxyURL string `mapstructure:"proxy_url"`
 }
+
+// LDAPConfig LDAP 认证配置
+type LDAPConfig struct {
+	// Enabled 是否启用 LDAP 认证
+	Enabled bool `mapstructure:"enabled"`
+	// Host LDAP 服务器地址
+	Host string `mapstructure:"host"`
+	// Port LDAP 服务器端口（389 或 636）
+	Port int `mapstructure:"port"`
+	// UseTLS 是否使用 LDAPS（LDAP over SSL/TLS）
+	UseTLS bool `mapstructure:"use_tls"`
+	// UseStartTLS 是否使用 StartTLS 升级连接
+	UseStartTLS bool `mapstructure:"use_start_tls"`
+	// SkipTLSVerify 是否跳过 TLS 证书验证（仅开发环境）
+	SkipTLSVerify bool `mapstructure:"skip_tls_verify"`
+	// BindDN 管理员 DN（用于搜索用户）
+	BindDN string `mapstructure:"bind_dn"`
+	// BindPassword 管理员密码
+	BindPassword string `mapstructure:"bind_password"`
+	// BaseDN 搜索基准 DN
+	BaseDN string `mapstructure:"base_dn"`
+	// UserFilter 用户搜索过滤器（如 "(uid=%s)"）
+	UserFilter string `mapstructure:"user_filter"`
+	// Attributes 用户属性映射
+	Attributes LDAPAttributesConfig `mapstructure:"attributes"`
+}
+
+// LDAPAttributesConfig LDAP 用户属性映射配置
+type LDAPAttributesConfig struct {
+	// Username 用户名属性（默认 "uid"）
+	Username string `mapstructure:"username"`
+	// Email 邮箱属性（默认 "mail"）
+	Email string `mapstructure:"email"`
+	// DisplayName 显示名称属性（默认 "cn"）
+	DisplayName string `mapstructure:"display_name"`
+}
+
 
 type LinuxDoConnectConfig struct {
 	Enabled             bool   `mapstructure:"enabled"`
@@ -869,6 +907,21 @@ func setDefaults() {
 	viper.SetDefault("gemini.oauth.client_secret", "")
 	viper.SetDefault("gemini.oauth.scopes", "")
 	viper.SetDefault("gemini.quota.policy", "")
+
+	// LDAP
+	viper.SetDefault("ldap.enabled", false)
+	viper.SetDefault("ldap.host", "")
+	viper.SetDefault("ldap.port", 389)
+	viper.SetDefault("ldap.use_tls", false)
+	viper.SetDefault("ldap.use_start_tls", false)
+	viper.SetDefault("ldap.skip_tls_verify", false)
+	viper.SetDefault("ldap.bind_dn", "")
+	viper.SetDefault("ldap.bind_password", "")
+	viper.SetDefault("ldap.base_dn", "")
+	viper.SetDefault("ldap.user_filter", "(uid=%s)")
+	viper.SetDefault("ldap.attributes.username", "uid")
+	viper.SetDefault("ldap.attributes.email", "mail")
+	viper.SetDefault("ldap.attributes.display_name", "cn")
 }
 
 func (c *Config) Validate() error {

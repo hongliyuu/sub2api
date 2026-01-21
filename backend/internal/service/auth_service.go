@@ -13,6 +13,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ldap"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -53,6 +54,7 @@ type AuthService struct {
 	turnstileService  *TurnstileService
 	emailQueueService *EmailQueueService
 	promoService      *PromoService
+	ldapClient        *ldap.Client
 }
 
 // NewAuthService 创建认证服务实例
@@ -64,6 +66,7 @@ func NewAuthService(
 	turnstileService *TurnstileService,
 	emailQueueService *EmailQueueService,
 	promoService *PromoService,
+	ldapClient *ldap.Client,
 ) *AuthService {
 	return &AuthService{
 		userRepo:          userRepo,
@@ -73,6 +76,7 @@ func NewAuthService(
 		turnstileService:  turnstileService,
 		emailQueueService: emailQueueService,
 		promoService:      promoService,
+		ldapClient:        ldapClient,
 	}
 }
 
@@ -580,3 +584,114 @@ func (s *AuthService) RefreshToken(ctx context.Context, oldTokenString string) (
 	// 生成新token
 	return s.GenerateToken(user)
 }
+
+// AuthenticateWithLDAP 使用 LDAP 认证用户
+// 返回 JWT token 和用户信息
+func (s *AuthService) AuthenticateWithLDAP(ctx context.Context, username, password string) (string, *User, error) {
+	// 检查 LDAP 是否启用
+	if s.ldapClient == nil {
+		return "", nil, infraerrors.BadRequest("LDAP_NOT_ENABLED", "LDAP authentication is not enabled")
+	}
+
+	// 使用 LDAP 认证
+	userInfo, err := s.ldapClient.Authenticate(username, password)
+	if err != nil {
+		log.Printf("[Auth] LDAP authentication failed for user %s: %v", username, err)
+		return "", nil, ErrInvalidCredentials
+	}
+
+	// 查找或创建本地用户
+	user, err := s.FindOrCreateLDAPUser(ctx, userInfo)
+	if err != nil {
+		log.Printf("[Auth] Failed to find or create LDAP user %s: %v", username, err)
+		return "", nil, err
+	}
+
+	// 检查用户状态
+	if !user.IsActive() {
+		return "", nil, ErrUserNotActive
+	}
+
+	// 生成 JWT token
+	token, err := s.GenerateToken(user)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return token, user, nil
+}
+
+// FindOrCreateLDAPUser 查找或创建 LDAP 用户
+func (s *AuthService) FindOrCreateLDAPUser(ctx context.Context, userInfo *ldap.UserInfo) (*User, error) {
+	// 根据用户名查找用户
+	user, err := s.userRepo.GetByUsername(ctx, userInfo.Username)
+	if err == nil {
+		// 用户已存在，更新邮箱和显示名称（如果有变化）
+		needUpdate := false
+		if userInfo.Email != "" && user.Email != userInfo.Email {
+			user.Email = userInfo.Email
+			needUpdate = true
+		}
+		if userInfo.DisplayName != "" && user.Username != userInfo.DisplayName {
+			// 注意：这里不更新 Username，因为它是唯一标识
+			// 如果需要显示名称，应该在 User 模型中添加 DisplayName 字段
+			needUpdate = false // 暂时不更新
+		}
+		if needUpdate {
+			if err := s.userRepo.Update(ctx, user); err != nil {
+				log.Printf("[Auth] Failed to update LDAP user %s: %v", userInfo.Username, err)
+			}
+		}
+		return user, nil
+	}
+
+	// 用户不存在，创建新用户
+	if !errors.Is(err, ErrUserNotFound) {
+		return nil, err
+	}
+
+	// 生成随机密码（LDAP 用户不使用本地密码）
+	randomPassword, err := generateRandomPassword(32)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate random password: %w", err)
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(randomPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	// 创建新用户
+	newUser := &User{
+		Username:     userInfo.Username,
+		Email:        userInfo.Email,
+		PasswordHash: string(hashedPassword),
+		Role:         "user", // 默认角色为普通用户
+		Status:       "active",
+		Balance:      s.cfg.Default.UserBalance,
+		Concurrency:  s.cfg.Default.UserConcurrency,
+		TokenVersion: 0,
+	}
+
+	// 如果邮箱为空，使用用户名生成一个占位邮箱
+	if newUser.Email == "" {
+		newUser.Email = fmt.Sprintf("%s@ldap.local", userInfo.Username)
+	}
+
+	if err := s.userRepo.Create(ctx, newUser); err != nil {
+		return nil, fmt.Errorf("failed to create LDAP user: %w", err)
+	}
+
+	log.Printf("[Auth] Created new LDAP user: %s (email: %s)", newUser.Username, newUser.Email)
+	return newUser, nil
+}
+
+// generateRandomPassword 生成随机密码
+func generateRandomPassword(length int) (string, error) {
+	bytes := make([]byte, length)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
+}
+

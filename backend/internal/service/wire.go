@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ldap"
 	"github.com/google/wire"
 	"github.com/redis/go-redis/v9"
 )
@@ -202,9 +203,18 @@ func ProvideAPIKeyAuthCacheInvalidator(apiKeyService *APIKeyService) APIKeyAuthC
 	return apiKeyService
 }
 
+// ProvideLDAPClient 提供 LDAP 客户端（如果启用）
+func ProvideLDAPClient(cfg *config.Config) (*ldap.Client, error) {
+	if cfg == nil || !cfg.LDAP.Enabled {
+		return nil, nil
+	}
+	return ldap.NewClient(&cfg.LDAP)
+}
+
 // ProviderSet is the Wire provider set for all services
 var ProviderSet = wire.NewSet(
 	// Core services
+	ProvideLDAPClient,
 	NewAuthService,
 	NewUserService,
 	NewAPIKeyService,
