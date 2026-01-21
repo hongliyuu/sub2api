@@ -57,6 +57,9 @@ RUN go mod download
 # Copy backend source first
 COPY backend/ ./
 
+# Ensure go.sum is up to date
+RUN go mod tidy
+
 # Copy frontend dist from previous stage (must be after backend copy to avoid being overwritten)
 COPY --from=frontend-builder /app/backend/internal/web/dist ./internal/web/dist
 
