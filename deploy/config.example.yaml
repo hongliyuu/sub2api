@@ -429,6 +429,54 @@ linuxdo_connect:
   userinfo_username_path: ""
 
 # =============================================================================
+# LDAP Authentication Configuration
+# LDAP 认证配置
+# =============================================================================
+ldap:
+  # Enable LDAP authentication
+  # 启用 LDAP 认证
+  enabled: false
+  # LDAP server address
+  # LDAP 服务器地址
+  host: "ldap.example.com"
+  # LDAP server port (389 for LDAP, 636 for LDAPS)
+  # LDAP 服务器端口（389 用于 LDAP，636 用于 LDAPS）
+  port: 389
+  # Use LDAPS (LDAP over SSL/TLS)
+  # 使用 LDAPS（LDAP over SSL/TLS）
+  use_tls: false
+  # Use StartTLS to upgrade connection
+  # 使用 StartTLS 升级连接
+  use_start_tls: true
+  # Skip TLS certificate verification (development only)
+  # 跳过 TLS 证书验证（仅开发环境）
+  skip_tls_verify: false
+  # Admin DN for user search
+  # 管理员 DN（用于搜索用户）
+  bind_dn: "cn=admin,dc=example,dc=com"
+  # Admin password
+  # 管理员密码
+  bind_password: "admin_password"
+  # Base DN for user search
+  # 搜索基准 DN
+  base_dn: "ou=users,dc=example,dc=com"
+  # User search filter (%s will be replaced with username)
+  # 用户搜索过滤器（%s 将被替换为用户名）
+  user_filter: "(uid=%s)"
+  # User attribute mapping
+  # 用户属性映射
+  attributes:
+    # Username attribute (default: "uid")
+    # 用户名属性（默认："uid"）
+    username: "uid"
+    # Email attribute (default: "mail")
+    # 邮箱属性（默认："mail"）
+    email: "mail"
+    # Display name attribute (default: "cn")
+    # 显示名称属性（默认："cn"）
+    display_name: "cn"
+
+# =============================================================================
 # Default Settings
 # 默认设置
 # =============================================================================
