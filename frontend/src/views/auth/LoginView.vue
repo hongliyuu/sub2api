@@ -164,7 +164,7 @@ import LinuxDoOAuthSection from '@/components/auth/LinuxDoOAuthSection.vue'
 import Icon from '@/components/icons/Icon.vue'
 import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import { useAuthStore, useAppStore } from '@/stores'
-import { getPublicSettings, ldapLogin } from '@/api/auth'
+import { getPublicSettings } from '@/api/auth'
 
 const { t } = useI18n()
 
@@ -179,7 +179,6 @@ const appStore = useAppStore()
 const isLoading = ref<boolean>(false)
 const errorMessage = ref<string>('')
 const showPassword = ref<boolean>(false)
-const loginType = ref<'email' | 'ldap'>('email')
 
 // Public settings
 const turnstileEnabled = ref<boolean>(false)
@@ -195,20 +194,10 @@ const formData = reactive({
   password: ''
 })
 
-const ldapFormData = reactive({
-  username: '',
-  password: ''
-})
-
 const errors = reactive({
   email: '',
   password: '',
   turnstile: ''
-})
-
-const ldapErrors = reactive({
-  username: '',
-  password: ''
 })
 
 // ==================== Lifecycle ====================
@@ -329,66 +318,6 @@ async function handleLogin(): Promise<void> {
       errorMessage.value = err.message
     } else {
       errorMessage.value = t('auth.loginFailed')
-    }
-
-    // Also show error toast
-    appStore.showError(errorMessage.value)
-  } finally {
-    isLoading.value = false
-  }
-}
-
-// ==================== LDAP Login Handler ====================
-
-async function handleLDAPLogin(): Promise<void> {
-  // Clear previous error
-  errorMessage.value = ''
-  ldapErrors.username = ''
-  ldapErrors.password = ''
-
-  // Validate LDAP form
-  let isValid = true
-  if (!ldapFormData.username.trim()) {
-    ldapErrors.username = t('auth.usernameRequired')
-    isValid = false
-  }
-  if (!ldapFormData.password) {
-    ldapErrors.password = t('auth.passwordRequired')
-    isValid = false
-  }
-
-  if (!isValid) {
-    return
-  }
-
-  isLoading.value = true
-
-  try {
-    // Call LDAP login API directly (it already stores token and user)
-    await ldapLogin({
-      username: ldapFormData.username,
-      password: ldapFormData.password
-    })
-
-    // Refresh auth store state from localStorage
-    authStore.checkAuth()
-
-    // Show success toast
-    appStore.showSuccess(t('auth.loginSuccess'))
-
-    // Redirect to dashboard or intended route
-    const redirectTo = (router.currentRoute.value.query.redirect as string) || '/dashboard'
-    await router.push(redirectTo)
-  } catch (error: unknown) {
-    // Handle login error
-    const err = error as { message?: string; response?: { data?: { detail?: string } } }
-
-    if (err.response?.data?.detail) {
-      errorMessage.value = err.response.data.detail
-    } else if (err.message) {
-      errorMessage.value = err.message
-    } else {
-      errorMessage.value = t('auth.ldapLoginFailed')
     }
 
     // Also show error toast
