@@ -5,7 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 
-	"github.com/Wei-Shaw/sub2api/backend/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/go-ldap/ldap/v3"
 )
 
