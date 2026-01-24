@@ -43,11 +43,16 @@ func (s *UserSubscription) GetComputedStatus() string {
 }
 
 // MarshalJSON 自定义 JSON 序列化，自动计算 Status
-func (s UserSubscription) MarshalJSON() ([]byte, error) {
+func (s *UserSubscription) MarshalJSON() ([]byte, error) {
 	type Alias UserSubscription
+	aux := &struct {
+		*Alias
+	}{
+		Alias: (*Alias)(s),
+	}
 	// 在序列化前动态计算 status
-	s.Status = s.GetComputedStatus()
-	return json.Marshal((Alias)(s))
+	aux.Status = s.GetComputedStatus()
+	return json.Marshal(aux)
 }
 
 func (s *UserSubscription) IsActive() bool {
