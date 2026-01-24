@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"net/http"
@@ -28,6 +29,9 @@ import (
 
 func TestAPIContracts(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+
+	// 用于动态生成测试数据的 expires_at 时间（去除纳秒精度避免测试不稳定）
+	expiresAt := time.Now().Add(24 * time.Hour).Truncate(time.Second)
 
 	tests := []struct {
 		name       string
@@ -197,7 +201,7 @@ func TestAPIContracts(t *testing.T) {
 						UserID:          1,
 						GroupID:         10,
 						StartsAt:        deps.now,
-						ExpiresAt:       deps.now.Add(24 * time.Hour),
+						ExpiresAt:       expiresAt,
 						Status:          service.SubscriptionStatusActive,
 						DailyUsageUSD:   1.23,
 						WeeklyUsageUSD:  2.34,
@@ -213,7 +217,7 @@ func TestAPIContracts(t *testing.T) {
 			method:     http.MethodGet,
 			path:       "/api/v1/subscriptions",
 			wantStatus: http.StatusOK,
-			wantJSON: `{
+			wantJSON: fmt.Sprintf(`{
 				"code": 0,
 				"message": "success",
 				"data": [
@@ -222,7 +226,7 @@ func TestAPIContracts(t *testing.T) {
 						"user_id": 1,
 						"group_id": 10,
 						"starts_at": "2025-01-02T03:04:05Z",
-						"expires_at": "2025-01-03T03:04:05Z",
+						"expires_at": "%s",
 						"status": "active",
 						"daily_window_start": null,
 						"weekly_window_start": null,
@@ -234,7 +238,7 @@ func TestAPIContracts(t *testing.T) {
 						"updated_at": "2025-01-02T03:04:05Z"
 					}
 				]
-			}`,
+			}`, expiresAt.Format(time.RFC3339)),
 		},
 		{
 			name: "GET /api/v1/redeem/history",
