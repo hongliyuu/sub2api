@@ -1,6 +1,9 @@
 package service
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type UserSubscription struct {
 	ID      int64
@@ -29,6 +32,22 @@ type UserSubscription struct {
 	User           *User
 	Group          *Group
 	AssignedByUser *User
+}
+
+// GetComputedStatus 计算当前的真实状态（基于 expires_at）
+func (s *UserSubscription) GetComputedStatus() string {
+	if s.ExpiresAt.Before(time.Now()) {
+		return SubscriptionStatusExpired
+	}
+	return SubscriptionStatusActive
+}
+
+// MarshalJSON 自定义 JSON 序列化，自动计算 Status
+func (s UserSubscription) MarshalJSON() ([]byte, error) {
+	type Alias UserSubscription
+	// 在序列化前动态计算 status
+	s.Status = s.GetComputedStatus()
+	return json.Marshal((Alias)(s))
 }
 
 func (s *UserSubscription) IsActive() bool {

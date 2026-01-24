@@ -394,8 +394,6 @@ func (s *SubscriptionService) ListUserSubscriptions(ctx context.Context, userID 
 	if err != nil {
 		return nil, err
 	}
-	// 检查并更新过期的订阅状态
-	s.updateExpiredSubscriptionsInList(ctx, subs)
 	normalizeExpiredWindows(subs)
 	return subs, nil
 }
@@ -406,8 +404,6 @@ func (s *SubscriptionService) ListActiveUserSubscriptions(ctx context.Context, u
 	if err != nil {
 		return nil, err
 	}
-	// 检查并更新过期的订阅状态
-	s.updateExpiredSubscriptionsInList(ctx, subs)
 	normalizeExpiredWindows(subs)
 	return subs, nil
 }
@@ -419,8 +415,6 @@ func (s *SubscriptionService) ListGroupSubscriptions(ctx context.Context, groupI
 	if err != nil {
 		return nil, nil, err
 	}
-	// 检查并更新过期的订阅状态
-	s.updateExpiredSubscriptionsInList(ctx, subs)
 	normalizeExpiredWindows(subs)
 	return subs, pag, nil
 }
@@ -432,25 +426,8 @@ func (s *SubscriptionService) List(ctx context.Context, page, pageSize int, user
 	if err != nil {
 		return nil, nil, err
 	}
-	// 检查并更新过期的订阅状态
-	s.updateExpiredSubscriptionsInList(ctx, subs)
 	normalizeExpiredWindows(subs)
 	return subs, pag, nil
-}
-
-// updateExpiredSubscriptionsInList 检查并更新列表中过期的订阅状态（仅影响返回数据）
-// 完全基于 expires_at 判断，不依赖数据库的 status 字段
-func (s *SubscriptionService) updateExpiredSubscriptionsInList(ctx context.Context, subs []UserSubscription) {
-	now := time.Now()
-	for i := range subs {
-		sub := &subs[i]
-		// 直接根据过期时间判断状态
-		if sub.ExpiresAt.Before(now) {
-			sub.Status = SubscriptionStatusExpired
-		} else {
-			sub.Status = SubscriptionStatusActive
-		}
-	}
 }
 
 // normalizeExpiredWindows 将已过期窗口的数据清零（仅影响返回数据，不影响数据库）

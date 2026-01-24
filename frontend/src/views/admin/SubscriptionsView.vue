@@ -323,9 +323,11 @@
               <span
                 class="text-sm"
                 :class="
-                  isExpiringSoon(value)
-                    ? 'text-orange-600 dark:text-orange-400'
-                    : 'text-gray-700 dark:text-gray-300'
+                  isExpired(value)
+                    ? 'text-red-600 dark:text-red-400'
+                    : isExpiringSoon(value)
+                      ? 'text-orange-600 dark:text-orange-400'
+                      : 'text-gray-700 dark:text-gray-300'
                 "
               >
                 {{ formatDateOnly(value) }}
@@ -1110,6 +1112,12 @@ const getDaysRemaining = (expiresAt: string): number | null => {
 const isExpiringSoon = (expiresAt: string): boolean => {
   const days = getDaysRemaining(expiresAt)
   return days !== null && days <= 7
+}
+
+const isExpired = (expiresAt: string): boolean => {
+  const now = new Date()
+  const expires = new Date(expiresAt)
+  return expires.getTime() < now.getTime()
 }
 
 const getProgressWidth = (used: number | null | undefined, limit: number | null): string => {
