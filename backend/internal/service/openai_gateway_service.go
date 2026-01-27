@@ -806,6 +806,20 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 	}
 
+	// 增加droid支持 删除droid发起的请求参数 不删除会导致openai报错
+	if account.Type == AccountTypeOAuth {
+		if retention, ok := reqBody["prompt_cache_retention"]; ok {
+			delete(reqBody, "prompt_cache_retention")
+			bodyModified = true
+			log.Printf("[OpenAI] Removed unsupported prompt_cache_retention=%v (account: %s)", retention, account.Name)
+		}
+		if identifier, ok := reqBody["safety_identifier"]; ok {
+			delete(reqBody, "safety_identifier")
+			bodyModified = true
+			log.Printf("[OpenAI] Removed unsupported safety_identifier=%v (account: %s)", identifier, account.Name)
+		}
+	}
+	
 	// Handle max_output_tokens based on platform and account type
 	if !isCodexCLI {
 		if maxOutputTokens, hasMaxOutputTokens := reqBody["max_output_tokens"]; hasMaxOutputTokens {
