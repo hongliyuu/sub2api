@@ -73,6 +73,13 @@ func ProvideAccountExpiryService(accountRepo AccountRepository) *AccountExpirySe
 	return svc
 }
 
+// ProvideSubscriptionExpiryService creates and starts SubscriptionExpiryService.
+func ProvideSubscriptionExpiryService(userSubRepo UserSubscriptionRepository) *SubscriptionExpiryService {
+	svc := NewSubscriptionExpiryService(userSubRepo, time.Minute)
+	svc.Start()
+	return svc
+}
+
 // ProvideTimingWheelService creates and starts TimingWheelService
 func ProvideTimingWheelService() (*TimingWheelService, error) {
 	svc, err := NewTimingWheelService()
@@ -266,6 +273,7 @@ var ProviderSet = wire.NewSet(
 	ProvideUpdateService,
 	ProvideTokenRefreshService,
 	ProvideAccountExpiryService,
+	ProvideSubscriptionExpiryService,
 	ProvideTimingWheelService,
 	ProvideDashboardAggregationService,
 	ProvideUsageCleanupService,
@@ -273,4 +281,5 @@ var ProviderSet = wire.NewSet(
 	NewAntigravityQuotaFetcher,
 	NewUserAttributeService,
 	NewUsageCache,
+	NewTotpService,
 )
