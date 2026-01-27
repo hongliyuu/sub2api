@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -211,11 +212,15 @@ func ProvideAPIKeyAuthCacheInvalidator(apiKeyService *APIKeyService) APIKeyAuthC
 }
 
 // ProvideLDAPClient 提供 LDAP 客户端（如果启用）
-func ProvideLDAPClient(cfg *config.Config) (*ldap.Client, error) {
+func ProvideLDAPClient(cfg *config.Config) *ldap.Client {
 	if cfg == nil || !cfg.LDAP.Enabled {
-		return nil, nil
+		return nil
 	}
-	return ldap.NewClient(&cfg.LDAP)
+	client, err := ldap.NewClient(&cfg.LDAP)
+	if err != nil {
+		panic(fmt.Sprintf("failed to create LDAP client: %v", err))
+	}
+	return client
 }
 
 // ProviderSet is the Wire provider set for all services

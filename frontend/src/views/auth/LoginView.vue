@@ -11,6 +11,9 @@
         </p>
       </div>
 
+      <!-- LDAP 登录 -->
+      <LDAPLoginSection v-if="ldapEnabled" :disabled="isLoading" />
+
       <!-- LinuxDo Connect OAuth 登录 -->
       <LinuxDoOAuthSection v-if="linuxdoOAuthEnabled" :disabled="isLoading" />
 
@@ -180,6 +183,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { AuthLayout } from '@/components/layout'
+import LDAPLoginSection from '@/components/auth/LDAPLoginSection.vue'
 import LinuxDoOAuthSection from '@/components/auth/LinuxDoOAuthSection.vue'
 import TotpLoginModal from '@/components/auth/TotpLoginModal.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -205,6 +209,7 @@ const showPassword = ref<boolean>(false)
 // Public settings
 const turnstileEnabled = ref<boolean>(false)
 const turnstileSiteKey = ref<string>('')
+const ldapEnabled = ref<boolean>(false)
 const linuxdoOAuthEnabled = ref<boolean>(false)
 const passwordResetEnabled = ref<boolean>(false)
 
@@ -244,6 +249,7 @@ onMounted(async () => {
     const settings = await getPublicSettings()
     turnstileEnabled.value = settings.turnstile_enabled
     turnstileSiteKey.value = settings.turnstile_site_key || ''
+    ldapEnabled.value = settings.ldap_enabled
     linuxdoOAuthEnabled.value = settings.linuxdo_oauth_enabled
     passwordResetEnabled.value = settings.password_reset_enabled
   } catch (error) {

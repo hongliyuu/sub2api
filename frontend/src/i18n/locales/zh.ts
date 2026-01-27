@@ -258,6 +258,19 @@ export default {
     promoCodeAlreadyUsed: '您已使用过此优惠码',
     promoCodeValidating: '优惠码正在验证中，请稍候',
     promoCodeInvalidCannotRegister: '优惠码无效，请检查后重试或清空优惠码',
+    ldap: {
+      usernameLabel: '用户名',
+      usernamePlaceholder: '请输入用户名',
+      usernameRequired: '请输入用户名',
+      passwordLabel: '密码',
+      passwordPlaceholder: '请输入密码',
+      passwordRequired: '请输入密码',
+      signIn: 'LDAP 登录',
+      signingIn: '登录中...',
+      orContinue: '或使用邮箱密码继续',
+      loginSuccess: '登录成功',
+      loginFailed: '登录失败，请检查用户名和密码'
+    },
     linuxdo: {
       signIn: '使用 Linux.do 登录',
       orContinue: '或使用邮箱密码继续',

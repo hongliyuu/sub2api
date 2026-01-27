@@ -261,6 +261,19 @@ export default {
     promoCodeAlreadyUsed: 'You have already used this promo code',
     promoCodeValidating: 'Promo code is being validated, please wait',
     promoCodeInvalidCannotRegister: 'Invalid promo code. Please check and try again or clear the promo code field',
+    ldap: {
+      usernameLabel: 'Username',
+      usernamePlaceholder: 'Enter your username',
+      usernameRequired: 'Username is required',
+      passwordLabel: 'Password',
+      passwordPlaceholder: 'Enter your password',
+      passwordRequired: 'Password is required',
+      signIn: 'Sign in with LDAP',
+      signingIn: 'Signing in...',
+      orContinue: 'or continue with email',
+      loginSuccess: 'Login successful',
+      loginFailed: 'Login failed. Please check your username and password'
+    },
     linuxdo: {
       signIn: 'Continue with Linux.do',
       orContinue: 'or continue with email',

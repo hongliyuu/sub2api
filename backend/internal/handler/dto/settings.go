@@ -73,6 +73,7 @@ type PublicSettings struct {
 	HomeContent          string `json:"home_content"`
 	HideCcsImportButton  bool   `json:"hide_ccs_import_button"`
 	LinuxDoOAuthEnabled  bool   `json:"linuxdo_oauth_enabled"`
+	LDAPEnabled          bool   `json:"ldap_enabled"` // LDAP 认证
 	Version              string `json:"version"`
 }
 

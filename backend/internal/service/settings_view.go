@@ -75,6 +75,7 @@ type PublicSettings struct {
 	HomeContent          string
 	HideCcsImportButton  bool
 	LinuxDoOAuthEnabled  bool
+	LDAPEnabled          bool // LDAP 认证
 	Version              string
 }
 
