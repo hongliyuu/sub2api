@@ -11,9 +11,7 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
-      args:
-        GOPROXY: https://proxy.golang.org,direct
-        GOSUMDB: sum.golang.org
-    environment:
-      # Allow private IP addresses for CRS sync (false by default for security)
-      - SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS=${SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS:-false}
+    args:
+      GOPROXY: https://proxy.golang.org,direct
+      GOSUMDB: sum.golang.org
+

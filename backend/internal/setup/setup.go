@@ -66,7 +66,16 @@ type SetupConfig struct {
 	Admin    AdminConfig    `json:"admin" yaml:"-"` // Not stored in config file
 	Server   ServerConfig   `json:"server" yaml:"server"`
 	JWT      JWTConfig      `json:"jwt" yaml:"jwt"`
+	Security SecurityConfig `json:"security" yaml:"security"`
 	Timezone string         `json:"timezone" yaml:"timezone"` // e.g. "Asia/Shanghai", "UTC"
+}
+
+type SecurityConfig struct {
+	URLAllowlist URLAllowlistConfig `json:"url_allowlist" yaml:"url_allowlist"`
+}
+
+type URLAllowlistConfig struct {
+	AllowPrivateHosts bool `json:"allow_private_hosts" yaml:"allow_private_hosts"`
 }
 
 type DatabaseConfig struct {
@@ -385,7 +394,8 @@ func writeConfigFile(cfg *SetupConfig) error {
 			RequestsPerMinute int `yaml:"requests_per_minute"`
 			BurstSize         int `yaml:"burst_size"`
 		} `yaml:"rate_limit"`
-		Timezone string `yaml:"timezone"`
+		Security SecurityConfig `yaml:"security"`
+		Timezone string         `yaml:"timezone"`
 	}{
 		Server:   cfg.Server,
 		Database: cfg.Database,
@@ -415,6 +425,7 @@ func writeConfigFile(cfg *SetupConfig) error {
 			RequestsPerMinute: 60,
 			BurstSize:         10,
 		},
+		Security: cfg.Security,
 		Timezone: tz,
 	}
 
@@ -462,6 +473,16 @@ func getEnvIntOrDefault(key string, defaultValue int) int {
 	return defaultValue
 }
 
+// getEnvBoolOrDefault gets environment variable as bool or returns default value
+func getEnvBoolOrDefault(key string, defaultValue bool) bool {
+	if val := os.Getenv(key); val != "" {
+		if b, err := strconv.ParseBool(val); err == nil {
+			return b
+		}
+	}
+	return defaultValue
+}
+
 // AutoSetupFromEnv performs automatic setup using environment variables
 // This is designed for Docker deployment where all config is passed via env vars
 func AutoSetupFromEnv() error {
@@ -503,6 +524,11 @@ func AutoSetupFromEnv() error {
 			Secret:     getEnvOrDefault("JWT_SECRET", ""),
 			ExpireHour: getEnvIntOrDefault("JWT_EXPIRE_HOUR", 24),
 		},
+		Security: SecurityConfig{
+			URLAllowlist: URLAllowlistConfig{
+				AllowPrivateHosts: getEnvBoolOrDefault("SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS", false),
+			},
+		},
 		Timezone: tz,
 	}
 
@@ -525,15 +551,16 @@ func AutoSetupFromEnv() error {
 		cfg.Admin.Password = password
 
 		// Write initial password to a one-time file instead of logging to stdout
-		pwdFile := "/app/data/.initial_admin_password"
+		pwdFile := GetDataDir() + "/.initial_admin_password"
 		if err := os.WriteFile(pwdFile, []byte(password), 0600); err != nil {
 			log.Printf("Warning: failed to write initial password to %s: %v", pwdFile, err)
 			// Fallback to log if file write fails, but this is a security risk
 			fmt.Printf("Generated admin password (one-time): %s\n", cfg.Admin.Password)
+			fmt.Println("IMPORTANT: Save this password! It will not be shown again.")
 		} else {
 			log.Printf("Initial admin password has been written to %s", pwdFile)
+			fmt.Printf("IMPORTANT: Check %s for the admin password! It will not be shown in logs.\n", pwdFile)
 		}
-		fmt.Println("IMPORTANT: Check /app/data/.initial_admin_password for the admin password! It will not be shown in logs.")
 	}
 
 	// Test database connection
