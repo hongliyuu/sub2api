@@ -62,6 +62,22 @@ volumes:
   ```
 - By default the build override no longer mounts `deploy/config.yaml`; the app writes its generated config into the `sub2api_data` volume. Mount a custom config only when you intentionally want to override the generated one.
 
+### Redeploying the locally built image
+
+- Rebuild and restart the `sub2api` service by combining the base compose file with the build override so the updated Antigravity UA (`antigravity/1.15.8 windows/amd64`) is picked up:
+  ```bash
+  cd deploy
+  docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build sub2api
+  ```
+- Watch the logs to ensure the new UA appears and the service stays healthy:
+  ```bash
+  docker compose logs -f sub2api | grep antigravity/1.15.8
+  ```
+- To revert to the published image, drop the build override and recreate the service:
+  ```bash
+  docker compose -f docker-compose.yml up -d --no-build sub2api
+  ```
+
 ## Environment Variables
 
 | Variable | Description | Required | Default |

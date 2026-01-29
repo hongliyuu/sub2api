@@ -391,6 +391,8 @@ Simple Mode is designed for individual developers or internal teams who want qui
 
 Sub2API supports [Antigravity](https://antigravity.so/) accounts. After authorization, dedicated endpoints are available for Claude and Gemini models.
 
+The gateway identifies itself to Antigravity as `antigravity/1.15.8 windows/amd64`, keeping parity with the official client.
+
 ### Dedicated Endpoints
 
 | Endpoint | Model |

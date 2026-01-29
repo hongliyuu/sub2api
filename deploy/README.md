@@ -73,6 +73,22 @@ When using Docker Compose with `AUTO_SETUP=true`:
   ```
 - The build override no longer mounts `deploy/config.yaml` by default to prevent accidental overrides; the app writes its generated config to the `sub2api_data` volume.
 
+### Redeploying a locally built image
+
+1. Rebuild the image and update the running stack with the build override plus the base compose file:
+   ```bash
+   cd deploy
+   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build sub2api
+   ```
+2. Tail the logs to confirm the new Antigravity User-Agent string (`antigravity/1.15.8 windows/amd64`) is being used:
+   ```bash
+   docker compose logs -f sub2api | grep antigravity/1.15.8
+   ```
+3. If you need to roll back to the published image, run the base compose file without the build override:
+   ```bash
+   docker compose -f docker-compose.yml up -d --no-build sub2api
+   ```
+
 ### Remote access via tunnels (optional)
 
 - **Cloudflare Tunnel**: add the override and start with a tunnel token:
