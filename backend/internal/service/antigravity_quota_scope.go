@@ -49,13 +49,14 @@ func (a *Account) IsSchedulableForModel(requestedModel string) bool {
 	if !a.IsSchedulable() {
 		return false
 	}
-	if a.isModelRateLimited(requestedModel) {
+	effectiveModel := a.GetMappedModel(requestedModel)
+	if a.isModelRateLimited(effectiveModel) {
 		return false
 	}
 	if a.Platform != PlatformAntigravity {
 		return true
 	}
-	scope, ok := resolveAntigravityQuotaScope(requestedModel)
+	scope, ok := resolveAntigravityQuotaScope(effectiveModel)
 	if !ok {
 		return true
 	}

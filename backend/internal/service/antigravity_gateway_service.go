@@ -758,7 +758,9 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 		c:              c,
 		httpUpstream:   s.httpUpstream,
 		settingService: s.settingService,
-		handleError:    s.handleUpstreamError,
+		handleError: func(ctx context.Context, prefix string, account *Account, statusCode int, headers http.Header, body []byte, quotaScope AntigravityQuotaScope) {
+			s.handleUpstreamError(ctx, c, prefix, account, mappedModel, statusCode, headers, body, quotaScope)
+		},
 	})
 	if err != nil {
 		return nil, s.writeClaudeError(c, http.StatusBadGateway, "upstream_error", "Upstream request failed after retries")
@@ -834,7 +836,9 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 					c:              c,
 					httpUpstream:   s.httpUpstream,
 					settingService: s.settingService,
-					handleError:    s.handleUpstreamError,
+					handleError: func(ctx context.Context, prefix string, account *Account, statusCode int, headers http.Header, body []byte, quotaScope AntigravityQuotaScope) {
+						s.handleUpstreamError(ctx, c, prefix, account, mappedModel, statusCode, headers, body, quotaScope)
+					},
 				})
 				if retryErr != nil {
 					appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
@@ -910,7 +914,7 @@ func (s *AntigravityGatewayService) Forward(ctx context.Context, c *gin.Context,
 
 		// 处理错误响应（重试后仍失败或不触发重试）
 		if resp.StatusCode >= 400 {
-			s.handleUpstreamError(ctx, prefix, account, resp.StatusCode, resp.Header, respBody, quotaScope)
+			s.handleUpstreamError(ctx, c, prefix, account, mappedModel, resp.StatusCode, resp.Header, respBody, quotaScope)
 
 			if s.shouldFailoverUpstreamError(resp.StatusCode) {
 				upstreamMsg := strings.TrimSpace(extractAntigravityErrorMessage(respBody))
@@ -1336,7 +1340,9 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 		c:              c,
 		httpUpstream:   s.httpUpstream,
 		settingService: s.settingService,
-		handleError:    s.handleUpstreamError,
+		handleError: func(ctx context.Context, prefix string, account *Account, statusCode int, headers http.Header, body []byte, quotaScope AntigravityQuotaScope) {
+			s.handleUpstreamError(ctx, c, prefix, account, mappedModel, statusCode, headers, body, quotaScope)
+		},
 	})
 	if err != nil {
 		return nil, s.writeGoogleError(c, http.StatusBadGateway, "Upstream request failed after retries")
@@ -1393,7 +1399,7 @@ func (s *AntigravityGatewayService) ForwardGemini(ctx context.Context, c *gin.Co
 		if unwrapErr != nil || len(unwrappedForOps) == 0 {
 			unwrappedForOps = respBody
 		}
-		s.handleUpstreamError(ctx, prefix, account, resp.StatusCode, resp.Header, respBody, quotaScope)
+		s.handleUpstreamError(ctx, c, prefix, account, mappedModel, resp.StatusCode, resp.Header, respBody, quotaScope)
 		upstreamMsg := strings.TrimSpace(extractAntigravityErrorMessage(unwrappedForOps))
 		upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
 
@@ -1533,11 +1539,13 @@ func antigravityUseScopeRateLimit() bool {
 	return v == "1" || v == "true" || v == "yes" || v == "on"
 }
 
-func (s *AntigravityGatewayService) handleUpstreamError(ctx context.Context, prefix string, account *Account, statusCode int, headers http.Header, body []byte, quotaScope AntigravityQuotaScope) {
+func (s *AntigravityGatewayService) handleUpstreamError(ctx context.Context, c *gin.Context, prefix string, account *Account, effectiveModel string, statusCode int, headers http.Header, body []byte, quotaScope AntigravityQuotaScope) {
+	var signal *RateLimitSignal
 	// 429 使用 Gemini 格式解析（从 body 解析重置时间）
 	if statusCode == 429 {
 		useScopeLimit := antigravityUseScopeRateLimit() && quotaScope != ""
 		resetAt := ParseGeminiRateLimitResetTime(body)
+		var resetTime time.Time
 		if resetAt == nil {
 			// 解析失败：使用配置的 fallback 时间，直接限流整个账户
 			fallbackMinutes := 5
@@ -1545,39 +1553,64 @@ func (s *AntigravityGatewayService) handleUpstreamError(ctx context.Context, pre
 				fallbackMinutes = s.settingService.cfg.Gateway.AntigravityFallbackCooldownMinutes
 			}
 			defaultDur := time.Duration(fallbackMinutes) * time.Minute
-			ra := time.Now().Add(defaultDur)
+			resetTime = time.Now().Add(defaultDur)
 			if useScopeLimit {
 				log.Printf("%s status=429 rate_limited scope=%s reset_in=%v (fallback)", prefix, quotaScope, defaultDur)
-				if err := s.accountRepo.SetAntigravityQuotaScopeLimit(ctx, account.ID, quotaScope, ra); err != nil {
+				if err := s.accountRepo.SetAntigravityQuotaScopeLimit(ctx, account.ID, quotaScope, resetTime); err != nil {
 					log.Printf("%s status=429 rate_limit_set_failed scope=%s error=%v", prefix, quotaScope, err)
 				}
 			} else {
-				log.Printf("%s status=429 rate_limited account=%d reset_in=%v (fallback)", prefix, account.ID, defaultDur)
-				if err := s.accountRepo.SetRateLimited(ctx, account.ID, ra); err != nil {
-					log.Printf("%s status=429 rate_limit_set_failed account=%d error=%v", prefix, account.ID, err)
+				if key, ok := ModelRateLimitKey(account.Platform, effectiveModel); ok {
+					log.Printf("%s status=429 rate_limited key=%s reset_in=%v (fallback)", prefix, key, defaultDur)
+					if err := s.accountRepo.SetModelRateLimit(ctx, account.ID, key, resetTime); err != nil {
+						log.Printf("%s status=429 rate_limit_set_failed key=%s error=%v", prefix, key, err)
+					}
+				} else {
+					log.Printf("%s status=429 rate_limited account=%d reset_in=%v (fallback)", prefix, account.ID, defaultDur)
+					if err := s.accountRepo.SetRateLimited(ctx, account.ID, resetTime); err != nil {
+						log.Printf("%s status=429 rate_limit_set_failed account=%d error=%v", prefix, account.ID, err)
+					}
 				}
 			}
-			return
-		}
-		resetTime := time.Unix(*resetAt, 0)
-		if useScopeLimit {
-			log.Printf("%s status=429 rate_limited scope=%s reset_at=%v reset_in=%v", prefix, quotaScope, resetTime.Format("15:04:05"), time.Until(resetTime).Truncate(time.Second))
-			if err := s.accountRepo.SetAntigravityQuotaScopeLimit(ctx, account.ID, quotaScope, resetTime); err != nil {
-				log.Printf("%s status=429 rate_limit_set_failed scope=%s error=%v", prefix, quotaScope, err)
-			}
 		} else {
-			log.Printf("%s status=429 rate_limited account=%d reset_at=%v reset_in=%v", prefix, account.ID, resetTime.Format("15:04:05"), time.Until(resetTime).Truncate(time.Second))
-			if err := s.accountRepo.SetRateLimited(ctx, account.ID, resetTime); err != nil {
-				log.Printf("%s status=429 rate_limit_set_failed account=%d error=%v", prefix, account.ID, err)
+			resetTime = time.Unix(*resetAt, 0)
+			if useScopeLimit {
+				log.Printf("%s status=429 rate_limited scope=%s reset_at=%v reset_in=%v", prefix, quotaScope, resetTime.Format("15:04:05"), time.Until(resetTime).Truncate(time.Second))
+				if err := s.accountRepo.SetAntigravityQuotaScopeLimit(ctx, account.ID, quotaScope, resetTime); err != nil {
+					log.Printf("%s status=429 rate_limit_set_failed scope=%s error=%v", prefix, quotaScope, err)
+				}
+			} else {
+				if key, ok := ModelRateLimitKey(account.Platform, effectiveModel); ok {
+					log.Printf("%s status=429 rate_limited key=%s reset_at=%v reset_in=%v", prefix, key, resetTime.Format("15:04:05"), time.Until(resetTime).Truncate(time.Second))
+					if err := s.accountRepo.SetModelRateLimit(ctx, account.ID, key, resetTime); err != nil {
+						log.Printf("%s status=429 rate_limit_set_failed key=%s error=%v", prefix, key, err)
+					}
+				} else {
+					log.Printf("%s status=429 rate_limited account=%d reset_at=%v reset_in=%v", prefix, account.ID, resetTime.Format("15:04:05"), time.Until(resetTime).Truncate(time.Second))
+					if err := s.accountRepo.SetRateLimited(ctx, account.ID, resetTime); err != nil {
+						log.Printf("%s status=429 rate_limit_set_failed account=%d error=%v", prefix, account.ID, err)
+					}
+				}
 			}
 		}
+
+		resetTime = clampResetAt(resetTime, time.Now())
+		signal = &RateLimitSignal{Scope: RateLimitScopeAccount, ResetAt: resetTime}
+		if !useScopeLimit {
+			if key, ok := ModelRateLimitKey(account.Platform, effectiveModel); ok {
+				signal.Scope = RateLimitScopeModelBucket
+				signal.Key = key
+			}
+		}
+		setRateLimitResponseHeaders(c, signal)
 		return
 	}
 	// 其他错误码继续使用 rateLimitService
 	if s.rateLimitService == nil {
 		return
 	}
-	shouldDisable := s.rateLimitService.HandleUpstreamError(ctx, account, statusCode, headers, body)
+	shouldDisable, signal := s.rateLimitService.HandleUpstreamError(ctx, account, effectiveModel, statusCode, headers, body)
+	setRateLimitResponseHeaders(c, signal)
 	if shouldDisable {
 		log.Printf("%s status=%d marked_error", prefix, statusCode)
 	}

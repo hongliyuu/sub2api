@@ -155,6 +155,78 @@ func (s *AccountRepoSuite) TestDelete_WithGroupBindings() {
 	s.Require().Zero(count, "expected bindings to be removed")
 }
 
+func (s *AccountRepoSuite) TestSetModelRateLimitMonotonic() {
+	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "rl"})
+	bucketKey := "test-provider:test-bucket"
+	first := time.Now().Add(5 * time.Minute).UTC()
+	s.Require().NoError(s.repo.SetModelRateLimit(s.ctx, account.ID, bucketKey, first))
+	firstReset := s.bucketResetAt(account.ID, bucketKey)
+	s.Require().Equal(first.Unix(), firstReset.Unix())
+
+	second := first.Add(-time.Minute).UTC()
+	s.Require().NoError(s.repo.SetModelRateLimit(s.ctx, account.ID, bucketKey, second))
+	unchanged := s.bucketResetAt(account.ID, bucketKey)
+	s.Require().Equal(first.Unix(), unchanged.Unix())
+
+	third := first.Add(10 * time.Minute).UTC()
+	s.Require().NoError(s.repo.SetModelRateLimit(s.ctx, account.ID, bucketKey, third))
+	updated := s.bucketResetAt(account.ID, bucketKey)
+	s.Require().Equal(third.Unix(), updated.Unix())
+}
+
+func (s *AccountRepoSuite) TestSetModelRateLimitOutboxMonotonic() {
+	_, _ = integrationDB.ExecContext(s.ctx, "TRUNCATE scheduler_outbox")
+
+	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "outbox-monotonic"})
+	bucketKey := "test-provider:test-bucket"
+	first := time.Now().Add(5 * time.Minute).UTC()
+
+	// 1. Initial write should enqueue.
+	s.Require().NoError(s.repo.SetModelRateLimit(s.ctx, account.ID, bucketKey, first))
+	count := s.outboxCount()
+	s.Require().Equal(1, count, "expected 1 outbox entry after initial write")
+
+	// 2. Shorter reset (no-op) should NOT enqueue.
+	second := first.Add(-time.Minute).UTC()
+	s.Require().NoError(s.repo.SetModelRateLimit(s.ctx, account.ID, bucketKey, second))
+	s.Require().Equal(count, s.outboxCount(), "outbox count should remain same after shorter reset")
+
+	// 3. Identical reset (no-op) should NOT enqueue.
+	s.Require().NoError(s.repo.SetModelRateLimit(s.ctx, account.ID, bucketKey, first))
+	s.Require().Equal(count, s.outboxCount(), "outbox count should remain same after identical reset")
+
+	// 4. Longer reset (extension) should enqueue.
+	third := first.Add(10 * time.Minute).UTC()
+	s.Require().NoError(s.repo.SetModelRateLimit(s.ctx, account.ID, bucketKey, third))
+	s.Require().Equal(count+1, s.outboxCount(), "expected outbox count to increase after longer reset")
+}
+
+func (s *AccountRepoSuite) outboxCount() int {
+	rows, err := s.repo.sql.QueryContext(s.ctx, "SELECT count(*) FROM scheduler_outbox")
+	s.Require().NoError(err)
+	defer rows.Close()
+	s.Require().True(rows.Next())
+	var count int
+	s.Require().NoError(rows.Scan(&count))
+	return count
+}
+
+func (s *AccountRepoSuite) bucketResetAt(accountID int64, bucketKey string) time.Time {
+	account, err := s.repo.GetByID(s.ctx, accountID)
+	s.Require().NoError(err)
+	extra := account.Extra
+	s.Require().NotNil(extra)
+	rawLimits, ok := extra["model_rate_limits"].(map[string]any)
+	s.Require().True(ok, "model_rate_limits entry present")
+	rawLimit, ok := rawLimits[bucketKey].(map[string]any)
+	s.Require().True(ok, "bucket entry exists")
+	resetRaw, ok := rawLimit["rate_limit_reset_at"].(string)
+	s.Require().True(ok, "reset field present")
+	resetAt, err := time.Parse(time.RFC3339, resetRaw)
+	s.Require().NoError(err)
+	return resetAt.UTC()
+}
+
 // --- List / ListWithFilters ---
 
 func (s *AccountRepoSuite) TestList() {

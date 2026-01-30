@@ -8,39 +8,45 @@ import (
 const modelRateLimitsKey = "model_rate_limits"
 const modelRateLimitScopeClaudeSonnet = "claude_sonnet"
 
-func resolveModelRateLimitScope(requestedModel string) (string, bool) {
-	model := strings.ToLower(strings.TrimSpace(requestedModel))
-	if model == "" {
-		return "", false
-	}
-	model = strings.TrimPrefix(model, "models/")
-	if strings.Contains(model, "sonnet") {
-		return modelRateLimitScopeClaudeSonnet, true
-	}
-	return "", false
-}
-
 func (a *Account) isModelRateLimited(requestedModel string) bool {
-	scope, ok := resolveModelRateLimitScope(requestedModel)
+	if a == nil {
+		return false
+	}
+	key, ok := ModelRateLimitKey(a.Platform, requestedModel)
+	if !ok {
+		// Fallback to legacy behavior (pre-provider bucketing).
+		legacy := normalizeModelID(requestedModel)
+		if strings.Contains(legacy, "sonnet") {
+			key = modelRateLimitScopeClaudeSonnet
+			ok = true
+		}
+	}
 	if !ok {
 		return false
 	}
-	resetAt := a.modelRateLimitResetAt(scope)
+	resetAt := a.modelRateLimitResetAt(key)
 	if resetAt == nil {
 		return false
 	}
 	return time.Now().Before(*resetAt)
 }
 
-func (a *Account) modelRateLimitResetAt(scope string) *time.Time {
-	if a == nil || a.Extra == nil || scope == "" {
+func (a *Account) modelRateLimitResetAt(key string) *time.Time {
+	if a == nil || a.Extra == nil || strings.TrimSpace(key) == "" {
 		return nil
 	}
 	rawLimits, ok := a.Extra[modelRateLimitsKey].(map[string]any)
 	if !ok {
 		return nil
 	}
-	rawLimit, ok := rawLimits[scope].(map[string]any)
+	rawLimit, ok := rawLimits[key].(map[string]any)
+	if !ok {
+		// Backward compat: if key is provider-scoped, allow reading bucket-only.
+		if idx := strings.IndexByte(key, ':'); idx > 0 {
+			bucketOnly := key[idx+1:]
+			rawLimit, ok = rawLimits[bucketOnly].(map[string]any)
+		}
+	}
 	if !ok {
 		return nil
 	}

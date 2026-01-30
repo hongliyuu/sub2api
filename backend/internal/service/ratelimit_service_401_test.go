@@ -73,7 +73,7 @@ func TestRateLimitService_HandleUpstreamError_OAuth401MarksError(t *testing.T) {
 				},
 			}
 
-			shouldDisable := service.HandleUpstreamError(context.Background(), account, 401, http.Header{}, []byte("unauthorized"))
+			shouldDisable, _ := service.HandleUpstreamError(context.Background(), account, "", 401, http.Header{}, []byte("unauthorized"))
 
 			require.True(t, shouldDisable)
 			require.Equal(t, 1, repo.setErrorCalls)
@@ -95,7 +95,7 @@ func TestRateLimitService_HandleUpstreamError_OAuth401InvalidatorError(t *testin
 		Type:     AccountTypeOAuth,
 	}
 
-	shouldDisable := service.HandleUpstreamError(context.Background(), account, 401, http.Header{}, []byte("unauthorized"))
+	shouldDisable, _ := service.HandleUpstreamError(context.Background(), account, "", 401, http.Header{}, []byte("unauthorized"))
 
 	require.True(t, shouldDisable)
 	require.Equal(t, 1, repo.setErrorCalls)
@@ -113,7 +113,7 @@ func TestRateLimitService_HandleUpstreamError_NonOAuth401(t *testing.T) {
 		Type:     AccountTypeAPIKey,
 	}
 
-	shouldDisable := service.HandleUpstreamError(context.Background(), account, 401, http.Header{}, []byte("unauthorized"))
+	shouldDisable, _ := service.HandleUpstreamError(context.Background(), account, "", 401, http.Header{}, []byte("unauthorized"))
 
 	require.True(t, shouldDisable)
 	require.Equal(t, 1, repo.setErrorCalls)

@@ -735,9 +735,11 @@ func (s *OpenAIGatewayService) shouldFailoverUpstreamError(statusCode int) bool 
 	}
 }
 
-func (s *OpenAIGatewayService) handleFailoverSideEffects(ctx context.Context, resp *http.Response, account *Account) {
+func (s *OpenAIGatewayService) handleFailoverSideEffects(ctx context.Context, resp *http.Response, account *Account, effectiveModel string) {
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
-	s.rateLimitService.HandleUpstreamError(ctx, account, resp.StatusCode, resp.Header, body)
+	if s.rateLimitService != nil {
+		_, _ = s.rateLimitService.HandleUpstreamError(ctx, account, effectiveModel, resp.StatusCode, resp.Header, body)
+	}
 }
 
 // Forward forwards request to OpenAI API
@@ -928,10 +930,10 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 				Detail:             upstreamDetail,
 			})
 
-			s.handleFailoverSideEffects(ctx, resp, account)
+			s.handleFailoverSideEffects(ctx, resp, account, mappedModel)
 			return nil, &UpstreamFailoverError{StatusCode: resp.StatusCode}
 		}
-		return s.handleErrorResponse(ctx, resp, c, account)
+		return s.handleErrorResponse(ctx, resp, c, account, mappedModel)
 	}
 
 	// Handle normal response
@@ -1047,7 +1049,7 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 	return req, nil
 }
 
-func (s *OpenAIGatewayService) handleErrorResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account) (*OpenAIForwardResult, error) {
+func (s *OpenAIGatewayService) handleErrorResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, effectiveModel string) (*OpenAIForwardResult, error) {
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 
 	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(body))
@@ -1099,9 +1101,11 @@ func (s *OpenAIGatewayService) handleErrorResponse(ctx context.Context, resp *ht
 
 	// Handle upstream error (mark account status)
 	shouldDisable := false
+	var rateLimitSignal *RateLimitSignal
 	if s.rateLimitService != nil {
-		shouldDisable = s.rateLimitService.HandleUpstreamError(ctx, account, resp.StatusCode, resp.Header, body)
+		shouldDisable, rateLimitSignal = s.rateLimitService.HandleUpstreamError(ctx, account, effectiveModel, resp.StatusCode, resp.Header, body)
 	}
+	setRateLimitResponseHeaders(c, rateLimitSignal)
 	kind := "http_error"
 	if shouldDisable {
 		kind = "failover"

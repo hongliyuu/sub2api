@@ -33,7 +33,10 @@ type geminiUsageCacheEntry struct {
 	totals      GeminiUsageTotals
 }
 
-const geminiPrecheckCacheTTL = time.Minute
+const (
+	geminiPrecheckCacheTTL = time.Minute
+	rateLimitResetJitter   = 3 * time.Second
+)
 
 // NewRateLimitService 创建RateLimitService实例
 func NewRateLimitService(accountRepo AccountRepository, usageRepo UsageLogRepository, cfg *config.Config, geminiQuotaService *GeminiQuotaService, tempUnschedCache TempUnschedCache) *RateLimitService {
@@ -62,22 +65,23 @@ func (s *RateLimitService) SetTokenCacheInvalidator(invalidator TokenCacheInvali
 	s.tokenCacheInvalidator = invalidator
 }
 
-// HandleUpstreamError 处理上游错误响应，标记账号状态
-// 返回是否应该停止该账号的调度
-func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Account, statusCode int, headers http.Header, responseBody []byte) (shouldDisable bool) {
+// HandleUpstreamError processes upstream error responses and mutates account state.
+// effectiveModel should be the model actually sent upstream after any mapping.
+// Returns whether scheduling should disable this account and any rate-limit signal to expose to clients.
+func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Account, effectiveModel string, statusCode int, headers http.Header, responseBody []byte) (shouldDisable bool, signal *RateLimitSignal) {
 	// apikey 类型账号：检查自定义错误码配置
 	// 如果启用且错误码不在列表中，则不处理（不停止调度、不标记限流/过载）
 	customErrorCodesEnabled := account.IsCustomErrorCodesEnabled()
 	if !account.ShouldHandleErrorCode(statusCode) {
 		slog.Info("account_error_code_skipped", "account_id", account.ID, "status_code", statusCode)
-		return false
+		return false, nil
 	}
 
 	// 先尝试临时不可调度规则（401除外）
 	// 如果匹配成功，直接返回，不执行后续禁用逻辑
 	if statusCode != 401 {
 		if s.tryTempUnschedulable(ctx, account, statusCode, responseBody) {
-			return true
+			return true, nil
 		}
 	}
 
@@ -139,7 +143,7 @@ func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Acc
 		s.handleAuthError(ctx, account, msg)
 		shouldDisable = true
 	case 429:
-		s.handle429(ctx, account, headers, responseBody)
+		signal = s.handle429(ctx, account, effectiveModel, headers, responseBody)
 		shouldDisable = false
 	case 529:
 		s.handle529(ctx, account)
@@ -160,7 +164,7 @@ func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Acc
 		}
 	}
 
-	return shouldDisable
+	return shouldDisable, signal
 }
 
 // PreCheckUsage proactively checks local quota before dispatching a request.
@@ -342,110 +346,158 @@ func (s *RateLimitService) handleCustomErrorCode(ctx context.Context, account *A
 
 // handle429 处理429限流错误
 // 解析响应头获取重置时间，标记账号为限流状态
-func (s *RateLimitService) handle429(ctx context.Context, account *Account, headers http.Header, responseBody []byte) {
-	// 1. OpenAI 平台：优先尝试解析 x-codex-* 响应头（用于 rate_limit_exceeded）
+func (s *RateLimitService) handle429(ctx context.Context, account *Account, effectiveModel string, headers http.Header, responseBody []byte) *RateLimitSignal {
+	if account == nil {
+		return nil
+	}
+
+	now := time.Now()
+	var bestReset time.Time
+
+	if ra := parseRetryAfter(headers, now); ra != nil {
+		bestReset = laterFutureTime(bestReset, *ra, now)
+	}
+
 	if account.Platform == PlatformOpenAI {
 		if resetAt := s.calculateOpenAI429ResetTime(headers); resetAt != nil {
-			if err := s.accountRepo.SetRateLimited(ctx, account.ID, *resetAt); err != nil {
-				slog.Warn("rate_limit_set_failed", "account_id", account.ID, "error", err)
-				return
-			}
-			slog.Info("openai_account_rate_limited", "account_id", account.ID, "reset_at", *resetAt)
-			return
+			bestReset = laterFutureTime(bestReset, *resetAt, now)
 		}
 	}
 
-	// 2. 尝试从响应头解析重置时间（Anthropic）
-	resetTimestamp := headers.Get("anthropic-ratelimit-unified-reset")
-
-	// 3. 如果响应头没有，尝试从响应体解析（OpenAI usage_limit_reached, Gemini）
-	if resetTimestamp == "" {
-		switch account.Platform {
-		case PlatformOpenAI:
-			// 尝试解析 OpenAI 的 usage_limit_reached 错误
-			if resetAt := parseOpenAIRateLimitResetTime(responseBody); resetAt != nil {
-				resetTime := time.Unix(*resetAt, 0)
-				if err := s.accountRepo.SetRateLimited(ctx, account.ID, resetTime); err != nil {
-					slog.Warn("rate_limit_set_failed", "account_id", account.ID, "error", err)
-					return
-				}
-				slog.Info("account_rate_limited", "account_id", account.ID, "platform", account.Platform, "reset_at", resetTime, "reset_in", time.Until(resetTime).Truncate(time.Second))
-				return
-			}
-		case PlatformGemini, PlatformAntigravity:
-			// 尝试解析 Gemini 格式（用于其他平台）
-			if resetAt := ParseGeminiRateLimitResetTime(responseBody); resetAt != nil {
-				resetTime := time.Unix(*resetAt, 0)
-				if err := s.accountRepo.SetRateLimited(ctx, account.ID, resetTime); err != nil {
-					slog.Warn("rate_limit_set_failed", "account_id", account.ID, "error", err)
-					return
-				}
-				slog.Info("account_rate_limited", "account_id", account.ID, "platform", account.Platform, "reset_at", resetTime, "reset_in", time.Until(resetTime).Truncate(time.Second))
-				return
-			}
+	if v := strings.TrimSpace(headers.Get("anthropic-ratelimit-unified-reset")); v != "" {
+		if ts, err := strconv.ParseInt(v, 10, 64); err == nil {
+			bestReset = laterFutureTime(bestReset, time.Unix(ts, 0), now)
+		} else if t, err := time.Parse(time.RFC3339, v); err == nil {
+			bestReset = laterFutureTime(bestReset, t, now)
 		}
-
-		// 没有重置时间，使用默认5分钟
-		resetAt := time.Now().Add(5 * time.Minute)
-		if s.shouldScopeClaudeSonnetRateLimit(account, responseBody) {
-			if err := s.accountRepo.SetModelRateLimit(ctx, account.ID, modelRateLimitScopeClaudeSonnet, resetAt); err != nil {
-				slog.Warn("model_rate_limit_set_failed", "account_id", account.ID, "scope", modelRateLimitScopeClaudeSonnet, "error", err)
-			} else {
-				slog.Info("account_model_rate_limited", "account_id", account.ID, "scope", modelRateLimitScopeClaudeSonnet, "reset_at", resetAt)
-			}
-			return
-		}
-		slog.Warn("rate_limit_no_reset_time", "account_id", account.ID, "platform", account.Platform, "using_default", "5m")
-		if err := s.accountRepo.SetRateLimited(ctx, account.ID, resetAt); err != nil {
-			slog.Warn("rate_limit_set_failed", "account_id", account.ID, "error", err)
-		}
-		return
 	}
 
-	// 解析Unix时间戳
-	ts, err := strconv.ParseInt(resetTimestamp, 10, 64)
-	if err != nil {
-		slog.Warn("rate_limit_reset_parse_failed", "reset_timestamp", resetTimestamp, "error", err)
-		resetAt := time.Now().Add(5 * time.Minute)
-		if s.shouldScopeClaudeSonnetRateLimit(account, responseBody) {
-			if err := s.accountRepo.SetModelRateLimit(ctx, account.ID, modelRateLimitScopeClaudeSonnet, resetAt); err != nil {
-				slog.Warn("model_rate_limit_set_failed", "account_id", account.ID, "scope", modelRateLimitScopeClaudeSonnet, "error", err)
-			} else {
-				slog.Info("account_model_rate_limited", "account_id", account.ID, "scope", modelRateLimitScopeClaudeSonnet, "reset_at", resetAt)
-			}
-			return
+	switch account.Platform {
+	case PlatformOpenAI:
+		if resetAt := parseOpenAIRateLimitResetTime(responseBody); resetAt != nil {
+			bestReset = laterFutureTime(bestReset, time.Unix(*resetAt, 0), now)
 		}
-		if err := s.accountRepo.SetRateLimited(ctx, account.ID, resetAt); err != nil {
-			slog.Warn("rate_limit_set_failed", "account_id", account.ID, "error", err)
+	case PlatformGemini, PlatformAntigravity:
+		if resetAt := ParseGeminiRateLimitResetTime(responseBody); resetAt != nil {
+			bestReset = laterFutureTime(bestReset, time.Unix(*resetAt, 0), now)
 		}
-		return
 	}
 
-	resetAt := time.Unix(ts, 0)
+	resetAt := bestReset
+	if resetAt.IsZero() {
+		cooldown := 5 * time.Minute
+		if account.Platform == PlatformGemini {
+			cooldown = s.GeminiCooldown(ctx, account)
+		}
+		resetAt = now.Add(cooldown)
+		slog.Warn("rate_limit_no_reset_time", "account_id", account.ID, "platform", account.Platform, "using_default", cooldown.String())
+	}
+
+	resetAt = applyResetJitter(resetAt, now)
+	resetAt = clampResetAt(resetAt, now)
+
+	if key, ok := ModelRateLimitKey(account.Platform, effectiveModel); ok {
+		signal := &RateLimitSignal{Scope: RateLimitScopeModelBucket, Key: key, ResetAt: resetAt}
+		if existing := account.modelRateLimitResetAt(key); existing != nil && !resetAt.After(*existing) {
+			signal.ResetAt = *existing
+			return signal
+		}
+		if err := s.accountRepo.SetModelRateLimit(ctx, account.ID, key, resetAt); err != nil {
+			slog.Warn("model_rate_limit_set_failed", "account_id", account.ID, "key", key, "error", err)
+			return signal
+		}
+		slog.Info("account_model_rate_limited", "account_id", account.ID, "key", key, "reset_at", resetAt)
+		return signal
+	}
 
 	if s.shouldScopeClaudeSonnetRateLimit(account, responseBody) {
-		if err := s.accountRepo.SetModelRateLimit(ctx, account.ID, modelRateLimitScopeClaudeSonnet, resetAt); err != nil {
-			slog.Warn("model_rate_limit_set_failed", "account_id", account.ID, "scope", modelRateLimitScopeClaudeSonnet, "error", err)
-			return
+		if key, ok := ModelRateLimitKey(PlatformAnthropic, modelRateLimitScopeClaudeSonnet); ok {
+			signal := &RateLimitSignal{Scope: RateLimitScopeModelBucket, Key: key, ResetAt: resetAt}
+			if err := s.accountRepo.SetModelRateLimit(ctx, account.ID, key, resetAt); err != nil {
+				slog.Warn("model_rate_limit_set_failed", "account_id", account.ID, "key", key, "error", err)
+				return signal
+			}
+			slog.Info("account_model_rate_limited", "account_id", account.ID, "key", key, "reset_at", resetAt)
+			return signal
 		}
-		slog.Info("account_model_rate_limited", "account_id", account.ID, "scope", modelRateLimitScopeClaudeSonnet, "reset_at", resetAt)
-		return
 	}
 
-	// 标记限流状态
+	signal := &RateLimitSignal{Scope: RateLimitScopeAccount, ResetAt: resetAt}
+	if account.RateLimitResetAt != nil && !resetAt.After(*account.RateLimitResetAt) {
+		signal.ResetAt = *account.RateLimitResetAt
+		return signal
+	}
 	if err := s.accountRepo.SetRateLimited(ctx, account.ID, resetAt); err != nil {
 		slog.Warn("rate_limit_set_failed", "account_id", account.ID, "error", err)
-		return
+		return signal
 	}
 
-	// 根据重置时间反推5h窗口
 	windowEnd := resetAt
 	windowStart := resetAt.Add(-5 * time.Hour)
 	if err := s.accountRepo.UpdateSessionWindow(ctx, account.ID, &windowStart, &windowEnd, "rejected"); err != nil {
 		slog.Warn("rate_limit_update_session_window_failed", "account_id", account.ID, "error", err)
+		return signal
 	}
 
 	slog.Info("account_rate_limited", "account_id", account.ID, "reset_at", resetAt)
+	return signal
+}
+
+func clampResetAt(resetAt time.Time, now time.Time) time.Time {
+	// Clamp to a safe range to avoid pathological headers wedging scheduling.
+	min := now.Add(1 * time.Second)
+	max := now.Add(24 * time.Hour)
+	if resetAt.Before(min) {
+		return min
+	}
+	if resetAt.After(max) {
+		return max
+	}
+	return resetAt
+}
+
+func applyResetJitter(resetAt time.Time, now time.Time) time.Time {
+	if rateLimitResetJitter <= 0 {
+		return resetAt
+	}
+	rangeNs := int64(rateLimitResetJitter)
+	if rangeNs <= 0 {
+		return resetAt
+	}
+	offset := now.UnixNano() % rangeNs
+	if offset < 0 {
+		offset = -offset
+	}
+	return resetAt.Add(time.Duration(offset))
+}
+
+func laterFutureTime(best time.Time, candidate time.Time, now time.Time) time.Time {
+	if candidate.IsZero() || !candidate.After(now) {
+		return best
+	}
+	if best.IsZero() || candidate.After(best) {
+		return candidate
+	}
+	return best
+}
+
+// parseRetryAfter supports RFC 9110 Retry-After formats: delta-seconds or HTTP-date.
+func parseRetryAfter(headers http.Header, now time.Time) *time.Time {
+	v := strings.TrimSpace(headers.Get("Retry-After"))
+	if v == "" {
+		return nil
+	}
+	if secs, err := strconv.ParseInt(v, 10, 64); err == nil {
+		if secs <= 0 {
+			return nil
+		}
+		t := now.Add(time.Duration(secs) * time.Second)
+		return &t
+	}
+	if t, err := http.ParseTime(v); err == nil {
+		return &t
+	}
+	return nil
 }
 
 func (s *RateLimitService) shouldScopeClaudeSonnetRateLimit(account *Account, responseBody []byte) bool {

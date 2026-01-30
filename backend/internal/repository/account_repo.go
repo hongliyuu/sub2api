@@ -835,8 +835,12 @@ func (r *accountRepository) SetAntigravityQuotaScopeLimit(ctx context.Context, i
 	return nil
 }
 
-func (r *accountRepository) SetModelRateLimit(ctx context.Context, id int64, scope string, resetAt time.Time) error {
-	if scope == "" {
+func (r *accountRepository) SetModelRateLimit(ctx context.Context, id int64, key string, resetAt time.Time) error {
+	if key == "" {
+		return nil
+	}
+	if !service.IsSafeModelRateLimitKey(key) {
+		log.Printf("[SchedulerOutbox] refused unsafe model rate limit key: account=%d key=%q", id, key)
 		return nil
 	}
 	now := time.Now().UTC()
@@ -849,14 +853,26 @@ func (r *accountRepository) SetModelRateLimit(ctx context.Context, id int64, sco
 		return err
 	}
 
-	path := "{model_rate_limits," + scope + "}"
 	client := clientFromContext(ctx, r.client)
 	result, err := client.ExecContext(
 		ctx,
-		"UPDATE accounts SET extra = jsonb_set(COALESCE(extra, '{}'::jsonb), $1::text[], $2::jsonb, true), updated_at = NOW() WHERE id = $3 AND deleted_at IS NULL",
-		path,
+		"UPDATE accounts\n"+
+			"SET extra = COALESCE(extra, '{}'::jsonb) || jsonb_build_object('model_rate_limits', COALESCE(extra->'model_rate_limits', '{}'::jsonb) || jsonb_build_object($1::text, $2::jsonb)), updated_at = NOW()\n"+
+			"WHERE id = $3 AND deleted_at IS NULL\n"+
+			"  AND (\n"+
+			"    GREATEST(\n"+
+			"      CASE WHEN (extra->'model_rate_limits'->($1)::text->>'rate_limit_reset_at') ~ '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}' \n"+
+			"           THEN (extra->'model_rate_limits'->($1)::text->>'rate_limit_reset_at')::timestamptz \n"+
+			"           ELSE '-infinity'::timestamptz END,\n"+
+			"      CASE WHEN (extra->'model_rate_limits'->(split_part($1, ':', 2))::text->>'rate_limit_reset_at') ~ '^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}' \n"+
+			"           THEN (extra->'model_rate_limits'->(split_part($1, ':', 2))::text->>'rate_limit_reset_at')::timestamptz \n"+
+			"           ELSE '-infinity'::timestamptz END\n"+
+			"    ) < $4::timestamptz\n"+
+			")",
+		key,
 		raw,
 		id,
+		resetAt.UTC().Format(time.RFC3339),
 	)
 	if err != nil {
 		return err
@@ -867,9 +883,21 @@ func (r *accountRepository) SetModelRateLimit(ctx context.Context, id int64, sco
 		return err
 	}
 	if affected == 0 {
-		return service.ErrAccountNotFound
+		exists, err := r.client.Account.Query().
+			Where(dbaccount.IDEQ(id), dbaccount.DeletedAtIsNil()).
+			Exist(ctx)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			return service.ErrAccountNotFound
+		}
+		return nil
 	}
-	if err := enqueueSchedulerOutbox(ctx, r.sql, service.SchedulerOutboxEventAccountChanged, &id, nil, nil); err != nil {
+	outboxPayload := buildSchedulerOutboxPayload(nil, map[string]any{
+		"model_rate_limit_keys": []string{key},
+	})
+	if err := enqueueSchedulerOutbox(ctx, r.sql, service.SchedulerOutboxEventAccountChanged, &id, nil, outboxPayload); err != nil {
 		log.Printf("[SchedulerOutbox] enqueue model rate limit failed: account=%d err=%v", id, err)
 	}
 	return nil
@@ -1479,10 +1507,24 @@ func mergeGroupIDs(a []int64, b []int64) []int64 {
 }
 
 func buildSchedulerGroupPayload(groupIDs []int64) map[string]any {
-	if len(groupIDs) == 0 {
+	return buildSchedulerOutboxPayload(groupIDs, nil)
+}
+
+func buildSchedulerOutboxPayload(groupIDs []int64, extras map[string]any) map[string]any {
+	if len(groupIDs) == 0 && len(extras) == 0 {
 		return nil
 	}
-	return map[string]any{"group_ids": groupIDs}
+	payload := make(map[string]any)
+	if len(groupIDs) > 0 {
+		payload["group_ids"] = groupIDs
+	}
+	for k, v := range extras {
+		if v == nil {
+			continue
+		}
+		payload[k] = v
+	}
+	return payload
 }
 
 func accountEntityToService(m *dbent.Account) *service.Account {
