@@ -2753,6 +2753,15 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 		s.identityService.ApplyFingerprint(req, fingerprint)
 	}
 
+	// TLS指纹启用：添加Claude Code客户端标准Headers（覆盖任何现有值）
+	// 这与TLS指纹配置一起，使服务器完全伪装成官方Claude Code客户端
+	if account.IsTLSFingerprintEnabled() {
+		// 从claude包应用Claude Code默认Headers，覆盖现有头
+		for key, value := range claude.DefaultHeaders {
+			req.Header.Set(key, value)
+		}
+	}
+
 	// 确保必要的headers存在
 	if req.Header.Get("content-type") == "" {
 		req.Header.Set("content-type", "application/json")
@@ -3792,6 +3801,14 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 		fp, _ := s.identityService.GetOrCreateFingerprint(ctx, account.ID, c.Request.Header)
 		if fp != nil {
 			s.identityService.ApplyFingerprint(req, fp)
+		}
+	}
+
+	// TLS指纹启用：添加Claude Code客户端标准Headers（覆盖任何现有值）
+	// 这与TLS指纹配置一起，使服务器完全伪装成官方Claude Code客户端
+	if account.IsTLSFingerprintEnabled() {
+		for key, value := range claude.DefaultHeaders {
+			req.Header.Set(key, value)
 		}
 	}
 
