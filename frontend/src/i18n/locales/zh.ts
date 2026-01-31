@@ -3443,7 +3443,16 @@ export default {
     rechargeAmount: '充值金额',
     paidTime: '支付时间',
     backToDashboard: '返回首页',
-    continueRecharge: '继续充值'
+    continueRecharge: '继续充值',
+    // Failed page
+    failedTitle: '充值失败',
+    failedSubtitle: '订单支付未完成',
+    failedReasonPayment: '支付过程中出现问题，请重试',
+    failedReasonExpired: '订单已过期，请重新创建订单',
+    failedReasonCancelled: '订单已取消',
+    failedReasonUnknown: '未知错误，请重试',
+    retryRecharge: '重新充值',
+    statusCancelled: '已取消'
   },
 
   // User Subscriptions Page

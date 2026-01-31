@@ -3294,7 +3294,16 @@ export default {
     rechargeAmount: 'Recharge Amount',
     paidTime: 'Paid At',
     backToDashboard: 'Back to Dashboard',
-    continueRecharge: 'Continue Recharge'
+    continueRecharge: 'Continue Recharge',
+    // Failed page
+    failedTitle: 'Recharge Failed',
+    failedSubtitle: 'Payment was not completed',
+    failedReasonPayment: 'An error occurred during payment, please try again',
+    failedReasonExpired: 'Order has expired, please create a new order',
+    failedReasonCancelled: 'Order was cancelled',
+    failedReasonUnknown: 'Unknown error, please try again',
+    retryRecharge: 'Retry Recharge',
+    statusCancelled: 'Cancelled'
   },
 
   // User Subscriptions Page
