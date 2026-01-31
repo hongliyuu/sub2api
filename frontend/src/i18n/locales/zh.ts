@@ -3436,7 +3436,14 @@ export default {
     statusUnknown: '未知',
     waitingPayment: '等待支付中...',
     remainingTime: '剩余时间',
-    countdown: '剩余 {time}'
+    countdown: '剩余 {time}',
+    // Success page
+    successTitle: '充值成功',
+    successSubtitle: '您的充值已到账',
+    rechargeAmount: '充值金额',
+    paidTime: '支付时间',
+    backToDashboard: '返回首页',
+    continueRecharge: '继续充值'
   },
 
   // User Subscriptions Page

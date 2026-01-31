@@ -3287,7 +3287,14 @@ export default {
     statusUnknown: 'Unknown',
     waitingPayment: 'Waiting for payment...',
     remainingTime: 'Remaining Time',
-    countdown: '{time} remaining'
+    countdown: '{time} remaining',
+    // Success page
+    successTitle: 'Recharge Successful',
+    successSubtitle: 'Your balance has been credited',
+    rechargeAmount: 'Recharge Amount',
+    paidTime: 'Paid At',
+    backToDashboard: 'Back to Dashboard',
+    continueRecharge: 'Continue Recharge'
   },
 
   // User Subscriptions Page

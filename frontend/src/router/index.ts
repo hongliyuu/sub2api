@@ -232,6 +232,19 @@ const routes: RouteRecordRaw[] = [
       descriptionKey: 'recharge.paymentDescription'
     }
   },
+  {
+    path: '/recharge/success/:orderNo',
+    name: 'RechargeSuccess',
+    component: () => import('@/views/user/RechargeSuccessView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      requiresRecharge: true,
+      title: 'Recharge Success',
+      titleKey: 'recharge.successTitle',
+      descriptionKey: 'recharge.successSubtitle'
+    }
+  },
 
   // ==================== Admin Routes ====================
   {
