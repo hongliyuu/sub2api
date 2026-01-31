@@ -62,16 +62,22 @@
         <div class="mt-6">
           <button
             type="button"
-            :disabled="!canSubmit || submitting"
+            :disabled="!canSubmit || submitting || rateLimitCountdown > 0"
             :aria-label="submitButtonText"
             class="btn btn-primary w-full py-3 text-base font-medium transition-all duration-200"
             :class="{
-              'opacity-50 cursor-not-allowed': !canSubmit || submitting,
-              'hover:shadow-lg': canSubmit && !submitting
+              'opacity-50 cursor-not-allowed': !canSubmit || submitting || rateLimitCountdown > 0,
+              'hover:shadow-lg': canSubmit && !submitting && rateLimitCountdown <= 0
             }"
             @click="handleSubmit"
           >
-            <span v-if="submitting" class="flex items-center justify-center gap-2">
+            <span v-if="rateLimitCountdown > 0" class="flex items-center justify-center gap-2">
+              <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {{ t('recharge.rateLimitCountdown', { seconds: rateLimitCountdown }) }}
+            </span>
+            <span v-else-if="submitting" class="flex items-center justify-center gap-2">
               <svg class="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none">
                 <circle
                   class="opacity-25"
@@ -98,11 +104,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useAuthStore, useRechargeStore } from '@/stores'
-import { rechargeAPI } from '@/api'
+import { rechargeAPI, isRateLimitError } from '@/api'
 import AmountSelector from '@/components/user/recharge/AmountSelector.vue'
 import PaymentMethodSelector from '@/components/user/recharge/PaymentMethodSelector.vue'
 
@@ -125,6 +131,10 @@ const submitting = ref(false)
 
 // 错误信息
 const errorMessage = ref('')
+
+// 限流倒计时（秒）
+const rateLimitCountdown = ref(0)
+let rateLimitTimer: ReturnType<typeof setInterval> | null = null
 
 // 用户余额
 const balance = computed(() => authStore.user?.balance ?? 0)
@@ -162,9 +172,30 @@ const submitButtonText = computed(() => {
   return t('recharge.submitButtonDefault')
 })
 
+// 启动限流倒计时
+const startRateLimitCountdown = (seconds: number) => {
+  // 清除之前的计时器
+  if (rateLimitTimer) {
+    clearInterval(rateLimitTimer)
+  }
+
+  rateLimitCountdown.value = seconds
+  rateLimitTimer = setInterval(() => {
+    rateLimitCountdown.value--
+    if (rateLimitCountdown.value <= 0) {
+      if (rateLimitTimer) {
+        clearInterval(rateLimitTimer)
+        rateLimitTimer = null
+      }
+      // 倒计时结束时清除错误信息
+      errorMessage.value = ''
+    }
+  }, 1000)
+}
+
 // 提交处理
 const handleSubmit = async () => {
-  if (!canSubmit.value || submitting.value) {
+  if (!canSubmit.value || submitting.value || rateLimitCountdown.value > 0) {
     return
   }
 
@@ -186,7 +217,12 @@ const handleSubmit = async () => {
     })
   } catch (error) {
     console.error('Failed to create order:', error)
-    errorMessage.value = t('recharge.orderCreateFailed')
+    if (isRateLimitError(error)) {
+      errorMessage.value = error.message
+      startRateLimitCountdown(error.retryAfter)
+    } else {
+      errorMessage.value = t('recharge.orderCreateFailed')
+    }
   } finally {
     submitting.value = false
   }
@@ -201,6 +237,13 @@ onMounted(async () => {
     console.error('Failed to refresh user data:', error)
   } finally {
     loading.value = false
+  }
+})
+
+// 组件卸载时清理计时器
+onUnmounted(() => {
+  if (rateLimitTimer) {
+    clearInterval(rateLimitTimer)
   }
 })
 </script>

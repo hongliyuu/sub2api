@@ -3270,6 +3270,8 @@ export default {
     orderCreateFailed: 'Failed to create order, please try again',
     orderCreateSuccess: 'Order created successfully',
     selectPaymentMethodFirst: 'Please select a payment method',
+    // Rate limiting
+    rateLimitCountdown: 'Retry in {seconds} seconds',
     // Payment page
     paymentTitle: 'Payment',
     paymentDescription: 'Complete your payment',

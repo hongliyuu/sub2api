@@ -3,6 +3,7 @@
  * Handles balance recharge configuration and operations
  */
 
+import axios from 'axios'
 import { apiClient } from './client'
 
 // ==================== Types ====================
@@ -84,6 +85,35 @@ export interface ListOrdersResponse {
   page_size: number
 }
 
+// 限流错误响应类型
+export interface RateLimitErrorResponse {
+  error: string
+  message: string
+  retry_after: number
+}
+
+// ==================== Errors ====================
+
+/**
+ * 限流错误类
+ */
+export class RateLimitExceededError extends Error {
+  retryAfter: number
+
+  constructor(message: string, retryAfter: number) {
+    super(message)
+    this.name = 'RateLimitExceededError'
+    this.retryAfter = retryAfter
+  }
+}
+
+/**
+ * 检查是否为限流错误
+ */
+export function isRateLimitError(error: unknown): error is RateLimitExceededError {
+  return error instanceof RateLimitExceededError
+}
+
 // ==================== API Functions ====================
 
 export const rechargeAPI = {
@@ -97,10 +127,22 @@ export const rechargeAPI = {
 
   /**
    * 创建充值订单
+   * @throws {RateLimitExceededError} 当请求被限流时抛出
    */
   async createOrder(data: CreateOrderRequest): Promise<RechargeOrder> {
-    const response = await apiClient.post<RechargeOrder>('/recharge/orders', data)
-    return response.data
+    try {
+      const response = await apiClient.post<RechargeOrder>('/recharge/orders', data)
+      return response.data
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 429) {
+        const rateLimitData = error.response.data as RateLimitErrorResponse
+        throw new RateLimitExceededError(
+          rateLimitData.message || '操作过于频繁，请稍后重试',
+          rateLimitData.retry_after || 60
+        )
+      }
+      throw error
+    }
   },
 
   /**

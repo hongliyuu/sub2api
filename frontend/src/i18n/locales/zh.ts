@@ -3419,6 +3419,8 @@ export default {
     orderCreateFailed: '创建订单失败，请重试',
     orderCreateSuccess: '订单创建成功',
     selectPaymentMethodFirst: '请选择支付方式',
+    // Rate limiting
+    rateLimitCountdown: '{seconds} 秒后可再次提交',
     // Payment page
     paymentTitle: '支付',
     paymentDescription: '完成订单支付',

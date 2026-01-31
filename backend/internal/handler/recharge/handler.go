@@ -1,6 +1,7 @@
 package recharge
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -12,18 +13,21 @@ import (
 
 // RechargeHandler 充值相关接口处理器
 type RechargeHandler struct {
-	wechatPayService      *service.WeChatPayService
-	rechargeOrderService  *service.RechargeOrderService
+	wechatPayService           *service.WeChatPayService
+	rechargeOrderService       *service.RechargeOrderService
+	rechargeRateLimitService   *service.RechargeRateLimitService
 }
 
 // NewRechargeHandler 创建充值处理器
 func NewRechargeHandler(
 	wechatPayService *service.WeChatPayService,
 	rechargeOrderService *service.RechargeOrderService,
+	rechargeRateLimitService *service.RechargeRateLimitService,
 ) *RechargeHandler {
 	return &RechargeHandler{
-		wechatPayService:     wechatPayService,
-		rechargeOrderService: rechargeOrderService,
+		wechatPayService:         wechatPayService,
+		rechargeOrderService:     rechargeOrderService,
+		rechargeRateLimitService: rechargeRateLimitService,
 	}
 }
 
@@ -129,6 +133,26 @@ func (h *RechargeHandler) CreateOrder(c *gin.Context) {
 	if !exists {
 		response.Unauthorized(c, "未登录")
 		return
+	}
+
+	ctx := c.Request.Context()
+
+	// 检查分钟级限流
+	limitResult, err := h.rechargeRateLimitService.CheckRechargeMinuteLimit(ctx, userID.(int64))
+	if err != nil {
+		log.Printf("[RechargeHandler] check rate limit failed: %v", err)
+		// 限流服务异常时不阻止请求，但记录日志
+	} else if !limitResult.Allowed {
+		c.Header("Retry-After", strconv.Itoa(limitResult.RetryAfter))
+		c.Header("X-RateLimit-Remaining", "0")
+		c.JSON(http.StatusTooManyRequests, gin.H{
+			"error":       "rate_limit_exceeded",
+			"message":     limitResult.Message,
+			"retry_after": limitResult.RetryAfter,
+		})
+		return
+	} else if limitResult.Remaining >= 0 {
+		c.Header("X-RateLimit-Remaining", strconv.Itoa(limitResult.Remaining))
 	}
 
 	var req CreateOrderRequest

@@ -298,4 +298,5 @@ var ProviderSet = wire.NewSet(
 	NewRechargeOrderService,
 	NewPaymentCallbackService,
 	ProvideOrderExpireScheduler,
+	NewRechargeRateLimitService,
 )

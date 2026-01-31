@@ -78,7 +78,7 @@ development_status:
   4-3-cancel-unpaid-order: done                   # Epic 4
   4-4-order-expire-auto: done                     # Epic 4
   4-5-wechat-close-order: done                     # Epic 4
-  6-1-user-minute-rate-limit: ready-for-dev      # Epic 6
+  6-1-user-minute-rate-limit: done                 # Epic 6
   sprint-3-retrospective: optional
 
   # Sprint 4: 补偿机制 + 完整限流 (6 stories)
