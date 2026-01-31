@@ -76,6 +76,9 @@ func (r *rechargeOrderRepository) Update(ctx context.Context, order *service.Rec
 	if order.QRCodeURL != nil {
 		up.SetQrcodeURL(*order.QRCodeURL)
 	}
+	if order.PrepayID != nil {
+		up.SetPrepayID(*order.PrepayID)
+	}
 	if order.PaidAt != nil {
 		up.SetPaidAt(*order.PaidAt)
 	}
@@ -115,6 +118,7 @@ func rechargeOrderEntityToService(m *dbent.RechargeOrder) *service.RechargeOrder
 		Status:              m.Status,
 		WeChatTransactionID: m.WechatTransactionID,
 		QRCodeURL:           m.QrcodeURL,
+		PrepayID:            m.PrepayID,
 		ExpireAt:            m.ExpireAt,
 		PaidAt:              m.PaidAt,
 		Notes:               m.Notes,

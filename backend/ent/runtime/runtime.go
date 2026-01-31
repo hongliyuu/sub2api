@@ -12,6 +12,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
+	"github.com/Wei-Shaw/sub2api/ent/rechargeorder"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/schema"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
@@ -426,6 +427,89 @@ func init() {
 	proxy.DefaultStatus = proxyDescStatus.Default.(string)
 	// proxy.StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	proxy.StatusValidator = proxyDescStatus.Validators[0].(func(string) error)
+	rechargeorderMixin := schema.RechargeOrder{}.Mixin()
+	rechargeorderMixinFields0 := rechargeorderMixin[0].Fields()
+	_ = rechargeorderMixinFields0
+	rechargeorderFields := schema.RechargeOrder{}.Fields()
+	_ = rechargeorderFields
+	// rechargeorderDescCreatedAt is the schema descriptor for created_at field.
+	rechargeorderDescCreatedAt := rechargeorderMixinFields0[0].Descriptor()
+	// rechargeorder.DefaultCreatedAt holds the default value on creation for the created_at field.
+	rechargeorder.DefaultCreatedAt = rechargeorderDescCreatedAt.Default.(func() time.Time)
+	// rechargeorderDescUpdatedAt is the schema descriptor for updated_at field.
+	rechargeorderDescUpdatedAt := rechargeorderMixinFields0[1].Descriptor()
+	// rechargeorder.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	rechargeorder.DefaultUpdatedAt = rechargeorderDescUpdatedAt.Default.(func() time.Time)
+	// rechargeorder.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	rechargeorder.UpdateDefaultUpdatedAt = rechargeorderDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// rechargeorderDescOrderNo is the schema descriptor for order_no field.
+	rechargeorderDescOrderNo := rechargeorderFields[0].Descriptor()
+	// rechargeorder.OrderNoValidator is a validator for the "order_no" field. It is called by the builders before save.
+	rechargeorder.OrderNoValidator = func() func(string) error {
+		validators := rechargeorderDescOrderNo.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(order_no string) error {
+			for _, fn := range fns {
+				if err := fn(order_no); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// rechargeorderDescUserID is the schema descriptor for user_id field.
+	rechargeorderDescUserID := rechargeorderFields[1].Descriptor()
+	// rechargeorder.UserIDValidator is a validator for the "user_id" field. It is called by the builders before save.
+	rechargeorder.UserIDValidator = rechargeorderDescUserID.Validators[0].(func(int64) error)
+	// rechargeorderDescAmount is the schema descriptor for amount field.
+	rechargeorderDescAmount := rechargeorderFields[2].Descriptor()
+	// rechargeorder.AmountValidator is a validator for the "amount" field. It is called by the builders before save.
+	rechargeorder.AmountValidator = rechargeorderDescAmount.Validators[0].(func(float64) error)
+	// rechargeorderDescPaymentMethod is the schema descriptor for payment_method field.
+	rechargeorderDescPaymentMethod := rechargeorderFields[3].Descriptor()
+	// rechargeorder.PaymentMethodValidator is a validator for the "payment_method" field. It is called by the builders before save.
+	rechargeorder.PaymentMethodValidator = func() func(string) error {
+		validators := rechargeorderDescPaymentMethod.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(payment_method string) error {
+			for _, fn := range fns {
+				if err := fn(payment_method); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// rechargeorderDescPaymentChannel is the schema descriptor for payment_channel field.
+	rechargeorderDescPaymentChannel := rechargeorderFields[4].Descriptor()
+	// rechargeorder.DefaultPaymentChannel holds the default value on creation for the payment_channel field.
+	rechargeorder.DefaultPaymentChannel = rechargeorderDescPaymentChannel.Default.(string)
+	// rechargeorder.PaymentChannelValidator is a validator for the "payment_channel" field. It is called by the builders before save.
+	rechargeorder.PaymentChannelValidator = rechargeorderDescPaymentChannel.Validators[0].(func(string) error)
+	// rechargeorderDescStatus is the schema descriptor for status field.
+	rechargeorderDescStatus := rechargeorderFields[5].Descriptor()
+	// rechargeorder.DefaultStatus holds the default value on creation for the status field.
+	rechargeorder.DefaultStatus = rechargeorderDescStatus.Default.(string)
+	// rechargeorder.StatusValidator is a validator for the "status" field. It is called by the builders before save.
+	rechargeorder.StatusValidator = rechargeorderDescStatus.Validators[0].(func(string) error)
+	// rechargeorderDescWechatTransactionID is the schema descriptor for wechat_transaction_id field.
+	rechargeorderDescWechatTransactionID := rechargeorderFields[6].Descriptor()
+	// rechargeorder.WechatTransactionIDValidator is a validator for the "wechat_transaction_id" field. It is called by the builders before save.
+	rechargeorder.WechatTransactionIDValidator = rechargeorderDescWechatTransactionID.Validators[0].(func(string) error)
+	// rechargeorderDescPrepayID is the schema descriptor for prepay_id field.
+	rechargeorderDescPrepayID := rechargeorderFields[8].Descriptor()
+	// rechargeorder.PrepayIDValidator is a validator for the "prepay_id" field. It is called by the builders before save.
+	rechargeorder.PrepayIDValidator = rechargeorderDescPrepayID.Validators[0].(func(string) error)
+	// rechargeorderDescNotes is the schema descriptor for notes field.
+	rechargeorderDescNotes := rechargeorderFields[11].Descriptor()
+	// rechargeorder.DefaultNotes holds the default value on creation for the notes field.
+	rechargeorder.DefaultNotes = rechargeorderDescNotes.Default.(string)
 	redeemcodeFields := schema.RedeemCode{}.Fields()
 	_ = redeemcodeFields
 	// redeemcodeDescCode is the schema descriptor for code field.

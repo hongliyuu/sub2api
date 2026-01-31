@@ -5,11 +5,15 @@ import (
 	"crypto/rsa"
 	"fmt"
 	"log"
+	"math"
 	"sync"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/wechatpay-apiv3/wechatpay-go/core"
 	"github.com/wechatpay-apiv3/wechatpay-go/core/option"
+	"github.com/wechatpay-apiv3/wechatpay-go/services/payments/jsapi"
+	"github.com/wechatpay-apiv3/wechatpay-go/services/payments/native"
 	"github.com/wechatpay-apiv3/wechatpay-go/utils"
 )
 
@@ -137,4 +141,218 @@ func (s *WeChatPayService) ValidateRechargeAmount(amount float64) error {
 		return fmt.Errorf("充值金额不能大于 %.2f 元", cfg.MaxAmount)
 	}
 	return nil
+}
+
+// PaymentChannel 支付渠道类型
+type PaymentChannel string
+
+const (
+	WeChatPayChannelNative PaymentChannel = "native" // 扫码支付
+	WeChatPayChannelJSAPI  PaymentChannel = "jsapi"  // 公众号/小程序支付
+)
+
+// WeChatPayRequest 微信支付请求参数
+type WeChatPayRequest struct {
+	AppID       string         // 应用ID
+	MchID       string         // 商户号
+	OutTradeNo  string         // 商户订单号
+	AmountInFen int64          // 金额（分）
+	Description string         // 商品描述
+	NotifyURL   string         // 回调地址
+	Channel     PaymentChannel // 支付渠道
+	OpenID      string         // 用户OpenID（JSAPI必填）
+	ExpireAt    time.Time      // 过期时间
+}
+
+// WeChatPayResult 微信支付下单结果
+type WeChatPayResult struct {
+	PrepayID  string // 预支付交易会话标识
+	QRCodeURL string // 二维码链接（Native支付）
+}
+
+// CreateWeChatPayOrderRequest 创建微信支付订单请求
+type CreateWeChatPayOrderRequest struct {
+	OrderNo     string  // 商户订单号
+	Amount      float64 // 金额（元）
+	Description string  // 商品描述
+	Channel     string  // 支付渠道：native/jsapi
+	OpenID      string  // 用户OpenID（JSAPI必填）
+}
+
+// CreateWeChatPayOrderResult 创建微信支付订单结果
+type CreateWeChatPayOrderResult struct {
+	PrepayID  string // 预支付交易会话标识
+	QRCodeURL string // 二维码链接（Native支付）
+}
+
+// AmountToFen 将金额从元转换为分
+// 使用 math.Round 避免浮点数精度问题
+func AmountToFen(yuan float64) int64 {
+	return int64(math.Round(yuan * 100))
+}
+
+// maskOpenID 脱敏 OpenID（只显示前6位和后4位）
+func maskOpenID(openID string) string {
+	if len(openID) <= 10 {
+		return openID[:len(openID)/2] + "..."
+	}
+	return openID[:6] + "..." + openID[len(openID)-4:]
+}
+
+// buildPaymentRequest 构建支付请求参数
+func (s *WeChatPayService) buildPaymentRequest(orderNo string, amount float64, description, channel, openID string) *WeChatPayRequest {
+	expireMinutes := s.cfg.WeChatPay.OrderExpireMinutes
+	if expireMinutes <= 0 {
+		expireMinutes = 30
+	}
+
+	ch := WeChatPayChannelNative
+	if channel == "jsapi" {
+		ch = WeChatPayChannelJSAPI
+	}
+
+	return &WeChatPayRequest{
+		AppID:       s.cfg.WeChatPay.AppID,
+		MchID:       s.cfg.WeChatPay.MchID,
+		OutTradeNo:  orderNo,
+		AmountInFen: AmountToFen(amount),
+		Description: description,
+		NotifyURL:   s.cfg.WeChatPay.NotifyURL,
+		Channel:     ch,
+		OpenID:      openID,
+		ExpireAt:    time.Now().Add(time.Duration(expireMinutes) * time.Minute),
+	}
+}
+
+// CreateOrder 创建微信支付订单
+// 支持 Native（扫码支付）和 JSAPI（公众号支付）两种方式
+// 超时时间设置为 30 秒
+func (s *WeChatPayService) CreateOrder(ctx context.Context, req *CreateWeChatPayOrderRequest) (*CreateWeChatPayOrderResult, error) {
+	// 检查是否已初始化
+	if !s.IsEnabled() {
+		return nil, fmt.Errorf("wechat pay is not enabled or not initialized")
+	}
+
+	// 获取客户端
+	client, err := s.GetClient()
+	if err != nil {
+		log.Printf("[WeChatPay] Failed to get client: %v", err)
+		return nil, fmt.Errorf("get wechat pay client: %w", err)
+	}
+
+	// 构建请求参数
+	payReq := s.buildPaymentRequest(req.OrderNo, req.Amount, req.Description, req.Channel, req.OpenID)
+
+	// 根据支付渠道调用不同的 API
+	switch payReq.Channel {
+	case WeChatPayChannelNative:
+		return s.createNativeOrder(ctx, client, payReq)
+	case WeChatPayChannelJSAPI:
+		return s.createJSAPIOrder(ctx, client, payReq)
+	default:
+		return nil, fmt.Errorf("unsupported payment channel: %s", payReq.Channel)
+	}
+}
+
+// createNativeOrder 创建 Native 扫码支付订单
+func (s *WeChatPayService) createNativeOrder(ctx context.Context, client *core.Client, req *WeChatPayRequest) (*CreateWeChatPayOrderResult, error) {
+	svc := native.NativeApiService{Client: client}
+
+	// 构建 Native 支付请求
+	nativeReq := native.PrepayRequest{
+		Appid:       core.String(req.AppID),
+		Mchid:       core.String(req.MchID),
+		Description: core.String(req.Description),
+		OutTradeNo:  core.String(req.OutTradeNo),
+		TimeExpire:  core.Time(req.ExpireAt),
+		NotifyUrl:   core.String(req.NotifyURL),
+		Amount: &native.Amount{
+			Total:    core.Int64(req.AmountInFen),
+			Currency: core.String("CNY"),
+		},
+	}
+
+	log.Printf("[WeChatPay] Creating Native order: order_no=%s, amount=%d fen, expire_at=%s",
+		req.OutTradeNo, req.AmountInFen, req.ExpireAt.Format(time.RFC3339))
+
+	// 调用微信支付 API
+	resp, result, err := svc.Prepay(ctx, nativeReq)
+	if err != nil {
+		log.Printf("[WeChatPay] Native prepay failed: order_no=%s, error=%v", req.OutTradeNo, err)
+		return nil, fmt.Errorf("native prepay: %w", err)
+	}
+
+	// 检查 HTTP 状态码
+	if result.Response.StatusCode != 200 {
+		log.Printf("[WeChatPay] Native prepay returned non-200: order_no=%s, status=%d",
+			req.OutTradeNo, result.Response.StatusCode)
+		return nil, fmt.Errorf("native prepay returned status %d", result.Response.StatusCode)
+	}
+
+	if resp.CodeUrl == nil {
+		log.Printf("[WeChatPay] Native prepay returned nil code_url: order_no=%s", req.OutTradeNo)
+		return nil, fmt.Errorf("native prepay returned nil code_url")
+	}
+
+	log.Printf("[WeChatPay] Native order created successfully: order_no=%s", req.OutTradeNo)
+
+	return &CreateWeChatPayOrderResult{
+		QRCodeURL: *resp.CodeUrl,
+	}, nil
+}
+
+// createJSAPIOrder 创建 JSAPI 公众号支付订单
+func (s *WeChatPayService) createJSAPIOrder(ctx context.Context, client *core.Client, req *WeChatPayRequest) (*CreateWeChatPayOrderResult, error) {
+	// JSAPI 支付需要 OpenID
+	if req.OpenID == "" {
+		return nil, fmt.Errorf("openid is required for JSAPI payment")
+	}
+
+	svc := jsapi.JsapiApiService{Client: client}
+
+	// 构建 JSAPI 支付请求
+	jsapiReq := jsapi.PrepayRequest{
+		Appid:       core.String(req.AppID),
+		Mchid:       core.String(req.MchID),
+		Description: core.String(req.Description),
+		OutTradeNo:  core.String(req.OutTradeNo),
+		TimeExpire:  core.Time(req.ExpireAt),
+		NotifyUrl:   core.String(req.NotifyURL),
+		Amount: &jsapi.Amount{
+			Total:    core.Int64(req.AmountInFen),
+			Currency: core.String("CNY"),
+		},
+		Payer: &jsapi.Payer{
+			Openid: core.String(req.OpenID),
+		},
+	}
+
+	log.Printf("[WeChatPay] Creating JSAPI order: order_no=%s, amount=%d fen, openid=%s..., expire_at=%s",
+		req.OutTradeNo, req.AmountInFen, maskOpenID(req.OpenID), req.ExpireAt.Format(time.RFC3339))
+
+	// 调用微信支付 API
+	resp, result, err := svc.Prepay(ctx, jsapiReq)
+	if err != nil {
+		log.Printf("[WeChatPay] JSAPI prepay failed: order_no=%s, error=%v", req.OutTradeNo, err)
+		return nil, fmt.Errorf("jsapi prepay: %w", err)
+	}
+
+	// 检查 HTTP 状态码
+	if result.Response.StatusCode != 200 {
+		log.Printf("[WeChatPay] JSAPI prepay returned non-200: order_no=%s, status=%d",
+			req.OutTradeNo, result.Response.StatusCode)
+		return nil, fmt.Errorf("jsapi prepay returned status %d", result.Response.StatusCode)
+	}
+
+	if resp.PrepayId == nil {
+		log.Printf("[WeChatPay] JSAPI prepay returned nil prepay_id: order_no=%s", req.OutTradeNo)
+		return nil, fmt.Errorf("jsapi prepay returned nil prepay_id")
+	}
+
+	log.Printf("[WeChatPay] JSAPI order created successfully: order_no=%s, prepay_id=%s",
+		req.OutTradeNo, *resp.PrepayId)
+
+	return &CreateWeChatPayOrderResult{
+		PrepayID: *resp.PrepayId,
+	}, nil
 }

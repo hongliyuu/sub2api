@@ -121,3 +121,98 @@ func TestWeChatPayServiceValidateRechargeAmount(t *testing.T) {
 		})
 	}
 }
+
+func TestAmountToFen(t *testing.T) {
+	tests := []struct {
+		name     string
+		yuan     float64
+		expected int64
+	}{
+		{"整数金额", 10.0, 1000},
+		{"小数金额", 10.50, 1050},
+		{"两位小数", 99.99, 9999},
+		{"最小金额", 0.01, 1},
+		{"大金额", 1000.0, 100000},
+		{"带精度问题的金额", 19.9, 1990},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := AmountToFen(tt.yuan)
+			if result != tt.expected {
+				t.Errorf("AmountToFen(%f) = %d, want %d", tt.yuan, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestCreateWeChatPayOrderRequest(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.WeChatPay.AppID = "wx123456"
+	cfg.WeChatPay.MchID = "1234567890"
+	cfg.WeChatPay.NotifyURL = "https://example.com/api/v1/wechat/pay/notify"
+
+	svc := &WeChatPayService{cfg: cfg}
+
+	tests := []struct {
+		name           string
+		orderNo        string
+		amount         float64
+		description    string
+		channel        string
+		openID         string
+		expectChannel  PaymentChannel
+	}{
+		{
+			name:          "Native支付",
+			orderNo:       "RECH20260201000001",
+			amount:        10.0,
+			description:   "充值 10.00 元",
+			channel:       "native",
+			openID:        "",
+			expectChannel: WeChatPayChannelNative,
+		},
+		{
+			name:          "JSAPI支付",
+			orderNo:       "RECH20260201000002",
+			amount:        50.0,
+			description:   "充值 50.00 元",
+			channel:       "jsapi",
+			openID:        "oUpF8uMuAJO",
+			expectChannel: WeChatPayChannelJSAPI,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := svc.buildPaymentRequest(tt.orderNo, tt.amount, tt.description, tt.channel, tt.openID)
+			if req == nil {
+				t.Fatal("buildPaymentRequest returned nil")
+			}
+			if req.AppID != cfg.WeChatPay.AppID {
+				t.Errorf("AppID = %s, want %s", req.AppID, cfg.WeChatPay.AppID)
+			}
+			if req.MchID != cfg.WeChatPay.MchID {
+				t.Errorf("MchID = %s, want %s", req.MchID, cfg.WeChatPay.MchID)
+			}
+			if req.OutTradeNo != tt.orderNo {
+				t.Errorf("OutTradeNo = %s, want %s", req.OutTradeNo, tt.orderNo)
+			}
+			if req.AmountInFen != AmountToFen(tt.amount) {
+				t.Errorf("AmountInFen = %d, want %d", req.AmountInFen, AmountToFen(tt.amount))
+			}
+			if req.Description != tt.description {
+				t.Errorf("Description = %s, want %s", req.Description, tt.description)
+			}
+			if req.NotifyURL != cfg.WeChatPay.NotifyURL {
+				t.Errorf("NotifyURL = %s, want %s", req.NotifyURL, cfg.WeChatPay.NotifyURL)
+			}
+			if req.Channel != tt.expectChannel {
+				t.Errorf("Channel = %v, want %v", req.Channel, tt.expectChannel)
+			}
+			if tt.channel == "jsapi" && req.OpenID != tt.openID {
+				t.Errorf("OpenID = %s, want %s", req.OpenID, tt.openID)
+			}
+		})
+	}
+}

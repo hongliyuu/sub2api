@@ -51,6 +51,7 @@ type RechargeOrder struct {
 	Status               string     `json:"status"`
 	WeChatTransactionID  *string    `json:"wechat_transaction_id,omitempty"`
 	QRCodeURL            *string    `json:"qrcode_url,omitempty"`
+	PrepayID             *string    `json:"prepay_id,omitempty"`
 	ExpireAt             time.Time  `json:"expire_at"`
 	PaidAt               *time.Time `json:"paid_at,omitempty"`
 	Notes                string     `json:"notes,omitempty"`
@@ -194,4 +195,17 @@ func (s *RechargeOrderService) GetExpireMinutes() int {
 		return s.cfg.WeChatPay.OrderExpireMinutes
 	}
 	return 30
+}
+
+// UpdatePaymentResult 更新订单支付结果（保存 prepay_id 或 qrcode_url）
+func (s *RechargeOrderService) UpdatePaymentResult(ctx context.Context, orderNo string, qrcodeURL, prepayID *string) error {
+	order, err := s.repo.GetByOrderNo(ctx, orderNo)
+	if err != nil {
+		return err
+	}
+
+	order.QRCodeURL = qrcodeURL
+	order.PrepayID = prepayID
+
+	return s.repo.Update(ctx, order)
 }

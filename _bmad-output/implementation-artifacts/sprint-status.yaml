@@ -55,8 +55,8 @@ development_status:
 
   # Sprint 2: 支付集成 + 结果页面 (11 stories)
   # 目标: 完整支付流程闭环（PC端扫码支付）
-  sprint-2: backlog
-  2-6-wechat-pay-order-creation: ready-for-dev   # Epic 2
+  sprint-2: in-progress
+  2-6-wechat-pay-order-creation: done     # Epic 2
   2-7-native-pay-qrcode: ready-for-dev           # Epic 2
   3-1-receive-wechat-callback: ready-for-dev     # Epic 3
   3-2-callback-signature-decrypt: ready-for-dev  # Epic 3

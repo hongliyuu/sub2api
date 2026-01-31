@@ -22,6 +22,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
+	"github.com/Wei-Shaw/sub2api/ent/rechargeorder"
 	"github.com/Wei-Shaw/sub2api/ent/redeemcode"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
 	"github.com/Wei-Shaw/sub2api/ent/usagecleanuptask"
@@ -54,6 +55,8 @@ type Client struct {
 	PromoCodeUsage *PromoCodeUsageClient
 	// Proxy is the client for interacting with the Proxy builders.
 	Proxy *ProxyClient
+	// RechargeOrder is the client for interacting with the RechargeOrder builders.
+	RechargeOrder *RechargeOrderClient
 	// RedeemCode is the client for interacting with the RedeemCode builders.
 	RedeemCode *RedeemCodeClient
 	// Setting is the client for interacting with the Setting builders.
@@ -90,6 +93,7 @@ func (c *Client) init() {
 	c.PromoCode = NewPromoCodeClient(c.config)
 	c.PromoCodeUsage = NewPromoCodeUsageClient(c.config)
 	c.Proxy = NewProxyClient(c.config)
+	c.RechargeOrder = NewRechargeOrderClient(c.config)
 	c.RedeemCode = NewRedeemCodeClient(c.config)
 	c.Setting = NewSettingClient(c.config)
 	c.UsageCleanupTask = NewUsageCleanupTaskClient(c.config)
@@ -198,6 +202,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		PromoCode:               NewPromoCodeClient(cfg),
 		PromoCodeUsage:          NewPromoCodeUsageClient(cfg),
 		Proxy:                   NewProxyClient(cfg),
+		RechargeOrder:           NewRechargeOrderClient(cfg),
 		RedeemCode:              NewRedeemCodeClient(cfg),
 		Setting:                 NewSettingClient(cfg),
 		UsageCleanupTask:        NewUsageCleanupTaskClient(cfg),
@@ -233,6 +238,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		PromoCode:               NewPromoCodeClient(cfg),
 		PromoCodeUsage:          NewPromoCodeUsageClient(cfg),
 		Proxy:                   NewProxyClient(cfg),
+		RechargeOrder:           NewRechargeOrderClient(cfg),
 		RedeemCode:              NewRedeemCodeClient(cfg),
 		Setting:                 NewSettingClient(cfg),
 		UsageCleanupTask:        NewUsageCleanupTaskClient(cfg),
@@ -272,9 +278,9 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.APIKey, c.Account, c.AccountGroup, c.Group, c.PromoCode, c.PromoCodeUsage,
-		c.Proxy, c.RedeemCode, c.Setting, c.UsageCleanupTask, c.UsageLog, c.User,
-		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserSubscription,
+		c.Proxy, c.RechargeOrder, c.RedeemCode, c.Setting, c.UsageCleanupTask,
+		c.UsageLog, c.User, c.UserAllowedGroup, c.UserAttributeDefinition,
+		c.UserAttributeValue, c.UserSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -285,9 +291,9 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.APIKey, c.Account, c.AccountGroup, c.Group, c.PromoCode, c.PromoCodeUsage,
-		c.Proxy, c.RedeemCode, c.Setting, c.UsageCleanupTask, c.UsageLog, c.User,
-		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserSubscription,
+		c.Proxy, c.RechargeOrder, c.RedeemCode, c.Setting, c.UsageCleanupTask,
+		c.UsageLog, c.User, c.UserAllowedGroup, c.UserAttributeDefinition,
+		c.UserAttributeValue, c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -310,6 +316,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.PromoCodeUsage.mutate(ctx, m)
 	case *ProxyMutation:
 		return c.Proxy.mutate(ctx, m)
+	case *RechargeOrderMutation:
+		return c.RechargeOrder.mutate(ctx, m)
 	case *RedeemCodeMutation:
 		return c.RedeemCode.mutate(ctx, m)
 	case *SettingMutation:
@@ -1559,6 +1567,155 @@ func (c *ProxyClient) mutate(ctx context.Context, m *ProxyMutation) (Value, erro
 	}
 }
 
+// RechargeOrderClient is a client for the RechargeOrder schema.
+type RechargeOrderClient struct {
+	config
+}
+
+// NewRechargeOrderClient returns a client for the RechargeOrder from the given config.
+func NewRechargeOrderClient(c config) *RechargeOrderClient {
+	return &RechargeOrderClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `rechargeorder.Hooks(f(g(h())))`.
+func (c *RechargeOrderClient) Use(hooks ...Hook) {
+	c.hooks.RechargeOrder = append(c.hooks.RechargeOrder, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `rechargeorder.Intercept(f(g(h())))`.
+func (c *RechargeOrderClient) Intercept(interceptors ...Interceptor) {
+	c.inters.RechargeOrder = append(c.inters.RechargeOrder, interceptors...)
+}
+
+// Create returns a builder for creating a RechargeOrder entity.
+func (c *RechargeOrderClient) Create() *RechargeOrderCreate {
+	mutation := newRechargeOrderMutation(c.config, OpCreate)
+	return &RechargeOrderCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of RechargeOrder entities.
+func (c *RechargeOrderClient) CreateBulk(builders ...*RechargeOrderCreate) *RechargeOrderCreateBulk {
+	return &RechargeOrderCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *RechargeOrderClient) MapCreateBulk(slice any, setFunc func(*RechargeOrderCreate, int)) *RechargeOrderCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &RechargeOrderCreateBulk{err: fmt.Errorf("calling to RechargeOrderClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*RechargeOrderCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &RechargeOrderCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for RechargeOrder.
+func (c *RechargeOrderClient) Update() *RechargeOrderUpdate {
+	mutation := newRechargeOrderMutation(c.config, OpUpdate)
+	return &RechargeOrderUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *RechargeOrderClient) UpdateOne(_m *RechargeOrder) *RechargeOrderUpdateOne {
+	mutation := newRechargeOrderMutation(c.config, OpUpdateOne, withRechargeOrder(_m))
+	return &RechargeOrderUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *RechargeOrderClient) UpdateOneID(id int64) *RechargeOrderUpdateOne {
+	mutation := newRechargeOrderMutation(c.config, OpUpdateOne, withRechargeOrderID(id))
+	return &RechargeOrderUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for RechargeOrder.
+func (c *RechargeOrderClient) Delete() *RechargeOrderDelete {
+	mutation := newRechargeOrderMutation(c.config, OpDelete)
+	return &RechargeOrderDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *RechargeOrderClient) DeleteOne(_m *RechargeOrder) *RechargeOrderDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *RechargeOrderClient) DeleteOneID(id int64) *RechargeOrderDeleteOne {
+	builder := c.Delete().Where(rechargeorder.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &RechargeOrderDeleteOne{builder}
+}
+
+// Query returns a query builder for RechargeOrder.
+func (c *RechargeOrderClient) Query() *RechargeOrderQuery {
+	return &RechargeOrderQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeRechargeOrder},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a RechargeOrder entity by its id.
+func (c *RechargeOrderClient) Get(ctx context.Context, id int64) (*RechargeOrder, error) {
+	return c.Query().Where(rechargeorder.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *RechargeOrderClient) GetX(ctx context.Context, id int64) *RechargeOrder {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryUser queries the user edge of a RechargeOrder.
+func (c *RechargeOrderClient) QueryUser(_m *RechargeOrder) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(rechargeorder.Table, rechargeorder.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, rechargeorder.UserTable, rechargeorder.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *RechargeOrderClient) Hooks() []Hook {
+	return c.hooks.RechargeOrder
+}
+
+// Interceptors returns the client interceptors.
+func (c *RechargeOrderClient) Interceptors() []Interceptor {
+	return c.inters.RechargeOrder
+}
+
+func (c *RechargeOrderClient) mutate(ctx context.Context, m *RechargeOrderMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&RechargeOrderCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&RechargeOrderUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&RechargeOrderUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&RechargeOrderDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown RechargeOrder mutation op: %q", m.Op())
+	}
+}
+
 // RedeemCodeClient is a client for the RedeemCode schema.
 type RedeemCodeClient struct {
 	config
@@ -2439,6 +2596,22 @@ func (c *UserClient) QueryPromoCodeUsages(_m *User) *PromoCodeUsageQuery {
 	return query
 }
 
+// QueryRechargeOrders queries the recharge_orders edge of a User.
+func (c *UserClient) QueryRechargeOrders(_m *User) *RechargeOrderQuery {
+	query := (&RechargeOrderClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, id),
+			sqlgraph.To(rechargeorder.Table, rechargeorder.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.RechargeOrdersTable, user.RechargeOrdersColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
 // QueryUserAllowedGroups queries the user_allowed_groups edge of a User.
 func (c *UserClient) QueryUserAllowedGroups(_m *User) *UserAllowedGroupQuery {
 	query := (&UserAllowedGroupClient{config: c.config}).Query()
@@ -3117,13 +3290,15 @@ func (c *UserSubscriptionClient) mutate(ctx context.Context, m *UserSubscription
 type (
 	hooks struct {
 		APIKey, Account, AccountGroup, Group, PromoCode, PromoCodeUsage, Proxy,
-		RedeemCode, Setting, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
-		UserAttributeDefinition, UserAttributeValue, UserSubscription []ent.Hook
+		RechargeOrder, RedeemCode, Setting, UsageCleanupTask, UsageLog, User,
+		UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
+		UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Group, PromoCode, PromoCodeUsage, Proxy,
-		RedeemCode, Setting, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
-		UserAttributeDefinition, UserAttributeValue, UserSubscription []ent.Interceptor
+		RechargeOrder, RedeemCode, Setting, UsageCleanupTask, UsageLog, User,
+		UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
+		UserSubscription []ent.Interceptor
 	}
 )
 

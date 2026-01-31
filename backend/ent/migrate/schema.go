@@ -370,6 +370,60 @@ var (
 			},
 		},
 	}
+	// RechargeOrdersColumns holds the columns for the "recharge_orders" table.
+	RechargeOrdersColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "order_no", Type: field.TypeString, Unique: true, Size: 50},
+		{Name: "amount", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "decimal(20,2)"}},
+		{Name: "payment_method", Type: field.TypeString, Size: 20},
+		{Name: "payment_channel", Type: field.TypeString, Size: 20, Default: "native"},
+		{Name: "status", Type: field.TypeString, Size: 20, Default: "pending"},
+		{Name: "wechat_transaction_id", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "qrcode_url", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "prepay_id", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "expire_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "paid_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "notes", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "user_id", Type: field.TypeInt64},
+	}
+	// RechargeOrdersTable holds the schema information for the "recharge_orders" table.
+	RechargeOrdersTable = &schema.Table{
+		Name:       "recharge_orders",
+		Columns:    RechargeOrdersColumns,
+		PrimaryKey: []*schema.Column{RechargeOrdersColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "recharge_orders_users_recharge_orders",
+				Columns:    []*schema.Column{RechargeOrdersColumns[14]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "rechargeorder_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{RechargeOrdersColumns[14]},
+			},
+			{
+				Name:    "rechargeorder_status",
+				Unique:  false,
+				Columns: []*schema.Column{RechargeOrdersColumns[7]},
+			},
+			{
+				Name:    "rechargeorder_expire_at",
+				Unique:  false,
+				Columns: []*schema.Column{RechargeOrdersColumns[11]},
+			},
+			{
+				Name:    "rechargeorder_user_id_status",
+				Unique:  false,
+				Columns: []*schema.Column{RechargeOrdersColumns[14], RechargeOrdersColumns[7]},
+			},
+		},
+	}
 	// RedeemCodesColumns holds the columns for the "redeem_codes" table.
 	RedeemCodesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -848,6 +902,7 @@ var (
 		PromoCodesTable,
 		PromoCodeUsagesTable,
 		ProxiesTable,
+		RechargeOrdersTable,
 		RedeemCodesTable,
 		SettingsTable,
 		UsageCleanupTasksTable,
@@ -888,6 +943,10 @@ func init() {
 	}
 	ProxiesTable.Annotation = &entsql.Annotation{
 		Table: "proxies",
+	}
+	RechargeOrdersTable.ForeignKeys[0].RefTable = UsersTable
+	RechargeOrdersTable.Annotation = &entsql.Annotation{
+		Table: "recharge_orders",
 	}
 	RedeemCodesTable.ForeignKeys[0].RefTable = GroupsTable
 	RedeemCodesTable.ForeignKeys[1].RefTable = UsersTable
