@@ -3387,8 +3387,10 @@ export default {
 
   // Recharge Page
   recharge: {
-    title: '充值',
+    title: '余额充值',
     description: '为您的账户余额充值',
+    subtitle: '在线充值余额，支付完成后自动到账',
+    currentBalance: '当前余额',
     comingSoon: '充值功能即将上线，敬请期待。'
   },
 

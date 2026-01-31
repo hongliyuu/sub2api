@@ -3240,6 +3240,8 @@ export default {
   recharge: {
     title: 'Recharge',
     description: 'Top up your account balance',
+    subtitle: 'Recharge your balance online, automatically credited after payment',
+    currentBalance: 'Current Balance',
     comingSoon: 'Recharge feature is coming soon. Stay tuned.'
   },
 
