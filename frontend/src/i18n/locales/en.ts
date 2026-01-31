@@ -3288,6 +3288,13 @@ export default {
     waitingPayment: 'Waiting for payment...',
     remainingTime: 'Remaining Time',
     countdown: '{time} remaining',
+    // JSAPI Payment
+    pleaseOpenInWeChat: 'Please open this page in WeChat to pay',
+    clickToPayInWeChat: 'Click the button below to pay with WeChat',
+    payNow: 'Pay Now',
+    retryPayment: 'Retry Payment',
+    paymentProcessing: 'Initiating payment...',
+    paymentFailed: 'Payment failed, please try again',
     // Success page
     successTitle: 'Recharge Successful',
     successSubtitle: 'Your balance has been credited',

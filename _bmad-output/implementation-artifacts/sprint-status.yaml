@@ -55,7 +55,7 @@ development_status:
 
   # Sprint 2: 支付集成 + 结果页面 (11 stories)
   # 目标: 完整支付流程闭环（PC端扫码支付）
-  sprint-2: in-progress
+  sprint-2: done
   2-6-wechat-pay-order-creation: done     # Epic 2
   2-7-native-pay-qrcode: done                     # Epic 2
   3-1-receive-wechat-callback: done             # Epic 3
@@ -68,7 +68,7 @@ development_status:
   4-8-recharge-success-page: done                # Epic 4
   4-9-recharge-failed-page: done                 # Epic 4
   # 可选: 2-8-jsapi-pay-invoke (如果主要用户在微信内)
-  2-8-jsapi-pay-invoke: ready-for-dev            # Epic 2 (可选)
+  2-8-jsapi-pay-invoke: done                       # Epic 2 (可选)
   sprint-2-retrospective: optional
 
   # Sprint 3: 订单管理 + 基础防护 (5 stories)

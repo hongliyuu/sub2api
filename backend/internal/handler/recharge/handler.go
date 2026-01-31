@@ -190,6 +190,8 @@ type OrderDetailResponse struct {
 	Status         string     `json:"status"`
 	PaymentMethod  string     `json:"payment_method"`
 	PaymentChannel string     `json:"payment_channel"`
+	QRCodeURL      *string    `json:"qrcode_url,omitempty"` // Native 支付二维码 URL
+	PrepayID       *string    `json:"prepay_id,omitempty"`  // JSAPI 预支付 ID
 	ExpireAt       time.Time  `json:"expire_at"`
 	PaidAt         *time.Time `json:"paid_at,omitempty"`
 	CreatedAt      time.Time  `json:"created_at"`
@@ -226,8 +228,155 @@ func (h *RechargeHandler) GetOrder(c *gin.Context) {
 		Status:         order.Status,
 		PaymentMethod:  order.PaymentMethod,
 		PaymentChannel: order.PaymentChannel,
+		QRCodeURL:      order.QRCodeURL,
+		PrepayID:       order.PrepayID,
 		ExpireAt:       order.ExpireAt,
 		PaidAt:         order.PaidAt,
 		CreatedAt:      order.CreatedAt,
 	})
+}
+
+// InitiatePaymentRequest 发起支付请求
+type InitiatePaymentRequest struct {
+	OpenID string `json:"openid"` // 用户 OpenID（JSAPI 支付必填）
+}
+
+// InitiatePaymentResponse 发起支付响应
+type InitiatePaymentResponse struct {
+	OrderNo        string                      `json:"order_no"`
+	PaymentChannel string                      `json:"payment_channel"`
+	QRCodeURL      *string                     `json:"qrcode_url,omitempty"`   // Native 支付二维码 URL
+	PrepayID       *string                     `json:"prepay_id,omitempty"`    // JSAPI 预支付 ID
+	JSAPIParams    *service.JSAPIPaymentParams `json:"jsapi_params,omitempty"` // JSAPI 支付调起参数
+}
+
+// InitiatePayment 发起支付（需认证）
+// 创建微信支付预支付订单，返回支付参数
+// POST /api/v1/recharge/orders/:order_no/pay
+func (h *RechargeHandler) InitiatePayment(c *gin.Context) {
+	// 从 context 获取用户 ID
+	userID, exists := c.Get("userID")
+	if !exists {
+		response.Unauthorized(c, "未登录")
+		return
+	}
+
+	orderNo := c.Param("order_no")
+	if orderNo == "" {
+		response.BadRequest(c, "订单号不能为空")
+		return
+	}
+
+	var req InitiatePaymentRequest
+	// 允许空请求体（Native 支付不需要 OpenID）
+	_ = c.ShouldBindJSON(&req)
+
+	// 获取订单详情（带权限校验）
+	order, err := h.rechargeOrderService.GetUserOrder(c.Request.Context(), userID.(int64), orderNo)
+	if err != nil {
+		if !response.ErrorFrom(c, err) {
+			response.InternalError(c, "查询订单失败")
+		}
+		return
+	}
+
+	// 检查订单状态
+	if order.Status != service.OrderStatusPending {
+		response.BadRequest(c, "订单状态不允许支付")
+		return
+	}
+
+	// 检查订单是否已过期
+	if time.Now().After(order.ExpireAt) {
+		response.BadRequest(c, "订单已过期")
+		return
+	}
+
+	// 检查是否已经有支付结果
+	if order.QRCodeURL != nil || order.PrepayID != nil {
+		// 已经发起过支付
+		// 对于 JSAPI 支付，需要重新调用微信支付获取签名参数（签名包含时间戳，无法缓存）
+		if order.PaymentChannel == service.PaymentChannelJSAPI {
+			// JSAPI 支付需要 OpenID
+			if req.OpenID == "" {
+				response.BadRequest(c, "JSAPI支付需要提供openid")
+				return
+			}
+
+			// 重新调用微信支付获取最新的签名参数
+			payResult, err := h.wechatPayService.CreateOrder(c.Request.Context(), &service.CreateWeChatPayOrderRequest{
+				OrderNo:     order.OrderNo,
+				Amount:      order.Amount,
+				Description: "账户充值",
+				Channel:     order.PaymentChannel,
+				OpenID:      req.OpenID,
+			})
+			if err != nil {
+				response.InternalError(c, "发起支付失败: "+err.Error())
+				return
+			}
+
+			resp := InitiatePaymentResponse{
+				OrderNo:        order.OrderNo,
+				PaymentChannel: order.PaymentChannel,
+				PrepayID:       order.PrepayID,
+				JSAPIParams:    payResult.JSAPIParams,
+			}
+			response.Success(c, resp)
+			return
+		}
+
+		// Native 支付直接返回现有结果
+		resp := InitiatePaymentResponse{
+			OrderNo:        order.OrderNo,
+			PaymentChannel: order.PaymentChannel,
+			QRCodeURL:      order.QRCodeURL,
+			PrepayID:       order.PrepayID,
+		}
+		response.Success(c, resp)
+		return
+	}
+
+	// JSAPI 支付需要 OpenID
+	if order.PaymentChannel == service.PaymentChannelJSAPI && req.OpenID == "" {
+		response.BadRequest(c, "JSAPI支付需要提供openid")
+		return
+	}
+
+	// 调用微信支付创建预支付订单
+	payResult, err := h.wechatPayService.CreateOrder(c.Request.Context(), &service.CreateWeChatPayOrderRequest{
+		OrderNo:     order.OrderNo,
+		Amount:      order.Amount,
+		Description: "账户充值",
+		Channel:     order.PaymentChannel,
+		OpenID:      req.OpenID,
+	})
+	if err != nil {
+		response.InternalError(c, "发起支付失败: "+err.Error())
+		return
+	}
+
+	// 保存支付结果到订单
+	var qrcodeURL, prepayID *string
+	if payResult.QRCodeURL != "" {
+		qrcodeURL = &payResult.QRCodeURL
+	}
+	if payResult.PrepayID != "" {
+		prepayID = &payResult.PrepayID
+	}
+
+	if err := h.rechargeOrderService.UpdatePaymentResult(c.Request.Context(), order.OrderNo, qrcodeURL, prepayID); err != nil {
+		// 记录错误但不影响响应（支付已发起）
+		c.Error(err)
+	}
+
+	// 返回支付参数
+	resp := InitiatePaymentResponse{
+		OrderNo:        order.OrderNo,
+		PaymentChannel: order.PaymentChannel,
+		QRCodeURL:      qrcodeURL,
+		PrepayID:       prepayID,
+		JSAPIParams:    payResult.JSAPIParams,
+	}
+	response.Success(c, resp)
 }

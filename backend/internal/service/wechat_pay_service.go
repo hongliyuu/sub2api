@@ -210,6 +210,19 @@ type CreateWeChatPayOrderRequest struct {
 type CreateWeChatPayOrderResult struct {
 	PrepayID  string // 预支付交易会话标识
 	QRCodeURL string // 二维码链接（Native支付）
+	// JSAPI 支付参数（仅 JSAPI 渠道返回，用于前端调起支付）
+	JSAPIParams *JSAPIPaymentParams `json:"jsapi_params,omitempty"`
+}
+
+// JSAPIPaymentParams JSAPI 支付调起参数
+// 前端使用这些参数调用 WeixinJSBridge.invoke('getBrandWCPayRequest', ...) 或 wx.chooseWXPay()
+type JSAPIPaymentParams struct {
+	AppID     string `json:"appId"`     // 公众号/小程序 AppID
+	TimeStamp string `json:"timeStamp"` // 时间戳（秒级）
+	NonceStr  string `json:"nonceStr"`  // 随机字符串
+	Package   string `json:"package"`   // 订单详情扩展字符串，格式为 prepay_id=xxx
+	SignType  string `json:"signType"`  // 签名类型，固定为 RSA
+	PaySign   string `json:"paySign"`   // 签名值
 }
 
 // AmountToFen 将金额从元转换为分
@@ -329,6 +342,7 @@ func (s *WeChatPayService) createNativeOrder(ctx context.Context, client *core.C
 }
 
 // createJSAPIOrder 创建 JSAPI 公众号支付订单
+// 使用 PrepayWithRequestPayment 方法直接返回前端调起支付所需的所有参数
 func (s *WeChatPayService) createJSAPIOrder(ctx context.Context, client *core.Client, req *WeChatPayRequest) (*CreateWeChatPayOrderResult, error) {
 	// JSAPI 支付需要 OpenID
 	if req.OpenID == "" {
@@ -357,8 +371,8 @@ func (s *WeChatPayService) createJSAPIOrder(ctx context.Context, client *core.Cl
 	log.Printf("[WeChatPay] Creating JSAPI order: order_no=%s, amount=%d fen, openid=%s..., expire_at=%s",
 		req.OutTradeNo, req.AmountInFen, maskOpenID(req.OpenID), req.ExpireAt.Format(time.RFC3339))
 
-	// 调用微信支付 API
-	resp, result, err := svc.Prepay(ctx, jsapiReq)
+	// 使用 PrepayWithRequestPayment 直接获取前端调起支付所需的签名参数
+	resp, result, err := svc.PrepayWithRequestPayment(ctx, jsapiReq)
 	if err != nil {
 		log.Printf("[WeChatPay] JSAPI prepay failed: order_no=%s, error=%v", req.OutTradeNo, err)
 		return nil, fmt.Errorf("jsapi prepay: %w", err)
@@ -381,6 +395,14 @@ func (s *WeChatPayService) createJSAPIOrder(ctx context.Context, client *core.Cl
 
 	return &CreateWeChatPayOrderResult{
 		PrepayID: *resp.PrepayId,
+		JSAPIParams: &JSAPIPaymentParams{
+			AppID:     safeString(resp.Appid),
+			TimeStamp: safeString(resp.TimeStamp),
+			NonceStr:  safeString(resp.NonceStr),
+			Package:   safeString(resp.Package),
+			SignType:  safeString(resp.SignType),
+			PaySign:   safeString(resp.PaySign),
+		},
 	}, nil
 }
 

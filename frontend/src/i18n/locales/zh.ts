@@ -3437,6 +3437,13 @@ export default {
     waitingPayment: '等待支付中...',
     remainingTime: '剩余时间',
     countdown: '剩余 {time}',
+    // JSAPI Payment
+    pleaseOpenInWeChat: '请在微信中打开此页面进行支付',
+    clickToPayInWeChat: '点击下方按钮调起微信支付',
+    payNow: '立即支付',
+    retryPayment: '重试支付',
+    paymentProcessing: '正在调起支付...',
+    paymentFailed: '支付失败，请重试',
     // Success page
     successTitle: '充值成功',
     successSubtitle: '您的充值已到账',

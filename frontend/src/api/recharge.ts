@@ -17,6 +17,7 @@ export interface RechargeConfig {
 export interface CreateOrderRequest {
   amount: number
   payment_method: string
+  payment_channel?: string // 支付渠道：native/jsapi
 }
 
 export interface RechargeOrder {
@@ -31,6 +32,30 @@ export interface RechargeOrder {
   paid_at?: string // 支付时间
   created_at: string
   expire_at: string
+}
+
+// JSAPI 支付调起参数
+export interface JSAPIPaymentParams {
+  appId: string     // 公众号/小程序 AppID
+  timeStamp: string // 时间戳（秒级）
+  nonceStr: string  // 随机字符串
+  package: string   // 订单详情扩展字符串，格式为 prepay_id=xxx
+  signType: string  // 签名类型，固定为 RSA
+  paySign: string   // 签名值
+}
+
+// 发起支付请求
+export interface InitiatePaymentRequest {
+  openid?: string // 用户 OpenID（JSAPI 支付必填）
+}
+
+// 发起支付响应
+export interface InitiatePaymentResponse {
+  order_no: string
+  payment_channel: string
+  qrcode_url?: string        // Native 支付二维码 URL
+  prepay_id?: string         // JSAPI 预支付 ID
+  jsapi_params?: JSAPIPaymentParams // JSAPI 支付调起参数
 }
 
 // ==================== API Functions ====================
@@ -57,6 +82,15 @@ export const rechargeAPI = {
    */
   async getOrder(orderNo: string): Promise<RechargeOrder> {
     const response = await apiClient.get<RechargeOrder>(`/recharge/orders/${orderNo}`)
+    return response.data
+  },
+
+  /**
+   * 发起支付
+   * 调用微信支付创建预支付订单，返回支付参数
+   */
+  async initiatePayment(orderNo: string, data?: InitiatePaymentRequest): Promise<InitiatePaymentResponse> {
+    const response = await apiClient.post<InitiatePaymentResponse>(`/recharge/orders/${orderNo}/pay`, data || {})
     return response.data
   }
 }
