@@ -45,16 +45,29 @@
           :max-amount="rechargeStore.maxAmount"
         />
 
+        <!-- 支付方式选择器 -->
+        <div class="mt-6">
+          <PaymentMethodSelector v-model="selectedPaymentMethod" />
+        </div>
+
+        <!-- 错误提示 -->
+        <div
+          v-if="errorMessage"
+          class="mt-4 rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400"
+        >
+          {{ errorMessage }}
+        </div>
+
         <!-- 提交按钮 -->
         <div class="mt-6">
           <button
             type="button"
-            :disabled="!isAmountValid || submitting"
+            :disabled="!canSubmit || submitting"
             :aria-label="submitButtonText"
             class="btn btn-primary w-full py-3 text-base font-medium transition-all duration-200"
             :class="{
-              'opacity-50 cursor-not-allowed': !isAmountValid || submitting,
-              'hover:shadow-lg': isAmountValid && !submitting
+              'opacity-50 cursor-not-allowed': !canSubmit || submitting,
+              'hover:shadow-lg': canSubmit && !submitting
             }"
             @click="handleSubmit"
           >
@@ -74,16 +87,11 @@
                   d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                 />
               </svg>
-              {{ t('recharge.submitting') }}
+              {{ t('recharge.orderCreating') }}
             </span>
             <span v-else>{{ submitButtonText }}</span>
           </button>
         </div>
-
-        <!-- 支付方式提示（后续 Story 实现） -->
-        <p class="mt-4 text-center text-sm text-gray-400 dark:text-gray-500">
-          {{ t('recharge.comingSoon') }}
-        </p>
       </div>
     </div>
   </main>
@@ -92,10 +100,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { useAuthStore, useRechargeStore } from '@/stores'
+import { rechargeAPI } from '@/api'
 import AmountSelector from '@/components/user/recharge/AmountSelector.vue'
+import PaymentMethodSelector from '@/components/user/recharge/PaymentMethodSelector.vue'
 
 const { t } = useI18n()
+const router = useRouter()
 const authStore = useAuthStore()
 const rechargeStore = useRechargeStore()
 
@@ -105,8 +117,14 @@ const loading = ref(true)
 // 选中的充值金额
 const selectedAmount = ref<number | null>(null)
 
+// 选中的支付方式
+const selectedPaymentMethod = ref<string | null>(null)
+
 // 提交中状态
 const submitting = ref(false)
+
+// 错误信息
+const errorMessage = ref('')
 
 // 用户余额
 const balance = computed(() => authStore.user?.balance ?? 0)
@@ -123,30 +141,52 @@ const isAmountValid = computed(() => {
   return amount >= rechargeStore.minAmount && amount <= rechargeStore.maxAmount
 })
 
+// 支付方式有效性验证
+const isPaymentMethodValid = computed(() => {
+  return selectedPaymentMethod.value !== null
+})
+
+// 是否可以提交
+const canSubmit = computed(() => {
+  return isAmountValid.value && isPaymentMethodValid.value
+})
+
 // 提交按钮文案
 const submitButtonText = computed(() => {
+  if (!isPaymentMethodValid.value) {
+    return t('recharge.selectPaymentMethodFirst')
+  }
   if (selectedAmount.value !== null && isAmountValid.value) {
     return t('recharge.submitButton', { amount: selectedAmount.value })
   }
   return t('recharge.submitButtonDefault')
 })
 
-// 提交处理（后续 Story 实现具体逻辑）
+// 提交处理
 const handleSubmit = async () => {
-  if (!isAmountValid.value || submitting.value) {
+  if (!canSubmit.value || submitting.value) {
     return
   }
 
+  // 清除之前的错误
+  errorMessage.value = ''
   submitting.value = true
 
   try {
-    // TODO: Story 2-4/2-5 实现订单创建逻辑
-    console.log('Creating order for amount:', selectedAmount.value)
+    // 调用 API 创建订单
+    const order = await rechargeAPI.createOrder({
+      amount: selectedAmount.value!,
+      payment_method: selectedPaymentMethod.value!
+    })
 
-    // 模拟异步操作（后续替换为真实 API 调用）
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    // 订单创建成功，跳转到支付页面
+    router.push({
+      name: 'RechargePayment',
+      params: { orderNo: order.order_no }
+    })
   } catch (error) {
     console.error('Failed to create order:', error)
+    errorMessage.value = t('recharge.orderCreateFailed')
   } finally {
     submitting.value = false
   }

@@ -14,6 +14,22 @@ export interface RechargeConfig {
   default_amounts: number[]
 }
 
+export interface CreateOrderRequest {
+  amount: number
+  payment_method: string
+}
+
+export interface RechargeOrder {
+  id: number
+  order_no: string
+  amount: number
+  status: string
+  payment_method: string
+  payment_channel: string
+  created_at: string
+  expire_at: string
+}
+
 // ==================== API Functions ====================
 
 export const rechargeAPI = {
@@ -22,6 +38,14 @@ export const rechargeAPI = {
    */
   async getConfig(): Promise<RechargeConfig> {
     const response = await apiClient.get<RechargeConfig>('/recharge/config')
+    return response.data
+  },
+
+  /**
+   * 创建充值订单
+   */
+  async createOrder(data: CreateOrderRequest): Promise<RechargeOrder> {
+    const response = await apiClient.post<RechargeOrder>('/recharge/orders', data)
     return response.data
   }
 }

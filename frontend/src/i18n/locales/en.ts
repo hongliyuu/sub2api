@@ -3254,7 +3254,33 @@ export default {
     // Submit button
     submitButton: 'Recharge ¥{amount}',
     submitButtonDefault: 'Select Amount',
-    submitting: 'Processing...'
+    submitting: 'Processing...',
+    // Payment method selector
+    paymentMethod: 'Payment Method',
+    selectPaymentMethod: 'Select {method}',
+    wechatPay: 'WeChat Pay',
+    wechatPayDesc: 'Scan QR code to pay',
+    alipay: 'Alipay',
+    alipayDesc: 'Pay with Alipay',
+    comingSoonLabel: 'Coming Soon',
+    // Order creation
+    orderCreating: 'Creating order...',
+    orderCreateFailed: 'Failed to create order, please try again',
+    orderCreateSuccess: 'Order created successfully',
+    selectPaymentMethodFirst: 'Please select a payment method',
+    // Payment page
+    paymentTitle: 'Payment',
+    paymentDescription: 'Complete your payment',
+    orderInfo: 'Order Information',
+    orderNo: 'Order No.',
+    orderAmount: 'Amount',
+    orderStatus: 'Status',
+    qrcodeComingSoon: 'QR code payment coming soon',
+    statusPending: 'Pending',
+    statusPaid: 'Paid',
+    statusFailed: 'Failed',
+    statusExpired: 'Expired',
+    statusUnknown: 'Unknown'
   },
 
   // User Subscriptions Page

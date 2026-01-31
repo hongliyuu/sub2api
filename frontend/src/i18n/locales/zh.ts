@@ -3403,7 +3403,33 @@ export default {
     // Submit button
     submitButton: '立即充值 ¥{amount}',
     submitButtonDefault: '请选择金额',
-    submitting: '处理中...'
+    submitting: '处理中...',
+    // Payment method selector
+    paymentMethod: '支付方式',
+    selectPaymentMethod: '选择{method}支付',
+    wechatPay: '微信支付',
+    wechatPayDesc: '使用微信扫码支付',
+    alipay: '支付宝',
+    alipayDesc: '使用支付宝支付',
+    comingSoonLabel: '即将上线',
+    // Order creation
+    orderCreating: '正在创建订单...',
+    orderCreateFailed: '创建订单失败，请重试',
+    orderCreateSuccess: '订单创建成功',
+    selectPaymentMethodFirst: '请选择支付方式',
+    // Payment page
+    paymentTitle: '支付',
+    paymentDescription: '完成订单支付',
+    orderInfo: '订单信息',
+    orderNo: '订单号',
+    orderAmount: '支付金额',
+    orderStatus: '订单状态',
+    qrcodeComingSoon: '二维码支付功能即将上线',
+    statusPending: '待支付',
+    statusPaid: '已支付',
+    statusFailed: '支付失败',
+    statusExpired: '已过期',
+    statusUnknown: '未知'
   },
 
   // User Subscriptions Page
