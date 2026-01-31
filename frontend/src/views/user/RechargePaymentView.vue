@@ -47,12 +47,26 @@
           </div>
         </div>
 
-        <!-- 支付二维码区域（后续 Story 实现） -->
-        <div class="mt-6 flex flex-col items-center justify-center rounded-xl bg-gray-50 p-8 dark:bg-dark-700">
-          <div class="mb-4 text-center text-gray-500 dark:text-gray-400">
-            {{ t('recharge.qrcodeComingSoon') }}
-          </div>
-          <div class="h-48 w-48 rounded-lg bg-gray-200 dark:bg-dark-600"></div>
+        <!-- 支付二维码区域 -->
+        <div
+          v-if="order?.payment_channel === 'native' && order?.qrcode_url"
+          class="mt-6 flex flex-col items-center justify-center rounded-xl bg-gray-50 p-8 dark:bg-dark-700"
+        >
+          <QRCodeDisplay
+            :code-url="order.qrcode_url"
+            :size="200"
+            @generated="onQRCodeGenerated"
+            @error="onQRCodeError"
+          />
+        </div>
+
+        <!-- 二维码加载中（无 qrcode_url 但是 native 支付） -->
+        <div
+          v-else-if="order?.payment_channel === 'native'"
+          class="mt-6 flex flex-col items-center justify-center rounded-xl bg-gray-50 p-8 dark:bg-dark-700"
+        >
+          <div class="h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent"></div>
+          <span class="mt-4 text-sm text-gray-500 dark:text-gray-400">{{ t('recharge.qrcodeLoading') }}</span>
         </div>
       </div>
     </div>
@@ -64,6 +78,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter, useRoute } from 'vue-router'
 import type { RechargeOrder } from '@/api/recharge'
+import QRCodeDisplay from '@/components/user/recharge/QRCodeDisplay.vue'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -114,10 +129,20 @@ const goBack = () => {
   router.push({ name: 'Recharge' })
 }
 
+// 二维码生成成功
+const onQRCodeGenerated = () => {
+  console.log('[RechargePayment] QR code generated successfully')
+}
+
+// 二维码生成失败
+const onQRCodeError = (error: Error) => {
+  console.error('[RechargePayment] QR code generation failed:', error)
+}
+
 // 加载订单信息
 onMounted(async () => {
   try {
-    // TODO: Story 2-6/2-7 实现订单查询和二维码展示
+    // TODO: Story 2-8 实现订单查询 API
     // 目前使用模拟数据
     order.value = {
       id: 1,
@@ -126,6 +151,7 @@ onMounted(async () => {
       status: 'pending',
       payment_method: 'wechat_pay',
       payment_channel: 'native',
+      qrcode_url: 'weixin://wxpay/bizpayurl?pr=demo123', // 模拟的二维码 URL
       created_at: new Date().toISOString(),
       expire_at: new Date(Date.now() + 30 * 60 * 1000).toISOString()
     }

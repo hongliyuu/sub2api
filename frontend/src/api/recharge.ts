@@ -26,6 +26,8 @@ export interface RechargeOrder {
   status: string
   payment_method: string
   payment_channel: string
+  qrcode_url?: string // Native 支付二维码 URL
+  prepay_id?: string // JSAPI 预支付 ID
   created_at: string
   expire_at: string
 }
