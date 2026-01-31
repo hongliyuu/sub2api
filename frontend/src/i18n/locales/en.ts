@@ -3314,7 +3314,21 @@ export default {
     failedReasonCancelled: 'Order was cancelled',
     failedReasonUnknown: 'Unknown error, please try again',
     retryRecharge: 'Retry Recharge',
-    statusCancelled: 'Cancelled'
+    statusCancelled: 'Cancelled',
+    // Manual sync
+    paying: {
+      syncStatus: 'Check Order Status',
+      syncing: 'Checking...',
+      syncCooldown: 'Retry in {seconds}s',
+      syncHint: 'If payment succeeded but page didn\'t redirect, click above to check',
+      syncError: 'Check failed, please try again',
+      syncResult: {
+        paid: 'Payment successful! Redirecting...',
+        pending: 'Order still pending, please complete payment',
+        failed: 'Order failed or expired',
+        unknown: 'Unknown order status, please try again later'
+      }
+    }
   },
 
   // Recharge Records Page

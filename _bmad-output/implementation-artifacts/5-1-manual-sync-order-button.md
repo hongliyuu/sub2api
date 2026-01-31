@@ -1,6 +1,6 @@
 # Story 5.1: 手动同步订单状态按钮
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -10,29 +10,29 @@ Status: ready-for-dev
 
 ## Acceptance Criteria
 
-- [ ] AC1: 支付中页面显示「手动查询订单状态」按钮
-- [ ] AC2: 按钮点击后调用同步接口
-- [ ] AC3: 按钮有冷却时间（5秒内不可重复点击）
-- [ ] AC4: 同步中显示loading状态
-- [ ] AC5: 同步结果显示提示（已支付/支付中/支付失败）
+- [x] AC1: 支付中页面显示「手动查询订单状态」按钮
+- [x] AC2: 按钮点击后调用同步接口
+- [x] AC3: 按钮有冷却时间（5秒内不可重复点击）
+- [x] AC4: 同步中显示loading状态
+- [x] AC5: 同步结果显示提示（已支付/支付中/支付失败）
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: 前端 - 添加同步按钮组件 (AC: 1, 3, 4)
-  - [ ] 1.1 在 `RechargePayingView.vue` 添加「手动查询订单状态」按钮
-  - [ ] 1.2 实现按钮冷却状态管理（5秒倒计时）
-  - [ ] 1.3 实现按钮 loading 状态
+- [x] Task 1: 前端 - 添加同步按钮组件 (AC: 1, 3, 4)
+  - [x] 1.1 在 `RechargePaymentView.vue` 添加「手动查询订单状态」按钮
+  - [x] 1.2 实现按钮冷却状态管理（5秒倒计时）
+  - [x] 1.3 实现按钮 loading 状态
 
-- [ ] Task 2: 前端 - API 调用与结果处理 (AC: 2, 5)
-  - [ ] 2.1 在 `src/api/recharge.ts` 添加 `syncOrderStatus` 方法
-  - [ ] 2.2 点击按钮后调用同步接口
-  - [ ] 2.3 根据返回状态显示 Toast 提示
-  - [ ] 2.4 状态为 `paid` 时跳转到成功页面
-  - [ ] 2.5 状态为 `failed/expired` 时跳转到失败页面
+- [x] Task 2: 前端 - API 调用与结果处理 (AC: 2, 5)
+  - [x] 2.1 在 `src/api/recharge.ts` 添加 `syncOrderStatus` 方法
+  - [x] 2.2 点击按钮后调用同步接口
+  - [x] 2.3 根据返回状态显示 Toast 提示
+  - [x] 2.4 状态为 `paid` 时跳转到成功页面
+  - [x] 2.5 状态为 `failed/expired` 时跳转到失败页面
 
-- [ ] Task 3: 国际化 (AC: 1, 5)
-  - [ ] 3.1 添加中文翻译到 `frontend/src/locales/zh-CN.json`
-  - [ ] 3.2 添加英文翻译到 `frontend/src/locales/en.json`
+- [x] Task 3: 国际化 (AC: 1, 5)
+  - [x] 3.1 添加中文翻译到 `frontend/src/i18n/locales/zh.ts`
+  - [x] 3.2 添加英文翻译到 `frontend/src/i18n/locales/en.ts`
 
 ## Dev Notes
 
@@ -253,16 +253,25 @@ export async function syncOrderStatus(orderNo: string): Promise<SyncOrderStatusR
 
 ### Agent Model Used
 
-(待开发时填写)
+Claude Opus 4.5
 
 ### Debug Log References
 
-(待开发时填写)
+无
 
 ### Completion Notes List
 
-(待开发时填写)
+- 在 `recharge.ts` 添加 `SyncOrderStatusResponse` 接口和 `syncOrderStatus` API 方法
+- 在 `RechargePaymentView.vue` 添加手动同步按钮（同时支持 Native 和 JSAPI 支付区域）
+- 实现 5 秒冷却倒计时，防止频繁调用
+- 使用 `useAppStore` 的 toast 方法显示同步结果
+- 根据同步结果自动跳转到成功或失败页面
+- 组件卸载时自动清理计时器防止内存泄漏
+- 添加中英文国际化翻译
 
 ### File List
 
-(待开发时填写)
+- `frontend/src/api/recharge.ts` - 添加 syncOrderStatus 方法和 SyncOrderStatusResponse 接口
+- `frontend/src/views/user/RechargePaymentView.vue` - 添加手动同步按钮和相关逻辑
+- `frontend/src/i18n/locales/zh.ts` - 添加中文翻译
+- `frontend/src/i18n/locales/en.ts` - 添加英文翻译

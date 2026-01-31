@@ -3463,7 +3463,21 @@ export default {
     failedReasonCancelled: '订单已取消',
     failedReasonUnknown: '未知错误，请重试',
     retryRecharge: '重新充值',
-    statusCancelled: '已取消'
+    statusCancelled: '已取消',
+    // Manual sync
+    paying: {
+      syncStatus: '手动查询订单状态',
+      syncing: '查询中...',
+      syncCooldown: '{seconds}秒后可再次查询',
+      syncHint: '如果支付成功但页面未跳转，请点击上方按钮手动查询',
+      syncError: '查询失败，请稍后重试',
+      syncResult: {
+        paid: '支付成功！正在跳转...',
+        pending: '订单仍在支付中，请完成支付',
+        failed: '订单已失败或过期',
+        unknown: '订单状态未知，请稍后再试'
+      }
+    }
   },
 
   // Recharge Records Page

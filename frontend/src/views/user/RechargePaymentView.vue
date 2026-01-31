@@ -71,6 +71,35 @@
             <div class="h-4 w-4 animate-spin rounded-full border-2 border-primary-500 border-t-transparent"></div>
             <span>{{ t('recharge.waitingPayment') }}</span>
           </div>
+
+          <!-- 手动同步按钮 -->
+          <div class="mt-4 text-center">
+            <button
+              type="button"
+              :disabled="syncCooldown > 0 || isSyncing"
+              :class="[
+                'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                syncCooldown > 0 || isSyncing
+                  ? 'bg-gray-200 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-400'
+                  : 'bg-primary-100 text-primary-700 hover:bg-primary-200 dark:bg-primary-900/30 dark:text-primary-400'
+              ]"
+              @click="handleSyncStatus"
+            >
+              <span v-if="isSyncing" class="flex items-center gap-2">
+                <div class="h-4 w-4 animate-spin rounded-full border-2 border-primary-500 border-t-transparent"></div>
+                {{ t('recharge.paying.syncing') }}
+              </span>
+              <span v-else-if="syncCooldown > 0">
+                {{ t('recharge.paying.syncCooldown', { seconds: syncCooldown }) }}
+              </span>
+              <span v-else>
+                {{ t('recharge.paying.syncStatus') }}
+              </span>
+            </button>
+            <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('recharge.paying.syncHint') }}
+            </p>
+          </div>
         </div>
 
         <!-- 二维码加载中（无 qrcode_url 但是 native 支付） -->
@@ -142,6 +171,35 @@
               <div class="h-4 w-4 animate-spin rounded-full border-2 border-primary-500 border-t-transparent"></div>
               <span>{{ t('recharge.waitingPayment') }}</span>
             </div>
+
+            <!-- 手动同步按钮 -->
+            <div class="mt-4 text-center">
+              <button
+                type="button"
+                :disabled="syncCooldown > 0 || isSyncing"
+                :class="[
+                  'px-4 py-2 rounded-lg text-sm font-medium transition-colors',
+                  syncCooldown > 0 || isSyncing
+                    ? 'bg-gray-200 text-gray-500 cursor-not-allowed dark:bg-gray-700 dark:text-gray-400'
+                    : 'bg-primary-100 text-primary-700 hover:bg-primary-200 dark:bg-primary-900/30 dark:text-primary-400'
+                ]"
+                @click="handleSyncStatus"
+              >
+                <span v-if="isSyncing" class="flex items-center gap-2">
+                  <div class="h-4 w-4 animate-spin rounded-full border-2 border-primary-500 border-t-transparent"></div>
+                  {{ t('recharge.paying.syncing') }}
+                </span>
+                <span v-else-if="syncCooldown > 0">
+                  {{ t('recharge.paying.syncCooldown', { seconds: syncCooldown }) }}
+                </span>
+                <span v-else>
+                  {{ t('recharge.paying.syncStatus') }}
+                </span>
+              </button>
+              <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                {{ t('recharge.paying.syncHint') }}
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -155,12 +213,14 @@ import { useI18n } from 'vue-i18n'
 import { useRouter, useRoute } from 'vue-router'
 import { rechargeAPI, type RechargeOrder, type JSAPIPaymentParams } from '@/api/recharge'
 import { isWeChatBrowser, invokeWeChatPay } from '@/utils/wechat'
+import { useAppStore } from '@/stores/app'
 import QRCodeDisplay from '@/components/user/recharge/QRCodeDisplay.vue'
 import OrderCountdown from '@/components/user/recharge/OrderCountdown.vue'
 
 const { t } = useI18n()
 const router = useRouter()
 const route = useRoute()
+const appStore = useAppStore()
 
 // 订单号
 const orderNo = computed(() => route.params.orderNo as string)
@@ -185,6 +245,11 @@ const MAX_POLL_COUNT = 40 // 最多轮询40次（2分钟）
 let pollTimer: ReturnType<typeof setInterval> | null = null
 const pollCount = ref(0)
 const isPolling = ref(false)
+
+// 手动同步相关
+const isSyncing = ref(false)
+const syncCooldown = ref(0)
+let syncCooldownTimer: ReturnType<typeof setInterval> | null = null
 
 // 订单状态样式
 const statusClass = computed(() => {
@@ -246,6 +311,62 @@ const stopPolling = () => {
     pollTimer = null
   }
   isPolling.value = false
+}
+
+// 启动同步冷却倒计时
+const startSyncCooldown = () => {
+  syncCooldown.value = 5
+  syncCooldownTimer = setInterval(() => {
+    syncCooldown.value--
+    if (syncCooldown.value <= 0 && syncCooldownTimer) {
+      clearInterval(syncCooldownTimer)
+      syncCooldownTimer = null
+    }
+  }, 1000)
+}
+
+// 停止同步冷却倒计时
+const stopSyncCooldown = () => {
+  if (syncCooldownTimer) {
+    clearInterval(syncCooldownTimer)
+    syncCooldownTimer = null
+  }
+}
+
+// 手动同步订单状态
+const handleSyncStatus = async () => {
+  if (isSyncing.value || syncCooldown.value > 0) return
+
+  isSyncing.value = true
+  try {
+    const result = await rechargeAPI.syncOrderStatus(orderNo.value)
+    console.log('[RechargePayment] Sync order status result:', result)
+
+    // 根据状态显示提示并跳转
+    switch (result.status) {
+      case 'paid':
+        appStore.showSuccess(t('recharge.paying.syncResult.paid'))
+        router.push({ name: 'RechargeSuccess', params: { orderNo: orderNo.value } })
+        break
+      case 'pending':
+        appStore.showInfo(t('recharge.paying.syncResult.pending'))
+        break
+      case 'failed':
+      case 'expired':
+        appStore.showWarning(t('recharge.paying.syncResult.failed'))
+        router.push({ name: 'RechargeFailed', params: { orderNo: orderNo.value } })
+        break
+      default:
+        appStore.showInfo(t('recharge.paying.syncResult.unknown'))
+    }
+  } catch (error: unknown) {
+    console.error('[RechargePayment] Sync order status failed:', error)
+    const message = error instanceof Error ? error.message : t('recharge.paying.syncError')
+    appStore.showError(message)
+  } finally {
+    isSyncing.value = false
+    startSyncCooldown()
+  }
 }
 
 // 处理订单状态变化
@@ -397,5 +518,6 @@ onMounted(() => {
 
 onUnmounted(() => {
   stopPolling()
+  stopSyncCooldown()
 })
 </script>

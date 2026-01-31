@@ -85,6 +85,14 @@ export interface ListOrdersResponse {
   page_size: number
 }
 
+// 同步订单状态响应
+export interface SyncOrderStatusResponse {
+  order_no: string
+  status: 'pending' | 'paid' | 'failed' | 'expired' | 'refunded'
+  wechat_status: string  // 微信侧的原始状态
+  synced_at: string
+}
+
 // 限流错误响应类型
 export interface RateLimitErrorResponse {
   error: string
@@ -167,6 +175,15 @@ export const rechargeAPI = {
    */
   async listOrders(params?: ListOrdersRequest): Promise<ListOrdersResponse> {
     const response = await apiClient.get<ListOrdersResponse>('/recharge/orders', { params })
+    return response.data
+  },
+
+  /**
+   * 手动同步订单状态
+   * 调用微信支付查询接口获取最新状态
+   */
+  async syncOrderStatus(orderNo: string): Promise<SyncOrderStatusResponse> {
+    const response = await apiClient.post<SyncOrderStatusResponse>(`/recharge/orders/${orderNo}/sync`)
     return response.data
   }
 }
