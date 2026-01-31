@@ -3,6 +3,7 @@ package handler
 import (
 	"github.com/Wei-Shaw/sub2api/internal/handler/admin"
 	"github.com/Wei-Shaw/sub2api/internal/handler/recharge"
+	"github.com/Wei-Shaw/sub2api/internal/handler/webhook"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/google/wire"
@@ -74,21 +75,23 @@ func ProvideHandlers(
 	totpHandler *TotpHandler,
 	usageReportHandler *UserUsageReportHandler,
 	rechargeHandler *recharge.RechargeHandler,
+	wechatPayWebhookHandler *webhook.WeChatPayWebhookHandler,
 ) *Handlers {
 	return &Handlers{
-		Auth:          authHandler,
-		User:          userHandler,
-		APIKey:        apiKeyHandler,
-		Usage:         usageHandler,
-		Redeem:        redeemHandler,
-		Subscription:  subscriptionHandler,
-		Admin:         adminHandlers,
-		Gateway:       gatewayHandler,
-		OpenAIGateway: openaiGatewayHandler,
-		Setting:       settingHandler,
-		Totp:          totpHandler,
-		UsageReport:   usageReportHandler,
-		Recharge:      rechargeHandler,
+		Auth:             authHandler,
+		User:             userHandler,
+		APIKey:           apiKeyHandler,
+		Usage:            usageHandler,
+		Redeem:           redeemHandler,
+		Subscription:     subscriptionHandler,
+		Admin:            adminHandlers,
+		Gateway:          gatewayHandler,
+		OpenAIGateway:    openaiGatewayHandler,
+		Setting:          settingHandler,
+		Totp:             totpHandler,
+		UsageReport:      usageReportHandler,
+		Recharge:         rechargeHandler,
+		WeChatPayWebhook: wechatPayWebhookHandler,
 	}
 }
 
@@ -107,6 +110,7 @@ var ProviderSet = wire.NewSet(
 	NewUserUsageReportHandler,
 	ProvideSettingHandler,
 	recharge.NewRechargeHandler,
+	webhook.NewWeChatPayWebhookHandler,
 
 	// Admin handlers
 	admin.NewDashboardHandler,

@@ -12,6 +12,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/accountgroup"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/paymentcallback"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
@@ -190,6 +191,33 @@ func (f TraverseGroup) Traverse(ctx context.Context, q ent.Query) error {
 		return f(ctx, q)
 	}
 	return fmt.Errorf("unexpected query type %T. expect *ent.GroupQuery", q)
+}
+
+// The PaymentCallbackFunc type is an adapter to allow the use of ordinary function as a Querier.
+type PaymentCallbackFunc func(context.Context, *ent.PaymentCallbackQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f PaymentCallbackFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.PaymentCallbackQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.PaymentCallbackQuery", q)
+}
+
+// The TraversePaymentCallback type is an adapter to allow the use of ordinary function as Traverser.
+type TraversePaymentCallback func(context.Context, *ent.PaymentCallbackQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraversePaymentCallback) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraversePaymentCallback) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.PaymentCallbackQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.PaymentCallbackQuery", q)
 }
 
 // The PromoCodeFunc type is an adapter to allow the use of ordinary function as a Querier.
@@ -554,6 +582,8 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.AccountGroupQuery, predicate.AccountGroup, accountgroup.OrderOption]{typ: ent.TypeAccountGroup, tq: q}, nil
 	case *ent.GroupQuery:
 		return &query[*ent.GroupQuery, predicate.Group, group.OrderOption]{typ: ent.TypeGroup, tq: q}, nil
+	case *ent.PaymentCallbackQuery:
+		return &query[*ent.PaymentCallbackQuery, predicate.PaymentCallback, paymentcallback.OrderOption]{typ: ent.TypePaymentCallback, tq: q}, nil
 	case *ent.PromoCodeQuery:
 		return &query[*ent.PromoCodeQuery, predicate.PromoCode, promocode.OrderOption]{typ: ent.TypePromoCode, tq: q}, nil
 	case *ent.PromoCodeUsageQuery:

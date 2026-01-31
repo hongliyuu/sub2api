@@ -262,6 +262,56 @@ var (
 			},
 		},
 	}
+	// PaymentCallbacksColumns holds the columns for the "payment_callbacks" table.
+	PaymentCallbacksColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "order_no", Type: field.TypeString, Nullable: true, Size: 50},
+		{Name: "payment_method", Type: field.TypeString, Size: 20},
+		{Name: "transaction_id", Type: field.TypeString, Nullable: true, Size: 64},
+		{Name: "request_headers", Type: field.TypeString, Default: "{}", SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "request_body", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "signature_valid", Type: field.TypeBool, Default: false},
+		{Name: "process_status", Type: field.TypeString, Size: 20, Default: "received"},
+		{Name: "process_message", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "response_code", Type: field.TypeString, Size: 20, Default: ""},
+		{Name: "response_message", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "process_time_ms", Type: field.TypeInt64, Default: 0},
+	}
+	// PaymentCallbacksTable holds the schema information for the "payment_callbacks" table.
+	PaymentCallbacksTable = &schema.Table{
+		Name:       "payment_callbacks",
+		Columns:    PaymentCallbacksColumns,
+		PrimaryKey: []*schema.Column{PaymentCallbacksColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "paymentcallback_order_no",
+				Unique:  false,
+				Columns: []*schema.Column{PaymentCallbacksColumns[3]},
+			},
+			{
+				Name:    "paymentcallback_transaction_id",
+				Unique:  false,
+				Columns: []*schema.Column{PaymentCallbacksColumns[5]},
+			},
+			{
+				Name:    "paymentcallback_payment_method",
+				Unique:  false,
+				Columns: []*schema.Column{PaymentCallbacksColumns[4]},
+			},
+			{
+				Name:    "paymentcallback_process_status",
+				Unique:  false,
+				Columns: []*schema.Column{PaymentCallbacksColumns[9]},
+			},
+			{
+				Name:    "paymentcallback_created_at",
+				Unique:  false,
+				Columns: []*schema.Column{PaymentCallbacksColumns[1]},
+			},
+		},
+	}
 	// PromoCodesColumns holds the columns for the "promo_codes" table.
 	PromoCodesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -899,6 +949,7 @@ var (
 		AccountsTable,
 		AccountGroupsTable,
 		GroupsTable,
+		PaymentCallbacksTable,
 		PromoCodesTable,
 		PromoCodeUsagesTable,
 		ProxiesTable,
@@ -932,6 +983,9 @@ func init() {
 	}
 	GroupsTable.Annotation = &entsql.Annotation{
 		Table: "groups",
+	}
+	PaymentCallbacksTable.Annotation = &entsql.Annotation{
+		Table: "payment_callbacks",
 	}
 	PromoCodesTable.Annotation = &entsql.Annotation{
 		Table: "promo_codes",

@@ -9,6 +9,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/accountgroup"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/paymentcallback"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
@@ -286,6 +287,83 @@ func init() {
 	groupDescModelRoutingEnabled := groupFields[17].Descriptor()
 	// group.DefaultModelRoutingEnabled holds the default value on creation for the model_routing_enabled field.
 	group.DefaultModelRoutingEnabled = groupDescModelRoutingEnabled.Default.(bool)
+	paymentcallbackMixin := schema.PaymentCallback{}.Mixin()
+	paymentcallbackMixinFields0 := paymentcallbackMixin[0].Fields()
+	_ = paymentcallbackMixinFields0
+	paymentcallbackFields := schema.PaymentCallback{}.Fields()
+	_ = paymentcallbackFields
+	// paymentcallbackDescCreatedAt is the schema descriptor for created_at field.
+	paymentcallbackDescCreatedAt := paymentcallbackMixinFields0[0].Descriptor()
+	// paymentcallback.DefaultCreatedAt holds the default value on creation for the created_at field.
+	paymentcallback.DefaultCreatedAt = paymentcallbackDescCreatedAt.Default.(func() time.Time)
+	// paymentcallbackDescUpdatedAt is the schema descriptor for updated_at field.
+	paymentcallbackDescUpdatedAt := paymentcallbackMixinFields0[1].Descriptor()
+	// paymentcallback.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	paymentcallback.DefaultUpdatedAt = paymentcallbackDescUpdatedAt.Default.(func() time.Time)
+	// paymentcallback.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	paymentcallback.UpdateDefaultUpdatedAt = paymentcallbackDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// paymentcallbackDescOrderNo is the schema descriptor for order_no field.
+	paymentcallbackDescOrderNo := paymentcallbackFields[0].Descriptor()
+	// paymentcallback.OrderNoValidator is a validator for the "order_no" field. It is called by the builders before save.
+	paymentcallback.OrderNoValidator = paymentcallbackDescOrderNo.Validators[0].(func(string) error)
+	// paymentcallbackDescPaymentMethod is the schema descriptor for payment_method field.
+	paymentcallbackDescPaymentMethod := paymentcallbackFields[1].Descriptor()
+	// paymentcallback.PaymentMethodValidator is a validator for the "payment_method" field. It is called by the builders before save.
+	paymentcallback.PaymentMethodValidator = func() func(string) error {
+		validators := paymentcallbackDescPaymentMethod.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(payment_method string) error {
+			for _, fn := range fns {
+				if err := fn(payment_method); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// paymentcallbackDescTransactionID is the schema descriptor for transaction_id field.
+	paymentcallbackDescTransactionID := paymentcallbackFields[2].Descriptor()
+	// paymentcallback.TransactionIDValidator is a validator for the "transaction_id" field. It is called by the builders before save.
+	paymentcallback.TransactionIDValidator = paymentcallbackDescTransactionID.Validators[0].(func(string) error)
+	// paymentcallbackDescRequestHeaders is the schema descriptor for request_headers field.
+	paymentcallbackDescRequestHeaders := paymentcallbackFields[3].Descriptor()
+	// paymentcallback.DefaultRequestHeaders holds the default value on creation for the request_headers field.
+	paymentcallback.DefaultRequestHeaders = paymentcallbackDescRequestHeaders.Default.(string)
+	// paymentcallbackDescRequestBody is the schema descriptor for request_body field.
+	paymentcallbackDescRequestBody := paymentcallbackFields[4].Descriptor()
+	// paymentcallback.DefaultRequestBody holds the default value on creation for the request_body field.
+	paymentcallback.DefaultRequestBody = paymentcallbackDescRequestBody.Default.(string)
+	// paymentcallbackDescSignatureValid is the schema descriptor for signature_valid field.
+	paymentcallbackDescSignatureValid := paymentcallbackFields[5].Descriptor()
+	// paymentcallback.DefaultSignatureValid holds the default value on creation for the signature_valid field.
+	paymentcallback.DefaultSignatureValid = paymentcallbackDescSignatureValid.Default.(bool)
+	// paymentcallbackDescProcessStatus is the schema descriptor for process_status field.
+	paymentcallbackDescProcessStatus := paymentcallbackFields[6].Descriptor()
+	// paymentcallback.DefaultProcessStatus holds the default value on creation for the process_status field.
+	paymentcallback.DefaultProcessStatus = paymentcallbackDescProcessStatus.Default.(string)
+	// paymentcallback.ProcessStatusValidator is a validator for the "process_status" field. It is called by the builders before save.
+	paymentcallback.ProcessStatusValidator = paymentcallbackDescProcessStatus.Validators[0].(func(string) error)
+	// paymentcallbackDescProcessMessage is the schema descriptor for process_message field.
+	paymentcallbackDescProcessMessage := paymentcallbackFields[7].Descriptor()
+	// paymentcallback.DefaultProcessMessage holds the default value on creation for the process_message field.
+	paymentcallback.DefaultProcessMessage = paymentcallbackDescProcessMessage.Default.(string)
+	// paymentcallbackDescResponseCode is the schema descriptor for response_code field.
+	paymentcallbackDescResponseCode := paymentcallbackFields[8].Descriptor()
+	// paymentcallback.DefaultResponseCode holds the default value on creation for the response_code field.
+	paymentcallback.DefaultResponseCode = paymentcallbackDescResponseCode.Default.(string)
+	// paymentcallback.ResponseCodeValidator is a validator for the "response_code" field. It is called by the builders before save.
+	paymentcallback.ResponseCodeValidator = paymentcallbackDescResponseCode.Validators[0].(func(string) error)
+	// paymentcallbackDescResponseMessage is the schema descriptor for response_message field.
+	paymentcallbackDescResponseMessage := paymentcallbackFields[9].Descriptor()
+	// paymentcallback.DefaultResponseMessage holds the default value on creation for the response_message field.
+	paymentcallback.DefaultResponseMessage = paymentcallbackDescResponseMessage.Default.(string)
+	// paymentcallbackDescProcessTimeMs is the schema descriptor for process_time_ms field.
+	paymentcallbackDescProcessTimeMs := paymentcallbackFields[10].Descriptor()
+	// paymentcallback.DefaultProcessTimeMs holds the default value on creation for the process_time_ms field.
+	paymentcallback.DefaultProcessTimeMs = paymentcallbackDescProcessTimeMs.Default.(int64)
 	promocodeFields := schema.PromoCode{}.Fields()
 	_ = promocodeFields
 	// promocodeDescCode is the schema descriptor for code field.

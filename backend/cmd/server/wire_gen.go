@@ -13,6 +13,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/handler/admin"
 	"github.com/Wei-Shaw/sub2api/internal/handler/recharge"
+	"github.com/Wei-Shaw/sub2api/internal/handler/webhook"
 	"github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/Wei-Shaw/sub2api/internal/server"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -182,7 +183,9 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	rechargeOrderRepository := repository.NewRechargeOrderRepository(client)
 	rechargeOrderService := service.NewRechargeOrderService(configConfig, rechargeOrderRepository, weChatPayService)
 	rechargeHandler := recharge.NewRechargeHandler(weChatPayService, rechargeOrderService)
-	handlers := handler.ProvideHandlers(authHandler, userHandler, apiKeyHandler, usageHandler, redeemHandler, subscriptionHandler, adminHandlers, gatewayHandler, openAIGatewayHandler, handlerSettingHandler, totpHandler, userUsageReportHandler, rechargeHandler)
+	paymentCallbackRepository := repository.NewPaymentCallbackRepository(client)
+	weChatPayWebhookHandler := webhook.NewWeChatPayWebhookHandler(paymentCallbackRepository)
+	handlers := handler.ProvideHandlers(authHandler, userHandler, apiKeyHandler, usageHandler, redeemHandler, subscriptionHandler, adminHandlers, gatewayHandler, openAIGatewayHandler, handlerSettingHandler, totpHandler, userUsageReportHandler, rechargeHandler, weChatPayWebhookHandler)
 	jwtAuthMiddleware := middleware.NewJWTAuthMiddleware(authService, userService)
 	adminAuthMiddleware := middleware.NewAdminAuthMiddleware(authService, userService, settingService)
 	apiKeyAuthMiddleware := middleware.NewAPIKeyAuthMiddleware(apiKeyService, subscriptionService, configConfig)

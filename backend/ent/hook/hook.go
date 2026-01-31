@@ -57,6 +57,18 @@ func (f GroupFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.GroupMutation", m)
 }
 
+// The PaymentCallbackFunc type is an adapter to allow the use of ordinary
+// function as PaymentCallback mutator.
+type PaymentCallbackFunc func(context.Context, *ent.PaymentCallbackMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f PaymentCallbackFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.PaymentCallbackMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.PaymentCallbackMutation", m)
+}
+
 // The PromoCodeFunc type is an adapter to allow the use of ordinary
 // function as PromoCode mutator.
 type PromoCodeFunc func(context.Context, *ent.PromoCodeMutation) (ent.Value, error)

@@ -19,6 +19,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/accountgroup"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/paymentcallback"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
@@ -49,6 +50,8 @@ type Client struct {
 	AccountGroup *AccountGroupClient
 	// Group is the client for interacting with the Group builders.
 	Group *GroupClient
+	// PaymentCallback is the client for interacting with the PaymentCallback builders.
+	PaymentCallback *PaymentCallbackClient
 	// PromoCode is the client for interacting with the PromoCode builders.
 	PromoCode *PromoCodeClient
 	// PromoCodeUsage is the client for interacting with the PromoCodeUsage builders.
@@ -90,6 +93,7 @@ func (c *Client) init() {
 	c.Account = NewAccountClient(c.config)
 	c.AccountGroup = NewAccountGroupClient(c.config)
 	c.Group = NewGroupClient(c.config)
+	c.PaymentCallback = NewPaymentCallbackClient(c.config)
 	c.PromoCode = NewPromoCodeClient(c.config)
 	c.PromoCodeUsage = NewPromoCodeUsageClient(c.config)
 	c.Proxy = NewProxyClient(c.config)
@@ -199,6 +203,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Account:                 NewAccountClient(cfg),
 		AccountGroup:            NewAccountGroupClient(cfg),
 		Group:                   NewGroupClient(cfg),
+		PaymentCallback:         NewPaymentCallbackClient(cfg),
 		PromoCode:               NewPromoCodeClient(cfg),
 		PromoCodeUsage:          NewPromoCodeUsageClient(cfg),
 		Proxy:                   NewProxyClient(cfg),
@@ -235,6 +240,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Account:                 NewAccountClient(cfg),
 		AccountGroup:            NewAccountGroupClient(cfg),
 		Group:                   NewGroupClient(cfg),
+		PaymentCallback:         NewPaymentCallbackClient(cfg),
 		PromoCode:               NewPromoCodeClient(cfg),
 		PromoCodeUsage:          NewPromoCodeUsageClient(cfg),
 		Proxy:                   NewProxyClient(cfg),
@@ -277,10 +283,10 @@ func (c *Client) Close() error {
 // In order to add hooks to a specific client, call: `client.Node.Use(...)`.
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
-		c.APIKey, c.Account, c.AccountGroup, c.Group, c.PromoCode, c.PromoCodeUsage,
-		c.Proxy, c.RechargeOrder, c.RedeemCode, c.Setting, c.UsageCleanupTask,
-		c.UsageLog, c.User, c.UserAllowedGroup, c.UserAttributeDefinition,
-		c.UserAttributeValue, c.UserSubscription,
+		c.APIKey, c.Account, c.AccountGroup, c.Group, c.PaymentCallback, c.PromoCode,
+		c.PromoCodeUsage, c.Proxy, c.RechargeOrder, c.RedeemCode, c.Setting,
+		c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
+		c.UserAttributeDefinition, c.UserAttributeValue, c.UserSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -290,10 +296,10 @@ func (c *Client) Use(hooks ...Hook) {
 // In order to add interceptors to a specific client, call: `client.Node.Intercept(...)`.
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
-		c.APIKey, c.Account, c.AccountGroup, c.Group, c.PromoCode, c.PromoCodeUsage,
-		c.Proxy, c.RechargeOrder, c.RedeemCode, c.Setting, c.UsageCleanupTask,
-		c.UsageLog, c.User, c.UserAllowedGroup, c.UserAttributeDefinition,
-		c.UserAttributeValue, c.UserSubscription,
+		c.APIKey, c.Account, c.AccountGroup, c.Group, c.PaymentCallback, c.PromoCode,
+		c.PromoCodeUsage, c.Proxy, c.RechargeOrder, c.RedeemCode, c.Setting,
+		c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
+		c.UserAttributeDefinition, c.UserAttributeValue, c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -310,6 +316,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.AccountGroup.mutate(ctx, m)
 	case *GroupMutation:
 		return c.Group.mutate(ctx, m)
+	case *PaymentCallbackMutation:
+		return c.PaymentCallback.mutate(ctx, m)
 	case *PromoCodeMutation:
 		return c.PromoCode.mutate(ctx, m)
 	case *PromoCodeUsageMutation:
@@ -1099,6 +1107,139 @@ func (c *GroupClient) mutate(ctx context.Context, m *GroupMutation) (Value, erro
 		return (&GroupDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown Group mutation op: %q", m.Op())
+	}
+}
+
+// PaymentCallbackClient is a client for the PaymentCallback schema.
+type PaymentCallbackClient struct {
+	config
+}
+
+// NewPaymentCallbackClient returns a client for the PaymentCallback from the given config.
+func NewPaymentCallbackClient(c config) *PaymentCallbackClient {
+	return &PaymentCallbackClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `paymentcallback.Hooks(f(g(h())))`.
+func (c *PaymentCallbackClient) Use(hooks ...Hook) {
+	c.hooks.PaymentCallback = append(c.hooks.PaymentCallback, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `paymentcallback.Intercept(f(g(h())))`.
+func (c *PaymentCallbackClient) Intercept(interceptors ...Interceptor) {
+	c.inters.PaymentCallback = append(c.inters.PaymentCallback, interceptors...)
+}
+
+// Create returns a builder for creating a PaymentCallback entity.
+func (c *PaymentCallbackClient) Create() *PaymentCallbackCreate {
+	mutation := newPaymentCallbackMutation(c.config, OpCreate)
+	return &PaymentCallbackCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of PaymentCallback entities.
+func (c *PaymentCallbackClient) CreateBulk(builders ...*PaymentCallbackCreate) *PaymentCallbackCreateBulk {
+	return &PaymentCallbackCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *PaymentCallbackClient) MapCreateBulk(slice any, setFunc func(*PaymentCallbackCreate, int)) *PaymentCallbackCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &PaymentCallbackCreateBulk{err: fmt.Errorf("calling to PaymentCallbackClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*PaymentCallbackCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &PaymentCallbackCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for PaymentCallback.
+func (c *PaymentCallbackClient) Update() *PaymentCallbackUpdate {
+	mutation := newPaymentCallbackMutation(c.config, OpUpdate)
+	return &PaymentCallbackUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *PaymentCallbackClient) UpdateOne(_m *PaymentCallback) *PaymentCallbackUpdateOne {
+	mutation := newPaymentCallbackMutation(c.config, OpUpdateOne, withPaymentCallback(_m))
+	return &PaymentCallbackUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *PaymentCallbackClient) UpdateOneID(id int64) *PaymentCallbackUpdateOne {
+	mutation := newPaymentCallbackMutation(c.config, OpUpdateOne, withPaymentCallbackID(id))
+	return &PaymentCallbackUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for PaymentCallback.
+func (c *PaymentCallbackClient) Delete() *PaymentCallbackDelete {
+	mutation := newPaymentCallbackMutation(c.config, OpDelete)
+	return &PaymentCallbackDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *PaymentCallbackClient) DeleteOne(_m *PaymentCallback) *PaymentCallbackDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *PaymentCallbackClient) DeleteOneID(id int64) *PaymentCallbackDeleteOne {
+	builder := c.Delete().Where(paymentcallback.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &PaymentCallbackDeleteOne{builder}
+}
+
+// Query returns a query builder for PaymentCallback.
+func (c *PaymentCallbackClient) Query() *PaymentCallbackQuery {
+	return &PaymentCallbackQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypePaymentCallback},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a PaymentCallback entity by its id.
+func (c *PaymentCallbackClient) Get(ctx context.Context, id int64) (*PaymentCallback, error) {
+	return c.Query().Where(paymentcallback.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *PaymentCallbackClient) GetX(ctx context.Context, id int64) *PaymentCallback {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *PaymentCallbackClient) Hooks() []Hook {
+	return c.hooks.PaymentCallback
+}
+
+// Interceptors returns the client interceptors.
+func (c *PaymentCallbackClient) Interceptors() []Interceptor {
+	return c.inters.PaymentCallback
+}
+
+func (c *PaymentCallbackClient) mutate(ctx context.Context, m *PaymentCallbackMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&PaymentCallbackCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&PaymentCallbackUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&PaymentCallbackUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&PaymentCallbackDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown PaymentCallback mutation op: %q", m.Op())
 	}
 }
 
@@ -3289,15 +3430,15 @@ func (c *UserSubscriptionClient) mutate(ctx context.Context, m *UserSubscription
 // hooks and interceptors per client, for fast access.
 type (
 	hooks struct {
-		APIKey, Account, AccountGroup, Group, PromoCode, PromoCodeUsage, Proxy,
-		RechargeOrder, RedeemCode, Setting, UsageCleanupTask, UsageLog, User,
-		UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
+		APIKey, Account, AccountGroup, Group, PaymentCallback, PromoCode,
+		PromoCodeUsage, Proxy, RechargeOrder, RedeemCode, Setting, UsageCleanupTask,
+		UsageLog, User, UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
 		UserSubscription []ent.Hook
 	}
 	inters struct {
-		APIKey, Account, AccountGroup, Group, PromoCode, PromoCodeUsage, Proxy,
-		RechargeOrder, RedeemCode, Setting, UsageCleanupTask, UsageLog, User,
-		UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
+		APIKey, Account, AccountGroup, Group, PaymentCallback, PromoCode,
+		PromoCodeUsage, Proxy, RechargeOrder, RedeemCode, Setting, UsageCleanupTask,
+		UsageLog, User, UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
 		UserSubscription []ent.Interceptor
 	}
 )

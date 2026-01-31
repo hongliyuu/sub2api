@@ -16,6 +16,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/accountgroup"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/paymentcallback"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
@@ -45,6 +46,7 @@ const (
 	TypeAccount                 = "Account"
 	TypeAccountGroup            = "AccountGroup"
 	TypeGroup                   = "Group"
+	TypePaymentCallback         = "PaymentCallback"
 	TypePromoCode               = "PromoCode"
 	TypePromoCodeUsage          = "PromoCodeUsage"
 	TypeProxy                   = "Proxy"
@@ -6247,6 +6249,1057 @@ func (m *GroupMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown Group edge %s", name)
+}
+
+// PaymentCallbackMutation represents an operation that mutates the PaymentCallback nodes in the graph.
+type PaymentCallbackMutation struct {
+	config
+	op                 Op
+	typ                string
+	id                 *int64
+	created_at         *time.Time
+	updated_at         *time.Time
+	order_no           *string
+	payment_method     *string
+	transaction_id     *string
+	request_headers    *string
+	request_body       *string
+	signature_valid    *bool
+	process_status     *string
+	process_message    *string
+	response_code      *string
+	response_message   *string
+	process_time_ms    *int64
+	addprocess_time_ms *int64
+	clearedFields      map[string]struct{}
+	done               bool
+	oldValue           func(context.Context) (*PaymentCallback, error)
+	predicates         []predicate.PaymentCallback
+}
+
+var _ ent.Mutation = (*PaymentCallbackMutation)(nil)
+
+// paymentcallbackOption allows management of the mutation configuration using functional options.
+type paymentcallbackOption func(*PaymentCallbackMutation)
+
+// newPaymentCallbackMutation creates new mutation for the PaymentCallback entity.
+func newPaymentCallbackMutation(c config, op Op, opts ...paymentcallbackOption) *PaymentCallbackMutation {
+	m := &PaymentCallbackMutation{
+		config:        c,
+		op:            op,
+		typ:           TypePaymentCallback,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withPaymentCallbackID sets the ID field of the mutation.
+func withPaymentCallbackID(id int64) paymentcallbackOption {
+	return func(m *PaymentCallbackMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *PaymentCallback
+		)
+		m.oldValue = func(ctx context.Context) (*PaymentCallback, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().PaymentCallback.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withPaymentCallback sets the old PaymentCallback of the mutation.
+func withPaymentCallback(node *PaymentCallback) paymentcallbackOption {
+	return func(m *PaymentCallbackMutation) {
+		m.oldValue = func(context.Context) (*PaymentCallback, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m PaymentCallbackMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m PaymentCallbackMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *PaymentCallbackMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *PaymentCallbackMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().PaymentCallback.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *PaymentCallbackMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *PaymentCallbackMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the PaymentCallback entity.
+// If the PaymentCallback object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentCallbackMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *PaymentCallbackMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *PaymentCallbackMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *PaymentCallbackMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the PaymentCallback entity.
+// If the PaymentCallback object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentCallbackMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *PaymentCallbackMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetOrderNo sets the "order_no" field.
+func (m *PaymentCallbackMutation) SetOrderNo(s string) {
+	m.order_no = &s
+}
+
+// OrderNo returns the value of the "order_no" field in the mutation.
+func (m *PaymentCallbackMutation) OrderNo() (r string, exists bool) {
+	v := m.order_no
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOrderNo returns the old "order_no" field's value of the PaymentCallback entity.
+// If the PaymentCallback object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentCallbackMutation) OldOrderNo(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOrderNo is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOrderNo requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOrderNo: %w", err)
+	}
+	return oldValue.OrderNo, nil
+}
+
+// ClearOrderNo clears the value of the "order_no" field.
+func (m *PaymentCallbackMutation) ClearOrderNo() {
+	m.order_no = nil
+	m.clearedFields[paymentcallback.FieldOrderNo] = struct{}{}
+}
+
+// OrderNoCleared returns if the "order_no" field was cleared in this mutation.
+func (m *PaymentCallbackMutation) OrderNoCleared() bool {
+	_, ok := m.clearedFields[paymentcallback.FieldOrderNo]
+	return ok
+}
+
+// ResetOrderNo resets all changes to the "order_no" field.
+func (m *PaymentCallbackMutation) ResetOrderNo() {
+	m.order_no = nil
+	delete(m.clearedFields, paymentcallback.FieldOrderNo)
+}
+
+// SetPaymentMethod sets the "payment_method" field.
+func (m *PaymentCallbackMutation) SetPaymentMethod(s string) {
+	m.payment_method = &s
+}
+
+// PaymentMethod returns the value of the "payment_method" field in the mutation.
+func (m *PaymentCallbackMutation) PaymentMethod() (r string, exists bool) {
+	v := m.payment_method
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPaymentMethod returns the old "payment_method" field's value of the PaymentCallback entity.
+// If the PaymentCallback object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentCallbackMutation) OldPaymentMethod(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPaymentMethod is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPaymentMethod requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPaymentMethod: %w", err)
+	}
+	return oldValue.PaymentMethod, nil
+}
+
+// ResetPaymentMethod resets all changes to the "payment_method" field.
+func (m *PaymentCallbackMutation) ResetPaymentMethod() {
+	m.payment_method = nil
+}
+
+// SetTransactionID sets the "transaction_id" field.
+func (m *PaymentCallbackMutation) SetTransactionID(s string) {
+	m.transaction_id = &s
+}
+
+// TransactionID returns the value of the "transaction_id" field in the mutation.
+func (m *PaymentCallbackMutation) TransactionID() (r string, exists bool) {
+	v := m.transaction_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTransactionID returns the old "transaction_id" field's value of the PaymentCallback entity.
+// If the PaymentCallback object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentCallbackMutation) OldTransactionID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTransactionID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTransactionID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTransactionID: %w", err)
+	}
+	return oldValue.TransactionID, nil
+}
+
+// ClearTransactionID clears the value of the "transaction_id" field.
+func (m *PaymentCallbackMutation) ClearTransactionID() {
+	m.transaction_id = nil
+	m.clearedFields[paymentcallback.FieldTransactionID] = struct{}{}
+}
+
+// TransactionIDCleared returns if the "transaction_id" field was cleared in this mutation.
+func (m *PaymentCallbackMutation) TransactionIDCleared() bool {
+	_, ok := m.clearedFields[paymentcallback.FieldTransactionID]
+	return ok
+}
+
+// ResetTransactionID resets all changes to the "transaction_id" field.
+func (m *PaymentCallbackMutation) ResetTransactionID() {
+	m.transaction_id = nil
+	delete(m.clearedFields, paymentcallback.FieldTransactionID)
+}
+
+// SetRequestHeaders sets the "request_headers" field.
+func (m *PaymentCallbackMutation) SetRequestHeaders(s string) {
+	m.request_headers = &s
+}
+
+// RequestHeaders returns the value of the "request_headers" field in the mutation.
+func (m *PaymentCallbackMutation) RequestHeaders() (r string, exists bool) {
+	v := m.request_headers
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequestHeaders returns the old "request_headers" field's value of the PaymentCallback entity.
+// If the PaymentCallback object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentCallbackMutation) OldRequestHeaders(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequestHeaders is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequestHeaders requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequestHeaders: %w", err)
+	}
+	return oldValue.RequestHeaders, nil
+}
+
+// ResetRequestHeaders resets all changes to the "request_headers" field.
+func (m *PaymentCallbackMutation) ResetRequestHeaders() {
+	m.request_headers = nil
+}
+
+// SetRequestBody sets the "request_body" field.
+func (m *PaymentCallbackMutation) SetRequestBody(s string) {
+	m.request_body = &s
+}
+
+// RequestBody returns the value of the "request_body" field in the mutation.
+func (m *PaymentCallbackMutation) RequestBody() (r string, exists bool) {
+	v := m.request_body
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRequestBody returns the old "request_body" field's value of the PaymentCallback entity.
+// If the PaymentCallback object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentCallbackMutation) OldRequestBody(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRequestBody is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRequestBody requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRequestBody: %w", err)
+	}
+	return oldValue.RequestBody, nil
+}
+
+// ResetRequestBody resets all changes to the "request_body" field.
+func (m *PaymentCallbackMutation) ResetRequestBody() {
+	m.request_body = nil
+}
+
+// SetSignatureValid sets the "signature_valid" field.
+func (m *PaymentCallbackMutation) SetSignatureValid(b bool) {
+	m.signature_valid = &b
+}
+
+// SignatureValid returns the value of the "signature_valid" field in the mutation.
+func (m *PaymentCallbackMutation) SignatureValid() (r bool, exists bool) {
+	v := m.signature_valid
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSignatureValid returns the old "signature_valid" field's value of the PaymentCallback entity.
+// If the PaymentCallback object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentCallbackMutation) OldSignatureValid(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSignatureValid is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSignatureValid requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSignatureValid: %w", err)
+	}
+	return oldValue.SignatureValid, nil
+}
+
+// ResetSignatureValid resets all changes to the "signature_valid" field.
+func (m *PaymentCallbackMutation) ResetSignatureValid() {
+	m.signature_valid = nil
+}
+
+// SetProcessStatus sets the "process_status" field.
+func (m *PaymentCallbackMutation) SetProcessStatus(s string) {
+	m.process_status = &s
+}
+
+// ProcessStatus returns the value of the "process_status" field in the mutation.
+func (m *PaymentCallbackMutation) ProcessStatus() (r string, exists bool) {
+	v := m.process_status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProcessStatus returns the old "process_status" field's value of the PaymentCallback entity.
+// If the PaymentCallback object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentCallbackMutation) OldProcessStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProcessStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProcessStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProcessStatus: %w", err)
+	}
+	return oldValue.ProcessStatus, nil
+}
+
+// ResetProcessStatus resets all changes to the "process_status" field.
+func (m *PaymentCallbackMutation) ResetProcessStatus() {
+	m.process_status = nil
+}
+
+// SetProcessMessage sets the "process_message" field.
+func (m *PaymentCallbackMutation) SetProcessMessage(s string) {
+	m.process_message = &s
+}
+
+// ProcessMessage returns the value of the "process_message" field in the mutation.
+func (m *PaymentCallbackMutation) ProcessMessage() (r string, exists bool) {
+	v := m.process_message
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProcessMessage returns the old "process_message" field's value of the PaymentCallback entity.
+// If the PaymentCallback object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentCallbackMutation) OldProcessMessage(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProcessMessage is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProcessMessage requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProcessMessage: %w", err)
+	}
+	return oldValue.ProcessMessage, nil
+}
+
+// ResetProcessMessage resets all changes to the "process_message" field.
+func (m *PaymentCallbackMutation) ResetProcessMessage() {
+	m.process_message = nil
+}
+
+// SetResponseCode sets the "response_code" field.
+func (m *PaymentCallbackMutation) SetResponseCode(s string) {
+	m.response_code = &s
+}
+
+// ResponseCode returns the value of the "response_code" field in the mutation.
+func (m *PaymentCallbackMutation) ResponseCode() (r string, exists bool) {
+	v := m.response_code
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldResponseCode returns the old "response_code" field's value of the PaymentCallback entity.
+// If the PaymentCallback object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentCallbackMutation) OldResponseCode(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldResponseCode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldResponseCode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldResponseCode: %w", err)
+	}
+	return oldValue.ResponseCode, nil
+}
+
+// ResetResponseCode resets all changes to the "response_code" field.
+func (m *PaymentCallbackMutation) ResetResponseCode() {
+	m.response_code = nil
+}
+
+// SetResponseMessage sets the "response_message" field.
+func (m *PaymentCallbackMutation) SetResponseMessage(s string) {
+	m.response_message = &s
+}
+
+// ResponseMessage returns the value of the "response_message" field in the mutation.
+func (m *PaymentCallbackMutation) ResponseMessage() (r string, exists bool) {
+	v := m.response_message
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldResponseMessage returns the old "response_message" field's value of the PaymentCallback entity.
+// If the PaymentCallback object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentCallbackMutation) OldResponseMessage(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldResponseMessage is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldResponseMessage requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldResponseMessage: %w", err)
+	}
+	return oldValue.ResponseMessage, nil
+}
+
+// ResetResponseMessage resets all changes to the "response_message" field.
+func (m *PaymentCallbackMutation) ResetResponseMessage() {
+	m.response_message = nil
+}
+
+// SetProcessTimeMs sets the "process_time_ms" field.
+func (m *PaymentCallbackMutation) SetProcessTimeMs(i int64) {
+	m.process_time_ms = &i
+	m.addprocess_time_ms = nil
+}
+
+// ProcessTimeMs returns the value of the "process_time_ms" field in the mutation.
+func (m *PaymentCallbackMutation) ProcessTimeMs() (r int64, exists bool) {
+	v := m.process_time_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldProcessTimeMs returns the old "process_time_ms" field's value of the PaymentCallback entity.
+// If the PaymentCallback object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *PaymentCallbackMutation) OldProcessTimeMs(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldProcessTimeMs is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldProcessTimeMs requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldProcessTimeMs: %w", err)
+	}
+	return oldValue.ProcessTimeMs, nil
+}
+
+// AddProcessTimeMs adds i to the "process_time_ms" field.
+func (m *PaymentCallbackMutation) AddProcessTimeMs(i int64) {
+	if m.addprocess_time_ms != nil {
+		*m.addprocess_time_ms += i
+	} else {
+		m.addprocess_time_ms = &i
+	}
+}
+
+// AddedProcessTimeMs returns the value that was added to the "process_time_ms" field in this mutation.
+func (m *PaymentCallbackMutation) AddedProcessTimeMs() (r int64, exists bool) {
+	v := m.addprocess_time_ms
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetProcessTimeMs resets all changes to the "process_time_ms" field.
+func (m *PaymentCallbackMutation) ResetProcessTimeMs() {
+	m.process_time_ms = nil
+	m.addprocess_time_ms = nil
+}
+
+// Where appends a list predicates to the PaymentCallbackMutation builder.
+func (m *PaymentCallbackMutation) Where(ps ...predicate.PaymentCallback) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the PaymentCallbackMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *PaymentCallbackMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.PaymentCallback, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *PaymentCallbackMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *PaymentCallbackMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (PaymentCallback).
+func (m *PaymentCallbackMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *PaymentCallbackMutation) Fields() []string {
+	fields := make([]string, 0, 13)
+	if m.created_at != nil {
+		fields = append(fields, paymentcallback.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, paymentcallback.FieldUpdatedAt)
+	}
+	if m.order_no != nil {
+		fields = append(fields, paymentcallback.FieldOrderNo)
+	}
+	if m.payment_method != nil {
+		fields = append(fields, paymentcallback.FieldPaymentMethod)
+	}
+	if m.transaction_id != nil {
+		fields = append(fields, paymentcallback.FieldTransactionID)
+	}
+	if m.request_headers != nil {
+		fields = append(fields, paymentcallback.FieldRequestHeaders)
+	}
+	if m.request_body != nil {
+		fields = append(fields, paymentcallback.FieldRequestBody)
+	}
+	if m.signature_valid != nil {
+		fields = append(fields, paymentcallback.FieldSignatureValid)
+	}
+	if m.process_status != nil {
+		fields = append(fields, paymentcallback.FieldProcessStatus)
+	}
+	if m.process_message != nil {
+		fields = append(fields, paymentcallback.FieldProcessMessage)
+	}
+	if m.response_code != nil {
+		fields = append(fields, paymentcallback.FieldResponseCode)
+	}
+	if m.response_message != nil {
+		fields = append(fields, paymentcallback.FieldResponseMessage)
+	}
+	if m.process_time_ms != nil {
+		fields = append(fields, paymentcallback.FieldProcessTimeMs)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *PaymentCallbackMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case paymentcallback.FieldCreatedAt:
+		return m.CreatedAt()
+	case paymentcallback.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case paymentcallback.FieldOrderNo:
+		return m.OrderNo()
+	case paymentcallback.FieldPaymentMethod:
+		return m.PaymentMethod()
+	case paymentcallback.FieldTransactionID:
+		return m.TransactionID()
+	case paymentcallback.FieldRequestHeaders:
+		return m.RequestHeaders()
+	case paymentcallback.FieldRequestBody:
+		return m.RequestBody()
+	case paymentcallback.FieldSignatureValid:
+		return m.SignatureValid()
+	case paymentcallback.FieldProcessStatus:
+		return m.ProcessStatus()
+	case paymentcallback.FieldProcessMessage:
+		return m.ProcessMessage()
+	case paymentcallback.FieldResponseCode:
+		return m.ResponseCode()
+	case paymentcallback.FieldResponseMessage:
+		return m.ResponseMessage()
+	case paymentcallback.FieldProcessTimeMs:
+		return m.ProcessTimeMs()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *PaymentCallbackMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case paymentcallback.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case paymentcallback.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case paymentcallback.FieldOrderNo:
+		return m.OldOrderNo(ctx)
+	case paymentcallback.FieldPaymentMethod:
+		return m.OldPaymentMethod(ctx)
+	case paymentcallback.FieldTransactionID:
+		return m.OldTransactionID(ctx)
+	case paymentcallback.FieldRequestHeaders:
+		return m.OldRequestHeaders(ctx)
+	case paymentcallback.FieldRequestBody:
+		return m.OldRequestBody(ctx)
+	case paymentcallback.FieldSignatureValid:
+		return m.OldSignatureValid(ctx)
+	case paymentcallback.FieldProcessStatus:
+		return m.OldProcessStatus(ctx)
+	case paymentcallback.FieldProcessMessage:
+		return m.OldProcessMessage(ctx)
+	case paymentcallback.FieldResponseCode:
+		return m.OldResponseCode(ctx)
+	case paymentcallback.FieldResponseMessage:
+		return m.OldResponseMessage(ctx)
+	case paymentcallback.FieldProcessTimeMs:
+		return m.OldProcessTimeMs(ctx)
+	}
+	return nil, fmt.Errorf("unknown PaymentCallback field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *PaymentCallbackMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case paymentcallback.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case paymentcallback.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case paymentcallback.FieldOrderNo:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOrderNo(v)
+		return nil
+	case paymentcallback.FieldPaymentMethod:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPaymentMethod(v)
+		return nil
+	case paymentcallback.FieldTransactionID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTransactionID(v)
+		return nil
+	case paymentcallback.FieldRequestHeaders:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequestHeaders(v)
+		return nil
+	case paymentcallback.FieldRequestBody:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRequestBody(v)
+		return nil
+	case paymentcallback.FieldSignatureValid:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSignatureValid(v)
+		return nil
+	case paymentcallback.FieldProcessStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProcessStatus(v)
+		return nil
+	case paymentcallback.FieldProcessMessage:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProcessMessage(v)
+		return nil
+	case paymentcallback.FieldResponseCode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetResponseCode(v)
+		return nil
+	case paymentcallback.FieldResponseMessage:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetResponseMessage(v)
+		return nil
+	case paymentcallback.FieldProcessTimeMs:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetProcessTimeMs(v)
+		return nil
+	}
+	return fmt.Errorf("unknown PaymentCallback field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *PaymentCallbackMutation) AddedFields() []string {
+	var fields []string
+	if m.addprocess_time_ms != nil {
+		fields = append(fields, paymentcallback.FieldProcessTimeMs)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *PaymentCallbackMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case paymentcallback.FieldProcessTimeMs:
+		return m.AddedProcessTimeMs()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *PaymentCallbackMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case paymentcallback.FieldProcessTimeMs:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddProcessTimeMs(v)
+		return nil
+	}
+	return fmt.Errorf("unknown PaymentCallback numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *PaymentCallbackMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(paymentcallback.FieldOrderNo) {
+		fields = append(fields, paymentcallback.FieldOrderNo)
+	}
+	if m.FieldCleared(paymentcallback.FieldTransactionID) {
+		fields = append(fields, paymentcallback.FieldTransactionID)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *PaymentCallbackMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *PaymentCallbackMutation) ClearField(name string) error {
+	switch name {
+	case paymentcallback.FieldOrderNo:
+		m.ClearOrderNo()
+		return nil
+	case paymentcallback.FieldTransactionID:
+		m.ClearTransactionID()
+		return nil
+	}
+	return fmt.Errorf("unknown PaymentCallback nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *PaymentCallbackMutation) ResetField(name string) error {
+	switch name {
+	case paymentcallback.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case paymentcallback.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case paymentcallback.FieldOrderNo:
+		m.ResetOrderNo()
+		return nil
+	case paymentcallback.FieldPaymentMethod:
+		m.ResetPaymentMethod()
+		return nil
+	case paymentcallback.FieldTransactionID:
+		m.ResetTransactionID()
+		return nil
+	case paymentcallback.FieldRequestHeaders:
+		m.ResetRequestHeaders()
+		return nil
+	case paymentcallback.FieldRequestBody:
+		m.ResetRequestBody()
+		return nil
+	case paymentcallback.FieldSignatureValid:
+		m.ResetSignatureValid()
+		return nil
+	case paymentcallback.FieldProcessStatus:
+		m.ResetProcessStatus()
+		return nil
+	case paymentcallback.FieldProcessMessage:
+		m.ResetProcessMessage()
+		return nil
+	case paymentcallback.FieldResponseCode:
+		m.ResetResponseCode()
+		return nil
+	case paymentcallback.FieldResponseMessage:
+		m.ResetResponseMessage()
+		return nil
+	case paymentcallback.FieldProcessTimeMs:
+		m.ResetProcessTimeMs()
+		return nil
+	}
+	return fmt.Errorf("unknown PaymentCallback field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *PaymentCallbackMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *PaymentCallbackMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *PaymentCallbackMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *PaymentCallbackMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *PaymentCallbackMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *PaymentCallbackMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *PaymentCallbackMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown PaymentCallback unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *PaymentCallbackMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown PaymentCallback edge %s", name)
 }
 
 // PromoCodeMutation represents an operation that mutates the PromoCode nodes in the graph.
