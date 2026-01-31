@@ -50,6 +50,23 @@ const (
 	callbackLockTTL       = 30 * time.Second
 )
 
+// PaymentSource 支付来源
+type PaymentSource string
+
+const (
+	PaymentSourceCallback   PaymentSource = "callback"    // 微信回调
+	PaymentSourceCompensate PaymentSource = "compensate"  // 定时任务补偿
+	PaymentSourceManualSync PaymentSource = "manual_sync" // 用户手动同步
+)
+
+// ProcessPaymentSuccessParams 处理支付成功的参数
+type ProcessPaymentSuccessParams struct {
+	OrderNo       string        // 订单号
+	TransactionID string        // 微信支付订单号
+	AmountInFen   int64         // 实际支付金额（分），0 表示不验证
+	Source        PaymentSource // 支付来源
+}
+
 // ProcessPaymentResult 处理支付结果
 type ProcessPaymentResult struct {
 	Success        bool   // 是否处理成功
@@ -217,6 +234,173 @@ func (s *PaymentCallbackService) processPaymentInTransaction(
 		BalanceAfter:   balanceAfter,
 		RelatedOrderNo: &order.OrderNo,
 		Description:    fmt.Sprintf("充值 %.2f 元", order.Amount),
+		OperatorID:     0,
+		OperatorType:   OperatorTypeSystem,
+	}
+	if err := s.balanceLogRepo.Create(txCtx, balanceLog); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("create balance log: %w", err)
+	}
+
+	// 提交事务
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit transaction: %w", err)
+	}
+
+	return nil
+}
+
+// ProcessPaymentSuccess 处理支付成功的通用方法
+// 可被回调处理和补偿逻辑复用
+// 包含：分布式锁 → 订单查询 → 状态检查 → 金额验证（可选）→ 事务处理
+func (s *PaymentCallbackService) ProcessPaymentSuccess(
+	ctx context.Context,
+	params ProcessPaymentSuccessParams,
+) *ProcessPaymentResult {
+	result := &ProcessPaymentResult{
+		OrderNo: params.OrderNo,
+	}
+
+	// 1. 获取分布式锁
+	lockKey := callbackLockKeyPrefix + params.OrderNo
+	locked, err := s.redisClient.SetNX(ctx, lockKey, 1, callbackLockTTL).Result()
+	if err != nil {
+		result.ErrorMessage = fmt.Sprintf("acquire lock failed: %v", err)
+		return result
+	}
+	if !locked {
+		// 其他进程正在处理，直接返回成功（幂等）
+		result.Success = true
+		result.AlreadyPaid = true
+		log.Printf("[PaymentCallback] Order already being processed: order_no=%s, source=%s",
+			params.OrderNo, params.Source)
+		return result
+	}
+	// 确保释放锁
+	defer func() {
+		if err := s.redisClient.Del(ctx, lockKey).Err(); err != nil {
+			log.Printf("[PaymentCallback] Failed to release lock: order_no=%s, error=%v",
+				params.OrderNo, err)
+		}
+	}()
+
+	// 2. 查询订单
+	order, err := s.orderRepo.GetByOrderNo(ctx, params.OrderNo)
+	if err != nil {
+		result.ErrorMessage = fmt.Sprintf("get order failed: %v", err)
+		return result
+	}
+	result.Amount = order.Amount
+	result.UserID = order.UserID
+	result.TransactionID = params.TransactionID
+
+	// 3. 检查订单状态
+	if order.Status != OrderStatusPending {
+		// 订单已处理过（幂等）
+		result.Success = true
+		result.AlreadyPaid = true
+		log.Printf("[PaymentCallback] Order already processed: order_no=%s, status=%s, source=%s",
+			params.OrderNo, order.Status, params.Source)
+		return result
+	}
+
+	// 4. 验证金额（仅当 AmountInFen > 0 时验证）
+	if params.AmountInFen > 0 {
+		orderAmountInFen := int64(math.Round(order.Amount * 100))
+		if params.AmountInFen != orderAmountInFen {
+			result.ErrorMessage = fmt.Sprintf("amount mismatch: callback=%d, order=%d",
+				params.AmountInFen, orderAmountInFen)
+			log.Printf("[PaymentCallback] Amount mismatch: order_no=%s, callback_amount=%d, order_amount=%d, source=%s",
+				params.OrderNo, params.AmountInFen, orderAmountInFen, params.Source)
+			return result
+		}
+	}
+
+	// 5. 在事务中更新订单状态和用户余额
+	description := s.buildDescription(order.Amount, params.Source)
+	err = s.processPaymentInTransactionWithDesc(ctx, order, params.TransactionID, description)
+	if err != nil {
+		result.ErrorMessage = fmt.Sprintf("transaction failed: %v", err)
+		return result
+	}
+
+	result.Success = true
+	log.Printf("[PaymentCallback] Payment processed successfully: order_no=%s, user_id=%d, amount=%.2f, source=%s",
+		params.OrderNo, order.UserID, order.Amount, params.Source)
+	return result
+}
+
+// buildDescription 根据支付来源构建日志描述
+func (s *PaymentCallbackService) buildDescription(amount float64, source PaymentSource) string {
+	switch source {
+	case PaymentSourceCallback:
+		return fmt.Sprintf("充值 %.2f 元", amount)
+	case PaymentSourceCompensate:
+		return fmt.Sprintf("充值 %.2f 元（定时补偿）", amount)
+	case PaymentSourceManualSync:
+		return fmt.Sprintf("充值 %.2f 元（手动同步补偿）", amount)
+	default:
+		return fmt.Sprintf("充值 %.2f 元", amount)
+	}
+}
+
+// processPaymentInTransactionWithDesc 在事务中处理支付（支持自定义描述）
+func (s *PaymentCallbackService) processPaymentInTransactionWithDesc(
+	ctx context.Context,
+	order *RechargeOrder,
+	transactionID string,
+	description string,
+) error {
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("start transaction: %w", err)
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			_ = tx.Rollback()
+			panic(r)
+		}
+	}()
+
+	// 使用事务上下文
+	txCtx := dbent.NewTxContext(ctx, tx)
+
+	// 查询用户当前余额（用于日志记录）
+	user, err := s.userRepo.GetByID(txCtx, order.UserID)
+	if err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("get user: %w", err)
+	}
+	balanceBefore := user.Balance
+
+	// 更新订单状态
+	now := time.Now()
+	order.Status = OrderStatusPaid
+	order.WeChatTransactionID = &transactionID
+	order.PaidAt = &now
+
+	if err := s.orderRepo.Update(txCtx, order); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("update order: %w", err)
+	}
+
+	// 增加用户余额
+	if err := s.userRepo.UpdateBalance(txCtx, order.UserID, order.Amount); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("update user balance: %w", err)
+	}
+
+	// 插入余额变动日志
+	balanceAfter := balanceBefore + order.Amount
+	balanceLog := &BalanceLog{
+		UserID:         order.UserID,
+		ChangeType:     BalanceChangeTypeRecharge,
+		Amount:         order.Amount,
+		BalanceBefore:  balanceBefore,
+		BalanceAfter:   balanceAfter,
+		RelatedOrderNo: &order.OrderNo,
+		Description:    description,
 		OperatorID:     0,
 		OperatorType:   OperatorTypeSystem,
 	}

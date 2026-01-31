@@ -105,9 +105,10 @@ type RechargeOrderRepository interface {
 
 // RechargeOrderService 充值订单服务
 type RechargeOrderService struct {
-	cfg              *config.Config
-	repo             RechargeOrderRepository
-	wechatPayService *WeChatPayService
+	cfg                    *config.Config
+	repo                   RechargeOrderRepository
+	wechatPayService       *WeChatPayService
+	paymentCallbackService *PaymentCallbackService
 }
 
 // NewRechargeOrderService 创建充值订单服务
@@ -115,11 +116,13 @@ func NewRechargeOrderService(
 	cfg *config.Config,
 	repo RechargeOrderRepository,
 	wechatPayService *WeChatPayService,
+	paymentCallbackService *PaymentCallbackService,
 ) *RechargeOrderService {
 	return &RechargeOrderService{
-		cfg:              cfg,
-		repo:             repo,
-		wechatPayService: wechatPayService,
+		cfg:                    cfg,
+		repo:                   repo,
+		wechatPayService:       wechatPayService,
+		paymentCallbackService: paymentCallbackService,
 	}
 }
 
@@ -316,6 +319,7 @@ type SyncOrderStatusResult struct {
 
 // SyncOrderStatus 同步订单状态
 // 调用微信支付查询接口获取真实支付状态，与本地订单状态进行对比
+// 如果微信显示已支付但本地未到账，自动触发补偿到账
 func (s *RechargeOrderService) SyncOrderStatus(ctx context.Context, userID int64, orderNo string) (*SyncOrderStatusResult, error) {
 	// 1. 查询本地订单
 	order, err := s.repo.GetByOrderNo(ctx, orderNo)
@@ -346,6 +350,25 @@ func (s *RechargeOrderService) SyncOrderStatus(ctx context.Context, userID int64
 
 	// 5. 根据微信状态映射本地状态
 	localStatus := mapWeChatStatusToLocal(wechatResult.TradeState)
+
+	// 6. 如果微信显示已支付但本地是 pending，触发补偿到账
+	if wechatResult.TradeState == "SUCCESS" && order.Status == OrderStatusPending {
+		if s.paymentCallbackService != nil {
+			result := s.paymentCallbackService.ProcessPaymentSuccess(ctx, ProcessPaymentSuccessParams{
+				OrderNo:       orderNo,
+				TransactionID: wechatResult.TransactionID,
+				AmountInFen:   0, // 补偿时不验证金额（查询接口可能不返回）
+				Source:        PaymentSourceManualSync,
+			})
+			if result.Success {
+				localStatus = OrderStatusPaid
+			} else if result.ErrorMessage != "" {
+				// 记录补偿失败但不影响返回（用户至少知道微信已支付）
+				fmt.Printf("[SyncOrderStatus] Compensation failed: order_no=%s, error=%s\n",
+					orderNo, result.ErrorMessage)
+			}
+		}
+	}
 
 	return &SyncOrderStatusResult{
 		OrderNo:      orderNo,
