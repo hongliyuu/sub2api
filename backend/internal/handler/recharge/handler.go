@@ -182,3 +182,52 @@ func (h *RechargeHandler) CreateOrder(c *gin.Context) {
 		CreatedAt:      order.CreatedAt,
 	})
 }
+
+// OrderDetailResponse 订单详情响应
+type OrderDetailResponse struct {
+	OrderNo        string     `json:"order_no"`
+	Amount         float64    `json:"amount"`
+	Status         string     `json:"status"`
+	PaymentMethod  string     `json:"payment_method"`
+	PaymentChannel string     `json:"payment_channel"`
+	ExpireAt       time.Time  `json:"expire_at"`
+	PaidAt         *time.Time `json:"paid_at,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+}
+
+// GetOrder 获取订单详情（需认证）
+// GET /api/v1/recharge/orders/:order_no
+func (h *RechargeHandler) GetOrder(c *gin.Context) {
+	// 从 context 获取用户 ID
+	userID, exists := c.Get("userID")
+	if !exists {
+		response.Unauthorized(c, "未登录")
+		return
+	}
+
+	orderNo := c.Param("order_no")
+	if orderNo == "" {
+		response.BadRequest(c, "订单号不能为空")
+		return
+	}
+
+	// 获取订单详情（带权限校验）
+	order, err := h.rechargeOrderService.GetUserOrder(c.Request.Context(), userID.(int64), orderNo)
+	if err != nil {
+		if !response.ErrorFrom(c, err) {
+			response.InternalError(c, "查询订单失败")
+		}
+		return
+	}
+
+	response.Success(c, OrderDetailResponse{
+		OrderNo:        order.OrderNo,
+		Amount:         order.Amount,
+		Status:         order.Status,
+		PaymentMethod:  order.PaymentMethod,
+		PaymentChannel: order.PaymentChannel,
+		ExpireAt:       order.ExpireAt,
+		PaidAt:         order.PaidAt,
+		CreatedAt:      order.CreatedAt,
+	})
+}

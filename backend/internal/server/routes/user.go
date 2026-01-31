@@ -93,6 +93,7 @@ func RegisterUserRoutes(
 		{
 			recharge.POST("/validate-amount", h.Recharge.ValidateAmount)
 			recharge.POST("/orders", h.Recharge.CreateOrder)
+			recharge.GET("/orders/:order_no", h.Recharge.GetOrder)
 		}
 	}
 }

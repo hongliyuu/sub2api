@@ -184,6 +184,22 @@ func (s *RechargeOrderService) GetOrder(ctx context.Context, orderNo string) (*R
 	return s.repo.GetByOrderNo(ctx, orderNo)
 }
 
+// GetUserOrder 获取用户的订单详情（带权限校验）
+// 只能查询自己的订单，如果订单不存在或不属于该用户则返回错误
+func (s *RechargeOrderService) GetUserOrder(ctx context.Context, userID int64, orderNo string) (*RechargeOrder, error) {
+	order, err := s.repo.GetByOrderNo(ctx, orderNo)
+	if err != nil {
+		return nil, err
+	}
+
+	// 校验用户权限：只能查询自己的订单
+	if order.UserID != userID {
+		return nil, ErrRechargeOrderNotFound
+	}
+
+	return order, nil
+}
+
 // GetOrderByID 根据ID获取订单
 func (s *RechargeOrderService) GetOrderByID(ctx context.Context, id int64) (*RechargeOrder, error) {
 	return s.repo.GetByID(ctx, id)
