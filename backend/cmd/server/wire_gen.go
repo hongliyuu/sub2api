@@ -184,7 +184,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	rechargeOrderService := service.NewRechargeOrderService(configConfig, rechargeOrderRepository, weChatPayService)
 	rechargeHandler := recharge.NewRechargeHandler(weChatPayService, rechargeOrderService)
 	paymentCallbackRepository := repository.NewPaymentCallbackRepository(client)
-	weChatPayWebhookHandler := webhook.NewWeChatPayWebhookHandler(paymentCallbackRepository)
+	weChatPayWebhookHandler := webhook.NewWeChatPayWebhookHandler(paymentCallbackRepository, weChatPayService)
 	handlers := handler.ProvideHandlers(authHandler, userHandler, apiKeyHandler, usageHandler, redeemHandler, subscriptionHandler, adminHandlers, gatewayHandler, openAIGatewayHandler, handlerSettingHandler, totpHandler, userUsageReportHandler, rechargeHandler, weChatPayWebhookHandler)
 	jwtAuthMiddleware := middleware.NewJWTAuthMiddleware(authService, userService)
 	adminAuthMiddleware := middleware.NewAdminAuthMiddleware(authService, userService, settingService)

@@ -6,12 +6,18 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/wechatpay-apiv3/wechatpay-go/core"
+	"github.com/wechatpay-apiv3/wechatpay-go/core/auth/verifiers"
+	"github.com/wechatpay-apiv3/wechatpay-go/core/downloader"
+	"github.com/wechatpay-apiv3/wechatpay-go/core/notify"
 	"github.com/wechatpay-apiv3/wechatpay-go/core/option"
+	"github.com/wechatpay-apiv3/wechatpay-go/services/payments"
 	"github.com/wechatpay-apiv3/wechatpay-go/services/payments/jsapi"
 	"github.com/wechatpay-apiv3/wechatpay-go/services/payments/native"
 	"github.com/wechatpay-apiv3/wechatpay-go/utils"
@@ -19,11 +25,13 @@ import (
 
 // WeChatPayService 微信支付服务
 type WeChatPayService struct {
-	cfg         *config.Config
-	client      *core.Client
-	privateKey  *rsa.PrivateKey
-	mu          sync.RWMutex
-	initialized bool
+	cfg            *config.Config
+	client         *core.Client
+	privateKey     *rsa.PrivateKey
+	notifyHandler  *notify.Handler
+	certDownloader *downloader.CertificateDownloader
+	mu             sync.RWMutex
+	initialized    bool
 }
 
 // NewWeChatPayService 创建微信支付服务
@@ -53,6 +61,8 @@ func (s *WeChatPayService) initClient() error {
 	s.privateKey = privateKey
 
 	ctx := context.Background()
+
+	// 创建微信支付客户端（自动下载和管理平台证书）
 	client, err := core.NewClient(
 		ctx,
 		option.WithWechatPayAutoAuthCipher(
@@ -65,10 +75,27 @@ func (s *WeChatPayService) initClient() error {
 	if err != nil {
 		return fmt.Errorf("create wechat pay client failed: %w", err)
 	}
-
 	s.client = client
+
+	// 初始化证书下载器（用于回调验签）
+	certDownloader, err := downloader.NewCertificateDownloaderWithClient(
+		ctx,
+		client,
+		s.cfg.WeChatPay.MchID,
+	)
+	if err != nil {
+		return fmt.Errorf("create certificate downloader failed: %w", err)
+	}
+	s.certDownloader = certDownloader
+
+	// 创建回调通知处理器
+	s.notifyHandler = notify.NewNotifyHandler(
+		s.cfg.WeChatPay.APIv3Key,
+		verifiers.NewSHA256WithRSAVerifier(certDownloader),
+	)
+
 	s.initialized = true
-	log.Printf("[WeChatPay] Client initialized successfully")
+	log.Printf("[WeChatPay] Client initialized successfully (with notify handler)")
 	return nil
 }
 
@@ -355,4 +382,128 @@ func (s *WeChatPayService) createJSAPIOrder(ctx context.Context, client *core.Cl
 	return &CreateWeChatPayOrderResult{
 		PrepayID: *resp.PrepayId,
 	}, nil
+}
+
+// NotifyMaxTimestampAgeSeconds 回调请求时间戳最大允许偏差（5分钟，防重放攻击）
+const NotifyMaxTimestampAgeSeconds = 300
+
+// PaymentNotifyResult 支付回调解析结果
+type PaymentNotifyResult struct {
+	Transaction   *payments.Transaction // 解密后的交易数据
+	SignatureErr  error                 // 签名验证错误（nil表示验证通过）
+	TimestampErr  error                 // 时间戳验证错误（nil表示验证通过）
+	DecryptionErr error                 // 解密错误（nil表示解密成功）
+}
+
+// IsValid 检查回调是否完全有效（签名+时间戳+解密都通过）
+func (r *PaymentNotifyResult) IsValid() bool {
+	return r.SignatureErr == nil && r.TimestampErr == nil && r.DecryptionErr == nil && r.Transaction != nil
+}
+
+// Error 返回第一个错误
+func (r *PaymentNotifyResult) Error() error {
+	if r.SignatureErr != nil {
+		return r.SignatureErr
+	}
+	if r.TimestampErr != nil {
+		return r.TimestampErr
+	}
+	if r.DecryptionErr != nil {
+		return r.DecryptionErr
+	}
+	return nil
+}
+
+// ValidateTimestamp 验证回调请求的时间戳是否在允许范围内（5分钟）
+// 防止重放攻击
+func ValidateTimestamp(timestampStr string) error {
+	if timestampStr == "" {
+		return fmt.Errorf("timestamp is empty")
+	}
+
+	timestamp, err := strconv.ParseInt(timestampStr, 10, 64)
+	if err != nil {
+		return fmt.Errorf("invalid timestamp format: %w", err)
+	}
+
+	now := time.Now().Unix()
+	diff := now - timestamp
+	if diff < 0 {
+		diff = -diff
+	}
+
+	if diff > NotifyMaxTimestampAgeSeconds {
+		return fmt.Errorf("timestamp expired: diff=%d seconds (max=%d)", diff, NotifyMaxTimestampAgeSeconds)
+	}
+
+	return nil
+}
+
+// ParsePaymentNotify 解析并验证支付回调通知
+// 返回解析结果，包含签名验证、时间戳验证、解密结果
+// 调用方可以根据结果决定如何响应微信支付
+func (s *WeChatPayService) ParsePaymentNotify(ctx context.Context, request *http.Request) *PaymentNotifyResult {
+	result := &PaymentNotifyResult{}
+
+	// 检查服务是否已初始化
+	if !s.IsEnabled() {
+		result.SignatureErr = fmt.Errorf("wechat pay service not initialized")
+		return result
+	}
+
+	// 1. 验证时间戳（防重放攻击）
+	timestamp := request.Header.Get("Wechatpay-Timestamp")
+	if err := ValidateTimestamp(timestamp); err != nil {
+		result.TimestampErr = err
+		log.Printf("[WeChatPay] Notify timestamp validation failed: %v", err)
+		// 时间戳验证失败仍继续处理签名，以便记录完整信息
+	}
+
+	// 2. 使用 SDK 验签并解密
+	s.mu.RLock()
+	handler := s.notifyHandler
+	s.mu.RUnlock()
+
+	if handler == nil {
+		result.SignatureErr = fmt.Errorf("notify handler not initialized")
+		return result
+	}
+
+	transaction := &payments.Transaction{}
+	notifyReq, err := handler.ParseNotifyRequest(ctx, request, transaction)
+	if err != nil {
+		// SDK 的 ParseNotifyRequest 会同时验证签名和解密
+		// 根据错误类型区分是签名错误还是解密错误
+		result.SignatureErr = fmt.Errorf("signature verification or decryption failed: %w", err)
+		log.Printf("[WeChatPay] Notify parse failed: %v", err)
+		return result
+	}
+
+	// 3. 验证解析结果
+	if notifyReq == nil {
+		result.DecryptionErr = fmt.Errorf("parsed notify request is nil")
+		return result
+	}
+
+	// 4. 设置解密后的交易数据
+	result.Transaction = transaction
+	log.Printf("[WeChatPay] Notify parsed successfully: out_trade_no=%s, transaction_id=%s, trade_state=%s",
+		safeString(transaction.OutTradeNo),
+		safeString(transaction.TransactionId),
+		safeString(transaction.TradeState))
+
+	return result
+}
+
+// GetAPIv3Key 获取 APIv3 密钥（仅内部使用，用于测试）
+func (s *WeChatPayService) GetAPIv3Key() string {
+	return s.cfg.WeChatPay.APIv3Key
+}
+
+// safeString 安全获取字符串指针的值
+func safeString(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }

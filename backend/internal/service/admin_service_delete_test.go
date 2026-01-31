@@ -105,6 +105,18 @@ func (s *userRepoStub) DisableTotp(ctx context.Context, userID int64) error {
 	panic("unexpected DisableTotp call")
 }
 
+func (s *userRepoStub) BindWeChatOpenID(ctx context.Context, userID int64, openID string) error {
+	panic("unexpected BindWeChatOpenID call")
+}
+
+func (s *userRepoStub) GetByWeChatOpenID(ctx context.Context, openID string) (*User, error) {
+	panic("unexpected GetByWeChatOpenID call")
+}
+
+func (s *userRepoStub) ExistsByWeChatOpenID(ctx context.Context, openID string) (bool, error) {
+	panic("unexpected ExistsByWeChatOpenID call")
+}
+
 type groupRepoStub struct {
 	affectedUserIDs []int64
 	deleteErr       error

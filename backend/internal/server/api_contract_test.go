@@ -58,7 +58,8 @@ func TestAPIContracts(t *testing.T) {
 					"allowed_groups": null,
 					"created_at": "2025-01-02T03:04:05Z",
 					"updated_at": "2025-01-02T03:04:05Z",
-					"run_mode": "standard"
+					"run_mode": "standard",
+					"wechat_openid": ""
 				}
 			}`,
 		},
@@ -475,9 +476,12 @@ func TestAPIContracts(t *testing.T) {
 						"ops_metrics_interval_seconds": 60,
 						"site_name": "Code80",
 						"site_logo": "",
+						"site_logo_dark": "",
 						"site_subtitle": "Subtitle",
 						"api_base_url": "https://api.example.com",
 					"contact_info": "support",
+					"contact_qrcode_wechat": "",
+					"contact_qrcode_group": "",
 					"doc_url": "https://docs.example.com",
 					"default_concurrency": 5,
 					"default_balance": 1.25,
@@ -491,7 +495,17 @@ func TestAPIContracts(t *testing.T) {
 					"home_content": "",
 					"hide_ccs_import_button": false,
 					"purchase_subscription_enabled": false,
-					"purchase_subscription_url": ""
+					"purchase_subscription_url": "",
+					"usage_report_global_enabled": false,
+					"usage_report_global_schedule": "09:00",
+					"usage_report_target_scope": "opted_in",
+					"wechat_auth_enabled": false,
+					"wechat_app_id": "",
+					"wechat_app_secret_configured": false,
+					"wechat_server_address": "",
+					"wechat_server_token_configured": false,
+					"wechat_account_qrcode_url": "",
+					"wechat_account_qrcode_data": ""
 				}
 			}`,
 		},
@@ -603,7 +617,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 	authHandler := handler.NewAuthHandler(cfg, nil, userService, settingService, nil, nil)
 	apiKeyHandler := handler.NewAPIKeyHandler(apiKeyService)
 	usageHandler := handler.NewUsageHandler(usageService, apiKeyService)
-	adminSettingHandler := adminhandler.NewSettingHandler(settingService, nil, nil, nil)
+	adminSettingHandler := adminhandler.NewSettingHandler(settingService, nil, nil, nil, nil)
 	adminAccountHandler := adminhandler.NewAccountHandler(adminService, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 
 	jwtAuth := func(c *gin.Context) {
@@ -769,6 +783,18 @@ func (r *stubUserRepo) EnableTotp(ctx context.Context, userID int64) error {
 
 func (r *stubUserRepo) DisableTotp(ctx context.Context, userID int64) error {
 	return errors.New("not implemented")
+}
+
+func (r *stubUserRepo) BindWeChatOpenID(ctx context.Context, userID int64, openID string) error {
+	return errors.New("not implemented")
+}
+
+func (r *stubUserRepo) GetByWeChatOpenID(ctx context.Context, openID string) (*service.User, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (r *stubUserRepo) ExistsByWeChatOpenID(ctx context.Context, openID string) (bool, error) {
+	return false, errors.New("not implemented")
 }
 
 type stubApiKeyCache struct{}

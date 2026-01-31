@@ -1,13 +1,16 @@
 package webhook
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"log"
 	"net/http"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/repository"
+	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
@@ -16,13 +19,18 @@ const maxRequestBodySize = 1 << 20
 
 // WeChatPayWebhookHandler 微信支付回调处理器
 type WeChatPayWebhookHandler struct {
-	callbackRepo *repository.PaymentCallbackRepository
+	callbackRepo    *repository.PaymentCallbackRepository
+	wechatPayService *service.WeChatPayService
 }
 
 // NewWeChatPayWebhookHandler 创建微信支付回调处理器
-func NewWeChatPayWebhookHandler(callbackRepo *repository.PaymentCallbackRepository) *WeChatPayWebhookHandler {
+func NewWeChatPayWebhookHandler(
+	callbackRepo *repository.PaymentCallbackRepository,
+	wechatPayService *service.WeChatPayService,
+) *WeChatPayWebhookHandler {
 	return &WeChatPayWebhookHandler{
-		callbackRepo: callbackRepo,
+		callbackRepo:    callbackRepo,
+		wechatPayService: wechatPayService,
 	}
 }
 
@@ -34,8 +42,15 @@ type WeChatPayResponse struct {
 
 // HandlePaymentNotify 处理微信支付回调通知
 // POST /api/v1/webhook/wechat/payment
+// 功能：
+// 1. 接收微信支付回调
+// 2. 验证签名（使用平台证书）
+// 3. 验证时间戳（5分钟内，防重放攻击）
+// 4. 解密回调数据（AEAD_AES_256_GCM）
+// 5. 记录回调日志并更新验签结果
 func (h *WeChatPayWebhookHandler) HandlePaymentNotify(c *gin.Context) {
 	startTime := time.Now()
+	ctx := c.Request.Context()
 
 	// 读取请求体（限制大小防止内存耗尽攻击）
 	bodyBytes, err := io.ReadAll(io.LimitReader(c.Request.Body, maxRequestBodySize))
@@ -46,52 +61,102 @@ func (h *WeChatPayWebhookHandler) HandlePaymentNotify(c *gin.Context) {
 	}
 	bodyStr := string(bodyBytes)
 
+	// 重置请求体以便 SDK 可以再次读取
+	c.Request.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+
 	// 提取必要的请求头（仅记录微信支付相关头部）
 	headers := extractWeChatPayHeaders(c.Request.Header)
 	headersJSON, _ := json.Marshal(headers)
 
-	log.Printf("[WeChatPayWebhook] Received callback: body_length=%d", len(bodyStr))
+	log.Printf("[WeChatPayWebhook] Received callback: body_length=%d, timestamp=%s",
+		len(bodyStr), headers["Wechatpay-Timestamp"])
 
-	// 创建回调记录
+	// 创建回调记录（初始状态）
 	record := &repository.PaymentCallbackRecord{
 		PaymentMethod:   "wechat_pay",
 		RequestHeaders:  string(headersJSON),
 		RequestBody:     bodyStr,
-		SignatureValid:  false, // 后续 Story 3-2 实现签名验证
+		SignatureValid:  false,
 		ProcessStatus:   "received",
-		ProcessMessage:  "回调已接收，待处理",
+		ProcessMessage:  "回调已接收，验签中",
 		ResponseCode:    "",
 		ResponseMessage: "",
 		ProcessTimeMs:   0,
 	}
 
-	callback, err := h.callbackRepo.Create(c.Request.Context(), record)
+	callback, err := h.callbackRepo.Create(ctx, record)
 	if err != nil {
 		log.Printf("[WeChatPayWebhook] Failed to save callback record: %v", err)
-		// 即使记录保存失败，也返回 SUCCESS 以避免微信重复发送
-		h.respondSuccess(c)
-		return
+		// 即使记录保存失败，仍继续处理验签
 	}
 
-	// 计算处理耗时
-	processTimeMs := time.Since(startTime).Milliseconds()
+	// 使用 WeChatPayService 验签和解密
+	notifyResult := h.wechatPayService.ParsePaymentNotify(ctx, c.Request)
 
-	// 更新记录：标记为接收成功
-	record.ProcessStatus = "received"
-	record.ProcessMessage = "回调已接收，签名验证待后续 Story 实现"
-	record.ResponseCode = "SUCCESS"
-	record.ResponseMessage = ""
+	// 更新回调记录
+	processTimeMs := time.Since(startTime).Milliseconds()
 	record.ProcessTimeMs = processTimeMs
 
-	_, updateErr := h.callbackRepo.Update(c.Request.Context(), callback.ID, record)
-	if updateErr != nil {
-		log.Printf("[WeChatPayWebhook] Failed to update callback record: %v", updateErr)
+	if notifyResult.IsValid() {
+		// 验签成功，解密成功
+		record.SignatureValid = true
+		record.ProcessStatus = "verified"
+		record.ProcessMessage = "签名验证通过，数据解密成功"
+		record.ResponseCode = "SUCCESS"
+		record.ResponseMessage = ""
+
+		// 从解密后的数据中提取订单信息
+		if notifyResult.Transaction != nil {
+			if notifyResult.Transaction.OutTradeNo != nil {
+				orderNo := *notifyResult.Transaction.OutTradeNo
+				record.OrderNo = &orderNo
+			}
+			if notifyResult.Transaction.TransactionId != nil {
+				txID := *notifyResult.Transaction.TransactionId
+				record.TransactionID = &txID
+			}
+		}
+
+		log.Printf("[WeChatPayWebhook] Signature verified: callback_id=%d, order_no=%s, transaction_id=%s",
+			getCallbackID(callback), safeStringPtr(record.OrderNo), safeStringPtr(record.TransactionID))
+	} else {
+		// 验签失败或解密失败
+		record.SignatureValid = false
+		record.ProcessStatus = "signature_invalid"
+		record.ResponseCode = "FAIL"
+
+		errMsg := "验证失败"
+		if notifyResult.TimestampErr != nil {
+			errMsg = "时间戳验证失败: " + notifyResult.TimestampErr.Error()
+		} else if notifyResult.SignatureErr != nil {
+			errMsg = "签名验证失败: " + notifyResult.SignatureErr.Error()
+		} else if notifyResult.DecryptionErr != nil {
+			errMsg = "数据解密失败: " + notifyResult.DecryptionErr.Error()
+		}
+		record.ProcessMessage = errMsg
+		record.ResponseMessage = "签名验证失败"
+
+		log.Printf("[WeChatPayWebhook] Signature verification failed: callback_id=%d, error=%s",
+			getCallbackID(callback), errMsg)
 	}
 
-	log.Printf("[WeChatPayWebhook] Callback processed: id=%d, process_time=%dms", callback.ID, processTimeMs)
+	// 更新回调记录
+	if callback != nil {
+		_, updateErr := h.callbackRepo.Update(ctx, callback.ID, record)
+		if updateErr != nil {
+			log.Printf("[WeChatPayWebhook] Failed to update callback record: %v", updateErr)
+		}
+	}
 
-	// 返回成功响应
-	h.respondSuccess(c)
+	log.Printf("[WeChatPayWebhook] Callback processed: id=%d, signature_valid=%v, process_time=%dms",
+		getCallbackID(callback), record.SignatureValid, processTimeMs)
+
+	// 根据验签结果返回响应
+	if notifyResult.IsValid() {
+		h.respondSuccess(c)
+	} else {
+		h.respondFail(c, record.ResponseMessage)
+	}
 }
 
 // respondSuccess 返回成功响应
@@ -132,4 +197,20 @@ func extractWeChatPayHeaders(header http.Header) map[string]string {
 	}
 
 	return headers
+}
+
+// getCallbackID 安全获取回调记录 ID
+func getCallbackID(callback *ent.PaymentCallback) int64 {
+	if callback == nil {
+		return 0
+	}
+	return callback.ID
+}
+
+// safeStringPtr 安全获取字符串指针的值
+func safeStringPtr(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
