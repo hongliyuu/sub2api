@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/rechargeorder"
@@ -161,6 +162,41 @@ func (r *rechargeOrderRepository) UpdateStatusWithCondition(ctx context.Context,
 		).
 		SetStatus(newStatus).
 		SetNotes(notes).
+		Save(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return int64(rowsAffected), nil
+}
+
+// MarkExpiredOrders 批量将已过期的 pending 订单标记为 expired
+// 查找 status='pending' 且 expire_at < now() 的订单，最多处理 limit 条
+// 返回受影响的行数
+func (r *rechargeOrderRepository) MarkExpiredOrders(ctx context.Context, limit int) (int64, error) {
+	client := clientFromContext(ctx, r.client)
+	now := time.Now()
+
+	// 先查询需要过期的订单 ID，限制数量
+	ids, err := client.RechargeOrder.Query().
+		Where(
+			rechargeorder.StatusEQ(service.OrderStatusPending),
+			rechargeorder.ExpireAtLT(now),
+		).
+		Limit(limit).
+		IDs(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	if len(ids) == 0 {
+		return 0, nil
+	}
+
+	// 批量更新这些订单
+	rowsAffected, err := client.RechargeOrder.Update().
+		Where(rechargeorder.IDIn(ids...)).
+		SetStatus(service.OrderStatusExpired).
+		SetNotes("系统自动过期").
 		Save(ctx)
 	if err != nil {
 		return 0, err

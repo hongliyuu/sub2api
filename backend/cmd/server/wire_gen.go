@@ -202,7 +202,8 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	accountExpiryService := service.ProvideAccountExpiryService(accountRepository)
 	subscriptionExpiryService := service.ProvideSubscriptionExpiryService(userSubscriptionRepository)
 	userUsageReportScheduler := service.ProvideUserUsageReportScheduler(userUsageReportService, settingService, userUsageReportRepository, redisClient)
-	v := provideCleanup(client, redisClient, opsMetricsCollector, opsAggregationService, opsAlertEvaluatorService, opsCleanupService, opsScheduledReportService, schedulerSnapshotService, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, pricingService, emailQueueService, billingCacheService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, userUsageReportScheduler)
+	orderExpireScheduler := service.ProvideOrderExpireScheduler(rechargeOrderRepository)
+	v := provideCleanup(client, redisClient, opsMetricsCollector, opsAggregationService, opsAlertEvaluatorService, opsCleanupService, opsScheduledReportService, schedulerSnapshotService, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, pricingService, emailQueueService, billingCacheService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, userUsageReportScheduler, orderExpireScheduler)
 	application := &Application{
 		Server:  httpServer,
 		Cleanup: v,
@@ -245,6 +246,7 @@ func provideCleanup(
 	geminiOAuth *service.GeminiOAuthService,
 	antigravityOAuth *service.AntigravityOAuthService,
 	usageReportScheduler *service.UserUsageReportScheduler,
+	orderExpireScheduler *service.OrderExpireScheduler,
 ) func() {
 	return func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -254,6 +256,12 @@ func provideCleanup(
 			name string
 			fn   func() error
 		}{
+			{"OrderExpireScheduler", func() error {
+				if orderExpireScheduler != nil {
+					orderExpireScheduler.Stop()
+				}
+				return nil
+			}},
 			{"UserUsageReportScheduler", func() error {
 				if usageReportScheduler != nil {
 					usageReportScheduler.Stop()

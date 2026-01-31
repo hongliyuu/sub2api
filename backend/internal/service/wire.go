@@ -214,6 +214,13 @@ func ProvideUserUsageReportScheduler(
 	return svc
 }
 
+// ProvideOrderExpireScheduler creates and starts OrderExpireScheduler.
+func ProvideOrderExpireScheduler(repo RechargeOrderRepository) *OrderExpireScheduler {
+	svc := NewOrderExpireScheduler(repo)
+	svc.Start()
+	return svc
+}
+
 // ProvideAPIKeyAuthCacheInvalidator 提供 API Key 认证缓存失效能力
 func ProvideAPIKeyAuthCacheInvalidator(apiKeyService *APIKeyService) APIKeyAuthCacheInvalidator {
 	// Start Pub/Sub subscriber for L1 cache invalidation across instances
@@ -290,4 +297,5 @@ var ProviderSet = wire.NewSet(
 	NewWeChatPayService,
 	NewRechargeOrderService,
 	NewPaymentCallbackService,
+	ProvideOrderExpireScheduler,
 )
