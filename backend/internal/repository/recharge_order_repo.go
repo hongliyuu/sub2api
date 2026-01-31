@@ -171,37 +171,75 @@ func (r *rechargeOrderRepository) UpdateStatusWithCondition(ctx context.Context,
 
 // MarkExpiredOrders 批量将已过期的 pending 订单标记为 expired
 // 查找 status='pending' 且 expire_at < now() 的订单，最多处理 limit 条
-// 返回受影响的行数
-func (r *rechargeOrderRepository) MarkExpiredOrders(ctx context.Context, limit int) (int64, error) {
+// 返回过期的订单号列表
+func (r *rechargeOrderRepository) MarkExpiredOrders(ctx context.Context, limit int) ([]string, error) {
 	client := clientFromContext(ctx, r.client)
 	now := time.Now()
 
-	// 先查询需要过期的订单 ID，限制数量
-	ids, err := client.RechargeOrder.Query().
+	// 先查询需要过期的订单，获取订单号
+	orders, err := client.RechargeOrder.Query().
 		Where(
 			rechargeorder.StatusEQ(service.OrderStatusPending),
 			rechargeorder.ExpireAtLT(now),
 		).
 		Limit(limit).
-		IDs(ctx)
+		Select(rechargeorder.FieldID, rechargeorder.FieldOrderNo).
+		All(ctx)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	if len(ids) == 0 {
-		return 0, nil
+	if len(orders) == 0 {
+		return nil, nil
+	}
+
+	// 收集订单号和 ID
+	orderNos := make([]string, len(orders))
+	ids := make([]int64, len(orders))
+	for i, order := range orders {
+		orderNos[i] = order.OrderNo
+		ids[i] = order.ID
 	}
 
 	// 批量更新这些订单
-	rowsAffected, err := client.RechargeOrder.Update().
+	_, err = client.RechargeOrder.Update().
 		Where(rechargeorder.IDIn(ids...)).
 		SetStatus(service.OrderStatusExpired).
 		SetNotes("系统自动过期").
 		Save(ctx)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
-	return int64(rowsAffected), nil
+	return orderNos, nil
+}
+
+// AppendNotes 追加订单备注
+func (r *rechargeOrderRepository) AppendNotes(ctx context.Context, orderNo, notes string) error {
+	client := clientFromContext(ctx, r.client)
+
+	// 先获取当前订单
+	order, err := client.RechargeOrder.Query().
+		Where(rechargeorder.OrderNoEQ(orderNo)).
+		Only(ctx)
+	if err != nil {
+		if dbent.IsNotFound(err) {
+			return service.ErrRechargeOrderNotFound
+		}
+		return err
+	}
+
+	// 追加备注
+	newNotes := order.Notes
+	if newNotes != "" {
+		newNotes += "; "
+	}
+	newNotes += notes
+
+	// 更新
+	_, err = client.RechargeOrder.UpdateOneID(order.ID).
+		SetNotes(newNotes).
+		Save(ctx)
+	return err
 }
 
 func rechargeOrderEntityToService(m *dbent.RechargeOrder) *service.RechargeOrder {

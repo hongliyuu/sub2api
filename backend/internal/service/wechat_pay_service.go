@@ -529,3 +529,45 @@ func safeString(s *string) string {
 	}
 	return *s
 }
+
+// CloseOrder 关闭微信支付订单
+// 调用微信支付 API 关闭订单，防止已过期订单仍被支付
+// 返回 nil 表示关闭成功，返回 error 表示关闭失败
+func (s *WeChatPayService) CloseOrder(ctx context.Context, orderNo string) error {
+	// 检查是否已初始化
+	if !s.IsEnabled() {
+		return fmt.Errorf("wechat pay is not enabled or not initialized")
+	}
+
+	// 获取客户端
+	client, err := s.GetClient()
+	if err != nil {
+		log.Printf("[WeChatPay] Failed to get client for close order: %v", err)
+		return fmt.Errorf("get wechat pay client: %w", err)
+	}
+
+	svc := native.NativeApiService{Client: client}
+
+	closeReq := native.CloseOrderRequest{
+		OutTradeNo: core.String(orderNo),
+		Mchid:      core.String(s.cfg.WeChatPay.MchID),
+	}
+
+	log.Printf("[WeChatPay] Closing order: order_no=%s", orderNo)
+
+	result, err := svc.CloseOrder(ctx, closeReq)
+	if err != nil {
+		log.Printf("[WeChatPay] Close order failed: order_no=%s, error=%v", orderNo, err)
+		return fmt.Errorf("close order: %w", err)
+	}
+
+	// 检查 HTTP 状态码（204 表示成功）
+	if result.Response.StatusCode != 204 && result.Response.StatusCode != 200 {
+		log.Printf("[WeChatPay] Close order returned unexpected status: order_no=%s, status=%d",
+			orderNo, result.Response.StatusCode)
+		return fmt.Errorf("close order returned status %d", result.Response.StatusCode)
+	}
+
+	log.Printf("[WeChatPay] Order closed successfully: order_no=%s", orderNo)
+	return nil
+}

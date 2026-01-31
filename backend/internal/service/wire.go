@@ -215,8 +215,8 @@ func ProvideUserUsageReportScheduler(
 }
 
 // ProvideOrderExpireScheduler creates and starts OrderExpireScheduler.
-func ProvideOrderExpireScheduler(repo RechargeOrderRepository) *OrderExpireScheduler {
-	svc := NewOrderExpireScheduler(repo)
+func ProvideOrderExpireScheduler(repo RechargeOrderRepository, wechatPayService *WeChatPayService) *OrderExpireScheduler {
+	svc := NewOrderExpireScheduler(repo, wechatPayService)
 	svc.Start()
 	return svc
 }

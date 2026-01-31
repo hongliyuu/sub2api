@@ -96,8 +96,10 @@ type RechargeOrderRepository interface {
 	// 返回受影响的行数，如果为 0 则表示状态已改变（并发冲突）
 	UpdateStatusWithCondition(ctx context.Context, id int64, expectedStatus, newStatus, notes string) (int64, error)
 	// MarkExpiredOrders 批量将已过期的 pending 订单标记为 expired
-	// 返回受影响的行数
-	MarkExpiredOrders(ctx context.Context, limit int) (int64, error)
+	// 返回过期的订单号列表
+	MarkExpiredOrders(ctx context.Context, limit int) ([]string, error)
+	// AppendNotes 追加订单备注
+	AppendNotes(ctx context.Context, orderNo, notes string) error
 }
 
 // RechargeOrderService 充值订单服务
