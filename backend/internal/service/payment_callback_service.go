@@ -453,51 +453,179 @@ func (s *PaymentCallbackService) sendRechargeSuccessNotification(result *Process
 func (s *PaymentCallbackService) buildRechargeSuccessEmailBody(result *ProcessPaymentResult, currentBalance float64) string {
 	paidAt := time.Now().Format("2006-01-02 15:04:05")
 
+	// 获取站点 URL 用于 logo
+	siteURL := ""
+	siteName := "Code80"
+	ctx := context.Background()
+	if s.settingService != nil {
+		siteName = s.settingService.GetSiteName(ctx)
+		if publicSettings, err := s.settingService.GetPublicSettings(ctx); err == nil && publicSettings.APIBaseURL != "" {
+			siteURL = publicSettings.APIBaseURL
+		}
+	}
+
 	return fmt.Sprintf(`
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-        .header { background-color: #4CAF50; color: white; padding: 20px; text-align: center; }
-        .content { padding: 20px; background-color: #f9f9f9; }
-        .info-row { padding: 10px 0; border-bottom: 1px solid #eee; }
-        .label { color: #666; }
-        .value { font-weight: bold; }
-        .amount { color: #4CAF50; font-size: 24px; }
-        .footer { padding: 20px; text-align: center; color: #888; font-size: 12px; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            background: #fafafa;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 2px 12px rgba(217, 119, 87, 0.15);
+        }
+        .header {
+            background: linear-gradient(135deg, #d97757 0%%, #c45a3a 100%%);
+            color: white;
+            padding: 32px;
+            text-align: center;
+            position: relative;
+        }
+        .logo {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 16px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .logo img {
+            width: 32px;
+            height: 32px;
+        }
+        .header h2 {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        .header .subtitle {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        .amount-card {
+            background: linear-gradient(135deg, #d97757 0%%, #c45a3a 100%%);
+            margin: -20px 24px 24px;
+            padding: 24px;
+            border-radius: 12px;
+            text-align: center;
+            color: white;
+            box-shadow: 0 4px 16px rgba(217, 119, 87, 0.3);
+        }
+        .amount-label {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-bottom: 8px;
+        }
+        .amount-value {
+            font-size: 36px;
+            font-weight: 700;
+        }
+        .content {
+            padding: 0 24px 24px;
+        }
+        .info-card {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .info-row:last-child {
+            border-bottom: none;
+        }
+        .label {
+            color: #666;
+            font-size: 14px;
+        }
+        .value {
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+        }
+        .balance-card {
+            background: linear-gradient(135deg, #d97757 0%%, #c45a3a 100%%);
+            border-radius: 12px;
+            padding: 16px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: white;
+        }
+        .balance-label {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        .balance-value {
+            font-size: 24px;
+            font-weight: 700;
+        }
+        .footer {
+            padding: 20px 24px;
+            text-align: center;
+            color: #999;
+            font-size: 12px;
+            border-top: 1px solid #f0f0f0;
+        }
+        .site-name {
+            color: #d97757;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h2>💰 充值成功</h2>
+            <div class="logo">
+                <img src="%s/email-logo.png" alt="%s" onerror="this.style.display='none'">
+            </div>
+            <h2>充值成功</h2>
+            <div class="subtitle">您的充值已到账</div>
+        </div>
+        <div class="amount-card">
+            <div class="amount-label">充值金额</div>
+            <div class="amount-value">¥%.2f</div>
         </div>
         <div class="content">
-            <div class="info-row">
-                <span class="label">充值金额：</span>
-                <span class="value amount">¥%.2f</span>
+            <div class="info-card">
+                <div class="info-row">
+                    <span class="label">订单号</span>
+                    <span class="value">%s</span>
+                </div>
+                <div class="info-row">
+                    <span class="label">支付时间</span>
+                    <span class="value">%s</span>
+                </div>
             </div>
-            <div class="info-row">
-                <span class="label">订单号：</span>
-                <span class="value">%s</span>
-            </div>
-            <div class="info-row">
-                <span class="label">到账时间：</span>
-                <span class="value">%s</span>
-            </div>
-            <div class="info-row">
-                <span class="label">当前余额：</span>
-                <span class="value">¥%.2f</span>
+            <div class="balance-card">
+                <span class="balance-label">当前余额</span>
+                <span class="balance-value">$%.2f</span>
             </div>
         </div>
         <div class="footer">
             <p>感谢您的支持！如有问题，请联系客服。</p>
+            <p style="margin-top: 8px;"><span class="site-name">%s</span></p>
         </div>
     </div>
 </body>
 </html>
-`, result.Amount, result.OrderNo, paidAt, currentBalance)
+`, siteURL, siteName, result.Amount, result.OrderNo, paidAt, currentBalance, siteName)
 }
