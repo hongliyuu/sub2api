@@ -3467,6 +3467,7 @@ export default {
     amountTooLarge: '最大充值金额为 ¥{max}',
     // Exchange rate
     exchangeRateInfo: '支付 ¥{payAmount} → 到账 ${creditAmount}（汇率 {rate}:1）',
+    exchangeRateHint: '当前汇率：支付 ¥{rate} = 到账 $1',
     // Submit button
     submitButton: '立即充值 ¥{amount}',
     submitButtonDefault: '请选择金额',

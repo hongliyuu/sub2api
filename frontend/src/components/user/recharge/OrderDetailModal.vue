@@ -81,7 +81,7 @@
             </div>
 
             <!-- 操作按钮 -->
-            <div class="mt-6 flex gap-3">
+            <div v-if="order.status === 'pending'" class="mt-6 flex gap-3">
               <button
                 type="button"
                 class="btn btn-outline flex-1"

@@ -1,7 +1,8 @@
 <template>
-  <main class="container mx-auto max-w-3xl px-4 py-6">
-    <!-- 页面加载状态 -->
-    <div v-if="loading" class="flex flex-col items-center justify-center py-20">
+  <AppLayout>
+    <div class="mx-auto max-w-2xl space-y-6">
+      <!-- 页面加载状态 -->
+      <div v-if="loading" class="flex flex-col items-center justify-center py-20">
       <div class="h-8 w-8 animate-spin rounded-full border-4 border-primary-500 border-t-transparent"></div>
       <span class="mt-4 text-gray-500 dark:text-gray-400">{{ t('common.loading') }}</span>
     </div>
@@ -45,16 +46,25 @@
           :max-amount="rechargeStore.maxAmount"
         />
 
-        <!-- 汇率提示（非 1:1 时显示） -->
+        <!-- 汇率提示（始终显示） -->
         <div
-          v-if="selectedAmount && rechargeStore.exchangeRate !== 1"
           class="mt-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-700 dark:bg-blue-900/20 dark:text-blue-300"
         >
-          {{ t('recharge.exchangeRateInfo', {
-            payAmount: selectedAmount.toFixed(2),
-            creditAmount: creditedAmountPreview,
-            rate: rechargeStore.exchangeRate.toFixed(2)
-          }) }}
+          <div class="flex items-center gap-2">
+            <svg class="h-4 w-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span v-if="selectedAmount">
+              {{ t('recharge.exchangeRateInfo', {
+                payAmount: selectedAmount.toFixed(2),
+                creditAmount: creditedAmountPreview,
+                rate: rechargeStore.exchangeRate.toFixed(2)
+              }) }}
+            </span>
+            <span v-else>
+              {{ t('recharge.exchangeRateHint', { rate: rechargeStore.exchangeRate.toFixed(2) }) }}
+            </span>
+          </div>
         </div>
 
         <!-- 支付方式选择器 -->
@@ -285,7 +295,8 @@
       @repay="openPaymentModal"
       @status-changed="loadOrders"
     />
-  </main>
+    </div>
+  </AppLayout>
 </template>
 
 <script setup lang="ts">
@@ -293,6 +304,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore, useRechargeStore, useAppStore } from '@/stores'
 import { rechargeAPI, isRateLimitError, isCaptchaRequiredError, type OrderListItem } from '@/api'
+import AppLayout from '@/components/layout/AppLayout.vue'
 import AmountSelector from '@/components/user/recharge/AmountSelector.vue'
 import PaymentMethodSelector from '@/components/user/recharge/PaymentMethodSelector.vue'
 import TurnstileWidget from '@/components/TurnstileWidget.vue'

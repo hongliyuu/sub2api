@@ -3318,6 +3318,7 @@ export default {
     amountTooLarge: 'Maximum amount is ¥{max}',
     // Exchange rate
     exchangeRateInfo: 'Pay ¥{payAmount} → Credit ${creditAmount} (Rate {rate}:1)',
+    exchangeRateHint: 'Current rate: Pay ¥{rate} = Credit $1',
     // Submit button
     submitButton: 'Recharge ¥{amount}',
     submitButtonDefault: 'Select Amount',
