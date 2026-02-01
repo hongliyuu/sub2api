@@ -185,7 +185,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	paymentCallbackService := service.NewPaymentCallbackService(client, redisClient, rechargeOrderRepository, userRepository, balanceLogRepository)
 	rechargeOrderService := service.NewRechargeOrderService(configConfig, rechargeOrderRepository, weChatPayService, paymentCallbackService)
 	rechargeRateLimitService := service.NewRechargeRateLimitService(configConfig, redisClient)
-	rechargeHandler := recharge.NewRechargeHandler(weChatPayService, rechargeOrderService, rechargeRateLimitService)
+	rechargeHandler := recharge.NewRechargeHandler(weChatPayService, rechargeOrderService, rechargeRateLimitService, turnstileService)
 	paymentCallbackRepository := repository.NewPaymentCallbackRepository(client)
 	weChatPayWebhookHandler := webhook.NewWeChatPayWebhookHandler(paymentCallbackRepository, weChatPayService, paymentCallbackService)
 	handlers := handler.ProvideHandlers(authHandler, userHandler, apiKeyHandler, usageHandler, redeemHandler, subscriptionHandler, adminHandlers, gatewayHandler, openAIGatewayHandler, handlerSettingHandler, totpHandler, userUsageReportHandler, rechargeHandler, weChatPayWebhookHandler)

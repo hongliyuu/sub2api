@@ -3273,6 +3273,9 @@ export default {
     // Rate limiting
     rateLimitCountdown: 'Retry in {seconds} seconds',
     dailyLimitReached: 'Daily recharge limit reached',
+    // IP captcha
+    captchaRequired: 'Please complete the captcha verification',
+    captchaError: 'Captcha failed to load, please refresh',
     // Payment page
     paymentTitle: 'Payment',
     paymentDescription: 'Complete your payment',

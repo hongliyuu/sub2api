@@ -83,13 +83,13 @@ development_status:
 
   # Sprint 4: 补偿机制 + 完整限流 (6 stories)
   # 目标: 处理边缘情况，完善风控
-  sprint-4: in-progress
+  sprint-4: done
   5-1-manual-sync-order-button: done             # Epic 5
   5-2-query-wechat-order-status: done            # Epic 5
   5-3-compensation-balance-logic: done              # Epic 5
   5-4-scheduled-order-compensation: done          # Epic 5
   6-2-user-daily-rate-limit: done       # Epic 6
-  6-3-ip-rate-limit-captcha: ready-for-dev       # Epic 6
+  6-3-ip-rate-limit-captcha: done       # Epic 6
   sprint-4-retrospective: optional
 
   # Sprint 5: 管理端配置 (5 stories, 可选)

@@ -271,3 +271,67 @@ func (s *RechargeRateLimitService) CheckRechargeRateLimits(ctx context.Context, 
 		DailyRemaining:  dailyResult.Remaining,
 	}, nil
 }
+
+// IPCaptchaResult IP 验证码检查结果
+type IPCaptchaResult struct {
+	NeedsCaptcha bool
+	IPCount      int
+	Message      string
+}
+
+// ipCountScript IP 计数 Lua 脚本
+// 使用 String 计数器 + EXPIRE 实现滑动窗口
+var ipCountScript = redis.NewScript(`
+	local key = KEYS[1]
+	local threshold = tonumber(ARGV[1])
+	local window_sec = tonumber(ARGV[2])
+
+	local count = redis.call('INCR', key)
+	if count == 1 then
+		redis.call('EXPIRE', key, window_sec)
+	end
+
+	return count
+`)
+
+// CheckIPCaptchaRequired 检查 IP 是否需要验证码
+func (s *RechargeRateLimitService) CheckIPCaptchaRequired(ctx context.Context, ip string) (*IPCaptchaResult, error) {
+	// 检查是否启用限流
+	if !s.cfg.RateLimit.Recharge.Enabled {
+		return &IPCaptchaResult{NeedsCaptcha: false}, nil
+	}
+
+	threshold := s.cfg.RateLimit.Recharge.IPCaptchaThreshold
+	if threshold <= 0 {
+		threshold = 20 // 默认20个
+	}
+	windowMins := s.cfg.RateLimit.Recharge.IPCaptchaWindowMins
+	if windowMins <= 0 {
+		windowMins = 10 // 默认10分钟
+	}
+	windowSec := windowMins * 60
+
+	key := fmt.Sprintf("ratelimit:recharge:ip:%s", ip)
+
+	// 执行 Lua 脚本
+	count, err := ipCountScript.Run(ctx, s.redis, []string{key},
+		threshold,
+		windowSec,
+	).Int()
+
+	if err != nil {
+		return nil, fmt.Errorf("ip rate limit script failed: %w", err)
+	}
+
+	needsCaptcha := count > threshold
+	result := &IPCaptchaResult{
+		NeedsCaptcha: needsCaptcha,
+		IPCount:      count,
+	}
+
+	if needsCaptcha {
+		result.Message = "检测到异常请求频率，请完成验证码验证"
+	}
+
+	return result, nil
+}

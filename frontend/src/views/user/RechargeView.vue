@@ -50,6 +50,17 @@
           <PaymentMethodSelector v-model="selectedPaymentMethod" />
         </div>
 
+        <!-- Turnstile 验证码（IP 高频时显示） -->
+        <div v-if="showCaptcha && turnstileSiteKey" class="mt-6">
+          <TurnstileWidget
+            ref="turnstileRef"
+            :site-key="turnstileSiteKey"
+            @verify="onTurnstileVerify"
+            @expire="onTurnstileExpire"
+            @error="onTurnstileError"
+          />
+        </div>
+
         <!-- 错误提示 -->
         <div
           v-if="errorMessage"
@@ -107,15 +118,17 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { useAuthStore, useRechargeStore } from '@/stores'
-import { rechargeAPI, isRateLimitError } from '@/api'
+import { useAuthStore, useRechargeStore, useAppStore } from '@/stores'
+import { rechargeAPI, isRateLimitError, isCaptchaRequiredError } from '@/api'
 import AmountSelector from '@/components/user/recharge/AmountSelector.vue'
 import PaymentMethodSelector from '@/components/user/recharge/PaymentMethodSelector.vue'
+import TurnstileWidget from '@/components/TurnstileWidget.vue'
 
 const { t } = useI18n()
 const router = useRouter()
 const authStore = useAuthStore()
 const rechargeStore = useRechargeStore()
+const appStore = useAppStore()
 
 // 页面加载状态
 const loading = ref(true)
@@ -138,6 +151,12 @@ let rateLimitTimer: ReturnType<typeof setInterval> | null = null
 
 // 日级限流标记
 const isDailyLimited = ref(false)
+
+// 验证码相关状态
+const showCaptcha = ref(false)
+const captchaToken = ref('')
+const turnstileSiteKey = ref('')
+const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
 
 // 用户余额
 const balance = computed(() => authStore.user?.balance ?? 0)
@@ -199,9 +218,37 @@ const startRateLimitCountdown = (seconds: number) => {
   }, 1000)
 }
 
+// Turnstile 回调处理
+const onTurnstileVerify = (token: string) => {
+  captchaToken.value = token
+}
+
+const onTurnstileExpire = () => {
+  captchaToken.value = ''
+}
+
+const onTurnstileError = () => {
+  captchaToken.value = ''
+  errorMessage.value = t('recharge.captchaError')
+}
+
+// 重置验证码
+const resetCaptcha = () => {
+  captchaToken.value = ''
+  if (turnstileRef.value) {
+    turnstileRef.value.reset()
+  }
+}
+
 // 提交处理
 const handleSubmit = async () => {
   if (!canSubmit.value || submitting.value || rateLimitCountdown.value > 0) {
+    return
+  }
+
+  // 如果显示验证码但未完成验证，提示用户
+  if (showCaptcha.value && !captchaToken.value) {
+    errorMessage.value = t('recharge.captchaRequired')
     return
   }
 
@@ -213,7 +260,8 @@ const handleSubmit = async () => {
     // 调用 API 创建订单
     const order = await rechargeAPI.createOrder({
       amount: selectedAmount.value!,
-      payment_method: selectedPaymentMethod.value!
+      payment_method: selectedPaymentMethod.value!,
+      captcha_token: captchaToken.value || undefined
     })
 
     // 订单创建成功，跳转到支付页面
@@ -223,7 +271,18 @@ const handleSubmit = async () => {
     })
   } catch (error) {
     console.error('Failed to create order:', error)
-    if (isRateLimitError(error)) {
+    if (isCaptchaRequiredError(error)) {
+      // 需要验证码：显示验证码组件
+      showCaptcha.value = true
+      errorMessage.value = error.message
+      // 加载 Turnstile siteKey（如果尚未加载）
+      if (!turnstileSiteKey.value) {
+        const settings = await appStore.fetchPublicSettings()
+        if (settings?.turnstile_site_key) {
+          turnstileSiteKey.value = settings.turnstile_site_key
+        }
+      }
+    } else if (isRateLimitError(error)) {
       errorMessage.value = error.message
       if (error.isDaily) {
         // 日级限流：禁用按钮直到页面刷新
@@ -232,8 +291,12 @@ const handleSubmit = async () => {
         // 分钟级限流：启动倒计时
         startRateLimitCountdown(error.retryAfter)
       }
+      // 重置验证码以便重试
+      resetCaptcha()
     } else {
       errorMessage.value = t('recharge.orderCreateFailed')
+      // 重置验证码以便重试
+      resetCaptcha()
     }
   } finally {
     submitting.value = false

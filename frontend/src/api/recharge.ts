@@ -19,6 +19,7 @@ export interface CreateOrderRequest {
   amount: number
   payment_method: string
   payment_channel?: string // 支付渠道：native/jsapi
+  captcha_token?: string   // Turnstile 验证码 token（IP 高频时必填）
 }
 
 export interface RechargeOrder {
@@ -102,6 +103,13 @@ export interface RateLimitErrorResponse {
   reset_time?: string    // 日级限流重置时间（ISO 8601）
 }
 
+// 验证码需求错误响应类型
+export interface CaptchaRequiredResponse {
+  error: string
+  message: string
+  captcha_enabled: boolean
+}
+
 // ==================== Errors ====================
 
 /**
@@ -138,6 +146,23 @@ export function isRateLimitError(error: unknown): error is RateLimitExceededErro
   return error instanceof RateLimitExceededError
 }
 
+/**
+ * 验证码需求错误类
+ */
+export class CaptchaRequiredError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'CaptchaRequiredError'
+  }
+}
+
+/**
+ * 检查是否为验证码需求错误
+ */
+export function isCaptchaRequiredError(error: unknown): error is CaptchaRequiredError {
+  return error instanceof CaptchaRequiredError
+}
+
 // ==================== API Functions ====================
 
 export const rechargeAPI = {
@@ -152,21 +177,30 @@ export const rechargeAPI = {
   /**
    * 创建充值订单
    * @throws {RateLimitExceededError} 当请求被限流时抛出
+   * @throws {CaptchaRequiredError} 当需要验证码时抛出
    */
   async createOrder(data: CreateOrderRequest): Promise<RechargeOrder> {
     try {
       const response = await apiClient.post<RechargeOrder>('/recharge/orders', data)
       return response.data
     } catch (error) {
-      if (axios.isAxiosError(error) && error.response?.status === 429) {
-        const rateLimitData = error.response.data as RateLimitErrorResponse
-        const limitType = rateLimitData.limit_type || 'minute'
-        throw new RateLimitExceededError(
-          rateLimitData.message || '操作过于频繁，请稍后重试',
-          limitType,
-          rateLimitData.retry_after,
-          rateLimitData.reset_time
-        )
+      if (axios.isAxiosError(error)) {
+        // 处理 428 Precondition Required - 需要验证码
+        if (error.response?.status === 428) {
+          const captchaData = error.response.data as CaptchaRequiredResponse
+          throw new CaptchaRequiredError(captchaData.message || '请完成验证码验证')
+        }
+        // 处理 429 Too Many Requests - 限流
+        if (error.response?.status === 429) {
+          const rateLimitData = error.response.data as RateLimitErrorResponse
+          const limitType = rateLimitData.limit_type || 'minute'
+          throw new RateLimitExceededError(
+            rateLimitData.message || '操作过于频繁，请稍后重试',
+            limitType,
+            rateLimitData.retry_after,
+            rateLimitData.reset_time
+          )
+        }
       }
       throw error
     }

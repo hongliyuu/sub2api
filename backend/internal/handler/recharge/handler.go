@@ -13,9 +13,10 @@ import (
 
 // RechargeHandler 充值相关接口处理器
 type RechargeHandler struct {
-	wechatPayService           *service.WeChatPayService
-	rechargeOrderService       *service.RechargeOrderService
-	rechargeRateLimitService   *service.RechargeRateLimitService
+	wechatPayService         *service.WeChatPayService
+	rechargeOrderService     *service.RechargeOrderService
+	rechargeRateLimitService *service.RechargeRateLimitService
+	turnstileService         *service.TurnstileService
 }
 
 // NewRechargeHandler 创建充值处理器
@@ -23,11 +24,13 @@ func NewRechargeHandler(
 	wechatPayService *service.WeChatPayService,
 	rechargeOrderService *service.RechargeOrderService,
 	rechargeRateLimitService *service.RechargeRateLimitService,
+	turnstileService *service.TurnstileService,
 ) *RechargeHandler {
 	return &RechargeHandler{
 		wechatPayService:         wechatPayService,
 		rechargeOrderService:     rechargeOrderService,
 		rechargeRateLimitService: rechargeRateLimitService,
+		turnstileService:         turnstileService,
 	}
 }
 
@@ -111,6 +114,7 @@ type CreateOrderRequest struct {
 	Amount         float64 `json:"amount" binding:"required,gt=0"`
 	PaymentMethod  string  `json:"payment_method" binding:"required"`
 	PaymentChannel string  `json:"payment_channel"`
+	CaptchaToken   string  `json:"captcha_token"` // Turnstile 验证码 token（IP 高频时必填）
 }
 
 // CreateOrderResponse 创建订单响应
@@ -173,6 +177,31 @@ func (h *RechargeHandler) CreateOrder(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "请求参数无效")
 		return
+	}
+
+	// 检查 IP 级验证码需求
+	clientIP := c.ClientIP()
+	ipResult, err := h.rechargeRateLimitService.CheckIPCaptchaRequired(ctx, clientIP)
+	if err != nil {
+		log.Printf("[RechargeHandler] check IP captcha failed: %v", err)
+		// IP 限流服务异常时不阻止请求，但记录日志
+	} else if ipResult.NeedsCaptcha {
+		// 需要验证码
+		if req.CaptchaToken == "" {
+			// 未提供验证码，返回 428 Precondition Required
+			c.JSON(http.StatusPreconditionRequired, gin.H{
+				"error":           "captcha_required",
+				"message":         ipResult.Message,
+				"captcha_enabled": true,
+			})
+			return
+		}
+		// 验证 Turnstile token
+		if err := h.turnstileService.VerifyToken(ctx, req.CaptchaToken, clientIP); err != nil {
+			log.Printf("[RechargeHandler] turnstile verification failed: %v", err)
+			response.BadRequest(c, "验证码验证失败，请重试")
+			return
+		}
 	}
 
 	// 验证支付方式

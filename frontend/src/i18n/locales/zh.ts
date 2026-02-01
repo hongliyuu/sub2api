@@ -3422,6 +3422,9 @@ export default {
     // Rate limiting
     rateLimitCountdown: '{seconds} 秒后可再次提交',
     dailyLimitReached: '今日充值次数已达上限',
+    // IP captcha
+    captchaRequired: '请完成验证码验证',
+    captchaError: '验证码加载失败，请刷新重试',
     // Payment page
     paymentTitle: '支付',
     paymentDescription: '完成订单支付',
