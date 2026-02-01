@@ -316,6 +316,8 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		adminSettings.PUT("/stream-timeout", h.Admin.Setting.UpdateStreamTimeoutSettings)
 		// 微信二维码生成
 		adminSettings.POST("/wechat/generate-qrcode", h.Admin.Setting.GenerateWeChatQRCode)
+		// 微信支付状态（只读）
+		adminSettings.GET("/payment/wechat/status", h.Admin.Setting.GetWeChatPayStatus)
 	}
 }
 

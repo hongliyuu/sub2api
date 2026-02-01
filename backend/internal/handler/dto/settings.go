@@ -111,3 +111,12 @@ type StreamTimeoutSettings struct {
 	ThresholdCount         int    `json:"threshold_count"`
 	ThresholdWindowMinutes int    `json:"threshold_window_minutes"`
 }
+
+// WeChatPayStatus 微信支付配置状态（只读，脱敏后返回）
+type WeChatPayStatus struct {
+	Enabled     bool   `json:"enabled"`       // 是否启用
+	AppIDMasked string `json:"app_id_masked"` // 脱敏后的AppID
+	MchIDMasked string `json:"mch_id_masked"` // 脱敏后的商户号
+	NotifyURL   string `json:"notify_url"`    // 回调地址（可显示）
+	Configured  bool   `json:"configured"`    // 是否已配置（所有必填字段都有值）
+}

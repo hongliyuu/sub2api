@@ -16,21 +16,23 @@ import (
 
 // SettingHandler 系统设置处理器
 type SettingHandler struct {
-	settingService       *service.SettingService
-	emailService         *service.EmailService
-	turnstileService     *service.TurnstileService
-	opsService           *service.OpsService
-	wechatQRCodeService  *service.WeChatQRCodeService
+	settingService      *service.SettingService
+	emailService        *service.EmailService
+	turnstileService    *service.TurnstileService
+	opsService          *service.OpsService
+	wechatQRCodeService *service.WeChatQRCodeService
+	wechatPayService    *service.WeChatPayService
 }
 
 // NewSettingHandler 创建系统设置处理器
-func NewSettingHandler(settingService *service.SettingService, emailService *service.EmailService, turnstileService *service.TurnstileService, opsService *service.OpsService, wechatQRCodeService *service.WeChatQRCodeService) *SettingHandler {
+func NewSettingHandler(settingService *service.SettingService, emailService *service.EmailService, turnstileService *service.TurnstileService, opsService *service.OpsService, wechatQRCodeService *service.WeChatQRCodeService, wechatPayService *service.WeChatPayService) *SettingHandler {
 	return &SettingHandler{
-		settingService:       settingService,
-		emailService:         emailService,
-		turnstileService:     turnstileService,
-		opsService:           opsService,
-		wechatQRCodeService:  wechatQRCodeService,
+		settingService:      settingService,
+		emailService:        emailService,
+		turnstileService:    turnstileService,
+		opsService:          opsService,
+		wechatQRCodeService: wechatQRCodeService,
+		wechatPayService:    wechatPayService,
 	}
 }
 
@@ -996,4 +998,57 @@ func (h *SettingHandler) GenerateWeChatQRCode(c *gin.Context) {
 		QRCodeURL: result.ImageURL,
 		Ticket:    result.Ticket,
 	})
+}
+
+// MaskString 脱敏字符串，保留前后指定位数
+// 示例: MaskString("wx0b35f0a1b2fb07e", 6, 4) => "wx0b35****fb07e"
+func MaskString(s string, keepPrefix, keepSuffix int) string {
+	if s == "" {
+		return ""
+	}
+	runes := []rune(s)
+	length := len(runes)
+
+	if length <= keepPrefix+keepSuffix {
+		return s // 太短不脱敏
+	}
+
+	masked := make([]rune, length)
+	for i := 0; i < length; i++ {
+		if i < keepPrefix || i >= length-keepSuffix {
+			masked[i] = runes[i]
+		} else {
+			masked[i] = '*'
+		}
+	}
+	return string(masked)
+}
+
+// MaskAppID 脱敏微信AppID（保留前6后4）
+func MaskAppID(appID string) string {
+	return MaskString(appID, 6, 4)
+}
+
+// MaskMchID 脱敏商户号（保留前4后4）
+func MaskMchID(mchID string) string {
+	return MaskString(mchID, 4, 4)
+}
+
+// GetWeChatPayStatus 获取微信支付配置状态（只读，脱敏）
+// GET /api/v1/admin/settings/payment/wechat/status
+func (h *SettingHandler) GetWeChatPayStatus(c *gin.Context) {
+	cfg := h.wechatPayService.GetConfig()
+
+	// 判断是否已配置（配置启用且客户端初始化成功）
+	configured := h.wechatPayService.IsEnabled()
+
+	status := &dto.WeChatPayStatus{
+		Enabled:     cfg.Enabled,
+		AppIDMasked: MaskAppID(cfg.AppID),
+		MchIDMasked: MaskMchID(cfg.MchID),
+		NotifyURL:   cfg.NotifyURL,
+		Configured:  configured,
+	}
+
+	response.Success(c, status)
 }

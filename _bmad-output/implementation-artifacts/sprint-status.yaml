@@ -94,8 +94,8 @@ development_status:
 
   # Sprint 5: 管理端配置 (5 stories, 可选)
   # 目标: 运营可动态调整配置
-  sprint-5: backlog
-  1-2-admin-payment-status-display: ready-for-dev # Epic 1
+  sprint-5: in-progress
+  1-2-admin-payment-status-display: done # Epic 1
   1-3-admin-recharge-config: ready-for-dev       # Epic 1
   1-4-config-realtime-effect: ready-for-dev      # Epic 1
   1-5-config-priority: ready-for-dev             # Epic 1

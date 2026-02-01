@@ -312,6 +312,26 @@ export async function generateWeChatQRCode(
   return data
 }
 
+/**
+ * WeChat Pay configuration status (read-only, masked)
+ */
+export interface WeChatPayStatus {
+  enabled: boolean
+  app_id_masked: string
+  mch_id_masked: string
+  notify_url: string
+  configured: boolean
+}
+
+/**
+ * Get WeChat Pay configuration status (read-only, masked)
+ * @returns WeChat Pay status with masked sensitive fields
+ */
+export async function getWeChatPayStatus(): Promise<WeChatPayStatus> {
+  const { data } = await apiClient.get<WeChatPayStatus>('/admin/settings/payment/wechat/status')
+  return data
+}
+
 export const settingsAPI = {
   getSettings,
   updateSettings,
@@ -322,7 +342,8 @@ export const settingsAPI = {
   deleteAdminApiKey,
   getStreamTimeoutSettings,
   updateStreamTimeoutSettings,
-  generateWeChatQRCode
+  generateWeChatQRCode,
+  getWeChatPayStatus
 }
 
 export default settingsAPI

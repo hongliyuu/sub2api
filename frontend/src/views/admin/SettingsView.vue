@@ -812,6 +812,103 @@
           </div>
         </div>
 
+        <!-- 微信支付配置（只读） -->
+        <div class="card">
+          <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              {{ t('admin.settings.wechatPay.title') }}
+            </h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {{ t('admin.settings.wechatPay.description') }}
+            </p>
+          </div>
+          <div class="space-y-4 p-6">
+            <!-- 加载状态 -->
+            <div v-if="wechatPayLoading" class="flex items-center gap-2 text-gray-500">
+              <div class="h-4 w-4 animate-spin rounded-full border-b-2 border-primary-600"></div>
+              {{ t('common.loading') }}
+            </div>
+
+            <!-- 配置内容 -->
+            <template v-else>
+              <!-- 启用状态 -->
+              <div class="flex items-center justify-between">
+                <span class="text-sm text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.wechatPay.status') }}
+                </span>
+                <span
+                  :class="[
+                    'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
+                    wechatPayStatus?.enabled
+                      ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                      : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
+                  ]"
+                >
+                  {{ wechatPayStatus?.enabled
+                    ? t('admin.settings.wechatPay.enabled')
+                    : t('admin.settings.wechatPay.disabled')
+                  }}
+                </span>
+              </div>
+
+              <!-- 配置状态 -->
+              <div class="flex items-center justify-between">
+                <span class="text-sm text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.wechatPay.configStatus') }}
+                </span>
+                <span
+                  :class="[
+                    'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium',
+                    wechatPayStatus?.configured
+                      ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+                      : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                  ]"
+                >
+                  {{ wechatPayStatus?.configured
+                    ? t('admin.settings.wechatPay.configured')
+                    : t('admin.settings.wechatPay.notConfigured')
+                  }}
+                </span>
+              </div>
+
+              <!-- AppID（脱敏） -->
+              <div v-if="wechatPayStatus?.app_id_masked" class="flex items-center justify-between">
+                <span class="text-sm text-gray-700 dark:text-gray-300">AppID</span>
+                <code class="text-sm font-mono text-gray-600 dark:text-gray-400">
+                  {{ wechatPayStatus.app_id_masked }}
+                </code>
+              </div>
+
+              <!-- 商户号（脱敏） -->
+              <div v-if="wechatPayStatus?.mch_id_masked" class="flex items-center justify-between">
+                <span class="text-sm text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.wechatPay.mchId') }}
+                </span>
+                <code class="text-sm font-mono text-gray-600 dark:text-gray-400">
+                  {{ wechatPayStatus.mch_id_masked }}
+                </code>
+              </div>
+
+              <!-- 回调地址 -->
+              <div v-if="wechatPayStatus?.notify_url" class="flex items-center justify-between">
+                <span class="text-sm text-gray-700 dark:text-gray-300">
+                  {{ t('admin.settings.wechatPay.notifyUrl') }}
+                </span>
+                <code class="text-sm font-mono text-gray-600 dark:text-gray-400 truncate max-w-xs" :title="wechatPayStatus.notify_url">
+                  {{ wechatPayStatus.notify_url }}
+                </code>
+              </div>
+
+              <!-- 未配置提示 -->
+              <div v-if="!wechatPayStatus?.configured" class="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+                <p class="text-sm text-yellow-800 dark:text-yellow-200">
+                  {{ t('admin.settings.wechatPay.configHint') }}
+                </p>
+              </div>
+            </template>
+          </div>
+        </div>
+
         <!-- Default Settings -->
         <div class="card">
           <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
@@ -1572,7 +1669,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api'
-import type { SystemSettings, UpdateSettingsRequest } from '@/api/admin/settings'
+import type { SystemSettings, UpdateSettingsRequest, WeChatPayStatus } from '@/api/admin/settings'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import Toggle from '@/components/common/Toggle.vue'
@@ -1610,6 +1707,10 @@ const streamTimeoutForm = reactive({
   threshold_count: 3,
   threshold_window_minutes: 10
 })
+
+// 微信支付配置状态（只读）
+const wechatPayLoading = ref(true)
+const wechatPayStatus = ref<WeChatPayStatus | null>(null)
 
 type SettingsForm = SystemSettings & {
   smtp_password: string
@@ -2101,9 +2202,22 @@ async function saveStreamTimeoutSettings() {
   }
 }
 
+async function loadWeChatPayStatus() {
+  wechatPayLoading.value = true
+  try {
+    wechatPayStatus.value = await adminAPI.settings.getWeChatPayStatus()
+  } catch (error: any) {
+    console.error('Failed to load WeChat Pay status:', error)
+    // 静默失败，不影响其他设置加载
+  } finally {
+    wechatPayLoading.value = false
+  }
+}
+
 onMounted(() => {
   loadSettings()
   loadAdminApiKey()
   loadStreamTimeoutSettings()
+  loadWeChatPayStatus()
 })
 </script>

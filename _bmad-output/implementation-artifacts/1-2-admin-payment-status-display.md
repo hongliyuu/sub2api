@@ -1,6 +1,6 @@
 # Story 1.2: 管理端只读显示支付状态
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -10,36 +10,36 @@ Status: ready-for-dev
 
 ## Acceptance Criteria
 
-- [ ] AC1: 管理端「系统设置」页面新增「支付配置」卡片
-- [ ] AC2: 显示微信支付启用状态（已启用/未启用）
-- [ ] AC3: 显示脱敏AppID（如：wx0b35f0****fb07e）
-- [ ] AC4: 显示回调地址（只读）
-- [ ] AC5: 所有敏感字段不可编辑
-- [ ] AC6: 配置未启用时显示「未配置」状态
+- [x] AC1: 管理端「系统设置」页面新增「支付配置」卡片
+- [x] AC2: 显示微信支付启用状态（已启用/未启用）
+- [x] AC3: 显示脱敏AppID（如：wx0b35f0****fb07e）
+- [x] AC4: 显示回调地址（只读）
+- [x] AC5: 所有敏感字段不可编辑
+- [x] AC6: 配置未启用时显示「未配置」状态
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: 后端 - 创建支付状态 API (AC: 1-6)
-  - [ ] 1.1 在 `backend/internal/handler/dto/settings.go` 添加 `WeChatPayStatus` DTO
-  - [ ] 1.2 在 `backend/internal/handler/admin/setting_handler.go` 添加 `GetWeChatPayStatus` 方法
-  - [ ] 1.3 在 `backend/internal/server/routes/admin.go` 注册路由
+- [x] Task 1: 后端 - 创建支付状态 API (AC: 1-6)
+  - [x] 1.1 在 `backend/internal/handler/dto/settings.go` 添加 `WeChatPayStatus` DTO
+  - [x] 1.2 在 `backend/internal/handler/admin/setting_handler.go` 添加 `GetWeChatPayStatus` 方法
+  - [x] 1.3 在 `backend/internal/server/routes/admin.go` 注册路由
 
-- [ ] Task 2: 后端 - 实现脱敏逻辑 (AC: 3, 5)
-  - [ ] 2.1 实现 AppID 脱敏函数（保留前6位和后4位）
-  - [ ] 2.2 确保敏感字段（api_v3_key, cert_serial_no, private_key_path）不返回
+- [x] Task 2: 后端 - 实现脱敏逻辑 (AC: 3, 5)
+  - [x] 2.1 实现 AppID 脱敏函数（保留前6位和后4位）
+  - [x] 2.2 确保敏感字段（api_v3_key, cert_serial_no, private_key_path）不返回
 
-- [ ] Task 3: 前端 - 创建 API 客户端 (AC: 1)
-  - [ ] 3.1 在 `frontend/src/api/admin/settings.ts` 添加 `getWeChatPayStatus` 函数
-  - [ ] 3.2 定义 TypeScript 类型
+- [x] Task 3: 前端 - 创建 API 客户端 (AC: 1)
+  - [x] 3.1 在 `frontend/src/api/admin/settings.ts` 添加 `getWeChatPayStatus` 函数
+  - [x] 3.2 定义 TypeScript 类型
 
-- [ ] Task 4: 前端 - 创建支付配置卡片组件 (AC: 1-6)
-  - [ ] 4.1 在 `frontend/src/views/admin/SettingsView.vue` 添加支付配置卡片
-  - [ ] 4.2 实现只读显示模式
-  - [ ] 4.3 实现脱敏显示和未配置状态
+- [x] Task 4: 前端 - 创建支付配置卡片组件 (AC: 1-6)
+  - [x] 4.1 在 `frontend/src/views/admin/SettingsView.vue` 添加支付配置卡片
+  - [x] 4.2 实现只读显示模式
+  - [x] 4.3 实现脱敏显示和未配置状态
 
-- [ ] Task 5: 国际化 (AC: 1-6)
-  - [ ] 5.1 添加中文翻译 `frontend/src/locales/zh-CN.json`
-  - [ ] 5.2 添加英文翻译 `frontend/src/locales/en.json`
+- [x] Task 5: 国际化 (AC: 1-6)
+  - [x] 5.1 添加中文翻译 `frontend/src/i18n/locales/zh.ts`
+  - [x] 5.2 添加英文翻译 `frontend/src/i18n/locales/en.ts`
 
 ## Dev Notes
 

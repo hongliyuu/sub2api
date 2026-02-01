@@ -3159,6 +3159,19 @@ export default {
         sourceUpload: '已上传',
         sourceGenerated: 'API生成'
       },
+      wechatPay: {
+        title: '微信支付配置',
+        description: '查看微信支付集成状态（敏感配置需在服务器 config.yaml 中修改）',
+        status: '支付状态',
+        enabled: '已启用',
+        disabled: '未启用',
+        configStatus: '配置状态',
+        configured: '已配置',
+        notConfigured: '未配置',
+        mchId: '商户号',
+        notifyUrl: '回调地址',
+        configHint: '微信支付配置需要在服务器的 config.yaml 文件中设置，包括 AppID、商户号、APIv3密钥等敏感信息。'
+      },
       defaults: {
         title: '用户默认设置',
         description: '新用户的默认值',

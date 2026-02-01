@@ -3007,6 +3007,19 @@ export default {
         sourceUpload: 'Uploaded',
         sourceGenerated: 'API Generated'
       },
+      wechatPay: {
+        title: 'WeChat Pay Configuration',
+        description: 'View WeChat Pay integration status (sensitive config requires server config.yaml)',
+        status: 'Payment Status',
+        enabled: 'Enabled',
+        disabled: 'Disabled',
+        configStatus: 'Configuration',
+        configured: 'Configured',
+        notConfigured: 'Not Configured',
+        mchId: 'Merchant ID',
+        notifyUrl: 'Notify URL',
+        configHint: 'WeChat Pay configuration must be set in the server\'s config.yaml file, including AppID, Merchant ID, APIv3 Key and other sensitive information.'
+      },
       defaults: {
         title: 'Default User Settings',
         description: 'Default values for new users',
