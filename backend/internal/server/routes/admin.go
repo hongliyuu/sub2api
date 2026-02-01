@@ -318,6 +318,9 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		adminSettings.POST("/wechat/generate-qrcode", h.Admin.Setting.GenerateWeChatQRCode)
 		// 微信支付状态（只读）
 		adminSettings.GET("/payment/wechat/status", h.Admin.Setting.GetWeChatPayStatus)
+		// 充值业务配置
+		adminSettings.GET("/recharge", h.Admin.Setting.GetRechargeSettings)
+		adminSettings.PUT("/recharge", h.Admin.Setting.UpdateRechargeSettings)
 	}
 }
 

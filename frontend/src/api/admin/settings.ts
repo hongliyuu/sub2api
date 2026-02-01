@@ -332,6 +332,35 @@ export async function getWeChatPayStatus(): Promise<WeChatPayStatus> {
   return data
 }
 
+/**
+ * Recharge settings interface
+ */
+export interface RechargeSettings {
+  min_amount: number
+  max_amount: number
+  default_amounts: number[]
+  order_expire_minutes: number
+}
+
+/**
+ * Get recharge settings
+ * @returns Recharge settings
+ */
+export async function getRechargeSettings(): Promise<RechargeSettings> {
+  const { data } = await apiClient.get<RechargeSettings>('/admin/settings/recharge')
+  return data
+}
+
+/**
+ * Update recharge settings
+ * @param settings - Recharge settings to update
+ * @returns Updated settings
+ */
+export async function updateRechargeSettings(settings: RechargeSettings): Promise<RechargeSettings> {
+  const { data } = await apiClient.put<RechargeSettings>('/admin/settings/recharge', settings)
+  return data
+}
+
 export const settingsAPI = {
   getSettings,
   updateSettings,
@@ -343,7 +372,9 @@ export const settingsAPI = {
   getStreamTimeoutSettings,
   updateStreamTimeoutSettings,
   generateWeChatQRCode,
-  getWeChatPayStatus
+  getWeChatPayStatus,
+  getRechargeSettings,
+  updateRechargeSettings
 }
 
 export default settingsAPI

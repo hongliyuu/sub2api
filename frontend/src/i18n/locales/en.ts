@@ -3020,6 +3020,24 @@ export default {
         notifyUrl: 'Notify URL',
         configHint: 'WeChat Pay configuration must be set in the server\'s config.yaml file, including AppID, Merchant ID, APIv3 Key and other sensitive information.'
       },
+      recharge: {
+        title: 'Recharge Settings',
+        description: 'Configure recharge amount options and order rules',
+        minAmount: 'Minimum Amount',
+        maxAmount: 'Maximum Amount',
+        defaultAmounts: 'Quick Amount Options',
+        addAmount: 'Add Amount',
+        orderExpireMinutes: 'Order Expiry Time',
+        minutes: 'minutes',
+        amountsHint: 'Quick amount options displayed on the recharge page. Amounts must be within the min/max range.',
+        expireHint: 'Auto-expiry time for unpaid orders, range 1-1440 minutes (24 hours)',
+        saveSuccess: 'Recharge settings saved',
+        saveFailed: 'Failed to save recharge settings',
+        errors: {
+          minGreaterThanMax: 'Minimum amount cannot be greater than maximum amount',
+          amountOutOfRange: 'Amount options must be within the allowed range'
+        }
+      },
       defaults: {
         title: 'Default User Settings',
         description: 'Default values for new users',

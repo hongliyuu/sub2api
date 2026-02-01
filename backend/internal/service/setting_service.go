@@ -1007,3 +1007,104 @@ func (s *SettingService) IsUsageReportGlobalEnabled(ctx context.Context) bool {
 	}
 	return value == "true"
 }
+
+// RechargeSettings 充值业务配置
+type RechargeSettings struct {
+	MinAmount          float64   `json:"min_amount"`           // 最小充值金额（元）
+	MaxAmount          float64   `json:"max_amount"`           // 最大充值金额（元）
+	DefaultAmounts     []float64 `json:"default_amounts"`      // 默认金额选项
+	OrderExpireMinutes int       `json:"order_expire_minutes"` // 订单过期时间（分钟）
+}
+
+// GetRechargeSettings 获取充值业务配置
+func (s *SettingService) GetRechargeSettings(ctx context.Context) (*RechargeSettings, error) {
+	keys := []string{
+		SettingKeyRechargeMinAmount,
+		SettingKeyRechargeMaxAmount,
+		SettingKeyRechargeDefaultAmounts,
+		SettingKeyRechargeOrderExpireMinutes,
+	}
+
+	settings, err := s.settingRepo.GetMultiple(ctx, keys)
+	if err != nil {
+		return nil, fmt.Errorf("get recharge settings: %w", err)
+	}
+
+	result := &RechargeSettings{
+		MinAmount:          DefaultRechargeMinAmount,
+		MaxAmount:          DefaultRechargeMaxAmount,
+		DefaultAmounts:     DefaultRechargeAmounts,
+		OrderExpireMinutes: DefaultRechargeOrderExpireMinutes,
+	}
+
+	// 解析最小金额
+	if raw, ok := settings[SettingKeyRechargeMinAmount]; ok && raw != "" {
+		if v, err := strconv.ParseFloat(raw, 64); err == nil && v > 0 {
+			result.MinAmount = v
+		}
+	}
+
+	// 解析最大金额
+	if raw, ok := settings[SettingKeyRechargeMaxAmount]; ok && raw != "" {
+		if v, err := strconv.ParseFloat(raw, 64); err == nil && v > 0 {
+			result.MaxAmount = v
+		}
+	}
+
+	// 解析金额选项（JSON 数组）
+	if raw, ok := settings[SettingKeyRechargeDefaultAmounts]; ok && raw != "" {
+		var amounts []float64
+		if err := json.Unmarshal([]byte(raw), &amounts); err == nil && len(amounts) > 0 {
+			result.DefaultAmounts = amounts
+		}
+	}
+
+	// 解析过期时间
+	if raw, ok := settings[SettingKeyRechargeOrderExpireMinutes]; ok && raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil && v > 0 {
+			result.OrderExpireMinutes = v
+		}
+	}
+
+	return result, nil
+}
+
+// UpdateRechargeSettings 更新充值业务配置
+func (s *SettingService) UpdateRechargeSettings(ctx context.Context, settings *RechargeSettings) error {
+	// 验证逻辑
+	if settings.MinAmount <= 0 {
+		return fmt.Errorf("min_amount must be greater than 0")
+	}
+	if settings.MaxAmount <= 0 {
+		return fmt.Errorf("max_amount must be greater than 0")
+	}
+	if settings.MinAmount > settings.MaxAmount {
+		return fmt.Errorf("min_amount must be less than or equal to max_amount")
+	}
+	if settings.OrderExpireMinutes < 1 || settings.OrderExpireMinutes > 1440 {
+		return fmt.Errorf("order_expire_minutes must be between 1 and 1440")
+	}
+
+	// 验证金额选项
+	for _, amount := range settings.DefaultAmounts {
+		if amount < settings.MinAmount || amount > settings.MaxAmount {
+			return fmt.Errorf("default amount %.2f is out of allowed range [%.2f, %.2f]",
+				amount, settings.MinAmount, settings.MaxAmount)
+		}
+	}
+
+	// 序列化金额选项
+	amountsJSON, err := json.Marshal(settings.DefaultAmounts)
+	if err != nil {
+		return fmt.Errorf("marshal default amounts: %w", err)
+	}
+
+	updates := map[string]string{
+		SettingKeyRechargeMinAmount:          strconv.FormatFloat(settings.MinAmount, 'f', 2, 64),
+		SettingKeyRechargeMaxAmount:          strconv.FormatFloat(settings.MaxAmount, 'f', 2, 64),
+		SettingKeyRechargeDefaultAmounts:     string(amountsJSON),
+		SettingKeyRechargeOrderExpireMinutes: strconv.Itoa(settings.OrderExpireMinutes),
+	}
+
+	return s.settingRepo.SetMultiple(ctx, updates)
+}

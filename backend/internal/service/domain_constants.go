@@ -186,6 +186,22 @@ const (
 
 	// SettingKeyUsageReportGlobalSchedule is the global send time (HH:MM) for non-opted_in modes.
 	SettingKeyUsageReportGlobalSchedule = "usage_report_global_schedule"
+
+	// =========================
+	// Recharge Settings
+	// =========================
+
+	// SettingKeyRechargeMinAmount is the minimum recharge amount in yuan.
+	SettingKeyRechargeMinAmount = "recharge.min_amount"
+
+	// SettingKeyRechargeMaxAmount is the maximum recharge amount in yuan.
+	SettingKeyRechargeMaxAmount = "recharge.max_amount"
+
+	// SettingKeyRechargeDefaultAmounts stores JSON array of quick amount options.
+	SettingKeyRechargeDefaultAmounts = "recharge.default_amounts"
+
+	// SettingKeyRechargeOrderExpireMinutes is the order expiry time in minutes.
+	SettingKeyRechargeOrderExpireMinutes = "recharge.order_expire_minutes"
 )
 
 // AdminAPIKeyPrefix is the prefix for admin API keys (distinct from user "sk-" keys).
@@ -197,3 +213,13 @@ const (
 	UsageReportScopeActiveToday = "active_today" // 当天有使用的用户
 	UsageReportScopeOptedIn     = "opted_in"     // 仅启用了报告功能的用户
 )
+
+// Recharge defaults
+const (
+	DefaultRechargeMinAmount          = 1.0   // 最小充值金额（元）
+	DefaultRechargeMaxAmount          = 1000.0 // 最大充值金额（元）
+	DefaultRechargeOrderExpireMinutes = 120   // 订单过期时间（分钟）
+)
+
+// DefaultRechargeAmounts is the default quick amount options
+var DefaultRechargeAmounts = []float64{10, 50, 100, 200, 500}

@@ -1,6 +1,6 @@
 # Story 1.3: 管理端配置充值业务参数
 
-Status: ready-for-dev
+Status: done
 
 ## Story
 
@@ -10,49 +10,49 @@ Status: ready-for-dev
 
 ## Acceptance Criteria
 
-- [ ] AC1: 管理端可配置最小充值金额（默认1元）
-- [ ] AC2: 管理端可配置最大充值金额（默认1000元）
-- [ ] AC3: 管理端可配置默认充值金额选项（如：[10, 50, 100, 200, 500]）
-- [ ] AC4: 管理端可配置订单过期时间（分钟，默认120）
-- [ ] AC5: 输入验证：最小金额 <= 最大金额
-- [ ] AC6: 输入验证：金额选项在允许范围内
-- [ ] AC7: 保存时显示成功/失败提示
+- [x] AC1: 管理端可配置最小充值金额（默认1元）
+- [x] AC2: 管理端可配置最大充值金额（默认1000元）
+- [x] AC3: 管理端可配置默认充值金额选项（如：[10, 50, 100, 200, 500]）
+- [x] AC4: 管理端可配置订单过期时间（分钟，默认120）
+- [x] AC5: 输入验证：最小金额 <= 最大金额
+- [x] AC6: 输入验证：金额选项在允许范围内
+- [x] AC7: 保存时显示成功/失败提示
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: 后端 - 定义充值配置常量和结构体 (AC: 1-4)
-  - [ ] 1.1 在 `backend/internal/service/setting.go` 添加充值配置相关的 SettingKey 常量
-  - [ ] 1.2 在 `backend/internal/service/setting_service.go` 添加 `RechargeSettings` 结构体
-  - [ ] 1.3 添加默认值常量
+- [x] Task 1: 后端 - 定义充值配置常量和结构体 (AC: 1-4)
+  - [x] 1.1 在 `backend/internal/service/domain_constants.go` 添加充值配置相关的 SettingKey 常量
+  - [x] 1.2 在 `backend/internal/service/setting_service.go` 添加 `RechargeSettings` 结构体
+  - [x] 1.3 添加默认值常量
 
-- [ ] Task 2: 后端 - 实现获取充值配置接口 (AC: 1-4)
-  - [ ] 2.1 在 `backend/internal/service/setting_service.go` 添加 `GetRechargeSettings()` 方法
-  - [ ] 2.2 在 `backend/internal/handler/admin/setting_handler.go` 添加 `GetRechargeSettings` Handler
-  - [ ] 2.3 在 `backend/internal/server/routes/admin.go` 注册 GET 路由
+- [x] Task 2: 后端 - 实现获取充值配置接口 (AC: 1-4)
+  - [x] 2.1 在 `backend/internal/service/setting_service.go` 添加 `GetRechargeSettings()` 方法
+  - [x] 2.2 在 `backend/internal/handler/admin/setting_handler.go` 添加 `GetRechargeSettings` Handler
+  - [x] 2.3 在 `backend/internal/server/routes/admin.go` 注册 GET 路由
 
-- [ ] Task 3: 后端 - 实现更新充值配置接口 (AC: 1-7)
-  - [ ] 3.1 在 `backend/internal/handler/admin/setting_handler.go` 添加 `UpdateRechargeSettings` Handler
-  - [ ] 3.2 实现输入验证逻辑（最小金额 <= 最大金额，金额选项范围检查）
-  - [ ] 3.3 在 `backend/internal/service/setting_service.go` 添加 `UpdateRechargeSettings()` 方法
-  - [ ] 3.4 在 `backend/internal/server/routes/admin.go` 注册 PUT 路由
+- [x] Task 3: 后端 - 实现更新充值配置接口 (AC: 1-7)
+  - [x] 3.1 在 `backend/internal/handler/admin/setting_handler.go` 添加 `UpdateRechargeSettings` Handler
+  - [x] 3.2 实现输入验证逻辑（最小金额 <= 最大金额，金额选项范围检查）
+  - [x] 3.3 在 `backend/internal/service/setting_service.go` 添加 `UpdateRechargeSettings()` 方法
+  - [x] 3.4 在 `backend/internal/server/routes/admin.go` 注册 PUT 路由
 
-- [ ] Task 4: 后端 - DTO 定义 (AC: 1-4)
-  - [ ] 4.1 在 `backend/internal/handler/dto/settings.go` 添加 `RechargeSettings` DTO
+- [x] Task 4: 后端 - DTO 定义 (AC: 1-4)
+  - [x] 4.1 在 `backend/internal/handler/dto/settings.go` 添加 `RechargeSettings` DTO
 
-- [ ] Task 5: 前端 - API 客户端 (AC: 1-4)
-  - [ ] 5.1 在 `frontend/src/api/admin/settings.ts` 添加 `RechargeSettings` 接口
-  - [ ] 5.2 添加 `getRechargeSettings()` 函数
-  - [ ] 5.3 添加 `updateRechargeSettings()` 函数
+- [x] Task 5: 前端 - API 客户端 (AC: 1-4)
+  - [x] 5.1 在 `frontend/src/api/admin/settings.ts` 添加 `RechargeSettings` 接口
+  - [x] 5.2 添加 `getRechargeSettings()` 函数
+  - [x] 5.3 添加 `updateRechargeSettings()` 函数
 
-- [ ] Task 6: 前端 - 充值配置表单组件 (AC: 1-7)
-  - [ ] 6.1 在 `frontend/src/views/admin/SettingsView.vue` 添加充值配置卡片
-  - [ ] 6.2 实现表单输入（最小金额、最大金额、金额选项、过期时间）
-  - [ ] 6.3 实现前端输入验证
-  - [ ] 6.4 实现保存功能和状态反馈
+- [x] Task 6: 前端 - 充值配置表单组件 (AC: 1-7)
+  - [x] 6.1 在 `frontend/src/views/admin/SettingsView.vue` 添加充值配置卡片
+  - [x] 6.2 实现表单输入（最小金额、最大金额、金额选项、过期时间）
+  - [x] 6.3 实现前端输入验证
+  - [x] 6.4 实现保存功能和状态反馈
 
-- [ ] Task 7: 国际化 (AC: 1-7)
-  - [ ] 7.1 添加中文翻译 `frontend/src/locales/zh-CN.json`
-  - [ ] 7.2 添加英文翻译 `frontend/src/locales/en.json`
+- [x] Task 7: 国际化 (AC: 1-7)
+  - [x] 7.1 添加中文翻译 `frontend/src/i18n/locales/zh.ts`
+  - [x] 7.2 添加英文翻译 `frontend/src/i18n/locales/en.ts`
 
 - [ ] Task 8: 单元测试 (AC: 1-7)
   - [ ] 8.1 后端验证逻辑测试

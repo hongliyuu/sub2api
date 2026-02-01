@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -1051,4 +1052,80 @@ func (h *SettingHandler) GetWeChatPayStatus(c *gin.Context) {
 	}
 
 	response.Success(c, status)
+}
+
+// GetRechargeSettings 获取充值业务配置
+// GET /api/v1/admin/settings/recharge
+func (h *SettingHandler) GetRechargeSettings(c *gin.Context) {
+	settings, err := h.settingService.GetRechargeSettings(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, dto.RechargeSettings{
+		MinAmount:          settings.MinAmount,
+		MaxAmount:          settings.MaxAmount,
+		DefaultAmounts:     settings.DefaultAmounts,
+		OrderExpireMinutes: settings.OrderExpireMinutes,
+	})
+}
+
+// UpdateRechargeSettingsRequest 更新充值配置请求
+type UpdateRechargeSettingsRequest struct {
+	MinAmount          float64   `json:"min_amount" binding:"required,gt=0"`
+	MaxAmount          float64   `json:"max_amount" binding:"required,gt=0"`
+	DefaultAmounts     []float64 `json:"default_amounts" binding:"required,min=1"`
+	OrderExpireMinutes int       `json:"order_expire_minutes" binding:"required,min=1,max=1440"`
+}
+
+// UpdateRechargeSettings 更新充值业务配置
+// PUT /api/v1/admin/settings/recharge
+func (h *SettingHandler) UpdateRechargeSettings(c *gin.Context) {
+	var req UpdateRechargeSettingsRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	// 验证最小金额 <= 最大金额
+	if req.MinAmount > req.MaxAmount {
+		response.BadRequest(c, "Minimum amount must be less than or equal to maximum amount")
+		return
+	}
+
+	// 验证金额选项在范围内
+	for _, amount := range req.DefaultAmounts {
+		if amount < req.MinAmount || amount > req.MaxAmount {
+			response.BadRequest(c, fmt.Sprintf("Amount option %.2f is out of allowed range [%.2f, %.2f]",
+				amount, req.MinAmount, req.MaxAmount))
+			return
+		}
+	}
+
+	settings := &service.RechargeSettings{
+		MinAmount:          req.MinAmount,
+		MaxAmount:          req.MaxAmount,
+		DefaultAmounts:     req.DefaultAmounts,
+		OrderExpireMinutes: req.OrderExpireMinutes,
+	}
+
+	if err := h.settingService.UpdateRechargeSettings(c.Request.Context(), settings); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	// 重新获取设置返回
+	updatedSettings, err := h.settingService.GetRechargeSettings(c.Request.Context())
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, dto.RechargeSettings{
+		MinAmount:          updatedSettings.MinAmount,
+		MaxAmount:          updatedSettings.MaxAmount,
+		DefaultAmounts:     updatedSettings.DefaultAmounts,
+		OrderExpireMinutes: updatedSettings.OrderExpireMinutes,
+	})
 }

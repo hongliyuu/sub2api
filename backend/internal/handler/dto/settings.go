@@ -120,3 +120,11 @@ type WeChatPayStatus struct {
 	NotifyURL   string `json:"notify_url"`    // 回调地址（可显示）
 	Configured  bool   `json:"configured"`    // 是否已配置（所有必填字段都有值）
 }
+
+// RechargeSettings 充值业务配置 DTO
+type RechargeSettings struct {
+	MinAmount          float64   `json:"min_amount"`           // 最小充值金额（元）
+	MaxAmount          float64   `json:"max_amount"`           // 最大充值金额（元）
+	DefaultAmounts     []float64 `json:"default_amounts"`      // 默认金额选项
+	OrderExpireMinutes int       `json:"order_expire_minutes"` // 订单过期时间（分钟）
+}

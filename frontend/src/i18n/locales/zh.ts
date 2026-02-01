@@ -3172,6 +3172,24 @@ export default {
         notifyUrl: '回调地址',
         configHint: '微信支付配置需要在服务器的 config.yaml 文件中设置，包括 AppID、商户号、APIv3密钥等敏感信息。'
       },
+      recharge: {
+        title: '充值业务配置',
+        description: '配置用户充值的金额选项和订单规则',
+        minAmount: '最小充值金额',
+        maxAmount: '最大充值金额',
+        defaultAmounts: '默认金额选项',
+        addAmount: '添加金额',
+        orderExpireMinutes: '订单过期时间',
+        minutes: '分钟',
+        amountsHint: '用户在充值页面看到的快捷金额选项，金额必须在最小和最大范围内',
+        expireHint: '未支付订单的自动过期时间，范围 1-1440 分钟（24小时）',
+        saveSuccess: '充值配置已保存',
+        saveFailed: '保存充值配置失败',
+        errors: {
+          minGreaterThanMax: '最小金额不能大于最大金额',
+          amountOutOfRange: '金额选项必须在允许范围内'
+        }
+      },
       defaults: {
         title: '用户默认设置',
         description: '新用户的默认值',
