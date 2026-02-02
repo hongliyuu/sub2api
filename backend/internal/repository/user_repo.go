@@ -404,6 +404,22 @@ func (r *userRepository) ExistsByWeChatOpenID(ctx context.Context, openID string
 	return r.client.User.Query().Where(dbuser.WechatOpenidEQ(openID), dbuser.WechatOpenidNEQ("")).Exist(ctx)
 }
 
+// UnbindWeChatOpenID removes the WeChat OpenID binding from a user
+func (r *userRepository) UnbindWeChatOpenID(ctx context.Context, userID int64) error {
+	client := clientFromContext(ctx, r.client)
+	n, err := client.User.Update().
+		Where(dbuser.IDEQ(userID)).
+		SetWechatOpenid("").
+		Save(ctx)
+	if err != nil {
+		return translatePersistenceError(err, service.ErrUserNotFound, nil)
+	}
+	if n == 0 {
+		return service.ErrUserNotFound
+	}
+	return nil
+}
+
 func (r *userRepository) RemoveGroupFromAllowedGroups(ctx context.Context, groupID int64) (int64, error) {
 	// 仅操作 user_allowed_groups 联接表，legacy users.allowed_groups 列已弃用。
 	affected, err := r.client.UserAllowedGroup.Delete().

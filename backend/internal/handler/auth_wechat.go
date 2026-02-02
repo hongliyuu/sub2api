@@ -154,6 +154,48 @@ func (h *AuthHandler) WeChatBind(c *gin.Context) {
 	})
 }
 
+// WeChatUnbind 解除微信账号绑定（已登录用户）
+// DELETE /api/v1/auth/oauth/wechat/bind
+func (h *AuthHandler) WeChatUnbind(c *gin.Context) {
+	// 获取当前登录用户
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "用户未登录")
+		return
+	}
+
+	// 获取用户信息检查是否已绑定微信
+	user, err := h.userService.GetByID(c.Request.Context(), subject.UserID)
+	if err != nil {
+		log.Printf("[WeChat Unbind] Failed to get user: %v", err)
+		response.ErrorFrom(c, infraerrors.InternalServer("INTERNAL_ERROR", "获取用户信息失败"))
+		return
+	}
+
+	// 检查用户是否是微信合成邮箱用户（纯微信登录用户不允许解绑）
+	if isWeChatSyntheticEmail(user.Email) {
+		response.ErrorFrom(c, infraerrors.BadRequest("CANNOT_UNBIND", "微信登录用户请先绑定邮箱后再解绑微信"))
+		return
+	}
+
+	// 检查是否已绑定微信
+	if user.WeChatOpenID == "" {
+		response.ErrorFrom(c, infraerrors.BadRequest("NOT_BOUND", "当前账号未绑定微信"))
+		return
+	}
+
+	// 解除绑定
+	if err := h.userService.UnbindWeChatOpenID(c.Request.Context(), subject.UserID); err != nil {
+		log.Printf("[WeChat Unbind] Failed to unbind wechat: %v", err)
+		response.ErrorFrom(c, infraerrors.InternalServer("UNBIND_FAILED", "解绑失败"))
+		return
+	}
+
+	response.Success(c, gin.H{
+		"message": "解绑成功",
+	})
+}
+
 // getWeChatConfig 获取微信登录配置
 func (h *AuthHandler) getWeChatConfig(ctx context.Context) (*service.WeChatConfig, error) {
 	if h.settingSvc == nil {

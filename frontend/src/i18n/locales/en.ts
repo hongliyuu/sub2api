@@ -666,7 +666,14 @@ export default {
       bindSuccess: 'WeChat account bound successfully',
       bindFailed: 'Failed to bind WeChat account',
       bound: 'Bound',
-      boundStatus: 'WeChat account linked, you can use QR code to login'
+      boundStatus: 'WeChat account linked, you can use QR code to login',
+      unbindButton: 'Unbind',
+      unbindConfirmTitle: 'Confirm Unbind WeChat',
+      unbindConfirmMessage: 'After unbinding, you will not be able to login with this WeChat account. Are you sure?',
+      confirmUnbind: 'Confirm Unbind',
+      unbinding: 'Unbinding...',
+      unbindSuccess: 'WeChat unbound successfully',
+      unbindFailed: 'Failed to unbind WeChat'
     },
     // TOTP 2FA
     totp: {

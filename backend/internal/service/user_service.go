@@ -41,6 +41,7 @@ type UserRepository interface {
 
 	// WeChat binding methods
 	BindWeChatOpenID(ctx context.Context, userID int64, openID string) error
+	UnbindWeChatOpenID(ctx context.Context, userID int64) error
 	GetByWeChatOpenID(ctx context.Context, openID string) (*User, error)
 	ExistsByWeChatOpenID(ctx context.Context, openID string) (bool, error)
 
@@ -250,6 +251,11 @@ func (s *UserService) GetByWeChatOpenID(ctx context.Context, openID string) (*Us
 // ExistsByWeChatOpenID 检查微信 OpenID 是否已绑定
 func (s *UserService) ExistsByWeChatOpenID(ctx context.Context, openID string) (bool, error) {
 	return s.userRepo.ExistsByWeChatOpenID(ctx, openID)
+}
+
+// UnbindWeChatOpenID 解除微信 OpenID 绑定
+func (s *UserService) UnbindWeChatOpenID(ctx context.Context, userID int64) error {
+	return s.userRepo.UnbindWeChatOpenID(ctx, userID)
 }
 
 // GetByEmail 根据邮箱获取用户

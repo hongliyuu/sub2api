@@ -219,6 +219,15 @@ export async function wechatBind(code: string): Promise<{ wechat_id: string; mes
 }
 
 /**
+ * WeChat account unbinding for logged-in users
+ * @returns Unbind result with message
+ */
+export async function wechatUnbind(): Promise<{ message: string }> {
+  const { data } = await apiClient.delete<{ message: string }>('/auth/oauth/wechat/bind')
+  return data
+}
+
+/**
  * Reset password request
  */
 export interface ResetPasswordRequest {
@@ -306,6 +315,7 @@ export const authAPI = {
   validatePromoCode,
   wechatAuth,
   wechatBind,
+  wechatUnbind,
   forgotPassword,
   resetPassword,
   bindEmail,

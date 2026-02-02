@@ -29,6 +29,13 @@
             </svg>
             {{ t('profile.wechatBind.bound') }}
           </span>
+          <button
+            type="button"
+            class="btn btn-secondary btn-sm text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:text-red-300 dark:hover:bg-red-900/20"
+            @click="showUnbindConfirm = true"
+          >
+            {{ t('profile.wechatBind.unbindButton') }}
+          </button>
         </div>
         <button v-else type="button" class="btn btn-secondary" @click="showBindModal = true">
           {{ t('profile.wechatBind.bindButton') }}
@@ -139,6 +146,74 @@
         </div>
       </transition>
     </Teleport>
+
+    <!-- WeChat Unbind Confirm Modal -->
+    <Teleport to="body">
+      <transition name="modal-fade">
+        <div
+          v-if="showUnbindConfirm"
+          class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          @click.self="showUnbindConfirm = false"
+        >
+          <div
+            class="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl dark:bg-dark-800"
+            @click.stop
+          >
+            <div class="flex items-center justify-center mb-4">
+              <div class="flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
+                <svg class="h-6 w-6 text-red-600 dark:text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+            </div>
+            <h3 class="text-lg font-semibold text-center text-gray-900 dark:text-white mb-2">
+              {{ t('profile.wechatBind.unbindConfirmTitle') }}
+            </h3>
+            <p class="text-sm text-center text-gray-500 dark:text-dark-400 mb-6">
+              {{ t('profile.wechatBind.unbindConfirmMessage') }}
+            </p>
+            <div class="flex gap-3">
+              <button
+                type="button"
+                class="btn btn-secondary flex-1"
+                :disabled="isUnbinding"
+                @click="showUnbindConfirm = false"
+              >
+                {{ t('common.cancel') }}
+              </button>
+              <button
+                type="button"
+                class="btn flex-1 bg-red-600 text-white hover:bg-red-700 focus:ring-red-500"
+                :disabled="isUnbinding"
+                @click="handleWeChatUnbind"
+              >
+                <svg
+                  v-if="isUnbinding"
+                  class="-ml-1 mr-2 h-4 w-4 animate-spin text-white"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    class="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="4"
+                  ></circle>
+                  <path
+                    class="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
+                </svg>
+                {{ isUnbinding ? t('profile.wechatBind.unbinding') : t('profile.wechatBind.confirmUnbind') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </transition>
+    </Teleport>
   </div>
 </template>
 
@@ -148,7 +223,7 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import { authAPI } from '@/api'
-import { wechatBind } from '@/api/auth'
+import { wechatBind, wechatUnbind } from '@/api/auth'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -157,9 +232,11 @@ const authStore = useAuthStore()
 const wechatAuthEnabled = ref(false)
 const qrCodeUrl = ref('')
 const showBindModal = ref(false)
+const showUnbindConfirm = ref(false)
 const verifyCode = ref('')
 const codeError = ref('')
 const isLoading = ref(false)
+const isUnbinding = ref(false)
 
 // Check if user has already bound WeChat
 const isBound = computed(() => {
@@ -216,6 +293,36 @@ async function handleWeChatBind(): Promise<void> {
     appStore.showError(codeError.value)
   } finally {
     isLoading.value = false
+  }
+}
+
+async function handleWeChatUnbind(): Promise<void> {
+  isUnbinding.value = true
+
+  try {
+    await wechatUnbind()
+
+    // Refresh user data to update wechat_openid
+    await authStore.refreshUser()
+
+    // Show success
+    appStore.showSuccess(t('profile.wechatBind.unbindSuccess'))
+
+    // Close modal
+    showUnbindConfirm.value = false
+  } catch (error: unknown) {
+    const err = error as { message?: string; response?: { data?: { detail?: string } } }
+
+    let errorMessage = t('profile.wechatBind.unbindFailed')
+    if (err.response?.data?.detail) {
+      errorMessage = err.response.data.detail
+    } else if (err.message) {
+      errorMessage = err.message
+    }
+
+    appStore.showError(errorMessage)
+  } finally {
+    isUnbinding.value = false
   }
 }
 </script>

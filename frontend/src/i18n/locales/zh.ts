@@ -662,7 +662,14 @@ export default {
       bindSuccess: '微信绑定成功',
       bindFailed: '微信绑定失败',
       bound: '已绑定',
-      boundStatus: '已绑定微信账号，可使用微信扫码登录'
+      boundStatus: '已绑定微信账号，可使用微信扫码登录',
+      unbindButton: '解绑',
+      unbindConfirmTitle: '确认解绑微信',
+      unbindConfirmMessage: '解绑后将无法使用该微信账号登录，确定要解绑吗？',
+      confirmUnbind: '确认解绑',
+      unbinding: '解绑中...',
+      unbindSuccess: '微信解绑成功',
+      unbindFailed: '微信解绑失败'
     },
     // TOTP 2FA
     totp: {
