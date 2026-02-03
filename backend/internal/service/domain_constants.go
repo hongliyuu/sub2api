@@ -233,6 +233,9 @@ var DefaultRechargeAmounts = []float64{10, 50, 100, 200, 500}
 
 // WeChat account type constants
 const (
-	WeChatAccountTypeSubscription     = "subscription"       // 订阅号
+	WeChatAccountTypeSubscription       = "subscription"        // 订阅号
 	WeChatAccountTypeUnverifiedOfficial = "unverified_official" // 未认证公众号
 )
+
+// WeChatSyntheticEmailDomain 是微信登录用户的合成邮箱后缀（RFC 保留域名）
+const WeChatSyntheticEmailDomain = "@wechat-auth.invalid"

@@ -46,6 +46,13 @@ func RegisterAuthRoutes(
 		auth.GET("/oauth/wechat", rateLimiter.LimitWithOptions("wechat-auth", 20, 20*time.Minute, middleware.RateLimitOptions{
 			FailureMode: middleware.RateLimitFailClose,
 		}), h.Auth.WeChatAuth)
+		// 微信订阅号扫码自动登录
+		auth.GET("/wechat/scan/init", rateLimiter.LimitWithOptions("wechat-scan-init", 30, time.Minute, middleware.RateLimitOptions{
+			FailureMode: middleware.RateLimitFailClose,
+		}), h.Auth.WeChatScanInit)
+		auth.GET("/wechat/scan/poll", rateLimiter.LimitWithOptions("wechat-scan-poll", 120, time.Minute, middleware.RateLimitOptions{
+			FailureMode: middleware.RateLimitFailClose,
+		}), h.Auth.WeChatScanPoll)
 	}
 
 	// 公开设置（无需认证）

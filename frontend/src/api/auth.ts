@@ -182,6 +182,59 @@ export async function wechatAuth(code: string): Promise<AuthResponse> {
 }
 
 /**
+ * WeChat scan login init response
+ */
+export interface WeChatScanInitResponse {
+  scene_id: string
+  qr_code_url: string
+  expire_seconds: number
+}
+
+/**
+ * WeChat scan login poll response
+ */
+export interface WeChatScanPollResponse {
+  status: 'waiting' | 'confirmed'
+  access_token?: string
+  token_type?: string
+  user?: {
+    id: string
+    email: string
+    username: string
+    role: string
+    created_at: string
+  }
+}
+
+/**
+ * Initialize WeChat scan login session (subscription account only)
+ * @returns Scene ID and QR code URL for scanning
+ */
+export async function wechatScanInit(): Promise<WeChatScanInitResponse> {
+  const { data } = await apiClient.get<WeChatScanInitResponse>('/auth/wechat/scan/init')
+  return data
+}
+
+/**
+ * Poll WeChat scan login status
+ * @param sceneId - Scene ID from wechatScanInit
+ * @returns Status and auth data if confirmed
+ */
+export async function wechatScanPoll(sceneId: string): Promise<WeChatScanPollResponse> {
+  const { data } = await apiClient.get<WeChatScanPollResponse>('/auth/wechat/scan/poll', {
+    params: { scene_id: sceneId }
+  })
+
+  // If confirmed, store token and user data
+  if (data.status === 'confirmed' && data.access_token && data.user) {
+    setAuthToken(data.access_token)
+    localStorage.setItem('auth_user', JSON.stringify(data.user))
+  }
+
+  return data
+}
+
+/**
  * Forgot password request
  */
 export interface ForgotPasswordRequest {
@@ -314,6 +367,8 @@ export const authAPI = {
   sendVerifyCode,
   validatePromoCode,
   wechatAuth,
+  wechatScanInit,
+  wechatScanPoll,
   wechatBind,
   wechatUnbind,
   forgotPassword,

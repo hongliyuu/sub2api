@@ -48,6 +48,9 @@ type WeChatAPIClient interface {
 	GetAccessToken(ctx context.Context, appID, appSecret string) (*WeChatAccessTokenResponse, error)
 	// CreatePermanentQRCode 创建永久二维码
 	CreatePermanentQRCode(ctx context.Context, accessToken, sceneStr string) (*WeChatQRCodeResponse, error)
+	// CreateTemporaryQRCode 创建临时二维码
+	// expireSeconds: 有效期（秒），最长不超过 2592000（30天）
+	CreateTemporaryQRCode(ctx context.Context, accessToken, sceneStr string, expireSeconds int) (*WeChatQRCodeResponse, error)
 }
 
 // accessTokenCache access_token 缓存
@@ -108,6 +111,54 @@ func (s *WeChatQRCodeService) GeneratePermanentQRCode(ctx context.Context, appID
 			qrResp, err = s.apiClient.CreatePermanentQRCode(ctx, accessToken, sceneStr)
 			if err != nil {
 				return nil, fmt.Errorf("创建二维码失败: %w", err)
+			}
+		}
+		if qrResp.ErrCode != 0 {
+			return nil, fmt.Errorf("%w: %s (errcode: %d)", ErrWeChatQRCodeGenerateFailed, translateWeChatError(qrResp.ErrCode, qrResp.ErrMsg), qrResp.ErrCode)
+		}
+	}
+
+	return &WeChatQRCodeResult{
+		Ticket:   qrResp.Ticket,
+		URL:      qrResp.URL,
+		ImageURL: fmt.Sprintf("https://mp.weixin.qq.com/cgi-bin/showqrcode?ticket=%s", qrResp.Ticket),
+	}, nil
+}
+
+// GenerateTemporaryQRCode 生成临时二维码
+// sceneStr: 场景值字符串（最长64字符）
+// expireSeconds: 有效期（秒），最长不超过 2592000（30天）
+func (s *WeChatQRCodeService) GenerateTemporaryQRCode(ctx context.Context, appID, appSecret, sceneStr string, expireSeconds int) (*WeChatQRCodeResult, error) {
+	if appID == "" {
+		return nil, ErrWeChatAppIDNotConfigured
+	}
+	if appSecret == "" {
+		return nil, ErrWeChatAppSecretNotConfigured
+	}
+
+	// 获取 access_token（优先使用缓存）
+	accessToken, err := s.getAccessToken(ctx, appID, appSecret)
+	if err != nil {
+		return nil, err
+	}
+
+	// 创建临时二维码
+	qrResp, err := s.apiClient.CreateTemporaryQRCode(ctx, accessToken, sceneStr, expireSeconds)
+	if err != nil {
+		return nil, fmt.Errorf("创建临时二维码失败: %w", err)
+	}
+
+	if qrResp.ErrCode != 0 {
+		// access_token 可能过期，清除缓存后重试一次
+		if qrResp.ErrCode == 40001 || qrResp.ErrCode == 42001 {
+			s.invalidateTokenCache(appID)
+			accessToken, err = s.getAccessToken(ctx, appID, appSecret)
+			if err != nil {
+				return nil, err
+			}
+			qrResp, err = s.apiClient.CreateTemporaryQRCode(ctx, accessToken, sceneStr, expireSeconds)
+			if err != nil {
+				return nil, fmt.Errorf("创建临时二维码失败: %w", err)
 			}
 		}
 		if qrResp.ErrCode != 0 {

@@ -20,6 +20,11 @@ func RegisterWebhookRoutes(v1 *gin.RouterGroup, h *handler.Handlers) {
 			// POST /api/v1/webhook/wechat/refund
 			// 接收微信支付平台的退款结果通知
 			wechat.POST("/refund", h.WeChatPayWebhook.HandleRefundNotify)
+
+			// GET+POST /api/v1/webhook/wechat/mp
+			// 微信公众号消息回调（用于订阅号扫码登录）
+			wechat.GET("/mp", h.Auth.WeChatMPCallback)
+			wechat.POST("/mp", h.Auth.WeChatMPCallback)
 		}
 	}
 }

@@ -101,3 +101,43 @@ func (c *wechatAPIClient) CreatePermanentQRCode(ctx context.Context, accessToken
 
 	return &result, nil
 }
+
+// CreateTemporaryQRCode 创建临时二维码
+// expireSeconds: 有效期（秒），最长不超过 2592000（30天）
+func (c *wechatAPIClient) CreateTemporaryQRCode(ctx context.Context, accessToken, sceneStr string, expireSeconds int) (*service.WeChatQRCodeResponse, error) {
+	reqURL := fmt.Sprintf("%s?access_token=%s", wechatQRCodeURL, url.QueryEscape(accessToken))
+
+	// 构建请求体
+	reqBody := map[string]interface{}{
+		"expire_seconds": expireSeconds,
+		"action_name":    "QR_STR_SCENE",
+		"action_info": map[string]interface{}{
+			"scene": map[string]string{
+				"scene_str": sceneStr,
+			},
+		},
+	}
+	bodyBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request body: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, reqURL, bytes.NewReader(bodyBytes))
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("send request: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	var result service.WeChatQRCodeResponse
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	return &result, nil
+}
