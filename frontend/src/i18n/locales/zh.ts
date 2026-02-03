@@ -287,7 +287,7 @@ export default {
       callbackMissingToken: '登录信息缺失，请返回重试。',
       backToLogin: '返回登录'
     },
-    useEmailPassword: '使用邮箱密码登录',
+    useEmailPassword: '使用邮箱密码继续',
     wechat: {
       signIn: '使用微信继续',
       orContinue: '或使用邮箱密码继续',
