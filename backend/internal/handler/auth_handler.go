@@ -21,10 +21,11 @@ type AuthHandler struct {
 	settingSvc   *service.SettingService
 	promoService *service.PromoService
 	totpService  *service.TotpService
+	scanLoginSvc *service.WeChatScanLoginService
 }
 
 // NewAuthHandler creates a new AuthHandler
-func NewAuthHandler(cfg *config.Config, authService *service.AuthService, userService *service.UserService, settingService *service.SettingService, promoService *service.PromoService, totpService *service.TotpService) *AuthHandler {
+func NewAuthHandler(cfg *config.Config, authService *service.AuthService, userService *service.UserService, settingService *service.SettingService, promoService *service.PromoService, totpService *service.TotpService, scanLoginSvc *service.WeChatScanLoginService) *AuthHandler {
 	return &AuthHandler{
 		cfg:          cfg,
 		authService:  authService,
@@ -32,6 +33,7 @@ func NewAuthHandler(cfg *config.Config, authService *service.AuthService, userSe
 		settingSvc:   settingService,
 		promoService: promoService,
 		totpService:  totpService,
+		scanLoginSvc: scanLoginSvc,
 	}
 }
 

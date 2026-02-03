@@ -17,6 +17,12 @@ so that 每个用户都拥有专属的推广身份。
 3. **AC3**: 邀请码在数据库中有唯一索引约束，冲突时自动重新生成
 4. **AC4**: 初始化字段值：tier_level=1, effective_count=0, total_earnings=0, withdrawable=0, is_kol=false
 5. **AC5**: 创建分销记录的操作在同一事务中完成，确保与用户创建的原子性
+6. **AC6**: 实现阶梯佣金比例计算方法 `GetCommissionRate`，根据 effective_count 返回对应档位的佣金比例（默认 3 档：0-10 人 5%，11-30 人 8%，31+ 人 12%），KOL 用户优先使用专属比例
+
+## Dependencies
+
+- **Depends On**: 无（基础设施，分销系统第一个故事）
+- **Depended By**: Story 1.2 (推广信息API), Story 1.4 (邀请链接跳转), Story 1.5 (注册绑定), Story 2.1~2.4, Story 3.2 (战绩卡片阶梯数据), Story 4.1 (阶梯规则独立测试+配置化), Story 6.1, Story 8.1
 
 ## Tasks / Subtasks
 
@@ -41,6 +47,11 @@ so that 每个用户都拥有专属的推广身份。
   - [ ] 5.1 修改 `auth_service.go` 的 `Register()` 方法
   - [ ] 5.2 在用户创建成功后调用 `AffiliateService.CreateUserAffiliate()`
   - [ ] 5.3 确保在同一事务中执行
+- [ ] Task 6: 实现阶梯佣金比例计算 (AC: #6)
+  - [ ] 6.1 定义 `TierRule` 结构体（Level, Name, MinCount, MaxCount, Rate）
+  - [ ] 6.2 定义 `defaultTierRules` 硬编码阶梯规则（3 档：青铜 5%、白银 8%、黄金 12%），Epic 7 配置化
+  - [ ] 6.3 在 `affiliate_service.go` 实现 `GetCommissionRate(inviter *UserAffiliate) float64`
+  - [ ] 6.4 KOL 优先使用 `kol_config["commission_rate"]`，无则回退到阶梯规则
 
 ## Dev Notes
 
@@ -248,6 +259,67 @@ func (s *AffiliateService) CreateUserAffiliate(ctx context.Context, userID int64
 }
 ```
 
+### 阶梯佣金比例计算（前置实现）
+
+> **设计决策**: `GetCommissionRate` 和阶梯规则在 Story 1.1 中实现，因为 Story 2.3（首充佣金, Sprint 2）和 Story 3.2（战绩卡片, Sprint 2）都依赖此方法。Story 4.1 将在 Sprint 3 中补充独立测试用例并为 Epic 7 配置化做准备。
+
+```go
+// internal/service/affiliate_tier.go（或直接写在 affiliate_service.go 中）
+
+// TierRule 定义阶梯佣金规则
+type TierRule struct {
+    Level    int
+    Name     string
+    MinCount int
+    MaxCount int     // 0 表示无上限
+    Rate     float64
+}
+
+// defaultTierRules 默认阶梯规则（硬编码，Epic 7 通过 affiliate_config 表配置化）
+var defaultTierRules = []TierRule{
+    {Level: 1, Name: "青铜", MinCount: 0, MaxCount: 10, Rate: 0.05},
+    {Level: 2, Name: "白银", MinCount: 11, MaxCount: 30, Rate: 0.08},
+    {Level: 3, Name: "黄金", MinCount: 31, MaxCount: 0, Rate: 0.12},
+}
+
+// GetCommissionRate 获取用户的佣金比例
+// KOL 优先使用专属比例，普通用户按阶梯规则匹配
+func (s *AffiliateService) GetCommissionRate(inviter *UserAffiliate) float64 {
+    // KOL 优先使用专属比例
+    if inviter.IsKol {
+        if rate, ok := inviter.KolConfig["commission_rate"].(float64); ok && rate > 0 {
+            return rate
+        }
+    }
+    // 阶梯规则匹配
+    for _, tier := range defaultTierRules {
+        if inviter.EffectiveCount >= tier.MinCount &&
+           (tier.MaxCount == 0 || inviter.EffectiveCount <= tier.MaxCount) {
+            return tier.Rate
+        }
+    }
+    return 0.05 // 默认 5%
+}
+
+// GetTierInfo 获取用户当前阶梯信息（供 API 返回）
+func (s *AffiliateService) GetTierInfo(inviter *UserAffiliate) (tierName string, rate float64, nextThreshold int) {
+    for i, tier := range defaultTierRules {
+        if inviter.EffectiveCount >= tier.MinCount &&
+           (tier.MaxCount == 0 || inviter.EffectiveCount <= tier.MaxCount) {
+            tierName = tier.Name
+            rate = tier.Rate
+            if i+1 < len(defaultTierRules) {
+                nextThreshold = defaultTierRules[i+1].MinCount
+            } else {
+                nextThreshold = 0 // 已达最高档位
+            }
+            return
+        }
+    }
+    return defaultTierRules[0].Name, defaultTierRules[0].Rate, defaultTierRules[1].MinCount
+}
+```
+
 ### 集成到注册流程
 
 ```go
@@ -318,14 +390,35 @@ backend/
 
 ### Testing Requirements
 
-1. **单元测试**
-   - `affiliate_service_test.go`: 测试邀请码生成算法
-   - Mock Repository 测试 Service 逻辑
+#### Unit Tests (`//go:build unit`)
 
-2. **集成测试**
-   - 测试完整的用户注册 + 分销信息创建流程
-   - 测试邀请码唯一性约束
-   - 测试事务回滚场景
+| 测试函数 | 场景 | 期望结果 |
+|---------|------|---------|
+| TestGenerateReferralCode_Length | 生成邀请码 | 长度为 8 位 |
+| TestGenerateReferralCode_Charset | 生成邀请码 | 不含 0/O/1/I/l |
+| TestGenerateReferralCode_Unique | 生成多次 | 每次不同 |
+| TestCreateUserAffiliate_Normal | 新用户 | 正确创建记录，tier=1, count=0 |
+| TestCreateUserAffiliate_CodeConflict | 邀请码冲突 | 重试最多5次 |
+| TestCreateUserAffiliate_MaxRetries | 连续5次冲突 | 返回 ErrReferralCodeConflict |
+| TestCreateUserAffiliate_AlreadyExists | 用户已有记录 | 返回 ErrAffiliateAlreadyExists |
+| TestGetCommissionRate_Tier1_Zero | effective_count=0 | 返回 0.05 (5%) |
+| TestGetCommissionRate_Tier1_Max | effective_count=10 | 返回 0.05 (5%) |
+| TestGetCommissionRate_Tier2_Min | effective_count=11 | 返回 0.08 (8%) |
+| TestGetCommissionRate_Tier2_Max | effective_count=30 | 返回 0.08 (8%) |
+| TestGetCommissionRate_Tier3_Min | effective_count=31 | 返回 0.12 (12%) |
+| TestGetCommissionRate_Tier3_Large | effective_count=1000 | 返回 0.12 (12%) |
+| TestGetCommissionRate_KolOverride | is_kol=true, kol_rate=0.15 | 返回 0.15，忽略阶梯 |
+| TestGetCommissionRate_KolNoRate | is_kol=true, 无 kol_rate | 回退到阶梯比例 |
+| TestGetTierInfo_Tier1 | effective_count=5 | 返回 "青铜", 0.05, nextThreshold=11 |
+| TestGetTierInfo_MaxTier | effective_count=50 | 返回 "黄金", 0.12, nextThreshold=0 |
+
+#### Integration Tests (`//go:build integration`)
+
+| 测试场景 | 验证内容 |
+|---------|---------|
+| 完整注册流程 | 用户创建 + 分销信息创建在同一事务中 |
+| 邀请码唯一索引 | 插入重复邀请码触发 UNIQUE 约束 |
+| 事务回滚 | 分销信息创建失败 → 用户创建也回滚 |
 
 ### 注意事项
 
