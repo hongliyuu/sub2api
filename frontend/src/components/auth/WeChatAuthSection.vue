@@ -27,6 +27,17 @@
       <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
     </div>
 
+    <!-- 切换到邮箱密码模式 -->
+    <div class="text-center">
+      <button
+        type="button"
+        @click="emit('useEmailPassword')"
+        class="text-sm text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+      >
+        {{ t('auth.useEmailPassword') }}
+      </button>
+    </div>
+
     <!-- WeChat Login Modal -->
     <Teleport to="body">
       <transition name="modal-fade">
@@ -148,6 +159,7 @@ defineProps<{
 
 const emit = defineEmits<{
   (e: 'needEmailBind'): void
+  (e: 'useEmailPassword'): void
 }>()
 
 const router = useRouter()
