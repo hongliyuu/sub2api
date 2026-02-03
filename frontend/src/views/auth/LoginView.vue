@@ -41,22 +41,12 @@
 
         <!-- 微信公众号验证码登录 -->
         <WeChatAuthSection
-          v-if="wechatAuthEnabled"
+          v-if="wechatAuthEnabled && !showEmailPasswordForm"
           :disabled="isLoading"
           :qr-code-url="wechatAccountQRCodeURL"
           @need-email-bind="handleNeedEmailBind"
+          @use-email-password="showEmailPasswordForm = true"
         />
-
-        <!-- 切换到邮箱密码登录 -->
-        <div v-if="wechatAuthEnabled && !showEmailPasswordForm" class="text-center">
-          <button
-            type="button"
-            @click="showEmailPasswordForm = true"
-            class="text-sm text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
-          >
-            {{ t('auth.useEmailPassword') }}
-          </button>
-        </div>
 
         <!-- Login Form -->
         <form v-if="!wechatAuthEnabled || showEmailPasswordForm" @submit.prevent="handleLogin" class="space-y-5">
