@@ -22261,10 +22261,10 @@ type UserMutation struct {
 	status                        *string
 	username                      *string
 	notes                         *string
+	wechat_openid                 *string
 	totp_secret_encrypted         *string
 	totp_enabled                  *bool
 	totp_enabled_at               *time.Time
-	wechat_openid                 *string
 	usage_report_enabled          *bool
 	usage_report_schedule         *string
 	usage_report_timezone         *string
@@ -22857,6 +22857,42 @@ func (m *UserMutation) ResetNotes() {
 	m.notes = nil
 }
 
+// SetWechatOpenid sets the "wechat_openid" field.
+func (m *UserMutation) SetWechatOpenid(s string) {
+	m.wechat_openid = &s
+}
+
+// WechatOpenid returns the value of the "wechat_openid" field in the mutation.
+func (m *UserMutation) WechatOpenid() (r string, exists bool) {
+	v := m.wechat_openid
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldWechatOpenid returns the old "wechat_openid" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldWechatOpenid(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldWechatOpenid is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldWechatOpenid requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldWechatOpenid: %w", err)
+	}
+	return oldValue.WechatOpenid, nil
+}
+
+// ResetWechatOpenid resets all changes to the "wechat_openid" field.
+func (m *UserMutation) ResetWechatOpenid() {
+	m.wechat_openid = nil
+}
+
 // SetTotpSecretEncrypted sets the "totp_secret_encrypted" field.
 func (m *UserMutation) SetTotpSecretEncrypted(s string) {
 	m.totp_secret_encrypted = &s
@@ -22989,42 +23025,6 @@ func (m *UserMutation) TotpEnabledAtCleared() bool {
 func (m *UserMutation) ResetTotpEnabledAt() {
 	m.totp_enabled_at = nil
 	delete(m.clearedFields, user.FieldTotpEnabledAt)
-}
-
-// SetWechatOpenid sets the "wechat_openid" field.
-func (m *UserMutation) SetWechatOpenid(s string) {
-	m.wechat_openid = &s
-}
-
-// WechatOpenid returns the value of the "wechat_openid" field in the mutation.
-func (m *UserMutation) WechatOpenid() (r string, exists bool) {
-	v := m.wechat_openid
-	if v == nil {
-		return
-	}
-	return *v, true
-}
-
-// OldWechatOpenid returns the old "wechat_openid" field's value of the User entity.
-// If the User object wasn't provided to the builder, the object is fetched from the database.
-// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
-func (m *UserMutation) OldWechatOpenid(ctx context.Context) (v string, err error) {
-	if !m.op.Is(OpUpdateOne) {
-		return v, errors.New("OldWechatOpenid is only allowed on UpdateOne operations")
-	}
-	if m.id == nil || m.oldValue == nil {
-		return v, errors.New("OldWechatOpenid requires an ID field in the mutation")
-	}
-	oldValue, err := m.oldValue(ctx)
-	if err != nil {
-		return v, fmt.Errorf("querying old value for OldWechatOpenid: %w", err)
-	}
-	return oldValue.WechatOpenid, nil
-}
-
-// ResetWechatOpenid resets all changes to the "wechat_openid" field.
-func (m *UserMutation) ResetWechatOpenid() {
-	m.wechat_openid = nil
 }
 
 // SetUsageReportEnabled sets the "usage_report_enabled" field.
@@ -23851,6 +23851,9 @@ func (m *UserMutation) Fields() []string {
 	if m.notes != nil {
 		fields = append(fields, user.FieldNotes)
 	}
+	if m.wechat_openid != nil {
+		fields = append(fields, user.FieldWechatOpenid)
+	}
 	if m.totp_secret_encrypted != nil {
 		fields = append(fields, user.FieldTotpSecretEncrypted)
 	}
@@ -23859,9 +23862,6 @@ func (m *UserMutation) Fields() []string {
 	}
 	if m.totp_enabled_at != nil {
 		fields = append(fields, user.FieldTotpEnabledAt)
-	}
-	if m.wechat_openid != nil {
-		fields = append(fields, user.FieldWechatOpenid)
 	}
 	if m.usage_report_enabled != nil {
 		fields = append(fields, user.FieldUsageReportEnabled)
@@ -23902,14 +23902,14 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.Username()
 	case user.FieldNotes:
 		return m.Notes()
+	case user.FieldWechatOpenid:
+		return m.WechatOpenid()
 	case user.FieldTotpSecretEncrypted:
 		return m.TotpSecretEncrypted()
 	case user.FieldTotpEnabled:
 		return m.TotpEnabled()
 	case user.FieldTotpEnabledAt:
 		return m.TotpEnabledAt()
-	case user.FieldWechatOpenid:
-		return m.WechatOpenid()
 	case user.FieldUsageReportEnabled:
 		return m.UsageReportEnabled()
 	case user.FieldUsageReportSchedule:
@@ -23947,14 +23947,14 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldUsername(ctx)
 	case user.FieldNotes:
 		return m.OldNotes(ctx)
+	case user.FieldWechatOpenid:
+		return m.OldWechatOpenid(ctx)
 	case user.FieldTotpSecretEncrypted:
 		return m.OldTotpSecretEncrypted(ctx)
 	case user.FieldTotpEnabled:
 		return m.OldTotpEnabled(ctx)
 	case user.FieldTotpEnabledAt:
 		return m.OldTotpEnabledAt(ctx)
-	case user.FieldWechatOpenid:
-		return m.OldWechatOpenid(ctx)
 	case user.FieldUsageReportEnabled:
 		return m.OldUsageReportEnabled(ctx)
 	case user.FieldUsageReportSchedule:
@@ -24047,6 +24047,13 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetNotes(v)
 		return nil
+	case user.FieldWechatOpenid:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetWechatOpenid(v)
+		return nil
 	case user.FieldTotpSecretEncrypted:
 		v, ok := value.(string)
 		if !ok {
@@ -24067,13 +24074,6 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetTotpEnabledAt(v)
-		return nil
-	case user.FieldWechatOpenid:
-		v, ok := value.(string)
-		if !ok {
-			return fmt.Errorf("unexpected type %T for field %s", value, name)
-		}
-		m.SetWechatOpenid(v)
 		return nil
 	case user.FieldUsageReportEnabled:
 		v, ok := value.(bool)
@@ -24226,6 +24226,9 @@ func (m *UserMutation) ResetField(name string) error {
 	case user.FieldNotes:
 		m.ResetNotes()
 		return nil
+	case user.FieldWechatOpenid:
+		m.ResetWechatOpenid()
+		return nil
 	case user.FieldTotpSecretEncrypted:
 		m.ResetTotpSecretEncrypted()
 		return nil
@@ -24234,9 +24237,6 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldTotpEnabledAt:
 		m.ResetTotpEnabledAt()
-		return nil
-	case user.FieldWechatOpenid:
-		m.ResetWechatOpenid()
 		return nil
 	case user.FieldUsageReportEnabled:
 		m.ResetUsageReportEnabled()

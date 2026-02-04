@@ -39,14 +39,14 @@ type User struct {
 	Username string `json:"username,omitempty"`
 	// Notes holds the value of the "notes" field.
 	Notes string `json:"notes,omitempty"`
+	// WechatOpenid holds the value of the "wechat_openid" field.
+	WechatOpenid string `json:"wechat_openid,omitempty"`
 	// TotpSecretEncrypted holds the value of the "totp_secret_encrypted" field.
 	TotpSecretEncrypted *string `json:"totp_secret_encrypted,omitempty"`
 	// TotpEnabled holds the value of the "totp_enabled" field.
 	TotpEnabled bool `json:"totp_enabled,omitempty"`
 	// TotpEnabledAt holds the value of the "totp_enabled_at" field.
 	TotpEnabledAt *time.Time `json:"totp_enabled_at,omitempty"`
-	// WechatOpenid holds the value of the "wechat_openid" field.
-	WechatOpenid string `json:"wechat_openid,omitempty"`
 	// UsageReportEnabled holds the value of the "usage_report_enabled" field.
 	UsageReportEnabled bool `json:"usage_report_enabled,omitempty"`
 	// UsageReportSchedule holds the value of the "usage_report_schedule" field.
@@ -220,7 +220,7 @@ func (*User) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullFloat64)
 		case user.FieldID, user.FieldConcurrency:
 			values[i] = new(sql.NullInt64)
-		case user.FieldEmail, user.FieldPasswordHash, user.FieldRole, user.FieldStatus, user.FieldUsername, user.FieldNotes, user.FieldTotpSecretEncrypted, user.FieldWechatOpenid, user.FieldUsageReportSchedule, user.FieldUsageReportTimezone:
+		case user.FieldEmail, user.FieldPasswordHash, user.FieldRole, user.FieldStatus, user.FieldUsername, user.FieldNotes, user.FieldWechatOpenid, user.FieldTotpSecretEncrypted, user.FieldUsageReportSchedule, user.FieldUsageReportTimezone:
 			values[i] = new(sql.NullString)
 		case user.FieldCreatedAt, user.FieldUpdatedAt, user.FieldDeletedAt, user.FieldTotpEnabledAt:
 			values[i] = new(sql.NullTime)
@@ -312,6 +312,12 @@ func (_m *User) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.Notes = value.String
 			}
+		case user.FieldWechatOpenid:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field wechat_openid", values[i])
+			} else if value.Valid {
+				_m.WechatOpenid = value.String
+			}
 		case user.FieldTotpSecretEncrypted:
 			if value, ok := values[i].(*sql.NullString); !ok {
 				return fmt.Errorf("unexpected type %T for field totp_secret_encrypted", values[i])
@@ -331,12 +337,6 @@ func (_m *User) assignValues(columns []string, values []any) error {
 			} else if value.Valid {
 				_m.TotpEnabledAt = new(time.Time)
 				*_m.TotpEnabledAt = value.Time
-			}
-		case user.FieldWechatOpenid:
-			if value, ok := values[i].(*sql.NullString); !ok {
-				return fmt.Errorf("unexpected type %T for field wechat_openid", values[i])
-			} else if value.Valid {
-				_m.WechatOpenid = value.String
 			}
 		case user.FieldUsageReportEnabled:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -492,6 +492,9 @@ func (_m *User) String() string {
 	builder.WriteString("notes=")
 	builder.WriteString(_m.Notes)
 	builder.WriteString(", ")
+	builder.WriteString("wechat_openid=")
+	builder.WriteString(_m.WechatOpenid)
+	builder.WriteString(", ")
 	if v := _m.TotpSecretEncrypted; v != nil {
 		builder.WriteString("totp_secret_encrypted=")
 		builder.WriteString(*v)
@@ -504,9 +507,6 @@ func (_m *User) String() string {
 		builder.WriteString("totp_enabled_at=")
 		builder.WriteString(v.Format(time.ANSIC))
 	}
-	builder.WriteString(", ")
-	builder.WriteString("wechat_openid=")
-	builder.WriteString(_m.WechatOpenid)
 	builder.WriteString(", ")
 	builder.WriteString("usage_report_enabled=")
 	builder.WriteString(fmt.Sprintf("%v", _m.UsageReportEnabled))

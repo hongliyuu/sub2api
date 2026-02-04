@@ -1132,16 +1132,16 @@ func init() {
 	userDescNotes := userFields[7].Descriptor()
 	// user.DefaultNotes holds the default value on creation for the notes field.
 	user.DefaultNotes = userDescNotes.Default.(string)
-	// userDescTotpEnabled is the schema descriptor for totp_enabled field.
-	userDescTotpEnabled := userFields[9].Descriptor()
-	// user.DefaultTotpEnabled holds the default value on creation for the totp_enabled field.
-	user.DefaultTotpEnabled = userDescTotpEnabled.Default.(bool)
 	// userDescWechatOpenid is the schema descriptor for wechat_openid field.
-	userDescWechatOpenid := userFields[11].Descriptor()
+	userDescWechatOpenid := userFields[8].Descriptor()
 	// user.DefaultWechatOpenid holds the default value on creation for the wechat_openid field.
 	user.DefaultWechatOpenid = userDescWechatOpenid.Default.(string)
 	// user.WechatOpenidValidator is a validator for the "wechat_openid" field. It is called by the builders before save.
 	user.WechatOpenidValidator = userDescWechatOpenid.Validators[0].(func(string) error)
+	// userDescTotpEnabled is the schema descriptor for totp_enabled field.
+	userDescTotpEnabled := userFields[10].Descriptor()
+	// user.DefaultTotpEnabled holds the default value on creation for the totp_enabled field.
+	user.DefaultTotpEnabled = userDescTotpEnabled.Default.(bool)
 	// userDescUsageReportEnabled is the schema descriptor for usage_report_enabled field.
 	userDescUsageReportEnabled := userFields[12].Descriptor()
 	// user.DefaultUsageReportEnabled holds the default value on creation for the usage_report_enabled field.

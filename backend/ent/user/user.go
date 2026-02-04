@@ -37,14 +37,14 @@ const (
 	FieldUsername = "username"
 	// FieldNotes holds the string denoting the notes field in the database.
 	FieldNotes = "notes"
+	// FieldWechatOpenid holds the string denoting the wechat_openid field in the database.
+	FieldWechatOpenid = "wechat_openid"
 	// FieldTotpSecretEncrypted holds the string denoting the totp_secret_encrypted field in the database.
 	FieldTotpSecretEncrypted = "totp_secret_encrypted"
 	// FieldTotpEnabled holds the string denoting the totp_enabled field in the database.
 	FieldTotpEnabled = "totp_enabled"
 	// FieldTotpEnabledAt holds the string denoting the totp_enabled_at field in the database.
 	FieldTotpEnabledAt = "totp_enabled_at"
-	// FieldWechatOpenid holds the string denoting the wechat_openid field in the database.
-	FieldWechatOpenid = "wechat_openid"
 	// FieldUsageReportEnabled holds the string denoting the usage_report_enabled field in the database.
 	FieldUsageReportEnabled = "usage_report_enabled"
 	// FieldUsageReportSchedule holds the string denoting the usage_report_schedule field in the database.
@@ -184,10 +184,10 @@ var Columns = []string{
 	FieldStatus,
 	FieldUsername,
 	FieldNotes,
+	FieldWechatOpenid,
 	FieldTotpSecretEncrypted,
 	FieldTotpEnabled,
 	FieldTotpEnabledAt,
-	FieldWechatOpenid,
 	FieldUsageReportEnabled,
 	FieldUsageReportSchedule,
 	FieldUsageReportTimezone,
@@ -245,12 +245,12 @@ var (
 	UsernameValidator func(string) error
 	// DefaultNotes holds the default value on creation for the "notes" field.
 	DefaultNotes string
-	// DefaultTotpEnabled holds the default value on creation for the "totp_enabled" field.
-	DefaultTotpEnabled bool
 	// DefaultWechatOpenid holds the default value on creation for the "wechat_openid" field.
 	DefaultWechatOpenid string
 	// WechatOpenidValidator is a validator for the "wechat_openid" field. It is called by the builders before save.
 	WechatOpenidValidator func(string) error
+	// DefaultTotpEnabled holds the default value on creation for the "totp_enabled" field.
+	DefaultTotpEnabled bool
 	// DefaultUsageReportEnabled holds the default value on creation for the "usage_report_enabled" field.
 	DefaultUsageReportEnabled bool
 	// DefaultUsageReportSchedule holds the default value on creation for the "usage_report_schedule" field.
@@ -326,6 +326,11 @@ func ByNotes(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldNotes, opts...).ToFunc()
 }
 
+// ByWechatOpenid orders the results by the wechat_openid field.
+func ByWechatOpenid(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldWechatOpenid, opts...).ToFunc()
+}
+
 // ByTotpSecretEncrypted orders the results by the totp_secret_encrypted field.
 func ByTotpSecretEncrypted(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTotpSecretEncrypted, opts...).ToFunc()
@@ -339,11 +344,6 @@ func ByTotpEnabled(opts ...sql.OrderTermOption) OrderOption {
 // ByTotpEnabledAt orders the results by the totp_enabled_at field.
 func ByTotpEnabledAt(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTotpEnabledAt, opts...).ToFunc()
-}
-
-// ByWechatOpenid orders the results by the wechat_openid field.
-func ByWechatOpenid(opts ...sql.OrderTermOption) OrderOption {
-	return sql.OrderByField(FieldWechatOpenid, opts...).ToFunc()
 }
 
 // ByUsageReportEnabled orders the results by the usage_report_enabled field.

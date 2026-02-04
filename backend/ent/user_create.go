@@ -171,6 +171,20 @@ func (_c *UserCreate) SetNillableNotes(v *string) *UserCreate {
 	return _c
 }
 
+// SetWechatOpenid sets the "wechat_openid" field.
+func (_c *UserCreate) SetWechatOpenid(v string) *UserCreate {
+	_c.mutation.SetWechatOpenid(v)
+	return _c
+}
+
+// SetNillableWechatOpenid sets the "wechat_openid" field if the given value is not nil.
+func (_c *UserCreate) SetNillableWechatOpenid(v *string) *UserCreate {
+	if v != nil {
+		_c.SetWechatOpenid(*v)
+	}
+	return _c
+}
+
 // SetTotpSecretEncrypted sets the "totp_secret_encrypted" field.
 func (_c *UserCreate) SetTotpSecretEncrypted(v string) *UserCreate {
 	_c.mutation.SetTotpSecretEncrypted(v)
@@ -209,20 +223,6 @@ func (_c *UserCreate) SetTotpEnabledAt(v time.Time) *UserCreate {
 func (_c *UserCreate) SetNillableTotpEnabledAt(v *time.Time) *UserCreate {
 	if v != nil {
 		_c.SetTotpEnabledAt(*v)
-	}
-	return _c
-}
-
-// SetWechatOpenid sets the "wechat_openid" field.
-func (_c *UserCreate) SetWechatOpenid(v string) *UserCreate {
-	_c.mutation.SetWechatOpenid(v)
-	return _c
-}
-
-// SetNillableWechatOpenid sets the "wechat_openid" field if the given value is not nil.
-func (_c *UserCreate) SetNillableWechatOpenid(v *string) *UserCreate {
-	if v != nil {
-		_c.SetWechatOpenid(*v)
 	}
 	return _c
 }
@@ -524,13 +524,13 @@ func (_c *UserCreate) defaults() error {
 		v := user.DefaultNotes
 		_c.mutation.SetNotes(v)
 	}
-	if _, ok := _c.mutation.TotpEnabled(); !ok {
-		v := user.DefaultTotpEnabled
-		_c.mutation.SetTotpEnabled(v)
-	}
 	if _, ok := _c.mutation.WechatOpenid(); !ok {
 		v := user.DefaultWechatOpenid
 		_c.mutation.SetWechatOpenid(v)
+	}
+	if _, ok := _c.mutation.TotpEnabled(); !ok {
+		v := user.DefaultTotpEnabled
+		_c.mutation.SetTotpEnabled(v)
 	}
 	if _, ok := _c.mutation.UsageReportEnabled(); !ok {
 		v := user.DefaultUsageReportEnabled
@@ -604,9 +604,6 @@ func (_c *UserCreate) check() error {
 	if _, ok := _c.mutation.Notes(); !ok {
 		return &ValidationError{Name: "notes", err: errors.New(`ent: missing required field "User.notes"`)}
 	}
-	if _, ok := _c.mutation.TotpEnabled(); !ok {
-		return &ValidationError{Name: "totp_enabled", err: errors.New(`ent: missing required field "User.totp_enabled"`)}
-	}
 	if _, ok := _c.mutation.WechatOpenid(); !ok {
 		return &ValidationError{Name: "wechat_openid", err: errors.New(`ent: missing required field "User.wechat_openid"`)}
 	}
@@ -614,6 +611,9 @@ func (_c *UserCreate) check() error {
 		if err := user.WechatOpenidValidator(v); err != nil {
 			return &ValidationError{Name: "wechat_openid", err: fmt.Errorf(`ent: validator failed for field "User.wechat_openid": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.TotpEnabled(); !ok {
+		return &ValidationError{Name: "totp_enabled", err: errors.New(`ent: missing required field "User.totp_enabled"`)}
 	}
 	if _, ok := _c.mutation.UsageReportEnabled(); !ok {
 		return &ValidationError{Name: "usage_report_enabled", err: errors.New(`ent: missing required field "User.usage_report_enabled"`)}
@@ -705,6 +705,10 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 		_spec.SetField(user.FieldNotes, field.TypeString, value)
 		_node.Notes = value
 	}
+	if value, ok := _c.mutation.WechatOpenid(); ok {
+		_spec.SetField(user.FieldWechatOpenid, field.TypeString, value)
+		_node.WechatOpenid = value
+	}
 	if value, ok := _c.mutation.TotpSecretEncrypted(); ok {
 		_spec.SetField(user.FieldTotpSecretEncrypted, field.TypeString, value)
 		_node.TotpSecretEncrypted = &value
@@ -716,10 +720,6 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.TotpEnabledAt(); ok {
 		_spec.SetField(user.FieldTotpEnabledAt, field.TypeTime, value)
 		_node.TotpEnabledAt = &value
-	}
-	if value, ok := _c.mutation.WechatOpenid(); ok {
-		_spec.SetField(user.FieldWechatOpenid, field.TypeString, value)
-		_node.WechatOpenid = value
 	}
 	if value, ok := _c.mutation.UsageReportEnabled(); ok {
 		_spec.SetField(user.FieldUsageReportEnabled, field.TypeBool, value)
@@ -1119,6 +1119,18 @@ func (u *UserUpsert) UpdateNotes() *UserUpsert {
 	return u
 }
 
+// SetWechatOpenid sets the "wechat_openid" field.
+func (u *UserUpsert) SetWechatOpenid(v string) *UserUpsert {
+	u.Set(user.FieldWechatOpenid, v)
+	return u
+}
+
+// UpdateWechatOpenid sets the "wechat_openid" field to the value that was provided on create.
+func (u *UserUpsert) UpdateWechatOpenid() *UserUpsert {
+	u.SetExcluded(user.FieldWechatOpenid)
+	return u
+}
+
 // SetTotpSecretEncrypted sets the "totp_secret_encrypted" field.
 func (u *UserUpsert) SetTotpSecretEncrypted(v string) *UserUpsert {
 	u.Set(user.FieldTotpSecretEncrypted, v)
@@ -1164,18 +1176,6 @@ func (u *UserUpsert) UpdateTotpEnabledAt() *UserUpsert {
 // ClearTotpEnabledAt clears the value of the "totp_enabled_at" field.
 func (u *UserUpsert) ClearTotpEnabledAt() *UserUpsert {
 	u.SetNull(user.FieldTotpEnabledAt)
-	return u
-}
-
-// SetWechatOpenid sets the "wechat_openid" field.
-func (u *UserUpsert) SetWechatOpenid(v string) *UserUpsert {
-	u.Set(user.FieldWechatOpenid, v)
-	return u
-}
-
-// UpdateWechatOpenid sets the "wechat_openid" field to the value that was provided on create.
-func (u *UserUpsert) UpdateWechatOpenid() *UserUpsert {
-	u.SetExcluded(user.FieldWechatOpenid)
 	return u
 }
 
@@ -1421,6 +1421,20 @@ func (u *UserUpsertOne) UpdateNotes() *UserUpsertOne {
 	})
 }
 
+// SetWechatOpenid sets the "wechat_openid" field.
+func (u *UserUpsertOne) SetWechatOpenid(v string) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetWechatOpenid(v)
+	})
+}
+
+// UpdateWechatOpenid sets the "wechat_openid" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateWechatOpenid() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateWechatOpenid()
+	})
+}
+
 // SetTotpSecretEncrypted sets the "totp_secret_encrypted" field.
 func (u *UserUpsertOne) SetTotpSecretEncrypted(v string) *UserUpsertOne {
 	return u.Update(func(s *UserUpsert) {
@@ -1474,20 +1488,6 @@ func (u *UserUpsertOne) UpdateTotpEnabledAt() *UserUpsertOne {
 func (u *UserUpsertOne) ClearTotpEnabledAt() *UserUpsertOne {
 	return u.Update(func(s *UserUpsert) {
 		s.ClearTotpEnabledAt()
-	})
-}
-
-// SetWechatOpenid sets the "wechat_openid" field.
-func (u *UserUpsertOne) SetWechatOpenid(v string) *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.SetWechatOpenid(v)
-	})
-}
-
-// UpdateWechatOpenid sets the "wechat_openid" field to the value that was provided on create.
-func (u *UserUpsertOne) UpdateWechatOpenid() *UserUpsertOne {
-	return u.Update(func(s *UserUpsert) {
-		s.UpdateWechatOpenid()
 	})
 }
 
@@ -1905,6 +1905,20 @@ func (u *UserUpsertBulk) UpdateNotes() *UserUpsertBulk {
 	})
 }
 
+// SetWechatOpenid sets the "wechat_openid" field.
+func (u *UserUpsertBulk) SetWechatOpenid(v string) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetWechatOpenid(v)
+	})
+}
+
+// UpdateWechatOpenid sets the "wechat_openid" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateWechatOpenid() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateWechatOpenid()
+	})
+}
+
 // SetTotpSecretEncrypted sets the "totp_secret_encrypted" field.
 func (u *UserUpsertBulk) SetTotpSecretEncrypted(v string) *UserUpsertBulk {
 	return u.Update(func(s *UserUpsert) {
@@ -1958,20 +1972,6 @@ func (u *UserUpsertBulk) UpdateTotpEnabledAt() *UserUpsertBulk {
 func (u *UserUpsertBulk) ClearTotpEnabledAt() *UserUpsertBulk {
 	return u.Update(func(s *UserUpsert) {
 		s.ClearTotpEnabledAt()
-	})
-}
-
-// SetWechatOpenid sets the "wechat_openid" field.
-func (u *UserUpsertBulk) SetWechatOpenid(v string) *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.SetWechatOpenid(v)
-	})
-}
-
-// UpdateWechatOpenid sets the "wechat_openid" field to the value that was provided on create.
-func (u *UserUpsertBulk) UpdateWechatOpenid() *UserUpsertBulk {
-	return u.Update(func(s *UserUpsert) {
-		s.UpdateWechatOpenid()
 	})
 }
 

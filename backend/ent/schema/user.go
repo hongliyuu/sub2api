@@ -61,6 +61,10 @@ func (User) Fields() []ent.Field {
 		field.String("notes").
 			SchemaType(map[string]string{dialect.Postgres: "text"}).
 			Default(""),
+		// WeChat OpenID for account binding (see migration 044)
+		field.String("wechat_openid").
+			MaxLen(64).
+			Default(""),
 
 		// TOTP 双因素认证字段
 		field.String("totp_secret_encrypted").
@@ -73,12 +77,7 @@ func (User) Fields() []ent.Field {
 			Optional().
 			Nillable(),
 
-		// 微信 OpenID（扫码登录绑定）
-		field.String("wechat_openid").
-			MaxLen(64).
-			Default(""),
-
-		// 用户使用报告配置
+		// 使用报告邮件配置字段
 		field.Bool("usage_report_enabled").
 			Default(true),
 		field.String("usage_report_schedule").

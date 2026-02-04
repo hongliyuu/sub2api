@@ -191,6 +191,20 @@ func (_u *UserUpdate) SetNillableNotes(v *string) *UserUpdate {
 	return _u
 }
 
+// SetWechatOpenid sets the "wechat_openid" field.
+func (_u *UserUpdate) SetWechatOpenid(v string) *UserUpdate {
+	_u.mutation.SetWechatOpenid(v)
+	return _u
+}
+
+// SetNillableWechatOpenid sets the "wechat_openid" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableWechatOpenid(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetWechatOpenid(*v)
+	}
+	return _u
+}
+
 // SetTotpSecretEncrypted sets the "totp_secret_encrypted" field.
 func (_u *UserUpdate) SetTotpSecretEncrypted(v string) *UserUpdate {
 	_u.mutation.SetTotpSecretEncrypted(v)
@@ -242,20 +256,6 @@ func (_u *UserUpdate) SetNillableTotpEnabledAt(v *time.Time) *UserUpdate {
 // ClearTotpEnabledAt clears the value of the "totp_enabled_at" field.
 func (_u *UserUpdate) ClearTotpEnabledAt() *UserUpdate {
 	_u.mutation.ClearTotpEnabledAt()
-	return _u
-}
-
-// SetWechatOpenid sets the "wechat_openid" field.
-func (_u *UserUpdate) SetWechatOpenid(v string) *UserUpdate {
-	_u.mutation.SetWechatOpenid(v)
-	return _u
-}
-
-// SetNillableWechatOpenid sets the "wechat_openid" field if the given value is not nil.
-func (_u *UserUpdate) SetNillableWechatOpenid(v *string) *UserUpdate {
-	if v != nil {
-		_u.SetWechatOpenid(*v)
-	}
 	return _u
 }
 
@@ -876,6 +876,9 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.Notes(); ok {
 		_spec.SetField(user.FieldNotes, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.WechatOpenid(); ok {
+		_spec.SetField(user.FieldWechatOpenid, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.TotpSecretEncrypted(); ok {
 		_spec.SetField(user.FieldTotpSecretEncrypted, field.TypeString, value)
 	}
@@ -890,9 +893,6 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.TotpEnabledAtCleared() {
 		_spec.ClearField(user.FieldTotpEnabledAt, field.TypeTime)
-	}
-	if value, ok := _u.mutation.WechatOpenid(); ok {
-		_spec.SetField(user.FieldWechatOpenid, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.UsageReportEnabled(); ok {
 		_spec.SetField(user.FieldUsageReportEnabled, field.TypeBool, value)
@@ -1627,6 +1627,20 @@ func (_u *UserUpdateOne) SetNillableNotes(v *string) *UserUpdateOne {
 	return _u
 }
 
+// SetWechatOpenid sets the "wechat_openid" field.
+func (_u *UserUpdateOne) SetWechatOpenid(v string) *UserUpdateOne {
+	_u.mutation.SetWechatOpenid(v)
+	return _u
+}
+
+// SetNillableWechatOpenid sets the "wechat_openid" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableWechatOpenid(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetWechatOpenid(*v)
+	}
+	return _u
+}
+
 // SetTotpSecretEncrypted sets the "totp_secret_encrypted" field.
 func (_u *UserUpdateOne) SetTotpSecretEncrypted(v string) *UserUpdateOne {
 	_u.mutation.SetTotpSecretEncrypted(v)
@@ -1678,20 +1692,6 @@ func (_u *UserUpdateOne) SetNillableTotpEnabledAt(v *time.Time) *UserUpdateOne {
 // ClearTotpEnabledAt clears the value of the "totp_enabled_at" field.
 func (_u *UserUpdateOne) ClearTotpEnabledAt() *UserUpdateOne {
 	_u.mutation.ClearTotpEnabledAt()
-	return _u
-}
-
-// SetWechatOpenid sets the "wechat_openid" field.
-func (_u *UserUpdateOne) SetWechatOpenid(v string) *UserUpdateOne {
-	_u.mutation.SetWechatOpenid(v)
-	return _u
-}
-
-// SetNillableWechatOpenid sets the "wechat_openid" field if the given value is not nil.
-func (_u *UserUpdateOne) SetNillableWechatOpenid(v *string) *UserUpdateOne {
-	if v != nil {
-		_u.SetWechatOpenid(*v)
-	}
 	return _u
 }
 
@@ -2342,6 +2342,9 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	if value, ok := _u.mutation.Notes(); ok {
 		_spec.SetField(user.FieldNotes, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.WechatOpenid(); ok {
+		_spec.SetField(user.FieldWechatOpenid, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.TotpSecretEncrypted(); ok {
 		_spec.SetField(user.FieldTotpSecretEncrypted, field.TypeString, value)
 	}
@@ -2356,9 +2359,6 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if _u.mutation.TotpEnabledAtCleared() {
 		_spec.ClearField(user.FieldTotpEnabledAt, field.TypeTime)
-	}
-	if value, ok := _u.mutation.WechatOpenid(); ok {
-		_spec.SetField(user.FieldWechatOpenid, field.TypeString, value)
 	}
 	if value, ok := _u.mutation.UsageReportEnabled(); ok {
 		_spec.SetField(user.FieldUsageReportEnabled, field.TypeBool, value)
