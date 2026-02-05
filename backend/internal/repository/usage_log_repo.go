@@ -2415,13 +2415,13 @@ func (r *usageLogRepository) GetBalanceGroupUserStats(ctx context.Context, param
 	// Validate and set sort_by
 	sortColumn := "total_cost"
 	allowedSorts := map[string]string{
-		"total_cost":      "total_cost",
-		"actual_cost":     "actual_cost",
-		"total_requests":  "total_requests",
-		"input_tokens":    "input_tokens",
-		"output_tokens":   "output_tokens",
+		"total_cost":        "total_cost",
+		"actual_cost":       "actual_cost",
+		"total_requests":    "total_requests",
+		"input_tokens":      "input_tokens",
+		"output_tokens":     "output_tokens",
 		"cache_read_tokens": "cache_read_tokens",
-		"balance":         "balance",
+		"balance":           "balance",
 	}
 	if col, ok := allowedSorts[params.SortBy]; ok {
 		sortColumn = col
