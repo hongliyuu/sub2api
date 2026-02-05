@@ -170,5 +170,6 @@ func (UsageLog) Indexes() []ent.Index {
 		// 复合索引用于时间范围查询
 		index.Fields("user_id", "created_at"),
 		index.Fields("api_key_id", "created_at"),
+		index.Fields("group_id", "created_at"),
 	}
 }

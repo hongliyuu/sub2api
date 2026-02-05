@@ -226,3 +226,35 @@ type AccountUsageStatsResponse struct {
 	Summary AccountUsageSummary   `json:"summary"`
 	Models  []ModelStat           `json:"models"`
 }
+
+// BalanceGroupUserStats represents aggregated usage statistics for a single user in a balance group
+type BalanceGroupUserStats struct {
+	UserID          int64   `json:"user_id"`
+	Email           string  `json:"email"`
+	Username        string  `json:"username"`
+	Balance         float64 `json:"balance"`
+	TotalCost       float64 `json:"total_cost"`
+	ActualCost      float64 `json:"actual_cost"`
+	TotalRequests   int64   `json:"total_requests"`
+	InputTokens     int64   `json:"input_tokens"`
+	OutputTokens    int64   `json:"output_tokens"`
+	CacheReadTokens int64   `json:"cache_read_tokens"`
+}
+
+// BalanceGroupUserStatsResponse represents the paginated response for balance group user stats
+type BalanceGroupUserStatsResponse struct {
+	Users []BalanceGroupUserStats `json:"users"`
+	Total int64                   `json:"total"`
+}
+
+// BalanceGroupUserStatsParams represents the query parameters for balance group user stats
+type BalanceGroupUserStatsParams struct {
+	GroupID   int64      `json:"group_id"`
+	StartDate *time.Time `json:"start_date"`
+	EndDate   *time.Time `json:"end_date"`
+	Page      int        `json:"page"`
+	PageSize  int        `json:"page_size"`
+	SortBy    string     `json:"sort_by"`
+	SortOrder string     `json:"sort_order"`
+	Search    string     `json:"search"`
+}
