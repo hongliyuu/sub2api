@@ -21,6 +21,8 @@
               :ref="el => setPlanCardRef(plan.id, el)"
               :plan="plan"
               :is-popular="index === 0"
+              :subscribed="subscribedGroupIds.has(plan.id)"
+              :upgrade-info="getUpgradeInfo(plan.id)"
               @purchase="handlePurchasePlan"
             />
           </div>
@@ -44,8 +46,8 @@
           </p>
         </div>
 
-        <!-- Empty State - 无订阅 -->
-        <div v-if="subscriptions.length === 0" class="card p-12 text-center">
+        <!-- Empty State - 无有效订阅 -->
+        <div v-if="activeSubscriptions.length === 0" class="card p-12 text-center">
           <div
             class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 dark:bg-dark-700"
           >
@@ -59,14 +61,14 @@
           </p>
         </div>
 
-        <!-- Subscriptions Grid -->
+        <!-- Subscriptions Grid - 只显示有效订阅 -->
         <div v-else>
           <h2 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
             {{ t('userSubscriptions.title') }}
           </h2>
           <div class="grid gap-6 lg:grid-cols-2">
             <div
-              v-for="subscription in subscriptions"
+              v-for="subscription in activeSubscriptions"
               :key="subscription.id"
               class="card overflow-hidden"
             >
@@ -271,6 +273,61 @@
             </div>
           </div>
         </div>
+        <!-- 历史订阅记录 -->
+        <div v-if="historySubscriptions.length > 0" class="card p-6">
+          <h2 class="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
+            {{ t('userSubscriptions.history') }}
+          </h2>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-gray-200 dark:border-dark-600">
+                  <th class="pb-3 pr-4 text-left font-medium text-gray-500 dark:text-dark-400">
+                    {{ t('userSubscriptions.planName') }}
+                  </th>
+                  <th class="pb-3 pr-4 text-left font-medium text-gray-500 dark:text-dark-400">
+                    {{ t('userSubscriptions.subscribeTime') }}
+                  </th>
+                  <th class="pb-3 pr-4 text-left font-medium text-gray-500 dark:text-dark-400">
+                    {{ t('userSubscriptions.expireTime') }}
+                  </th>
+                  <th class="pb-3 text-left font-medium text-gray-500 dark:text-dark-400">
+                    {{ t('userSubscriptions.statusLabel') }}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="sub in historySubscriptions"
+                  :key="sub.id"
+                  class="border-b border-gray-100 last:border-0 dark:border-dark-700"
+                >
+                  <td class="py-3 pr-4 text-gray-900 dark:text-white">
+                    {{ sub.group?.name || `Group #${sub.group_id}` }}
+                  </td>
+                  <td class="py-3 pr-4 text-gray-600 dark:text-gray-300">
+                    {{ formatDateOnly(new Date(sub.created_at)) }}
+                  </td>
+                  <td class="py-3 pr-4 text-gray-600 dark:text-gray-300">
+                    {{ sub.expires_at ? formatDateOnly(new Date(sub.expires_at)) : t('userSubscriptions.noExpiration') }}
+                  </td>
+                  <td class="py-3">
+                    <span
+                      :class="[
+                        'badge',
+                        sub.status === 'expired' ? 'badge-warning'
+                          : sub.status === 'upgraded' ? 'badge-info'
+                          : 'badge-danger'
+                      ]"
+                    >
+                      {{ t(`userSubscriptions.status.${sub.status}`) }}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </template>
 
       <!-- 支付弹框 -->
@@ -290,7 +347,9 @@ import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import subscriptionsAPI from '@/api/subscriptions'
-import { subscriptionPlanAPI, type SubscriptionPlan } from '@/api/subscriptionPlan'
+import { subscriptionPlanAPI, type SubscriptionPlan, type UpgradeOption } from '@/api/subscriptionPlan'
+import { RateLimitExceededError } from '@/api/recharge'
+import type { UpgradeInfo } from '@/components/user/subscription/PlanCard.vue'
 import type { UserSubscription } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -305,6 +364,25 @@ const subscriptions = ref<UserSubscription[]>([])
 const purchasablePlans = ref<SubscriptionPlan[]>([])
 const loading = ref(true)
 const plansLoaded = ref(false)
+
+// 升级相关状态
+const upgradeOptions = ref<Record<string, UpgradeOption>>({})
+const upgradeSourceSubId = ref<number>(0)
+
+// 有效订阅
+const activeSubscriptions = computed(() =>
+  subscriptions.value.filter(s => s.status === 'active')
+)
+
+// 历史订阅（过期/已撤销/已升级）
+const historySubscriptions = computed(() =>
+  subscriptions.value.filter(s => s.status !== 'active')
+)
+
+// 已订阅的 group_id 集合
+const subscribedGroupIds = computed(() =>
+  new Set(activeSubscriptions.value.map(s => s.group_id))
+)
 
 // 支付弹框状态
 const paymentModalVisible = ref(false)
@@ -323,6 +401,18 @@ function setPlanCardRef(planId: number, el: unknown) {
   }
 }
 
+function getUpgradeInfo(planId: number): UpgradeInfo | undefined {
+  const option = upgradeOptions.value[String(planId)]
+  if (!option) return undefined
+  return {
+    canUpgrade: true,
+    sourceSubscriptionId: upgradeSourceSubId.value,
+    upgradePrice: option.upgrade_price,
+    originalPrice: option.original_price,
+    remainingValue: option.remaining_value,
+  }
+}
+
 async function loadData() {
   try {
     loading.value = true
@@ -333,6 +423,17 @@ async function loadData() {
     subscriptions.value = subs
     purchasablePlans.value = plansResponse.plans
     plansLoaded.value = true
+
+    // 加载升级选项
+    if (activeSubscriptions.value.length > 0) {
+      try {
+        const upgradeData = await subscriptionPlanAPI.getUpgradeOptions()
+        upgradeOptions.value = upgradeData.options || {}
+        upgradeSourceSubId.value = upgradeData.source_subscription_id
+      } catch (e) {
+        console.error('Failed to load upgrade options:', e)
+      }
+    }
   } catch (error) {
     console.error('Failed to load subscriptions:', error)
     appStore.showError(t('userSubscriptions.failedToLoad'))
@@ -346,19 +447,41 @@ async function handlePurchasePlan(planId: number) {
   try {
     cardRef?.setLoading(true)
 
-    // 创建订单
-    const order = await subscriptionPlanAPI.createOrder({
-      group_id: planId,
-      payment_method: 'wechat_pay',
-      payment_channel: 'native'
-    })
+    const upgradeInfo = getUpgradeInfo(planId)
+    let order
+
+    if (upgradeInfo?.canUpgrade) {
+      // 升级订单
+      order = await subscriptionPlanAPI.createUpgradeOrder({
+        source_subscription_id: upgradeInfo.sourceSubscriptionId,
+        target_group_id: planId,
+        payment_method: 'wechat_pay',
+        payment_channel: 'native'
+      })
+    } else {
+      // 普通购买
+      order = await subscriptionPlanAPI.createOrder({
+        group_id: planId,
+        payment_method: 'wechat_pay',
+        payment_channel: 'native'
+      })
+    }
 
     // 打开支付弹框
     currentOrderNo.value = order.order_no
     paymentModalVisible.value = true
   } catch (error: unknown) {
     console.error('Failed to create order:', error)
-    const errorMessage = error instanceof Error ? error.message : t('subscriptionPlan.createOrderFailed')
+    let errorMessage: string
+    if (error instanceof RateLimitExceededError) {
+      errorMessage = error.message
+    } else if (error instanceof Error) {
+      errorMessage = error.message
+    } else if (typeof error === 'object' && error !== null && 'message' in error) {
+      errorMessage = String((error as Record<string, unknown>).message)
+    } else {
+      errorMessage = t('subscriptionPlan.createOrderFailed')
+    }
     appStore.showError(errorMessage)
   } finally {
     cardRef?.setLoading(false)

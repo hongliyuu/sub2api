@@ -78,6 +78,20 @@ func (_u *SubscriptionOrderUpdate) SetNillableGroupID(v *int64) *SubscriptionOrd
 	return _u
 }
 
+// SetOrderType sets the "order_type" field.
+func (_u *SubscriptionOrderUpdate) SetOrderType(v string) *SubscriptionOrderUpdate {
+	_u.mutation.SetOrderType(v)
+	return _u
+}
+
+// SetNillableOrderType sets the "order_type" field if the given value is not nil.
+func (_u *SubscriptionOrderUpdate) SetNillableOrderType(v *string) *SubscriptionOrderUpdate {
+	if v != nil {
+		_u.SetOrderType(*v)
+	}
+	return _u
+}
+
 // SetAmount sets the "amount" field.
 func (_u *SubscriptionOrderUpdate) SetAmount(v float64) *SubscriptionOrderUpdate {
 	_u.mutation.ResetAmount()
@@ -96,6 +110,87 @@ func (_u *SubscriptionOrderUpdate) SetNillableAmount(v *float64) *SubscriptionOr
 // AddAmount adds value to the "amount" field.
 func (_u *SubscriptionOrderUpdate) AddAmount(v float64) *SubscriptionOrderUpdate {
 	_u.mutation.AddAmount(v)
+	return _u
+}
+
+// SetSourceSubscriptionID sets the "source_subscription_id" field.
+func (_u *SubscriptionOrderUpdate) SetSourceSubscriptionID(v int64) *SubscriptionOrderUpdate {
+	_u.mutation.ResetSourceSubscriptionID()
+	_u.mutation.SetSourceSubscriptionID(v)
+	return _u
+}
+
+// SetNillableSourceSubscriptionID sets the "source_subscription_id" field if the given value is not nil.
+func (_u *SubscriptionOrderUpdate) SetNillableSourceSubscriptionID(v *int64) *SubscriptionOrderUpdate {
+	if v != nil {
+		_u.SetSourceSubscriptionID(*v)
+	}
+	return _u
+}
+
+// AddSourceSubscriptionID adds value to the "source_subscription_id" field.
+func (_u *SubscriptionOrderUpdate) AddSourceSubscriptionID(v int64) *SubscriptionOrderUpdate {
+	_u.mutation.AddSourceSubscriptionID(v)
+	return _u
+}
+
+// ClearSourceSubscriptionID clears the value of the "source_subscription_id" field.
+func (_u *SubscriptionOrderUpdate) ClearSourceSubscriptionID() *SubscriptionOrderUpdate {
+	_u.mutation.ClearSourceSubscriptionID()
+	return _u
+}
+
+// SetOriginalAmount sets the "original_amount" field.
+func (_u *SubscriptionOrderUpdate) SetOriginalAmount(v float64) *SubscriptionOrderUpdate {
+	_u.mutation.ResetOriginalAmount()
+	_u.mutation.SetOriginalAmount(v)
+	return _u
+}
+
+// SetNillableOriginalAmount sets the "original_amount" field if the given value is not nil.
+func (_u *SubscriptionOrderUpdate) SetNillableOriginalAmount(v *float64) *SubscriptionOrderUpdate {
+	if v != nil {
+		_u.SetOriginalAmount(*v)
+	}
+	return _u
+}
+
+// AddOriginalAmount adds value to the "original_amount" field.
+func (_u *SubscriptionOrderUpdate) AddOriginalAmount(v float64) *SubscriptionOrderUpdate {
+	_u.mutation.AddOriginalAmount(v)
+	return _u
+}
+
+// ClearOriginalAmount clears the value of the "original_amount" field.
+func (_u *SubscriptionOrderUpdate) ClearOriginalAmount() *SubscriptionOrderUpdate {
+	_u.mutation.ClearOriginalAmount()
+	return _u
+}
+
+// SetDiscountAmount sets the "discount_amount" field.
+func (_u *SubscriptionOrderUpdate) SetDiscountAmount(v float64) *SubscriptionOrderUpdate {
+	_u.mutation.ResetDiscountAmount()
+	_u.mutation.SetDiscountAmount(v)
+	return _u
+}
+
+// SetNillableDiscountAmount sets the "discount_amount" field if the given value is not nil.
+func (_u *SubscriptionOrderUpdate) SetNillableDiscountAmount(v *float64) *SubscriptionOrderUpdate {
+	if v != nil {
+		_u.SetDiscountAmount(*v)
+	}
+	return _u
+}
+
+// AddDiscountAmount adds value to the "discount_amount" field.
+func (_u *SubscriptionOrderUpdate) AddDiscountAmount(v float64) *SubscriptionOrderUpdate {
+	_u.mutation.AddDiscountAmount(v)
+	return _u
+}
+
+// ClearDiscountAmount clears the value of the "discount_amount" field.
+func (_u *SubscriptionOrderUpdate) ClearDiscountAmount() *SubscriptionOrderUpdate {
+	_u.mutation.ClearDiscountAmount()
 	return _u
 }
 
@@ -336,6 +431,11 @@ func (_u *SubscriptionOrderUpdate) check() error {
 			return &ValidationError{Name: "group_id", err: fmt.Errorf(`ent: validator failed for field "SubscriptionOrder.group_id": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.OrderType(); ok {
+		if err := subscriptionorder.OrderTypeValidator(v); err != nil {
+			return &ValidationError{Name: "order_type", err: fmt.Errorf(`ent: validator failed for field "SubscriptionOrder.order_type": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Amount(); ok {
 		if err := subscriptionorder.AmountValidator(v); err != nil {
 			return &ValidationError{Name: "amount", err: fmt.Errorf(`ent: validator failed for field "SubscriptionOrder.amount": %w`, err)}
@@ -398,11 +498,41 @@ func (_u *SubscriptionOrderUpdate) sqlSave(ctx context.Context) (_node int, err 
 	if value, ok := _u.mutation.OrderNo(); ok {
 		_spec.SetField(subscriptionorder.FieldOrderNo, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.OrderType(); ok {
+		_spec.SetField(subscriptionorder.FieldOrderType, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.Amount(); ok {
 		_spec.SetField(subscriptionorder.FieldAmount, field.TypeFloat64, value)
 	}
 	if value, ok := _u.mutation.AddedAmount(); ok {
 		_spec.AddField(subscriptionorder.FieldAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.SourceSubscriptionID(); ok {
+		_spec.SetField(subscriptionorder.FieldSourceSubscriptionID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedSourceSubscriptionID(); ok {
+		_spec.AddField(subscriptionorder.FieldSourceSubscriptionID, field.TypeInt64, value)
+	}
+	if _u.mutation.SourceSubscriptionIDCleared() {
+		_spec.ClearField(subscriptionorder.FieldSourceSubscriptionID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.OriginalAmount(); ok {
+		_spec.SetField(subscriptionorder.FieldOriginalAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedOriginalAmount(); ok {
+		_spec.AddField(subscriptionorder.FieldOriginalAmount, field.TypeFloat64, value)
+	}
+	if _u.mutation.OriginalAmountCleared() {
+		_spec.ClearField(subscriptionorder.FieldOriginalAmount, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.DiscountAmount(); ok {
+		_spec.SetField(subscriptionorder.FieldDiscountAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedDiscountAmount(); ok {
+		_spec.AddField(subscriptionorder.FieldDiscountAmount, field.TypeFloat64, value)
+	}
+	if _u.mutation.DiscountAmountCleared() {
+		_spec.ClearField(subscriptionorder.FieldDiscountAmount, field.TypeFloat64)
 	}
 	if value, ok := _u.mutation.ValidityDays(); ok {
 		_spec.SetField(subscriptionorder.FieldValidityDays, field.TypeInt, value)
@@ -572,6 +702,20 @@ func (_u *SubscriptionOrderUpdateOne) SetNillableGroupID(v *int64) *Subscription
 	return _u
 }
 
+// SetOrderType sets the "order_type" field.
+func (_u *SubscriptionOrderUpdateOne) SetOrderType(v string) *SubscriptionOrderUpdateOne {
+	_u.mutation.SetOrderType(v)
+	return _u
+}
+
+// SetNillableOrderType sets the "order_type" field if the given value is not nil.
+func (_u *SubscriptionOrderUpdateOne) SetNillableOrderType(v *string) *SubscriptionOrderUpdateOne {
+	if v != nil {
+		_u.SetOrderType(*v)
+	}
+	return _u
+}
+
 // SetAmount sets the "amount" field.
 func (_u *SubscriptionOrderUpdateOne) SetAmount(v float64) *SubscriptionOrderUpdateOne {
 	_u.mutation.ResetAmount()
@@ -590,6 +734,87 @@ func (_u *SubscriptionOrderUpdateOne) SetNillableAmount(v *float64) *Subscriptio
 // AddAmount adds value to the "amount" field.
 func (_u *SubscriptionOrderUpdateOne) AddAmount(v float64) *SubscriptionOrderUpdateOne {
 	_u.mutation.AddAmount(v)
+	return _u
+}
+
+// SetSourceSubscriptionID sets the "source_subscription_id" field.
+func (_u *SubscriptionOrderUpdateOne) SetSourceSubscriptionID(v int64) *SubscriptionOrderUpdateOne {
+	_u.mutation.ResetSourceSubscriptionID()
+	_u.mutation.SetSourceSubscriptionID(v)
+	return _u
+}
+
+// SetNillableSourceSubscriptionID sets the "source_subscription_id" field if the given value is not nil.
+func (_u *SubscriptionOrderUpdateOne) SetNillableSourceSubscriptionID(v *int64) *SubscriptionOrderUpdateOne {
+	if v != nil {
+		_u.SetSourceSubscriptionID(*v)
+	}
+	return _u
+}
+
+// AddSourceSubscriptionID adds value to the "source_subscription_id" field.
+func (_u *SubscriptionOrderUpdateOne) AddSourceSubscriptionID(v int64) *SubscriptionOrderUpdateOne {
+	_u.mutation.AddSourceSubscriptionID(v)
+	return _u
+}
+
+// ClearSourceSubscriptionID clears the value of the "source_subscription_id" field.
+func (_u *SubscriptionOrderUpdateOne) ClearSourceSubscriptionID() *SubscriptionOrderUpdateOne {
+	_u.mutation.ClearSourceSubscriptionID()
+	return _u
+}
+
+// SetOriginalAmount sets the "original_amount" field.
+func (_u *SubscriptionOrderUpdateOne) SetOriginalAmount(v float64) *SubscriptionOrderUpdateOne {
+	_u.mutation.ResetOriginalAmount()
+	_u.mutation.SetOriginalAmount(v)
+	return _u
+}
+
+// SetNillableOriginalAmount sets the "original_amount" field if the given value is not nil.
+func (_u *SubscriptionOrderUpdateOne) SetNillableOriginalAmount(v *float64) *SubscriptionOrderUpdateOne {
+	if v != nil {
+		_u.SetOriginalAmount(*v)
+	}
+	return _u
+}
+
+// AddOriginalAmount adds value to the "original_amount" field.
+func (_u *SubscriptionOrderUpdateOne) AddOriginalAmount(v float64) *SubscriptionOrderUpdateOne {
+	_u.mutation.AddOriginalAmount(v)
+	return _u
+}
+
+// ClearOriginalAmount clears the value of the "original_amount" field.
+func (_u *SubscriptionOrderUpdateOne) ClearOriginalAmount() *SubscriptionOrderUpdateOne {
+	_u.mutation.ClearOriginalAmount()
+	return _u
+}
+
+// SetDiscountAmount sets the "discount_amount" field.
+func (_u *SubscriptionOrderUpdateOne) SetDiscountAmount(v float64) *SubscriptionOrderUpdateOne {
+	_u.mutation.ResetDiscountAmount()
+	_u.mutation.SetDiscountAmount(v)
+	return _u
+}
+
+// SetNillableDiscountAmount sets the "discount_amount" field if the given value is not nil.
+func (_u *SubscriptionOrderUpdateOne) SetNillableDiscountAmount(v *float64) *SubscriptionOrderUpdateOne {
+	if v != nil {
+		_u.SetDiscountAmount(*v)
+	}
+	return _u
+}
+
+// AddDiscountAmount adds value to the "discount_amount" field.
+func (_u *SubscriptionOrderUpdateOne) AddDiscountAmount(v float64) *SubscriptionOrderUpdateOne {
+	_u.mutation.AddDiscountAmount(v)
+	return _u
+}
+
+// ClearDiscountAmount clears the value of the "discount_amount" field.
+func (_u *SubscriptionOrderUpdateOne) ClearDiscountAmount() *SubscriptionOrderUpdateOne {
+	_u.mutation.ClearDiscountAmount()
 	return _u
 }
 
@@ -843,6 +1068,11 @@ func (_u *SubscriptionOrderUpdateOne) check() error {
 			return &ValidationError{Name: "group_id", err: fmt.Errorf(`ent: validator failed for field "SubscriptionOrder.group_id": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.OrderType(); ok {
+		if err := subscriptionorder.OrderTypeValidator(v); err != nil {
+			return &ValidationError{Name: "order_type", err: fmt.Errorf(`ent: validator failed for field "SubscriptionOrder.order_type": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Amount(); ok {
 		if err := subscriptionorder.AmountValidator(v); err != nil {
 			return &ValidationError{Name: "amount", err: fmt.Errorf(`ent: validator failed for field "SubscriptionOrder.amount": %w`, err)}
@@ -922,11 +1152,41 @@ func (_u *SubscriptionOrderUpdateOne) sqlSave(ctx context.Context) (_node *Subsc
 	if value, ok := _u.mutation.OrderNo(); ok {
 		_spec.SetField(subscriptionorder.FieldOrderNo, field.TypeString, value)
 	}
+	if value, ok := _u.mutation.OrderType(); ok {
+		_spec.SetField(subscriptionorder.FieldOrderType, field.TypeString, value)
+	}
 	if value, ok := _u.mutation.Amount(); ok {
 		_spec.SetField(subscriptionorder.FieldAmount, field.TypeFloat64, value)
 	}
 	if value, ok := _u.mutation.AddedAmount(); ok {
 		_spec.AddField(subscriptionorder.FieldAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.SourceSubscriptionID(); ok {
+		_spec.SetField(subscriptionorder.FieldSourceSubscriptionID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedSourceSubscriptionID(); ok {
+		_spec.AddField(subscriptionorder.FieldSourceSubscriptionID, field.TypeInt64, value)
+	}
+	if _u.mutation.SourceSubscriptionIDCleared() {
+		_spec.ClearField(subscriptionorder.FieldSourceSubscriptionID, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.OriginalAmount(); ok {
+		_spec.SetField(subscriptionorder.FieldOriginalAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedOriginalAmount(); ok {
+		_spec.AddField(subscriptionorder.FieldOriginalAmount, field.TypeFloat64, value)
+	}
+	if _u.mutation.OriginalAmountCleared() {
+		_spec.ClearField(subscriptionorder.FieldOriginalAmount, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.DiscountAmount(); ok {
+		_spec.SetField(subscriptionorder.FieldDiscountAmount, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedDiscountAmount(); ok {
+		_spec.AddField(subscriptionorder.FieldDiscountAmount, field.TypeFloat64, value)
+	}
+	if _u.mutation.DiscountAmountCleared() {
+		_spec.ClearField(subscriptionorder.FieldDiscountAmount, field.TypeFloat64)
 	}
 	if value, ok := _u.mutation.ValidityDays(); ok {
 		_spec.SetField(subscriptionorder.FieldValidityDays, field.TypeInt, value)

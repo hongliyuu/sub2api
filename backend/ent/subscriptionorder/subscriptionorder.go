@@ -24,8 +24,16 @@ const (
 	FieldUserID = "user_id"
 	// FieldGroupID holds the string denoting the group_id field in the database.
 	FieldGroupID = "group_id"
+	// FieldOrderType holds the string denoting the order_type field in the database.
+	FieldOrderType = "order_type"
 	// FieldAmount holds the string denoting the amount field in the database.
 	FieldAmount = "amount"
+	// FieldSourceSubscriptionID holds the string denoting the source_subscription_id field in the database.
+	FieldSourceSubscriptionID = "source_subscription_id"
+	// FieldOriginalAmount holds the string denoting the original_amount field in the database.
+	FieldOriginalAmount = "original_amount"
+	// FieldDiscountAmount holds the string denoting the discount_amount field in the database.
+	FieldDiscountAmount = "discount_amount"
 	// FieldValidityDays holds the string denoting the validity_days field in the database.
 	FieldValidityDays = "validity_days"
 	// FieldPaymentMethod holds the string denoting the payment_method field in the database.
@@ -74,7 +82,11 @@ var Columns = []string{
 	FieldOrderNo,
 	FieldUserID,
 	FieldGroupID,
+	FieldOrderType,
 	FieldAmount,
+	FieldSourceSubscriptionID,
+	FieldOriginalAmount,
+	FieldDiscountAmount,
 	FieldValidityDays,
 	FieldPaymentMethod,
 	FieldPaymentChannel,
@@ -109,6 +121,10 @@ var (
 	UserIDValidator func(int64) error
 	// GroupIDValidator is a validator for the "group_id" field. It is called by the builders before save.
 	GroupIDValidator func(int64) error
+	// DefaultOrderType holds the default value on creation for the "order_type" field.
+	DefaultOrderType string
+	// OrderTypeValidator is a validator for the "order_type" field. It is called by the builders before save.
+	OrderTypeValidator func(string) error
 	// AmountValidator is a validator for the "amount" field. It is called by the builders before save.
 	AmountValidator func(float64) error
 	// DefaultValidityDays holds the default value on creation for the "validity_days" field.
@@ -164,9 +180,29 @@ func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldGroupID, opts...).ToFunc()
 }
 
+// ByOrderType orders the results by the order_type field.
+func ByOrderType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOrderType, opts...).ToFunc()
+}
+
 // ByAmount orders the results by the amount field.
 func ByAmount(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAmount, opts...).ToFunc()
+}
+
+// BySourceSubscriptionID orders the results by the source_subscription_id field.
+func BySourceSubscriptionID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSourceSubscriptionID, opts...).ToFunc()
+}
+
+// ByOriginalAmount orders the results by the original_amount field.
+func ByOriginalAmount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOriginalAmount, opts...).ToFunc()
+}
+
+// ByDiscountAmount orders the results by the discount_amount field.
+func ByDiscountAmount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldDiscountAmount, opts...).ToFunc()
 }
 
 // ByValidityDays orders the results by the validity_days field.

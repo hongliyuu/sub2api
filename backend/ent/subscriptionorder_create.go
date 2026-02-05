@@ -70,9 +70,65 @@ func (_c *SubscriptionOrderCreate) SetGroupID(v int64) *SubscriptionOrderCreate 
 	return _c
 }
 
+// SetOrderType sets the "order_type" field.
+func (_c *SubscriptionOrderCreate) SetOrderType(v string) *SubscriptionOrderCreate {
+	_c.mutation.SetOrderType(v)
+	return _c
+}
+
+// SetNillableOrderType sets the "order_type" field if the given value is not nil.
+func (_c *SubscriptionOrderCreate) SetNillableOrderType(v *string) *SubscriptionOrderCreate {
+	if v != nil {
+		_c.SetOrderType(*v)
+	}
+	return _c
+}
+
 // SetAmount sets the "amount" field.
 func (_c *SubscriptionOrderCreate) SetAmount(v float64) *SubscriptionOrderCreate {
 	_c.mutation.SetAmount(v)
+	return _c
+}
+
+// SetSourceSubscriptionID sets the "source_subscription_id" field.
+func (_c *SubscriptionOrderCreate) SetSourceSubscriptionID(v int64) *SubscriptionOrderCreate {
+	_c.mutation.SetSourceSubscriptionID(v)
+	return _c
+}
+
+// SetNillableSourceSubscriptionID sets the "source_subscription_id" field if the given value is not nil.
+func (_c *SubscriptionOrderCreate) SetNillableSourceSubscriptionID(v *int64) *SubscriptionOrderCreate {
+	if v != nil {
+		_c.SetSourceSubscriptionID(*v)
+	}
+	return _c
+}
+
+// SetOriginalAmount sets the "original_amount" field.
+func (_c *SubscriptionOrderCreate) SetOriginalAmount(v float64) *SubscriptionOrderCreate {
+	_c.mutation.SetOriginalAmount(v)
+	return _c
+}
+
+// SetNillableOriginalAmount sets the "original_amount" field if the given value is not nil.
+func (_c *SubscriptionOrderCreate) SetNillableOriginalAmount(v *float64) *SubscriptionOrderCreate {
+	if v != nil {
+		_c.SetOriginalAmount(*v)
+	}
+	return _c
+}
+
+// SetDiscountAmount sets the "discount_amount" field.
+func (_c *SubscriptionOrderCreate) SetDiscountAmount(v float64) *SubscriptionOrderCreate {
+	_c.mutation.SetDiscountAmount(v)
+	return _c
+}
+
+// SetNillableDiscountAmount sets the "discount_amount" field if the given value is not nil.
+func (_c *SubscriptionOrderCreate) SetNillableDiscountAmount(v *float64) *SubscriptionOrderCreate {
+	if v != nil {
+		_c.SetDiscountAmount(*v)
+	}
 	return _c
 }
 
@@ -239,6 +295,10 @@ func (_c *SubscriptionOrderCreate) defaults() {
 		v := subscriptionorder.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
 	}
+	if _, ok := _c.mutation.OrderType(); !ok {
+		v := subscriptionorder.DefaultOrderType
+		_c.mutation.SetOrderType(v)
+	}
 	if _, ok := _c.mutation.ValidityDays(); !ok {
 		v := subscriptionorder.DefaultValidityDays
 		_c.mutation.SetValidityDays(v)
@@ -283,6 +343,14 @@ func (_c *SubscriptionOrderCreate) check() error {
 	if v, ok := _c.mutation.GroupID(); ok {
 		if err := subscriptionorder.GroupIDValidator(v); err != nil {
 			return &ValidationError{Name: "group_id", err: fmt.Errorf(`ent: validator failed for field "SubscriptionOrder.group_id": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.OrderType(); !ok {
+		return &ValidationError{Name: "order_type", err: errors.New(`ent: missing required field "SubscriptionOrder.order_type"`)}
+	}
+	if v, ok := _c.mutation.OrderType(); ok {
+		if err := subscriptionorder.OrderTypeValidator(v); err != nil {
+			return &ValidationError{Name: "order_type", err: fmt.Errorf(`ent: validator failed for field "SubscriptionOrder.order_type": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.Amount(); !ok {
@@ -383,9 +451,25 @@ func (_c *SubscriptionOrderCreate) createSpec() (*SubscriptionOrder, *sqlgraph.C
 		_spec.SetField(subscriptionorder.FieldOrderNo, field.TypeString, value)
 		_node.OrderNo = value
 	}
+	if value, ok := _c.mutation.OrderType(); ok {
+		_spec.SetField(subscriptionorder.FieldOrderType, field.TypeString, value)
+		_node.OrderType = value
+	}
 	if value, ok := _c.mutation.Amount(); ok {
 		_spec.SetField(subscriptionorder.FieldAmount, field.TypeFloat64, value)
 		_node.Amount = value
+	}
+	if value, ok := _c.mutation.SourceSubscriptionID(); ok {
+		_spec.SetField(subscriptionorder.FieldSourceSubscriptionID, field.TypeInt64, value)
+		_node.SourceSubscriptionID = &value
+	}
+	if value, ok := _c.mutation.OriginalAmount(); ok {
+		_spec.SetField(subscriptionorder.FieldOriginalAmount, field.TypeFloat64, value)
+		_node.OriginalAmount = &value
+	}
+	if value, ok := _c.mutation.DiscountAmount(); ok {
+		_spec.SetField(subscriptionorder.FieldDiscountAmount, field.TypeFloat64, value)
+		_node.DiscountAmount = &value
 	}
 	if value, ok := _c.mutation.ValidityDays(); ok {
 		_spec.SetField(subscriptionorder.FieldValidityDays, field.TypeInt, value)
@@ -557,6 +641,18 @@ func (u *SubscriptionOrderUpsert) UpdateGroupID() *SubscriptionOrderUpsert {
 	return u
 }
 
+// SetOrderType sets the "order_type" field.
+func (u *SubscriptionOrderUpsert) SetOrderType(v string) *SubscriptionOrderUpsert {
+	u.Set(subscriptionorder.FieldOrderType, v)
+	return u
+}
+
+// UpdateOrderType sets the "order_type" field to the value that was provided on create.
+func (u *SubscriptionOrderUpsert) UpdateOrderType() *SubscriptionOrderUpsert {
+	u.SetExcluded(subscriptionorder.FieldOrderType)
+	return u
+}
+
 // SetAmount sets the "amount" field.
 func (u *SubscriptionOrderUpsert) SetAmount(v float64) *SubscriptionOrderUpsert {
 	u.Set(subscriptionorder.FieldAmount, v)
@@ -572,6 +668,78 @@ func (u *SubscriptionOrderUpsert) UpdateAmount() *SubscriptionOrderUpsert {
 // AddAmount adds v to the "amount" field.
 func (u *SubscriptionOrderUpsert) AddAmount(v float64) *SubscriptionOrderUpsert {
 	u.Add(subscriptionorder.FieldAmount, v)
+	return u
+}
+
+// SetSourceSubscriptionID sets the "source_subscription_id" field.
+func (u *SubscriptionOrderUpsert) SetSourceSubscriptionID(v int64) *SubscriptionOrderUpsert {
+	u.Set(subscriptionorder.FieldSourceSubscriptionID, v)
+	return u
+}
+
+// UpdateSourceSubscriptionID sets the "source_subscription_id" field to the value that was provided on create.
+func (u *SubscriptionOrderUpsert) UpdateSourceSubscriptionID() *SubscriptionOrderUpsert {
+	u.SetExcluded(subscriptionorder.FieldSourceSubscriptionID)
+	return u
+}
+
+// AddSourceSubscriptionID adds v to the "source_subscription_id" field.
+func (u *SubscriptionOrderUpsert) AddSourceSubscriptionID(v int64) *SubscriptionOrderUpsert {
+	u.Add(subscriptionorder.FieldSourceSubscriptionID, v)
+	return u
+}
+
+// ClearSourceSubscriptionID clears the value of the "source_subscription_id" field.
+func (u *SubscriptionOrderUpsert) ClearSourceSubscriptionID() *SubscriptionOrderUpsert {
+	u.SetNull(subscriptionorder.FieldSourceSubscriptionID)
+	return u
+}
+
+// SetOriginalAmount sets the "original_amount" field.
+func (u *SubscriptionOrderUpsert) SetOriginalAmount(v float64) *SubscriptionOrderUpsert {
+	u.Set(subscriptionorder.FieldOriginalAmount, v)
+	return u
+}
+
+// UpdateOriginalAmount sets the "original_amount" field to the value that was provided on create.
+func (u *SubscriptionOrderUpsert) UpdateOriginalAmount() *SubscriptionOrderUpsert {
+	u.SetExcluded(subscriptionorder.FieldOriginalAmount)
+	return u
+}
+
+// AddOriginalAmount adds v to the "original_amount" field.
+func (u *SubscriptionOrderUpsert) AddOriginalAmount(v float64) *SubscriptionOrderUpsert {
+	u.Add(subscriptionorder.FieldOriginalAmount, v)
+	return u
+}
+
+// ClearOriginalAmount clears the value of the "original_amount" field.
+func (u *SubscriptionOrderUpsert) ClearOriginalAmount() *SubscriptionOrderUpsert {
+	u.SetNull(subscriptionorder.FieldOriginalAmount)
+	return u
+}
+
+// SetDiscountAmount sets the "discount_amount" field.
+func (u *SubscriptionOrderUpsert) SetDiscountAmount(v float64) *SubscriptionOrderUpsert {
+	u.Set(subscriptionorder.FieldDiscountAmount, v)
+	return u
+}
+
+// UpdateDiscountAmount sets the "discount_amount" field to the value that was provided on create.
+func (u *SubscriptionOrderUpsert) UpdateDiscountAmount() *SubscriptionOrderUpsert {
+	u.SetExcluded(subscriptionorder.FieldDiscountAmount)
+	return u
+}
+
+// AddDiscountAmount adds v to the "discount_amount" field.
+func (u *SubscriptionOrderUpsert) AddDiscountAmount(v float64) *SubscriptionOrderUpsert {
+	u.Add(subscriptionorder.FieldDiscountAmount, v)
+	return u
+}
+
+// ClearDiscountAmount clears the value of the "discount_amount" field.
+func (u *SubscriptionOrderUpsert) ClearDiscountAmount() *SubscriptionOrderUpsert {
+	u.SetNull(subscriptionorder.FieldDiscountAmount)
 	return u
 }
 
@@ -814,6 +982,20 @@ func (u *SubscriptionOrderUpsertOne) UpdateGroupID() *SubscriptionOrderUpsertOne
 	})
 }
 
+// SetOrderType sets the "order_type" field.
+func (u *SubscriptionOrderUpsertOne) SetOrderType(v string) *SubscriptionOrderUpsertOne {
+	return u.Update(func(s *SubscriptionOrderUpsert) {
+		s.SetOrderType(v)
+	})
+}
+
+// UpdateOrderType sets the "order_type" field to the value that was provided on create.
+func (u *SubscriptionOrderUpsertOne) UpdateOrderType() *SubscriptionOrderUpsertOne {
+	return u.Update(func(s *SubscriptionOrderUpsert) {
+		s.UpdateOrderType()
+	})
+}
+
 // SetAmount sets the "amount" field.
 func (u *SubscriptionOrderUpsertOne) SetAmount(v float64) *SubscriptionOrderUpsertOne {
 	return u.Update(func(s *SubscriptionOrderUpsert) {
@@ -832,6 +1014,90 @@ func (u *SubscriptionOrderUpsertOne) AddAmount(v float64) *SubscriptionOrderUpse
 func (u *SubscriptionOrderUpsertOne) UpdateAmount() *SubscriptionOrderUpsertOne {
 	return u.Update(func(s *SubscriptionOrderUpsert) {
 		s.UpdateAmount()
+	})
+}
+
+// SetSourceSubscriptionID sets the "source_subscription_id" field.
+func (u *SubscriptionOrderUpsertOne) SetSourceSubscriptionID(v int64) *SubscriptionOrderUpsertOne {
+	return u.Update(func(s *SubscriptionOrderUpsert) {
+		s.SetSourceSubscriptionID(v)
+	})
+}
+
+// AddSourceSubscriptionID adds v to the "source_subscription_id" field.
+func (u *SubscriptionOrderUpsertOne) AddSourceSubscriptionID(v int64) *SubscriptionOrderUpsertOne {
+	return u.Update(func(s *SubscriptionOrderUpsert) {
+		s.AddSourceSubscriptionID(v)
+	})
+}
+
+// UpdateSourceSubscriptionID sets the "source_subscription_id" field to the value that was provided on create.
+func (u *SubscriptionOrderUpsertOne) UpdateSourceSubscriptionID() *SubscriptionOrderUpsertOne {
+	return u.Update(func(s *SubscriptionOrderUpsert) {
+		s.UpdateSourceSubscriptionID()
+	})
+}
+
+// ClearSourceSubscriptionID clears the value of the "source_subscription_id" field.
+func (u *SubscriptionOrderUpsertOne) ClearSourceSubscriptionID() *SubscriptionOrderUpsertOne {
+	return u.Update(func(s *SubscriptionOrderUpsert) {
+		s.ClearSourceSubscriptionID()
+	})
+}
+
+// SetOriginalAmount sets the "original_amount" field.
+func (u *SubscriptionOrderUpsertOne) SetOriginalAmount(v float64) *SubscriptionOrderUpsertOne {
+	return u.Update(func(s *SubscriptionOrderUpsert) {
+		s.SetOriginalAmount(v)
+	})
+}
+
+// AddOriginalAmount adds v to the "original_amount" field.
+func (u *SubscriptionOrderUpsertOne) AddOriginalAmount(v float64) *SubscriptionOrderUpsertOne {
+	return u.Update(func(s *SubscriptionOrderUpsert) {
+		s.AddOriginalAmount(v)
+	})
+}
+
+// UpdateOriginalAmount sets the "original_amount" field to the value that was provided on create.
+func (u *SubscriptionOrderUpsertOne) UpdateOriginalAmount() *SubscriptionOrderUpsertOne {
+	return u.Update(func(s *SubscriptionOrderUpsert) {
+		s.UpdateOriginalAmount()
+	})
+}
+
+// ClearOriginalAmount clears the value of the "original_amount" field.
+func (u *SubscriptionOrderUpsertOne) ClearOriginalAmount() *SubscriptionOrderUpsertOne {
+	return u.Update(func(s *SubscriptionOrderUpsert) {
+		s.ClearOriginalAmount()
+	})
+}
+
+// SetDiscountAmount sets the "discount_amount" field.
+func (u *SubscriptionOrderUpsertOne) SetDiscountAmount(v float64) *SubscriptionOrderUpsertOne {
+	return u.Update(func(s *SubscriptionOrderUpsert) {
+		s.SetDiscountAmount(v)
+	})
+}
+
+// AddDiscountAmount adds v to the "discount_amount" field.
+func (u *SubscriptionOrderUpsertOne) AddDiscountAmount(v float64) *SubscriptionOrderUpsertOne {
+	return u.Update(func(s *SubscriptionOrderUpsert) {
+		s.AddDiscountAmount(v)
+	})
+}
+
+// UpdateDiscountAmount sets the "discount_amount" field to the value that was provided on create.
+func (u *SubscriptionOrderUpsertOne) UpdateDiscountAmount() *SubscriptionOrderUpsertOne {
+	return u.Update(func(s *SubscriptionOrderUpsert) {
+		s.UpdateDiscountAmount()
+	})
+}
+
+// ClearDiscountAmount clears the value of the "discount_amount" field.
+func (u *SubscriptionOrderUpsertOne) ClearDiscountAmount() *SubscriptionOrderUpsertOne {
+	return u.Update(func(s *SubscriptionOrderUpsert) {
+		s.ClearDiscountAmount()
 	})
 }
 
@@ -1263,6 +1529,20 @@ func (u *SubscriptionOrderUpsertBulk) UpdateGroupID() *SubscriptionOrderUpsertBu
 	})
 }
 
+// SetOrderType sets the "order_type" field.
+func (u *SubscriptionOrderUpsertBulk) SetOrderType(v string) *SubscriptionOrderUpsertBulk {
+	return u.Update(func(s *SubscriptionOrderUpsert) {
+		s.SetOrderType(v)
+	})
+}
+
+// UpdateOrderType sets the "order_type" field to the value that was provided on create.
+func (u *SubscriptionOrderUpsertBulk) UpdateOrderType() *SubscriptionOrderUpsertBulk {
+	return u.Update(func(s *SubscriptionOrderUpsert) {
+		s.UpdateOrderType()
+	})
+}
+
 // SetAmount sets the "amount" field.
 func (u *SubscriptionOrderUpsertBulk) SetAmount(v float64) *SubscriptionOrderUpsertBulk {
 	return u.Update(func(s *SubscriptionOrderUpsert) {
@@ -1281,6 +1561,90 @@ func (u *SubscriptionOrderUpsertBulk) AddAmount(v float64) *SubscriptionOrderUps
 func (u *SubscriptionOrderUpsertBulk) UpdateAmount() *SubscriptionOrderUpsertBulk {
 	return u.Update(func(s *SubscriptionOrderUpsert) {
 		s.UpdateAmount()
+	})
+}
+
+// SetSourceSubscriptionID sets the "source_subscription_id" field.
+func (u *SubscriptionOrderUpsertBulk) SetSourceSubscriptionID(v int64) *SubscriptionOrderUpsertBulk {
+	return u.Update(func(s *SubscriptionOrderUpsert) {
+		s.SetSourceSubscriptionID(v)
+	})
+}
+
+// AddSourceSubscriptionID adds v to the "source_subscription_id" field.
+func (u *SubscriptionOrderUpsertBulk) AddSourceSubscriptionID(v int64) *SubscriptionOrderUpsertBulk {
+	return u.Update(func(s *SubscriptionOrderUpsert) {
+		s.AddSourceSubscriptionID(v)
+	})
+}
+
+// UpdateSourceSubscriptionID sets the "source_subscription_id" field to the value that was provided on create.
+func (u *SubscriptionOrderUpsertBulk) UpdateSourceSubscriptionID() *SubscriptionOrderUpsertBulk {
+	return u.Update(func(s *SubscriptionOrderUpsert) {
+		s.UpdateSourceSubscriptionID()
+	})
+}
+
+// ClearSourceSubscriptionID clears the value of the "source_subscription_id" field.
+func (u *SubscriptionOrderUpsertBulk) ClearSourceSubscriptionID() *SubscriptionOrderUpsertBulk {
+	return u.Update(func(s *SubscriptionOrderUpsert) {
+		s.ClearSourceSubscriptionID()
+	})
+}
+
+// SetOriginalAmount sets the "original_amount" field.
+func (u *SubscriptionOrderUpsertBulk) SetOriginalAmount(v float64) *SubscriptionOrderUpsertBulk {
+	return u.Update(func(s *SubscriptionOrderUpsert) {
+		s.SetOriginalAmount(v)
+	})
+}
+
+// AddOriginalAmount adds v to the "original_amount" field.
+func (u *SubscriptionOrderUpsertBulk) AddOriginalAmount(v float64) *SubscriptionOrderUpsertBulk {
+	return u.Update(func(s *SubscriptionOrderUpsert) {
+		s.AddOriginalAmount(v)
+	})
+}
+
+// UpdateOriginalAmount sets the "original_amount" field to the value that was provided on create.
+func (u *SubscriptionOrderUpsertBulk) UpdateOriginalAmount() *SubscriptionOrderUpsertBulk {
+	return u.Update(func(s *SubscriptionOrderUpsert) {
+		s.UpdateOriginalAmount()
+	})
+}
+
+// ClearOriginalAmount clears the value of the "original_amount" field.
+func (u *SubscriptionOrderUpsertBulk) ClearOriginalAmount() *SubscriptionOrderUpsertBulk {
+	return u.Update(func(s *SubscriptionOrderUpsert) {
+		s.ClearOriginalAmount()
+	})
+}
+
+// SetDiscountAmount sets the "discount_amount" field.
+func (u *SubscriptionOrderUpsertBulk) SetDiscountAmount(v float64) *SubscriptionOrderUpsertBulk {
+	return u.Update(func(s *SubscriptionOrderUpsert) {
+		s.SetDiscountAmount(v)
+	})
+}
+
+// AddDiscountAmount adds v to the "discount_amount" field.
+func (u *SubscriptionOrderUpsertBulk) AddDiscountAmount(v float64) *SubscriptionOrderUpsertBulk {
+	return u.Update(func(s *SubscriptionOrderUpsert) {
+		s.AddDiscountAmount(v)
+	})
+}
+
+// UpdateDiscountAmount sets the "discount_amount" field to the value that was provided on create.
+func (u *SubscriptionOrderUpsertBulk) UpdateDiscountAmount() *SubscriptionOrderUpsertBulk {
+	return u.Update(func(s *SubscriptionOrderUpsert) {
+		s.UpdateDiscountAmount()
+	})
+}
+
+// ClearDiscountAmount clears the value of the "discount_amount" field.
+func (u *SubscriptionOrderUpsertBulk) ClearDiscountAmount() *SubscriptionOrderUpsertBulk {
+	return u.Update(func(s *SubscriptionOrderUpsert) {
+		s.ClearDiscountAmount()
 	})
 }
 

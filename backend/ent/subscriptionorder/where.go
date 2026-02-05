@@ -80,9 +80,29 @@ func GroupID(v int64) predicate.SubscriptionOrder {
 	return predicate.SubscriptionOrder(sql.FieldEQ(FieldGroupID, v))
 }
 
+// OrderType applies equality check predicate on the "order_type" field. It's identical to OrderTypeEQ.
+func OrderType(v string) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldEQ(FieldOrderType, v))
+}
+
 // Amount applies equality check predicate on the "amount" field. It's identical to AmountEQ.
 func Amount(v float64) predicate.SubscriptionOrder {
 	return predicate.SubscriptionOrder(sql.FieldEQ(FieldAmount, v))
+}
+
+// SourceSubscriptionID applies equality check predicate on the "source_subscription_id" field. It's identical to SourceSubscriptionIDEQ.
+func SourceSubscriptionID(v int64) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldEQ(FieldSourceSubscriptionID, v))
+}
+
+// OriginalAmount applies equality check predicate on the "original_amount" field. It's identical to OriginalAmountEQ.
+func OriginalAmount(v float64) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldEQ(FieldOriginalAmount, v))
+}
+
+// DiscountAmount applies equality check predicate on the "discount_amount" field. It's identical to DiscountAmountEQ.
+func DiscountAmount(v float64) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldEQ(FieldDiscountAmount, v))
 }
 
 // ValidityDays applies equality check predicate on the "validity_days" field. It's identical to ValidityDaysEQ.
@@ -315,6 +335,71 @@ func GroupIDNotIn(vs ...int64) predicate.SubscriptionOrder {
 	return predicate.SubscriptionOrder(sql.FieldNotIn(FieldGroupID, vs...))
 }
 
+// OrderTypeEQ applies the EQ predicate on the "order_type" field.
+func OrderTypeEQ(v string) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldEQ(FieldOrderType, v))
+}
+
+// OrderTypeNEQ applies the NEQ predicate on the "order_type" field.
+func OrderTypeNEQ(v string) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldNEQ(FieldOrderType, v))
+}
+
+// OrderTypeIn applies the In predicate on the "order_type" field.
+func OrderTypeIn(vs ...string) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldIn(FieldOrderType, vs...))
+}
+
+// OrderTypeNotIn applies the NotIn predicate on the "order_type" field.
+func OrderTypeNotIn(vs ...string) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldNotIn(FieldOrderType, vs...))
+}
+
+// OrderTypeGT applies the GT predicate on the "order_type" field.
+func OrderTypeGT(v string) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldGT(FieldOrderType, v))
+}
+
+// OrderTypeGTE applies the GTE predicate on the "order_type" field.
+func OrderTypeGTE(v string) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldGTE(FieldOrderType, v))
+}
+
+// OrderTypeLT applies the LT predicate on the "order_type" field.
+func OrderTypeLT(v string) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldLT(FieldOrderType, v))
+}
+
+// OrderTypeLTE applies the LTE predicate on the "order_type" field.
+func OrderTypeLTE(v string) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldLTE(FieldOrderType, v))
+}
+
+// OrderTypeContains applies the Contains predicate on the "order_type" field.
+func OrderTypeContains(v string) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldContains(FieldOrderType, v))
+}
+
+// OrderTypeHasPrefix applies the HasPrefix predicate on the "order_type" field.
+func OrderTypeHasPrefix(v string) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldHasPrefix(FieldOrderType, v))
+}
+
+// OrderTypeHasSuffix applies the HasSuffix predicate on the "order_type" field.
+func OrderTypeHasSuffix(v string) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldHasSuffix(FieldOrderType, v))
+}
+
+// OrderTypeEqualFold applies the EqualFold predicate on the "order_type" field.
+func OrderTypeEqualFold(v string) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldEqualFold(FieldOrderType, v))
+}
+
+// OrderTypeContainsFold applies the ContainsFold predicate on the "order_type" field.
+func OrderTypeContainsFold(v string) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldContainsFold(FieldOrderType, v))
+}
+
 // AmountEQ applies the EQ predicate on the "amount" field.
 func AmountEQ(v float64) predicate.SubscriptionOrder {
 	return predicate.SubscriptionOrder(sql.FieldEQ(FieldAmount, v))
@@ -353,6 +438,156 @@ func AmountLT(v float64) predicate.SubscriptionOrder {
 // AmountLTE applies the LTE predicate on the "amount" field.
 func AmountLTE(v float64) predicate.SubscriptionOrder {
 	return predicate.SubscriptionOrder(sql.FieldLTE(FieldAmount, v))
+}
+
+// SourceSubscriptionIDEQ applies the EQ predicate on the "source_subscription_id" field.
+func SourceSubscriptionIDEQ(v int64) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldEQ(FieldSourceSubscriptionID, v))
+}
+
+// SourceSubscriptionIDNEQ applies the NEQ predicate on the "source_subscription_id" field.
+func SourceSubscriptionIDNEQ(v int64) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldNEQ(FieldSourceSubscriptionID, v))
+}
+
+// SourceSubscriptionIDIn applies the In predicate on the "source_subscription_id" field.
+func SourceSubscriptionIDIn(vs ...int64) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldIn(FieldSourceSubscriptionID, vs...))
+}
+
+// SourceSubscriptionIDNotIn applies the NotIn predicate on the "source_subscription_id" field.
+func SourceSubscriptionIDNotIn(vs ...int64) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldNotIn(FieldSourceSubscriptionID, vs...))
+}
+
+// SourceSubscriptionIDGT applies the GT predicate on the "source_subscription_id" field.
+func SourceSubscriptionIDGT(v int64) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldGT(FieldSourceSubscriptionID, v))
+}
+
+// SourceSubscriptionIDGTE applies the GTE predicate on the "source_subscription_id" field.
+func SourceSubscriptionIDGTE(v int64) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldGTE(FieldSourceSubscriptionID, v))
+}
+
+// SourceSubscriptionIDLT applies the LT predicate on the "source_subscription_id" field.
+func SourceSubscriptionIDLT(v int64) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldLT(FieldSourceSubscriptionID, v))
+}
+
+// SourceSubscriptionIDLTE applies the LTE predicate on the "source_subscription_id" field.
+func SourceSubscriptionIDLTE(v int64) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldLTE(FieldSourceSubscriptionID, v))
+}
+
+// SourceSubscriptionIDIsNil applies the IsNil predicate on the "source_subscription_id" field.
+func SourceSubscriptionIDIsNil() predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldIsNull(FieldSourceSubscriptionID))
+}
+
+// SourceSubscriptionIDNotNil applies the NotNil predicate on the "source_subscription_id" field.
+func SourceSubscriptionIDNotNil() predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldNotNull(FieldSourceSubscriptionID))
+}
+
+// OriginalAmountEQ applies the EQ predicate on the "original_amount" field.
+func OriginalAmountEQ(v float64) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldEQ(FieldOriginalAmount, v))
+}
+
+// OriginalAmountNEQ applies the NEQ predicate on the "original_amount" field.
+func OriginalAmountNEQ(v float64) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldNEQ(FieldOriginalAmount, v))
+}
+
+// OriginalAmountIn applies the In predicate on the "original_amount" field.
+func OriginalAmountIn(vs ...float64) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldIn(FieldOriginalAmount, vs...))
+}
+
+// OriginalAmountNotIn applies the NotIn predicate on the "original_amount" field.
+func OriginalAmountNotIn(vs ...float64) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldNotIn(FieldOriginalAmount, vs...))
+}
+
+// OriginalAmountGT applies the GT predicate on the "original_amount" field.
+func OriginalAmountGT(v float64) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldGT(FieldOriginalAmount, v))
+}
+
+// OriginalAmountGTE applies the GTE predicate on the "original_amount" field.
+func OriginalAmountGTE(v float64) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldGTE(FieldOriginalAmount, v))
+}
+
+// OriginalAmountLT applies the LT predicate on the "original_amount" field.
+func OriginalAmountLT(v float64) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldLT(FieldOriginalAmount, v))
+}
+
+// OriginalAmountLTE applies the LTE predicate on the "original_amount" field.
+func OriginalAmountLTE(v float64) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldLTE(FieldOriginalAmount, v))
+}
+
+// OriginalAmountIsNil applies the IsNil predicate on the "original_amount" field.
+func OriginalAmountIsNil() predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldIsNull(FieldOriginalAmount))
+}
+
+// OriginalAmountNotNil applies the NotNil predicate on the "original_amount" field.
+func OriginalAmountNotNil() predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldNotNull(FieldOriginalAmount))
+}
+
+// DiscountAmountEQ applies the EQ predicate on the "discount_amount" field.
+func DiscountAmountEQ(v float64) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldEQ(FieldDiscountAmount, v))
+}
+
+// DiscountAmountNEQ applies the NEQ predicate on the "discount_amount" field.
+func DiscountAmountNEQ(v float64) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldNEQ(FieldDiscountAmount, v))
+}
+
+// DiscountAmountIn applies the In predicate on the "discount_amount" field.
+func DiscountAmountIn(vs ...float64) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldIn(FieldDiscountAmount, vs...))
+}
+
+// DiscountAmountNotIn applies the NotIn predicate on the "discount_amount" field.
+func DiscountAmountNotIn(vs ...float64) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldNotIn(FieldDiscountAmount, vs...))
+}
+
+// DiscountAmountGT applies the GT predicate on the "discount_amount" field.
+func DiscountAmountGT(v float64) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldGT(FieldDiscountAmount, v))
+}
+
+// DiscountAmountGTE applies the GTE predicate on the "discount_amount" field.
+func DiscountAmountGTE(v float64) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldGTE(FieldDiscountAmount, v))
+}
+
+// DiscountAmountLT applies the LT predicate on the "discount_amount" field.
+func DiscountAmountLT(v float64) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldLT(FieldDiscountAmount, v))
+}
+
+// DiscountAmountLTE applies the LTE predicate on the "discount_amount" field.
+func DiscountAmountLTE(v float64) predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldLTE(FieldDiscountAmount, v))
+}
+
+// DiscountAmountIsNil applies the IsNil predicate on the "discount_amount" field.
+func DiscountAmountIsNil() predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldIsNull(FieldDiscountAmount))
+}
+
+// DiscountAmountNotNil applies the NotNil predicate on the "discount_amount" field.
+func DiscountAmountNotNil() predicate.SubscriptionOrder {
+	return predicate.SubscriptionOrder(sql.FieldNotNull(FieldDiscountAmount))
 }
 
 // ValidityDaysEQ applies the EQ predicate on the "validity_days" field.

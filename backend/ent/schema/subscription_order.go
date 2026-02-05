@@ -45,10 +45,24 @@ func (SubscriptionOrder) Fields() []ent.Field {
 		field.Int64("group_id").
 			Positive(),
 
+		// 订单类型：purchase(新购)/upgrade(升级)
+		field.String("order_type").MaxLen(20).Default("purchase"),
+
 		// 订单金额（人民币）
 		field.Float("amount").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,2)"}).
 			Positive(),
+
+		// 升级源订阅ID（仅升级订单有效）
+		field.Int64("source_subscription_id").Optional().Nillable(),
+
+		// 原价（用于展示删除线价格）
+		field.Float("original_amount").Optional().Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,2)"}),
+
+		// 折扣金额（旧套餐剩余价值）
+		field.Float("discount_amount").Optional().Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,2)"}),
 
 		// 有效期天数
 		field.Int("validity_days").
@@ -127,5 +141,6 @@ func (SubscriptionOrder) Indexes() []ent.Index {
 		index.Fields("status"),
 		index.Fields("expire_at"),
 		index.Fields("user_id", "status"),
+		index.Fields("source_subscription_id"),
 	}
 }

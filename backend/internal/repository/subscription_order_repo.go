@@ -20,17 +20,29 @@ func NewSubscriptionOrderRepository(client *dbent.Client) service.SubscriptionOr
 
 func (r *subscriptionOrderRepository) Create(ctx context.Context, order *service.SubscriptionOrder) error {
 	client := clientFromContext(ctx, r.client)
-	created, err := client.SubscriptionOrder.Create().
+	creator := client.SubscriptionOrder.Create().
 		SetOrderNo(order.OrderNo).
 		SetUserID(order.UserID).
 		SetGroupID(order.GroupID).
+		SetOrderType(order.OrderType).
 		SetAmount(order.Amount).
 		SetValidityDays(order.ValidityDays).
 		SetPaymentMethod(order.PaymentMethod).
 		SetPaymentChannel(order.PaymentChannel).
 		SetStatus(order.Status).
-		SetExpireAt(order.ExpireAt).
-		Save(ctx)
+		SetExpireAt(order.ExpireAt)
+
+	if order.SourceSubscriptionID != nil {
+		creator.SetSourceSubscriptionID(*order.SourceSubscriptionID)
+	}
+	if order.OriginalAmount != nil {
+		creator.SetOriginalAmount(*order.OriginalAmount)
+	}
+	if order.DiscountAmount != nil {
+		creator.SetDiscountAmount(*order.DiscountAmount)
+	}
+
+	created, err := creator.Save(ctx)
 	if err != nil {
 		return err
 	}
@@ -311,21 +323,25 @@ func subscriptionOrderEntityToService(m *dbent.SubscriptionOrder) *service.Subsc
 		return nil
 	}
 	return &service.SubscriptionOrder{
-		ID:                  m.ID,
-		OrderNo:             m.OrderNo,
-		UserID:              m.UserID,
-		GroupID:             m.GroupID,
-		Amount:              m.Amount,
-		ValidityDays:        m.ValidityDays,
-		PaymentMethod:       m.PaymentMethod,
-		PaymentChannel:      m.PaymentChannel,
-		Status:              m.Status,
-		WeChatTransactionID: m.WechatTransactionID,
-		QRCodeURL:           m.QrcodeURL,
-		PrepayID:            m.PrepayID,
-		ExpireAt:            m.ExpireAt,
-		PaidAt:              m.PaidAt,
-		CreatedAt:           m.CreatedAt,
-		UpdatedAt:           m.UpdatedAt,
+		ID:                   m.ID,
+		OrderNo:              m.OrderNo,
+		UserID:               m.UserID,
+		GroupID:              m.GroupID,
+		OrderType:            m.OrderType,
+		Amount:               m.Amount,
+		ValidityDays:         m.ValidityDays,
+		PaymentMethod:        m.PaymentMethod,
+		PaymentChannel:       m.PaymentChannel,
+		Status:               m.Status,
+		WeChatTransactionID:  m.WechatTransactionID,
+		QRCodeURL:            m.QrcodeURL,
+		PrepayID:             m.PrepayID,
+		ExpireAt:             m.ExpireAt,
+		PaidAt:               m.PaidAt,
+		CreatedAt:            m.CreatedAt,
+		UpdatedAt:            m.UpdatedAt,
+		SourceSubscriptionID: m.SourceSubscriptionID,
+		OriginalAmount:       m.OriginalAmount,
+		DiscountAmount:       m.DiscountAmount,
 	}
 }

@@ -900,18 +900,24 @@ func init() {
 	subscriptionorderDescGroupID := subscriptionorderFields[2].Descriptor()
 	// subscriptionorder.GroupIDValidator is a validator for the "group_id" field. It is called by the builders before save.
 	subscriptionorder.GroupIDValidator = subscriptionorderDescGroupID.Validators[0].(func(int64) error)
+	// subscriptionorderDescOrderType is the schema descriptor for order_type field.
+	subscriptionorderDescOrderType := subscriptionorderFields[3].Descriptor()
+	// subscriptionorder.DefaultOrderType holds the default value on creation for the order_type field.
+	subscriptionorder.DefaultOrderType = subscriptionorderDescOrderType.Default.(string)
+	// subscriptionorder.OrderTypeValidator is a validator for the "order_type" field. It is called by the builders before save.
+	subscriptionorder.OrderTypeValidator = subscriptionorderDescOrderType.Validators[0].(func(string) error)
 	// subscriptionorderDescAmount is the schema descriptor for amount field.
-	subscriptionorderDescAmount := subscriptionorderFields[3].Descriptor()
+	subscriptionorderDescAmount := subscriptionorderFields[4].Descriptor()
 	// subscriptionorder.AmountValidator is a validator for the "amount" field. It is called by the builders before save.
 	subscriptionorder.AmountValidator = subscriptionorderDescAmount.Validators[0].(func(float64) error)
 	// subscriptionorderDescValidityDays is the schema descriptor for validity_days field.
-	subscriptionorderDescValidityDays := subscriptionorderFields[4].Descriptor()
+	subscriptionorderDescValidityDays := subscriptionorderFields[8].Descriptor()
 	// subscriptionorder.DefaultValidityDays holds the default value on creation for the validity_days field.
 	subscriptionorder.DefaultValidityDays = subscriptionorderDescValidityDays.Default.(int)
 	// subscriptionorder.ValidityDaysValidator is a validator for the "validity_days" field. It is called by the builders before save.
 	subscriptionorder.ValidityDaysValidator = subscriptionorderDescValidityDays.Validators[0].(func(int) error)
 	// subscriptionorderDescPaymentMethod is the schema descriptor for payment_method field.
-	subscriptionorderDescPaymentMethod := subscriptionorderFields[5].Descriptor()
+	subscriptionorderDescPaymentMethod := subscriptionorderFields[9].Descriptor()
 	// subscriptionorder.PaymentMethodValidator is a validator for the "payment_method" field. It is called by the builders before save.
 	subscriptionorder.PaymentMethodValidator = func() func(string) error {
 		validators := subscriptionorderDescPaymentMethod.Validators
@@ -929,23 +935,23 @@ func init() {
 		}
 	}()
 	// subscriptionorderDescPaymentChannel is the schema descriptor for payment_channel field.
-	subscriptionorderDescPaymentChannel := subscriptionorderFields[6].Descriptor()
+	subscriptionorderDescPaymentChannel := subscriptionorderFields[10].Descriptor()
 	// subscriptionorder.DefaultPaymentChannel holds the default value on creation for the payment_channel field.
 	subscriptionorder.DefaultPaymentChannel = subscriptionorderDescPaymentChannel.Default.(string)
 	// subscriptionorder.PaymentChannelValidator is a validator for the "payment_channel" field. It is called by the builders before save.
 	subscriptionorder.PaymentChannelValidator = subscriptionorderDescPaymentChannel.Validators[0].(func(string) error)
 	// subscriptionorderDescStatus is the schema descriptor for status field.
-	subscriptionorderDescStatus := subscriptionorderFields[7].Descriptor()
+	subscriptionorderDescStatus := subscriptionorderFields[11].Descriptor()
 	// subscriptionorder.DefaultStatus holds the default value on creation for the status field.
 	subscriptionorder.DefaultStatus = subscriptionorderDescStatus.Default.(string)
 	// subscriptionorder.StatusValidator is a validator for the "status" field. It is called by the builders before save.
 	subscriptionorder.StatusValidator = subscriptionorderDescStatus.Validators[0].(func(string) error)
 	// subscriptionorderDescWechatTransactionID is the schema descriptor for wechat_transaction_id field.
-	subscriptionorderDescWechatTransactionID := subscriptionorderFields[8].Descriptor()
+	subscriptionorderDescWechatTransactionID := subscriptionorderFields[12].Descriptor()
 	// subscriptionorder.WechatTransactionIDValidator is a validator for the "wechat_transaction_id" field. It is called by the builders before save.
 	subscriptionorder.WechatTransactionIDValidator = subscriptionorderDescWechatTransactionID.Validators[0].(func(string) error)
 	// subscriptionorderDescPrepayID is the schema descriptor for prepay_id field.
-	subscriptionorderDescPrepayID := subscriptionorderFields[10].Descriptor()
+	subscriptionorderDescPrepayID := subscriptionorderFields[14].Descriptor()
 	// subscriptionorder.PrepayIDValidator is a validator for the "prepay_id" field. It is called by the builders before save.
 	subscriptionorder.PrepayIDValidator = subscriptionorderDescPrepayID.Validators[0].(func(string) error)
 	usagecleanuptaskMixin := schema.UsageCleanupTask{}.Mixin()

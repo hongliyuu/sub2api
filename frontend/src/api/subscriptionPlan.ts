@@ -70,6 +70,9 @@ export interface SubscriptionOrder {
   created_at: string
   expire_at: string
   group_name?: string
+  order_type?: string
+  original_amount?: number
+  discount_amount?: number
 }
 
 // JSAPI payment params
@@ -133,6 +136,30 @@ export interface SyncOrderStatusResponse {
   synced_at: string
 }
 
+// Upgrade option for a target plan
+export interface UpgradeOption {
+  target_group_id: number
+  original_price: number
+  remaining_value: number
+  upgrade_price: number
+  remaining_days: number
+}
+
+// Get upgrade options response
+export interface GetUpgradeOptionsResponse {
+  options: Record<string, UpgradeOption>
+  source_subscription_id: number
+}
+
+// Create upgrade order request
+export interface CreateUpgradeOrderRequest {
+  source_subscription_id: number
+  target_group_id: number
+  payment_method: string
+  payment_channel?: string
+  captcha_token?: string
+}
+
 // ==================== API Functions ====================
 
 export const subscriptionPlanAPI = {
@@ -155,23 +182,24 @@ export const subscriptionPlanAPI = {
       const response = await apiClient.post<SubscriptionOrder>('/subscription-orders', data)
       return response.data
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        // Handle 428 Precondition Required - captcha required
-        if (error.response?.status === 428) {
-          const captchaData = error.response.data as CaptchaRequiredResponse
-          throw new CaptchaRequiredError(captchaData.message || '请完成验证码验证')
-        }
-        // Handle 429 Too Many Requests - rate limited
-        if (error.response?.status === 429) {
-          const rateLimitData = error.response.data as RateLimitErrorResponse
-          const limitType = rateLimitData.limit_type || 'minute'
-          throw new RateLimitExceededError(
-            rateLimitData.message || '操作过于频繁，请稍后重试',
-            limitType,
-            rateLimitData.retry_after,
-            rateLimitData.reset_time
-          )
-        }
+      // apiClient interceptor transforms errors to plain objects { status, code, message }
+      const errObj = error as Record<string, unknown>
+      const status = axios.isAxiosError(error) ? error.response?.status : errObj?.status
+      const errData = axios.isAxiosError(error) ? error.response?.data : errObj
+
+      if (status === 428) {
+        const captchaData = errData as CaptchaRequiredResponse
+        throw new CaptchaRequiredError(captchaData.message || '请完成验证码验证')
+      }
+      if (status === 429) {
+        const rateLimitData = errData as RateLimitErrorResponse
+        const limitType = rateLimitData.limit_type || 'minute'
+        throw new RateLimitExceededError(
+          rateLimitData.message || '操作过于频繁，请稍后重试',
+          limitType,
+          rateLimitData.retry_after,
+          rateLimitData.reset_time
+        )
       }
       throw error
     }
@@ -214,6 +242,46 @@ export const subscriptionPlanAPI = {
   async syncOrderStatus(orderNo: string): Promise<SyncOrderStatusResponse> {
     const response = await apiClient.post<SyncOrderStatusResponse>(`/subscription-orders/${orderNo}/sync`)
     return response.data
+  },
+
+  /**
+   * Get upgrade options for current user's active subscription
+   */
+  async getUpgradeOptions(): Promise<GetUpgradeOptionsResponse> {
+    const response = await apiClient.get<GetUpgradeOptionsResponse>('/subscription-orders/upgrade-options')
+    return response.data
+  },
+
+  /**
+   * Create upgrade order
+   * @throws {RateLimitExceededError} When rate limited
+   * @throws {CaptchaRequiredError} When captcha required
+   */
+  async createUpgradeOrder(data: CreateUpgradeOrderRequest): Promise<SubscriptionOrder> {
+    try {
+      const response = await apiClient.post<SubscriptionOrder>('/subscription-orders/upgrade', data)
+      return response.data
+    } catch (error) {
+      const errObj = error as Record<string, unknown>
+      const status = axios.isAxiosError(error) ? error.response?.status : errObj?.status
+      const errData = axios.isAxiosError(error) ? error.response?.data : errObj
+
+      if (status === 428) {
+        const captchaData = errData as CaptchaRequiredResponse
+        throw new CaptchaRequiredError(captchaData.message || '请完成验证码验证')
+      }
+      if (status === 429) {
+        const rateLimitData = errData as RateLimitErrorResponse
+        const limitType = rateLimitData.limit_type || 'minute'
+        throw new RateLimitExceededError(
+          rateLimitData.message || '操作过于频繁，请稍后重试',
+          limitType,
+          rateLimitData.retry_after,
+          rateLimitData.reset_time
+        )
+      }
+      throw error
+    }
   },
 }
 

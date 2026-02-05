@@ -111,6 +111,8 @@ func RegisterUserRoutes(
 		// 订阅套餐订单（需认证的接口）
 		subscriptionOrders := authenticated.Group("/subscription-orders")
 		{
+			subscriptionOrders.GET("/upgrade-options", h.SubscriptionPlan.GetUpgradeOptions)
+			subscriptionOrders.POST("/upgrade", h.SubscriptionPlan.CreateUpgradeOrder)
 			subscriptionOrders.POST("", h.SubscriptionPlan.CreateOrder)
 			subscriptionOrders.GET("", h.SubscriptionPlan.ListOrders)
 			subscriptionOrders.GET("/:order_no", h.SubscriptionPlan.GetOrder)

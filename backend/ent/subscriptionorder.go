@@ -29,8 +29,16 @@ type SubscriptionOrder struct {
 	UserID int64 `json:"user_id,omitempty"`
 	// GroupID holds the value of the "group_id" field.
 	GroupID int64 `json:"group_id,omitempty"`
+	// OrderType holds the value of the "order_type" field.
+	OrderType string `json:"order_type,omitempty"`
 	// Amount holds the value of the "amount" field.
 	Amount float64 `json:"amount,omitempty"`
+	// SourceSubscriptionID holds the value of the "source_subscription_id" field.
+	SourceSubscriptionID *int64 `json:"source_subscription_id,omitempty"`
+	// OriginalAmount holds the value of the "original_amount" field.
+	OriginalAmount *float64 `json:"original_amount,omitempty"`
+	// DiscountAmount holds the value of the "discount_amount" field.
+	DiscountAmount *float64 `json:"discount_amount,omitempty"`
 	// ValidityDays holds the value of the "validity_days" field.
 	ValidityDays int `json:"validity_days,omitempty"`
 	// PaymentMethod holds the value of the "payment_method" field.
@@ -93,11 +101,11 @@ func (*SubscriptionOrder) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case subscriptionorder.FieldAmount:
+		case subscriptionorder.FieldAmount, subscriptionorder.FieldOriginalAmount, subscriptionorder.FieldDiscountAmount:
 			values[i] = new(sql.NullFloat64)
-		case subscriptionorder.FieldID, subscriptionorder.FieldUserID, subscriptionorder.FieldGroupID, subscriptionorder.FieldValidityDays:
+		case subscriptionorder.FieldID, subscriptionorder.FieldUserID, subscriptionorder.FieldGroupID, subscriptionorder.FieldSourceSubscriptionID, subscriptionorder.FieldValidityDays:
 			values[i] = new(sql.NullInt64)
-		case subscriptionorder.FieldOrderNo, subscriptionorder.FieldPaymentMethod, subscriptionorder.FieldPaymentChannel, subscriptionorder.FieldStatus, subscriptionorder.FieldWechatTransactionID, subscriptionorder.FieldQrcodeURL, subscriptionorder.FieldPrepayID:
+		case subscriptionorder.FieldOrderNo, subscriptionorder.FieldOrderType, subscriptionorder.FieldPaymentMethod, subscriptionorder.FieldPaymentChannel, subscriptionorder.FieldStatus, subscriptionorder.FieldWechatTransactionID, subscriptionorder.FieldQrcodeURL, subscriptionorder.FieldPrepayID:
 			values[i] = new(sql.NullString)
 		case subscriptionorder.FieldCreatedAt, subscriptionorder.FieldUpdatedAt, subscriptionorder.FieldExpireAt, subscriptionorder.FieldPaidAt:
 			values[i] = new(sql.NullTime)
@@ -152,11 +160,38 @@ func (_m *SubscriptionOrder) assignValues(columns []string, values []any) error 
 			} else if value.Valid {
 				_m.GroupID = value.Int64
 			}
+		case subscriptionorder.FieldOrderType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field order_type", values[i])
+			} else if value.Valid {
+				_m.OrderType = value.String
+			}
 		case subscriptionorder.FieldAmount:
 			if value, ok := values[i].(*sql.NullFloat64); !ok {
 				return fmt.Errorf("unexpected type %T for field amount", values[i])
 			} else if value.Valid {
 				_m.Amount = value.Float64
+			}
+		case subscriptionorder.FieldSourceSubscriptionID:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field source_subscription_id", values[i])
+			} else if value.Valid {
+				_m.SourceSubscriptionID = new(int64)
+				*_m.SourceSubscriptionID = value.Int64
+			}
+		case subscriptionorder.FieldOriginalAmount:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field original_amount", values[i])
+			} else if value.Valid {
+				_m.OriginalAmount = new(float64)
+				*_m.OriginalAmount = value.Float64
+			}
+		case subscriptionorder.FieldDiscountAmount:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field discount_amount", values[i])
+			} else if value.Valid {
+				_m.DiscountAmount = new(float64)
+				*_m.DiscountAmount = value.Float64
 			}
 		case subscriptionorder.FieldValidityDays:
 			if value, ok := values[i].(*sql.NullInt64); !ok {
@@ -277,8 +312,26 @@ func (_m *SubscriptionOrder) String() string {
 	builder.WriteString("group_id=")
 	builder.WriteString(fmt.Sprintf("%v", _m.GroupID))
 	builder.WriteString(", ")
+	builder.WriteString("order_type=")
+	builder.WriteString(_m.OrderType)
+	builder.WriteString(", ")
 	builder.WriteString("amount=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Amount))
+	builder.WriteString(", ")
+	if v := _m.SourceSubscriptionID; v != nil {
+		builder.WriteString("source_subscription_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.OriginalAmount; v != nil {
+		builder.WriteString("original_amount=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	if v := _m.DiscountAmount; v != nil {
+		builder.WriteString("discount_amount=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("validity_days=")
 	builder.WriteString(fmt.Sprintf("%v", _m.ValidityDays))

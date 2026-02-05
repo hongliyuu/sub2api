@@ -3763,7 +3763,8 @@ export default {
     status: {
       active: 'Active',
       expired: 'Expired',
-      revoked: 'Revoked'
+      revoked: 'Revoked',
+      upgraded: 'Upgraded'
     },
     usage: 'Usage',
     expires: 'Expires',
@@ -3777,7 +3778,13 @@ export default {
     expiresOn: 'Expires on {date}',
     resetIn: 'Resets in {time}',
     windowNotActive: 'Awaiting first use',
-    usageOf: '{used} of {limit}'
+    usageOf: '{used} of {limit}',
+    history: 'Subscription History',
+    noHistory: 'No subscription history',
+    subscribeTime: 'Subscribed At',
+    planName: 'Plan Name',
+    expireTime: 'Expires At',
+    statusLabel: 'Status'
   },
 
   // Subscription Plan Purchase
@@ -3785,6 +3792,7 @@ export default {
     title: 'Available Plans',
     popular: 'Popular',
     purchase: 'Subscribe Now',
+    subscribed: 'Subscribed',
     subscription: 'Subscription Plan',
     orderInfo: 'Order Information',
     paymentSuccess: 'Payment successful, subscription activated',
@@ -3795,7 +3803,10 @@ export default {
     unlimitedQuota: 'Unlimited quota',
     noPlans: 'No plans available for purchase',
     noPlansDesc: 'Contact us for monthly plans or custom quota subscriptions',
-    contactUs: 'Contact'
+    contactUs: 'Contact',
+    upgradeNow: 'Upgrade Now',
+    upgradeDiscount: 'Saved ¥{amount}',
+    upgradeBadge: 'Upgrade'
   },
 
   // Onboarding Tour

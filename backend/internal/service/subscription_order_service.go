@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
@@ -24,6 +25,9 @@ var (
 	ErrGroupNotPurchasable            = infraerrors.BadRequest("GROUP_NOT_PURCHASABLE", "group is not available for purchase")
 	ErrGroupPriceNotSet               = infraerrors.BadRequest("GROUP_PRICE_NOT_SET", "group price is not set")
 	ErrSubscriptionOrderNotBelongUser = infraerrors.Forbidden("ORDER_NOT_BELONG_TO_USER", "order does not belong to you")
+	ErrUpgradeNotAllowed              = infraerrors.BadRequest("UPGRADE_NOT_ALLOWED", "upgrade is not allowed")
+	ErrSourceSubNotActive             = infraerrors.BadRequest("SOURCE_SUB_NOT_ACTIVE", "source subscription is not active")
+	ErrTargetPriceTooLow              = infraerrors.BadRequest("TARGET_PRICE_TOO_LOW", "target plan price must be higher than current")
 )
 
 // SubscriptionOrder 订阅订单模型
@@ -32,6 +36,7 @@ type SubscriptionOrder struct {
 	OrderNo             string     `json:"order_no"`
 	UserID              int64      `json:"user_id"`
 	GroupID             int64      `json:"group_id"`
+	OrderType           string     `json:"order_type"`
 	Amount              float64    `json:"amount"`
 	ValidityDays        int        `json:"validity_days"`
 	PaymentMethod       string     `json:"payment_method"`
@@ -44,6 +49,11 @@ type SubscriptionOrder struct {
 	PaidAt              *time.Time `json:"paid_at,omitempty"`
 	CreatedAt           time.Time  `json:"created_at"`
 	UpdatedAt           time.Time  `json:"updated_at"`
+
+	// 升级订单字段
+	SourceSubscriptionID *int64   `json:"source_subscription_id,omitempty"`
+	OriginalAmount       *float64 `json:"original_amount,omitempty"`
+	DiscountAmount       *float64 `json:"discount_amount,omitempty"`
 
 	// 关联信息
 	Group *Group `json:"group,omitempty"`
@@ -424,7 +434,28 @@ func (s *SubscriptionOrderService) processPaymentInTransaction(ctx context.Conte
 		return fmt.Errorf("update order: %w", err)
 	}
 
-	// 2. 分配或续期订阅
+	// 2. 升级订单特殊处理：将源订阅标记为 upgraded
+	var upgradeSourceSub *UserSubscription
+	if order.OrderType == OrderTypeUpgrade && order.SourceSubscriptionID != nil {
+		sourceSubID := *order.SourceSubscriptionID
+
+		// 校验源订阅仍然是 active
+		sourceSub, err := s.subscriptionService.GetByID(txCtx, sourceSubID)
+		if err != nil || sourceSub.Status != SubscriptionStatusActive {
+			_ = tx.Rollback()
+			return fmt.Errorf("source subscription is no longer active")
+		}
+
+		// 将源订阅标记为 upgraded
+		if err := s.subscriptionService.userSubRepo.UpdateStatus(txCtx, sourceSubID, SubscriptionStatusUpgraded); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("update source subscription: %w", err)
+		}
+
+		upgradeSourceSub = sourceSub
+	}
+
+	// 3. 分配或续期订阅
 	notes := fmt.Sprintf("订阅购买订单 %s", order.OrderNo)
 	_, isExtended, err := s.subscriptionService.AssignOrExtendSubscription(txCtx, &AssignSubscriptionInput{
 		UserID:       order.UserID,
@@ -440,9 +471,19 @@ func (s *SubscriptionOrderService) processPaymentInTransaction(ctx context.Conte
 
 	_ = isExtended // 可用于日志
 
-	// 3. 提交事务
+	// 4. 提交事务
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit transaction: %w", err)
+	}
+
+	// 5. 事务提交成功后，异步失效源订阅缓存
+	if upgradeSourceSub != nil && s.subscriptionService.billingCacheService != nil {
+		userID, groupID := upgradeSourceSub.UserID, upgradeSourceSub.GroupID
+		go func() {
+			cacheCtx, cacheCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cacheCancel()
+			_ = s.subscriptionService.billingCacheService.InvalidateSubscription(cacheCtx, userID, groupID)
+		}()
 	}
 
 	return nil
@@ -708,4 +749,272 @@ func (s *SubscriptionOrderService) ListAllOrders(ctx context.Context, req *ListS
 	}
 
 	return s.repo.ListAll(ctx, req)
+}
+
+// ==================== 升级相关 ====================
+
+// UpgradeOption 单个升级选项
+type UpgradeOption struct {
+	TargetGroupID  int64   `json:"target_group_id"`
+	OriginalPrice  float64 `json:"original_price"`
+	RemainingValue float64 `json:"remaining_value"`
+	UpgradePrice   float64 `json:"upgrade_price"`
+	RemainingDays  int     `json:"remaining_days"`
+}
+
+// subscriptionRemainingValue 计算订阅的剩余价值和剩余天数
+type subscriptionRemainingValue struct {
+	RemainingValue float64
+	RemainingDays  int
+}
+
+func calcRemainingValue(startsAt, expiresAt time.Time, price float64) subscriptionRemainingValue {
+	now := time.Now()
+	totalDuration := expiresAt.Sub(startsAt).Seconds()
+	remainingDuration := expiresAt.Sub(now).Seconds()
+	if remainingDuration < 0 {
+		remainingDuration = 0
+	}
+	remainingRatio := 0.0
+	if totalDuration > 0 {
+		remainingRatio = remainingDuration / totalDuration
+	}
+	return subscriptionRemainingValue{
+		RemainingValue: roundTwoDecimals(price * remainingRatio),
+		RemainingDays:  int(math.Ceil(remainingDuration / 86400)),
+	}
+}
+
+// calcUpgradePrice 根据目标价格和剩余价值计算升级价，最低 ¥1
+func calcUpgradePrice(targetPrice, remainingValue float64) float64 {
+	upgradePrice := roundTwoDecimals(targetPrice - remainingValue)
+	if upgradePrice < 1.0 {
+		upgradePrice = 1.0
+	}
+	return upgradePrice
+}
+
+// GetUpgradeOptions 获取当前用户所有可升级的套餐选项
+func (s *SubscriptionOrderService) GetUpgradeOptions(ctx context.Context, userID int64) (map[int64]*UpgradeOption, int64, error) {
+	// 1. 获取用户所有 active 订阅
+	activeSubs, err := s.subscriptionService.ListActiveUserSubscriptions(ctx, userID)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list active subscriptions: %w", err)
+	}
+	if len(activeSubs) == 0 {
+		return map[int64]*UpgradeOption{}, 0, nil
+	}
+
+	// 2. 获取所有可购买套餐（同时用作 Group 价格查表，避免 N+1 查询）
+	purchasableGroups, err := s.groupRepo.ListPurchasable(ctx)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list purchasable groups: %w", err)
+	}
+	groupPriceMap := make(map[int64]float64, len(purchasableGroups))
+	for _, g := range purchasableGroups {
+		if g.PriceCNY != nil {
+			groupPriceMap[g.ID] = *g.PriceCNY
+		}
+	}
+
+	// 3. 如果 active 订阅的 Group 不在 purchasableGroups 中，单独补查
+	for i := range activeSubs {
+		gid := activeSubs[i].GroupID
+		if _, ok := groupPriceMap[gid]; !ok {
+			group, err := s.groupRepo.GetByID(ctx, gid)
+			if err != nil {
+				continue
+			}
+			if group.PriceCNY != nil {
+				groupPriceMap[gid] = *group.PriceCNY
+			} else {
+				groupPriceMap[gid] = 0
+			}
+		}
+	}
+
+	// 4. 找到价格最高的订阅作为升级源
+	var sourceSub *UserSubscription
+	var sourcePrice float64
+	for i := range activeSubs {
+		sub := &activeSubs[i]
+		price := groupPriceMap[sub.GroupID]
+		if sourceSub == nil || price > sourcePrice {
+			sourceSub = sub
+			sourcePrice = price
+		}
+	}
+	if sourceSub == nil {
+		return map[int64]*UpgradeOption{}, 0, nil
+	}
+
+	// 5. 计算源订阅的剩余价值
+	rv := calcRemainingValue(sourceSub.StartsAt, sourceSub.ExpiresAt, sourcePrice)
+
+	// 6. 对每个价格高于源的套餐计算升级价格
+	options := make(map[int64]*UpgradeOption)
+	for _, g := range purchasableGroups {
+		if g.PriceCNY == nil || *g.PriceCNY <= sourcePrice {
+			continue
+		}
+		targetPrice := *g.PriceCNY
+		options[g.ID] = &UpgradeOption{
+			TargetGroupID:  g.ID,
+			OriginalPrice:  targetPrice,
+			RemainingValue: rv.RemainingValue,
+			UpgradePrice:   calcUpgradePrice(targetPrice, rv.RemainingValue),
+			RemainingDays:  rv.RemainingDays,
+		}
+	}
+
+	return options, sourceSub.ID, nil
+}
+
+// CalculateUpgradePrice 计算升级价格
+func (s *SubscriptionOrderService) CalculateUpgradePrice(ctx context.Context, userID, sourceSubID, targetGroupID int64) (*UpgradeOption, error) {
+	// 1. 获取源订阅
+	sourceSub, err := s.subscriptionService.GetByID(ctx, sourceSubID)
+	if err != nil {
+		return nil, err
+	}
+	if sourceSub.UserID != userID {
+		return nil, ErrSubscriptionOrderNotBelongUser
+	}
+	if sourceSub.Status != SubscriptionStatusActive {
+		return nil, ErrSourceSubNotActive
+	}
+
+	// 2. 获取源 Group 价格
+	sourceGroup, err := s.groupRepo.GetByID(ctx, sourceSub.GroupID)
+	if err != nil {
+		return nil, fmt.Errorf("get source group: %w", err)
+	}
+	sourcePrice := 0.0
+	if sourceGroup.PriceCNY != nil {
+		sourcePrice = *sourceGroup.PriceCNY
+	}
+
+	// 3. 获取目标 Group
+	targetGroup, err := s.groupRepo.GetByID(ctx, targetGroupID)
+	if err != nil {
+		return nil, err
+	}
+	if !targetGroup.IsPurchasable {
+		return nil, ErrGroupNotPurchasable
+	}
+	if targetGroup.PriceCNY == nil || *targetGroup.PriceCNY <= 0 {
+		return nil, ErrGroupPriceNotSet
+	}
+	targetPrice := *targetGroup.PriceCNY
+
+	// 4. 校验目标价格 > 源价格
+	if targetPrice <= sourcePrice {
+		return nil, ErrTargetPriceTooLow
+	}
+
+	// 5. 计算剩余价值和升级价格
+	rv := calcRemainingValue(sourceSub.StartsAt, sourceSub.ExpiresAt, sourcePrice)
+
+	return &UpgradeOption{
+		TargetGroupID:  targetGroupID,
+		OriginalPrice:  targetPrice,
+		RemainingValue: rv.RemainingValue,
+		UpgradePrice:   calcUpgradePrice(targetPrice, rv.RemainingValue),
+		RemainingDays:  rv.RemainingDays,
+	}, nil
+}
+
+// CreateUpgradeOrderRequest 创建升级订单请求
+type CreateUpgradeOrderRequest struct {
+	SourceSubscriptionID int64  `json:"source_subscription_id" binding:"required"`
+	TargetGroupID        int64  `json:"target_group_id" binding:"required"`
+	PaymentMethod        string `json:"payment_method" binding:"required"`
+	PaymentChannel       string `json:"payment_channel"`
+}
+
+// CreateUpgradeOrder 创建升级订单
+func (s *SubscriptionOrderService) CreateUpgradeOrder(ctx context.Context, userID int64, req *CreateUpgradeOrderRequest) (*SubscriptionOrder, error) {
+	// 检查微信支付是否启用
+	if !s.wechatPayService.IsEnabled() {
+		return nil, ErrRechargeNotEnabled
+	}
+
+	// 计算升级价格（含校验）
+	option, err := s.CalculateUpgradePrice(ctx, userID, req.SourceSubscriptionID, req.TargetGroupID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 获取目标分组信息
+	targetGroup, err := s.groupRepo.GetByID(ctx, req.TargetGroupID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 设置默认支付渠道
+	paymentChannel := req.PaymentChannel
+	if paymentChannel == "" {
+		paymentChannel = PaymentChannelNative
+	}
+
+	// 生成唯一订单号
+	var orderNo string
+	for i := 0; i < 3; i++ {
+		orderNo = GenerateSubscriptionOrderNo()
+		exists, err := s.repo.ExistsByOrderNo(ctx, orderNo)
+		if err != nil {
+			return nil, fmt.Errorf("check order no exists: %w", err)
+		}
+		if !exists {
+			break
+		}
+		if i == 2 {
+			return nil, fmt.Errorf("failed to generate unique order no after 3 attempts")
+		}
+	}
+
+	// 计算过期时间
+	expireMinutes := s.cfg.WeChatPay.OrderExpireMinutes
+	if expireMinutes <= 0 {
+		expireMinutes = 30
+	}
+	expireAt := time.Now().Add(time.Duration(expireMinutes) * time.Minute)
+
+	// 获取有效期天数
+	validityDays := targetGroup.DefaultValidityDays
+	if validityDays <= 0 {
+		validityDays = 30
+	}
+
+	sourceSubID := req.SourceSubscriptionID
+	originalAmount := option.OriginalPrice
+	discountAmount := option.RemainingValue
+
+	order := &SubscriptionOrder{
+		OrderNo:              orderNo,
+		UserID:               userID,
+		GroupID:              req.TargetGroupID,
+		OrderType:            OrderTypeUpgrade,
+		Amount:               option.UpgradePrice,
+		ValidityDays:         validityDays,
+		PaymentMethod:        req.PaymentMethod,
+		PaymentChannel:       paymentChannel,
+		Status:               OrderStatusPending,
+		ExpireAt:             expireAt,
+		SourceSubscriptionID: &sourceSubID,
+		OriginalAmount:       &originalAmount,
+		DiscountAmount:       &discountAmount,
+		Group:                targetGroup,
+	}
+
+	if err := s.repo.Create(ctx, order); err != nil {
+		return nil, fmt.Errorf("create upgrade order: %w", err)
+	}
+
+	return order, nil
+}
+
+// roundTwoDecimals 保留两位小数
+func roundTwoDecimals(x float64) float64 {
+	return math.Round(x*100) / 100
 }

@@ -3932,7 +3932,8 @@ export default {
     status: {
       active: '有效',
       expired: '已过期',
-      revoked: '已撤销'
+      revoked: '已撤销',
+      upgraded: '已升级'
     },
     usage: '用量',
     expires: '到期时间',
@@ -3946,7 +3947,13 @@ export default {
     expiresOn: '{date} 到期',
     resetIn: '{time} 后重置',
     windowNotActive: '等待首次使用',
-    usageOf: '已用 {used} / {limit}'
+    usageOf: '已用 {used} / {limit}',
+    history: '历史订阅记录',
+    noHistory: '暂无历史订阅记录',
+    subscribeTime: '订阅时间',
+    planName: '套餐名称',
+    expireTime: '到期时间',
+    statusLabel: '状态'
   },
 
   // Subscription Plan Purchase
@@ -3954,6 +3961,7 @@ export default {
     title: '开通套餐',
     popular: '推荐',
     purchase: '立即开通',
+    subscribed: '已订阅',
     subscription: '订阅套餐',
     orderInfo: '订单信息',
     paymentSuccess: '支付成功，订阅已生效',
@@ -3964,7 +3972,10 @@ export default {
     unlimitedQuota: '无限额度',
     noPlans: '暂无开放购买的套餐',
     noPlansDesc: '如需开通包月套餐或定制更大额度的订阅方案，请联系客服',
-    contactUs: '联系方式'
+    contactUs: '联系方式',
+    upgradeNow: '立即升级',
+    upgradeDiscount: '已抵扣 ¥{amount}',
+    upgradeBadge: '升级'
   },
 
   // Onboarding Tour

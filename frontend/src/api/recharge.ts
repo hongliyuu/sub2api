@@ -185,23 +185,24 @@ export const rechargeAPI = {
       const response = await apiClient.post<RechargeOrder>('/recharge/orders', data)
       return response.data
     } catch (error) {
-      if (axios.isAxiosError(error)) {
-        // 处理 428 Precondition Required - 需要验证码
-        if (error.response?.status === 428) {
-          const captchaData = error.response.data as CaptchaRequiredResponse
-          throw new CaptchaRequiredError(captchaData.message || '请完成验证码验证')
-        }
-        // 处理 429 Too Many Requests - 限流
-        if (error.response?.status === 429) {
-          const rateLimitData = error.response.data as RateLimitErrorResponse
-          const limitType = rateLimitData.limit_type || 'minute'
-          throw new RateLimitExceededError(
-            rateLimitData.message || '操作过于频繁，请稍后重试',
-            limitType,
-            rateLimitData.retry_after,
-            rateLimitData.reset_time
-          )
-        }
+      // apiClient interceptor transforms errors to plain objects { status, code, message }
+      const errObj = error as Record<string, unknown>
+      const status = axios.isAxiosError(error) ? error.response?.status : errObj?.status
+      const errData = axios.isAxiosError(error) ? error.response?.data : errObj
+
+      if (status === 428) {
+        const captchaData = errData as CaptchaRequiredResponse
+        throw new CaptchaRequiredError(captchaData.message || '请完成验证码验证')
+      }
+      if (status === 429) {
+        const rateLimitData = errData as RateLimitErrorResponse
+        const limitType = rateLimitData.limit_type || 'minute'
+        throw new RateLimitExceededError(
+          rateLimitData.message || '操作过于频繁，请稍后重试',
+          limitType,
+          rateLimitData.retry_after,
+          rateLimitData.reset_time
+        )
       }
       throw error
     }

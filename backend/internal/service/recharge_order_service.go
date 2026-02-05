@@ -24,6 +24,12 @@ const (
 	OrderStatusCancelled = "cancelled" // 已取消
 )
 
+// 订单类型常量
+const (
+	OrderTypePurchase = "purchase" // 新购
+	OrderTypeUpgrade  = "upgrade"  // 升级
+)
+
 // 支付方式常量
 const (
 	PaymentMethodWeChatPay = "wechat_pay"

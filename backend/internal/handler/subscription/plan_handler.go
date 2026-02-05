@@ -143,6 +143,9 @@ type CreateOrderResponse struct {
 	ExpireAt       time.Time `json:"expire_at"`
 	ExpireMinutes  int       `json:"expire_minutes"`
 	CreatedAt      time.Time `json:"created_at"`
+	OrderType      string    `json:"order_type"`
+	OriginalAmount *float64  `json:"original_amount,omitempty"`
+	DiscountAmount *float64  `json:"discount_amount,omitempty"`
 }
 
 // CreateOrder 创建订阅订单（需认证）
@@ -625,5 +628,140 @@ func (h *SubscriptionPlanHandler) SyncOrderStatus(c *gin.Context) {
 		"status":        result.Status,
 		"wechat_status": result.WeChatStatus,
 		"synced_at":     result.SyncedAt.Format(time.RFC3339),
+	})
+}
+
+// GetUpgradeOptions 获取升级选项（需认证）
+// GET /api/v1/subscription-orders/upgrade-options
+func (h *SubscriptionPlanHandler) GetUpgradeOptions(c *gin.Context) {
+	subject, ok := middleware.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "未登录")
+		return
+	}
+
+	options, sourceSubID, err := h.subscriptionOrderService.GetUpgradeOptions(c.Request.Context(), subject.UserID)
+	if err != nil {
+		log.Printf("[SubscriptionPlanHandler] GetUpgradeOptions failed: user_id=%d, error=%v", subject.UserID, err)
+		if !response.ErrorFrom(c, err) {
+			response.InternalError(c, "获取升级选项失败")
+		}
+		return
+	}
+
+	response.Success(c, gin.H{
+		"options":                 options,
+		"source_subscription_id": sourceSubID,
+	})
+}
+
+// CreateUpgradeOrderRequest 创建升级订单请求
+type CreateUpgradeOrderRequest struct {
+	SourceSubscriptionID int64  `json:"source_subscription_id" binding:"required"`
+	TargetGroupID        int64  `json:"target_group_id" binding:"required"`
+	PaymentMethod        string `json:"payment_method" binding:"required"`
+	PaymentChannel       string `json:"payment_channel"`
+	CaptchaToken         string `json:"captcha_token"`
+}
+
+// CreateUpgradeOrder 创建升级订单（需认证）
+// POST /api/v1/subscription-orders/upgrade
+func (h *SubscriptionPlanHandler) CreateUpgradeOrder(c *gin.Context) {
+	subject, ok := middleware.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "未登录")
+		return
+	}
+	userID := subject.UserID
+	ctx := c.Request.Context()
+
+	// 限流检查
+	limitResult, err := h.rechargeRateLimitService.CheckRechargeRateLimits(ctx, userID)
+	if err != nil {
+		log.Printf("[SubscriptionPlanHandler] check rate limit failed: %v", err)
+	} else if !limitResult.Allowed {
+		respData := gin.H{
+			"error":      "rate_limit_exceeded",
+			"limit_type": limitResult.LimitType,
+			"message":    limitResult.Message,
+		}
+		if limitResult.LimitType == "minute" {
+			c.Header("Retry-After", strconv.Itoa(limitResult.RetryAfter))
+			respData["retry_after"] = limitResult.RetryAfter
+		} else {
+			c.Header("X-RateLimit-Reset", limitResult.ResetTime.Format(time.RFC3339))
+			respData["reset_time"] = limitResult.ResetTime.Format(time.RFC3339)
+		}
+		c.JSON(http.StatusTooManyRequests, respData)
+		return
+	}
+
+	var req CreateUpgradeOrderRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "请求参数无效")
+		return
+	}
+
+	// IP 级验证码检查
+	clientIP := c.ClientIP()
+	ipResult, err := h.rechargeRateLimitService.CheckIPCaptchaRequired(ctx, clientIP)
+	if err != nil {
+		log.Printf("[SubscriptionPlanHandler] check IP captcha failed: %v", err)
+	} else if ipResult.NeedsCaptcha {
+		if req.CaptchaToken == "" {
+			c.JSON(http.StatusPreconditionRequired, gin.H{
+				"error":           "captcha_required",
+				"message":         ipResult.Message,
+				"captcha_enabled": true,
+			})
+			return
+		}
+		if err := h.turnstileService.VerifyToken(ctx, req.CaptchaToken, clientIP); err != nil {
+			log.Printf("[SubscriptionPlanHandler] turnstile verification failed: %v", err)
+			response.BadRequest(c, "验证码验证失败，请重试")
+			return
+		}
+	}
+
+	// 验证支付方式
+	if req.PaymentMethod != service.PaymentMethodWeChatPay {
+		response.BadRequest(c, "当前仅支持微信支付")
+		return
+	}
+
+	// 创建升级订单
+	order, err := h.subscriptionOrderService.CreateUpgradeOrder(ctx, userID, &service.CreateUpgradeOrderRequest{
+		SourceSubscriptionID: req.SourceSubscriptionID,
+		TargetGroupID:        req.TargetGroupID,
+		PaymentMethod:        req.PaymentMethod,
+		PaymentChannel:       req.PaymentChannel,
+	})
+	if err != nil {
+		if !response.ErrorFrom(c, err) {
+			response.InternalError(c, "创建升级订单失败")
+		}
+		return
+	}
+
+	groupName := ""
+	if order.Group != nil {
+		groupName = order.Group.Name
+	}
+
+	response.Success(c, CreateOrderResponse{
+		OrderNo:        order.OrderNo,
+		GroupID:        order.GroupID,
+		GroupName:      groupName,
+		Amount:         order.Amount,
+		ValidityDays:   order.ValidityDays,
+		PaymentMethod:  order.PaymentMethod,
+		PaymentChannel: order.PaymentChannel,
+		Status:         order.Status,
+		ExpireAt:       order.ExpireAt,
+		ExpireMinutes:  h.subscriptionOrderService.GetExpireMinutes(),
+		CreatedAt:      order.CreatedAt,
+		OrderType:      order.OrderType,
+		OriginalAmount: order.OriginalAmount,
+		DiscountAmount: order.DiscountAmount,
 	})
 }
