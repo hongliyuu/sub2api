@@ -350,3 +350,41 @@ func (s *UsageService) GetStatsWithFilters(ctx context.Context, filters usagesta
 	}
 	return stats, nil
 }
+
+// GetBalanceGroupUserStats returns aggregated usage statistics per user for a balance group.
+func (s *UsageService) GetBalanceGroupUserStats(ctx context.Context, params *usagestats.BalanceGroupUserStatsParams) (*usagestats.BalanceGroupUserStatsResponse, error) {
+	if params.GroupID <= 0 {
+		return nil, fmt.Errorf("group_id is required")
+	}
+	if params.StartDate == nil || params.EndDate == nil {
+		return nil, fmt.Errorf("start_date and end_date are required")
+	}
+	if params.EndDate.Before(*params.StartDate) {
+		return nil, fmt.Errorf("end_date must be after start_date")
+	}
+	// 日期范围不超过 90 天
+	if params.EndDate.Sub(*params.StartDate).Hours() > 90*24 {
+		return nil, fmt.Errorf("date range must not exceed 90 days")
+	}
+	if params.Page < 1 {
+		params.Page = 1
+	}
+	if params.PageSize < 1 || params.PageSize > 100 {
+		params.PageSize = 20
+	}
+	// sort_by 白名单校验
+	allowedSortBy := map[string]bool{
+		"total_cost":        true,
+		"actual_cost":       true,
+		"total_requests":    true,
+		"input_tokens":      true,
+		"output_tokens":     true,
+		"cache_read_tokens": true,
+		"balance":           true,
+	}
+	if params.SortBy != "" && !allowedSortBy[params.SortBy] {
+		params.SortBy = "total_cost"
+	}
+
+	return s.usageRepo.GetBalanceGroupUserStats(ctx, params)
+}

@@ -65,6 +65,9 @@ func RegisterAdminRoutes(
 		// 使用记录管理
 		registerUsageRoutes(admin, h)
 
+		// 余额管理
+		registerBalanceRoutes(admin, h)
+
 		// 用户属性管理
 		registerUserAttributeRoutes(admin, h)
 	}
@@ -385,5 +388,12 @@ func registerUserAttributeRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		attrs.PUT("/reorder", h.Admin.UserAttribute.ReorderDefinitions)
 		attrs.PUT("/:id", h.Admin.UserAttribute.UpdateDefinition)
 		attrs.DELETE("/:id", h.Admin.UserAttribute.DeleteDefinition)
+	}
+}
+
+func registerBalanceRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	balance := admin.Group("/balance")
+	{
+		balance.GET("/stats", h.Admin.Balance.GetStats)
 	}
 }

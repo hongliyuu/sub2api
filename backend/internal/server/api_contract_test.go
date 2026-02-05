@@ -1671,6 +1671,10 @@ func (r *stubUsageLogRepo) GetStatsWithFilters(ctx context.Context, filters usag
 	return nil, errors.New("not implemented")
 }
 
+func (r *stubUsageLogRepo) GetBalanceGroupUserStats(ctx context.Context, params *usagestats.BalanceGroupUserStatsParams) (*usagestats.BalanceGroupUserStatsResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
 type stubSettingRepo struct {
 	all map[string]string
 }

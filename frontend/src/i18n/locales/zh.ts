@@ -192,6 +192,7 @@ export default {
     users: '用户管理',
     groups: '分组管理',
     subscriptions: '订阅管理',
+    balance: '余额管理',
     accounts: '账号管理',
     proxies: 'IP管理',
     redeemCodes: '兑换码',
@@ -427,7 +428,16 @@ export default {
         claudeCode: 'Claude Code',
         geminiCli: 'Gemini CLI',
         codexCli: 'Codex CLI',
-        opencode: 'OpenCode'
+        opencode: 'OpenCode',
+        ccSwitch: 'CC Switch'
+      },
+      ccSwitch: {
+        basicConfigTitle: '基础配置',
+        basicConfigHint: '在 CC Switch 中添加供应商时，请填写以下信息：',
+        baseUrlLabel: '请求地址',
+        usageConfigTitle: '用量查询提取器代码',
+        usageConfigHint:
+          '配置用量查询：添加完供应商后，选中该供应商 → 点击「配置用量查询」子标签 → 点击「启用用量查询」→ 点击「自定义预设模板」→ 将以下代码拷贝到「提取器代码」中即可。'
       },
       antigravity: {
         description: '为 Antigravity 分组配置 API 访问。请根据您使用的客户端选择对应的配置方式。',
@@ -1270,7 +1280,34 @@ export default {
       revokeConfirm: "确定要撤销 '{user}' 的订阅吗？此操作无法撤销。"
     },
 
-    // Accounts Management
+    // Balance Management
+    balance: {
+      title: '余额管理',
+      description: '查看余额分组用户用量统计',
+      selectGroup: '选择分组',
+      selectGroupHint: '请选择一个分组',
+      selectGroupHintDesc: '从上方选择一个余额计费分组以查看用户用量数据',
+      noStandardGroups: '暂无余额计费分组',
+      noStandardGroupsDesc: '当前没有配置余额计费类型（standard）的分组',
+      searchPlaceholder: '搜索邮箱/用户名',
+      noData: '暂无数据',
+      noDataDesc: '当前条件下没有找到用户用量数据',
+      modelDist: '模型分布',
+      modelDistTitle: '{user} 的模型分布',
+      noModelData: '暂无模型分布数据',
+      history: '充值历史',
+      columns: {
+        user: '用户',
+        balance: '余额',
+        totalCost: '标准计费',
+        actualCost: '实际扣除',
+        requests: '请求次数',
+        inputTokens: '输入 Token',
+        outputTokens: '输出 Token',
+        cacheTokens: '缓存 Token',
+        actions: '操作'
+      }
+    },
     accounts: {
       title: '账号管理',
       description: '管理 AI 平台账号和 Cookie',
