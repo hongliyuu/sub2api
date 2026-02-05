@@ -2386,3 +2386,139 @@ func setToSlice(set map[int64]struct{}) []int64 {
 	}
 	return out
 }
+
+// BalanceGroupUserStats type alias
+type BalanceGroupUserStats = usagestats.BalanceGroupUserStats
+type BalanceGroupUserStatsResponse = usagestats.BalanceGroupUserStatsResponse
+type BalanceGroupUserStatsParams = usagestats.BalanceGroupUserStatsParams
+
+// GetBalanceGroupUserStats returns aggregated usage statistics per user for a balance group within a time range.
+func (r *usageLogRepository) GetBalanceGroupUserStats(ctx context.Context, params *BalanceGroupUserStatsParams) (resp *BalanceGroupUserStatsResponse, err error) {
+	// Build dynamic WHERE clause for search
+	args := []any{params.GroupID, *params.StartDate, *params.EndDate}
+	argPos := 4
+
+	searchClause := ""
+	if params.Search != "" {
+		searchClause = fmt.Sprintf(" AND (u.email ILIKE $%d OR u.username ILIKE $%d)", argPos, argPos+1)
+		// Escape ILIKE metacharacters to prevent unintended wildcard matching
+		escaped := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(params.Search)
+		searchPattern := "%" + escaped + "%"
+		args = append(args, searchPattern, searchPattern)
+		argPos += 2
+	}
+
+	// Validate and set sort_by
+	sortColumn := "total_cost"
+	allowedSorts := map[string]string{
+		"total_cost":      "total_cost",
+		"actual_cost":     "actual_cost",
+		"total_requests":  "total_requests",
+		"input_tokens":    "input_tokens",
+		"output_tokens":   "output_tokens",
+		"cache_read_tokens": "cache_read_tokens",
+		"balance":         "balance",
+	}
+	if col, ok := allowedSorts[params.SortBy]; ok {
+		sortColumn = col
+	}
+
+	sortOrder := "DESC"
+	if strings.EqualFold(params.SortOrder, "asc") {
+		sortOrder = "ASC"
+	}
+
+	// Count query for total
+	countQuery := fmt.Sprintf(`
+		WITH usage_agg AS (
+			SELECT user_id
+			FROM usage_logs
+			WHERE group_id = $1 AND created_at >= $2 AND created_at < $3
+			GROUP BY user_id
+		)
+		SELECT COUNT(DISTINCT ua.user_id)
+		FROM usage_agg ua
+		JOIN users u ON u.id = ua.user_id
+		WHERE 1=1%s
+	`, searchClause)
+
+	var total int64
+	if err := scanSingleRow(ctx, r.sql, countQuery, args, &total); err != nil {
+		return nil, err
+	}
+
+	// Data query with pagination
+	limit := params.PageSize
+	offset := (params.Page - 1) * params.PageSize
+
+	dataArgs := make([]any, len(args))
+	copy(dataArgs, args)
+	limitPos := argPos
+	offsetPos := argPos + 1
+	dataArgs = append(dataArgs, limit, offset)
+
+	dataQuery := fmt.Sprintf(`
+		WITH usage_agg AS (
+			SELECT
+				user_id,
+				COALESCE(SUM(total_cost), 0) as total_cost,
+				COALESCE(SUM(actual_cost), 0) as actual_cost,
+				COUNT(*) as total_requests,
+				COALESCE(SUM(input_tokens), 0) as input_tokens,
+				COALESCE(SUM(output_tokens), 0) as output_tokens,
+				COALESCE(SUM(cache_read_tokens), 0) as cache_read_tokens
+			FROM usage_logs
+			WHERE group_id = $1 AND created_at >= $2 AND created_at < $3
+			GROUP BY user_id
+		)
+		SELECT
+			ua.user_id,
+			COALESCE(u.email, '') as email,
+			COALESCE(u.username, '') as username,
+			COALESCE(u.balance, 0) as balance,
+			ua.total_cost,
+			ua.actual_cost,
+			ua.total_requests,
+			ua.input_tokens,
+			ua.output_tokens,
+			ua.cache_read_tokens
+		FROM usage_agg ua
+		JOIN users u ON u.id = ua.user_id
+		WHERE 1=1%s
+		ORDER BY %s %s
+		LIMIT $%d OFFSET $%d
+	`, searchClause, sortColumn, sortOrder, limitPos, offsetPos)
+
+	rows, err := r.sql.QueryContext(ctx, dataQuery, dataArgs...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil && err == nil {
+			err = closeErr
+			resp = nil
+		}
+	}()
+
+	users := make([]BalanceGroupUserStats, 0)
+	for rows.Next() {
+		var s BalanceGroupUserStats
+		if err = rows.Scan(
+			&s.UserID, &s.Email, &s.Username, &s.Balance,
+			&s.TotalCost, &s.ActualCost, &s.TotalRequests,
+			&s.InputTokens, &s.OutputTokens, &s.CacheReadTokens,
+		); err != nil {
+			return nil, err
+		}
+		users = append(users, s)
+	}
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	resp = &BalanceGroupUserStatsResponse{
+		Users: users,
+		Total: total,
+	}
+	return resp, nil
+}

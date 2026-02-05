@@ -53,6 +53,9 @@ type UsageLogRepository interface {
 	// Account stats
 	GetAccountUsageStats(ctx context.Context, accountID int64, startTime, endTime time.Time) (*usagestats.AccountUsageStatsResponse, error)
 
+	// Balance group stats
+	GetBalanceGroupUserStats(ctx context.Context, params *usagestats.BalanceGroupUserStatsParams) (*usagestats.BalanceGroupUserStatsResponse, error)
+
 	// Aggregated stats (optimized)
 	GetUserStatsAggregated(ctx context.Context, userID int64, startTime, endTime time.Time) (*usagestats.UsageStats, error)
 	GetAPIKeyStatsAggregated(ctx context.Context, apiKeyID int64, startTime, endTime time.Time) (*usagestats.UsageStats, error)
