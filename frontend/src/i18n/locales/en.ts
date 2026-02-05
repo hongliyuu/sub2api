@@ -195,6 +195,7 @@ export default {
     users: 'Users',
     groups: 'Groups',
     subscriptions: 'Subscriptions',
+    balance: 'Balance',
     accounts: 'Accounts',
     proxies: 'Proxies',
     redeemCodes: 'Redeem Codes',
@@ -429,6 +430,15 @@ export default {
         geminiCli: 'Gemini CLI',
         codexCli: 'Codex CLI',
         opencode: 'OpenCode',
+        ccSwitch: 'CC Switch',
+      },
+      ccSwitch: {
+        basicConfigTitle: 'Basic Config',
+        basicConfigHint: 'Fill in the following info when adding a provider in CC Switch:',
+        baseUrlLabel: 'Base URL',
+        usageConfigTitle: 'Usage Query Extractor Code',
+        usageConfigHint:
+          'Configure usage query: After adding a provider, select it → click "Configure Usage Query" tab → enable usage query → click "Custom Preset Template" → paste the following code into the "Extractor Code" field.',
       },
       antigravity: {
         description: 'Configure API access for Antigravity group. Select the configuration method based on your client.',
@@ -1173,6 +1183,35 @@ export default {
       validityDaysRequired: 'Please enter a valid number of days (at least 1)',
       revokeConfirm:
         "Are you sure you want to revoke the subscription for '{user}'? This action cannot be undone."
+    },
+
+    // Balance Management
+    balance: {
+      title: 'Balance Management',
+      description: 'View balance group user usage statistics',
+      selectGroup: 'Select Group',
+      selectGroupHint: 'Please select a group',
+      selectGroupHintDesc: 'Select a balance billing group above to view user usage data',
+      noStandardGroups: 'No Balance Groups',
+      noStandardGroupsDesc: 'No groups configured with balance billing type (standard)',
+      searchPlaceholder: 'Search email/username',
+      noData: 'No Data',
+      noDataDesc: 'No user usage data found for the current filters',
+      modelDist: 'Models',
+      modelDistTitle: 'Model Distribution for {user}',
+      noModelData: 'No model distribution data',
+      history: 'History',
+      columns: {
+        user: 'User',
+        balance: 'Balance',
+        totalCost: 'Standard Cost',
+        actualCost: 'Actual Cost',
+        requests: 'Requests',
+        inputTokens: 'Input Tokens',
+        outputTokens: 'Output Tokens',
+        cacheTokens: 'Cache Tokens',
+        actions: 'Actions'
+      }
     },
 
     // Accounts

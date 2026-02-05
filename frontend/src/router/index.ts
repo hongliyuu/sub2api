@@ -254,6 +254,18 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/balance',
+    name: 'AdminBalance',
+    component: () => import('@/views/admin/BalanceView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Balance Management',
+      titleKey: 'admin.balance.title',
+      descriptionKey: 'admin.balance.description'
+    }
+  },
+  {
     path: '/admin/accounts',
     name: 'AdminAccounts',
     component: () => import('@/views/admin/AccountsView.vue'),

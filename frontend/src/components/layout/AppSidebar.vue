@@ -289,6 +289,26 @@ const CreditCardIcon = {
     )
 }
 
+const WalletIcon = {
+  render: () =>
+    h(
+      'svg',
+      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
+      [
+        h('path', {
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+          d: 'M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 110-6h.008A2.251 2.251 0 0117.25 1.5h.5A2.25 2.25 0 0120 3.75v.443c.572.227 1.072.58 1.462 1.031C22.07 5.93 22.5 6.9 22.5 8.25v7.5c0 1.35-.43 2.32-1.038 3.026A3.733 3.733 0 0120 19.807v.443A2.25 2.25 0 0117.75 22.5h-.5a2.251 2.251 0 01-2.242-2.25H15a3 3 0 110-6h3.75A2.25 2.25 0 0021 12z'
+        }),
+        h('path', {
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+          d: 'M15.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0z'
+        })
+      ]
+    )
+}
+
 const GlobeIcon = {
   render: () =>
     h(
@@ -484,6 +504,7 @@ const adminNavItems = computed(() => {
     { path: '/admin/users', label: t('nav.users'), icon: UsersIcon, hideInSimpleMode: true },
     { path: '/admin/groups', label: t('nav.groups'), icon: FolderIcon, hideInSimpleMode: true },
     { path: '/admin/subscriptions', label: t('nav.subscriptions'), icon: CreditCardIcon, hideInSimpleMode: true },
+    { path: '/admin/balance', label: t('nav.balance'), icon: WalletIcon, hideInSimpleMode: true },
     { path: '/admin/accounts', label: t('nav.accounts'), icon: GlobeIcon },
     { path: '/admin/announcements', label: t('nav.announcements'), icon: BellIcon },
     { path: '/admin/proxies', label: t('nav.proxies'), icon: ServerIcon },
