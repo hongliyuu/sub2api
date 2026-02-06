@@ -16,6 +16,7 @@ type User struct {
 	Concurrency   int       `json:"concurrency"`
 	Status        string    `json:"status"`
 	AllowedGroups []int64   `json:"allowed_groups"`
+	HasPassword   bool      `json:"has_password"`
 	WeChatOpenID  string    `json:"wechat_openid"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`

@@ -205,6 +205,20 @@ func (_u *UserUpdate) SetNillableWechatOpenid(v *string) *UserUpdate {
 	return _u
 }
 
+// SetHasPassword sets the "has_password" field.
+func (_u *UserUpdate) SetHasPassword(v bool) *UserUpdate {
+	_u.mutation.SetHasPassword(v)
+	return _u
+}
+
+// SetNillableHasPassword sets the "has_password" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableHasPassword(v *bool) *UserUpdate {
+	if v != nil {
+		_u.SetHasPassword(*v)
+	}
+	return _u
+}
+
 // SetTotpSecretEncrypted sets the "totp_secret_encrypted" field.
 func (_u *UserUpdate) SetTotpSecretEncrypted(v string) *UserUpdate {
 	_u.mutation.SetTotpSecretEncrypted(v)
@@ -878,6 +892,9 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.WechatOpenid(); ok {
 		_spec.SetField(user.FieldWechatOpenid, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.HasPassword(); ok {
+		_spec.SetField(user.FieldHasPassword, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.TotpSecretEncrypted(); ok {
 		_spec.SetField(user.FieldTotpSecretEncrypted, field.TypeString, value)
@@ -1641,6 +1658,20 @@ func (_u *UserUpdateOne) SetNillableWechatOpenid(v *string) *UserUpdateOne {
 	return _u
 }
 
+// SetHasPassword sets the "has_password" field.
+func (_u *UserUpdateOne) SetHasPassword(v bool) *UserUpdateOne {
+	_u.mutation.SetHasPassword(v)
+	return _u
+}
+
+// SetNillableHasPassword sets the "has_password" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableHasPassword(v *bool) *UserUpdateOne {
+	if v != nil {
+		_u.SetHasPassword(*v)
+	}
+	return _u
+}
+
 // SetTotpSecretEncrypted sets the "totp_secret_encrypted" field.
 func (_u *UserUpdateOne) SetTotpSecretEncrypted(v string) *UserUpdateOne {
 	_u.mutation.SetTotpSecretEncrypted(v)
@@ -2344,6 +2375,9 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if value, ok := _u.mutation.WechatOpenid(); ok {
 		_spec.SetField(user.FieldWechatOpenid, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.HasPassword(); ok {
+		_spec.SetField(user.FieldHasPassword, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.TotpSecretEncrypted(); ok {
 		_spec.SetField(user.FieldTotpSecretEncrypted, field.TypeString, value)

@@ -115,6 +115,11 @@ func WechatOpenid(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldWechatOpenid, v))
 }
 
+// HasPassword applies equality check predicate on the "has_password" field. It's identical to HasPasswordEQ.
+func HasPassword(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldHasPassword, v))
+}
+
 // TotpSecretEncrypted applies equality check predicate on the "totp_secret_encrypted" field. It's identical to TotpSecretEncryptedEQ.
 func TotpSecretEncrypted(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldTotpSecretEncrypted, v))
@@ -808,6 +813,16 @@ func WechatOpenidEqualFold(v string) predicate.User {
 // WechatOpenidContainsFold applies the ContainsFold predicate on the "wechat_openid" field.
 func WechatOpenidContainsFold(v string) predicate.User {
 	return predicate.User(sql.FieldContainsFold(FieldWechatOpenid, v))
+}
+
+// HasPasswordEQ applies the EQ predicate on the "has_password" field.
+func HasPasswordEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldHasPassword, v))
+}
+
+// HasPasswordNEQ applies the NEQ predicate on the "has_password" field.
+func HasPasswordNEQ(v bool) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldHasPassword, v))
 }
 
 // TotpSecretEncryptedEQ applies the EQ predicate on the "totp_secret_encrypted" field.

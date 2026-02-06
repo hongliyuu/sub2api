@@ -21,6 +21,8 @@ func RegisterUserRoutes(
 		{
 			user.GET("/profile", h.User.GetProfile)
 			user.PUT("/password", h.User.ChangePassword)
+			user.POST("/send-set-password-code", h.User.SendSetPasswordCode)
+			user.POST("/set-password", h.User.SetPassword)
 			user.PUT("", h.User.UpdateProfile)
 
 			// TOTP 双因素认证

@@ -18,6 +18,7 @@ type User struct {
 	Status        string
 	AllowedGroups []int64
 	TokenVersion  int64  // Incremented on password change to invalidate existing tokens
+	HasPassword   bool   // Whether the user has set a password (false for OAuth users)
 	WeChatOpenID  string // WeChat OpenID for account binding
 	CreatedAt     time.Time
 	UpdatedAt     time.Time

@@ -39,6 +39,8 @@ const (
 	FieldNotes = "notes"
 	// FieldWechatOpenid holds the string denoting the wechat_openid field in the database.
 	FieldWechatOpenid = "wechat_openid"
+	// FieldHasPassword holds the string denoting the has_password field in the database.
+	FieldHasPassword = "has_password"
 	// FieldTotpSecretEncrypted holds the string denoting the totp_secret_encrypted field in the database.
 	FieldTotpSecretEncrypted = "totp_secret_encrypted"
 	// FieldTotpEnabled holds the string denoting the totp_enabled field in the database.
@@ -185,6 +187,7 @@ var Columns = []string{
 	FieldUsername,
 	FieldNotes,
 	FieldWechatOpenid,
+	FieldHasPassword,
 	FieldTotpSecretEncrypted,
 	FieldTotpEnabled,
 	FieldTotpEnabledAt,
@@ -249,6 +252,8 @@ var (
 	DefaultWechatOpenid string
 	// WechatOpenidValidator is a validator for the "wechat_openid" field. It is called by the builders before save.
 	WechatOpenidValidator func(string) error
+	// DefaultHasPassword holds the default value on creation for the "has_password" field.
+	DefaultHasPassword bool
 	// DefaultTotpEnabled holds the default value on creation for the "totp_enabled" field.
 	DefaultTotpEnabled bool
 	// DefaultUsageReportEnabled holds the default value on creation for the "usage_report_enabled" field.
@@ -329,6 +334,11 @@ func ByNotes(opts ...sql.OrderTermOption) OrderOption {
 // ByWechatOpenid orders the results by the wechat_openid field.
 func ByWechatOpenid(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldWechatOpenid, opts...).ToFunc()
+}
+
+// ByHasPassword orders the results by the has_password field.
+func ByHasPassword(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldHasPassword, opts...).ToFunc()
 }
 
 // ByTotpSecretEncrypted orders the results by the totp_secret_encrypted field.

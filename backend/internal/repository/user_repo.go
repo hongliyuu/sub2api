@@ -60,6 +60,7 @@ func (r *userRepository) Create(ctx context.Context, userIn *service.User) error
 		SetBalance(userIn.Balance).
 		SetConcurrency(userIn.Concurrency).
 		SetStatus(userIn.Status).
+		SetHasPassword(userIn.HasPassword).
 		Save(ctx)
 	if err != nil {
 		return translatePersistenceError(err, nil, service.ErrEmailExists)
@@ -142,6 +143,7 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User) error
 		SetBalance(userIn.Balance).
 		SetConcurrency(userIn.Concurrency).
 		SetStatus(userIn.Status).
+		SetHasPassword(userIn.HasPassword).
 		Save(ctx)
 	if err != nil {
 		return translatePersistenceError(err, service.ErrUserNotFound, service.ErrEmailExists)
@@ -383,7 +385,7 @@ func (r *userRepository) BindWeChatOpenID(ctx context.Context, userID int64, ope
 
 // GetByWeChatOpenID finds a user by WeChat OpenID
 func (r *userRepository) GetByWeChatOpenID(ctx context.Context, openID string) (*service.User, error) {
-	m, err := r.client.User.Query().Where(dbuser.WechatOpenidEQ(openID)).Only(ctx)
+	m, err := r.client.User.Query().Where(dbuser.WechatOpenidEqualFold(openID), dbuser.WechatOpenidNEQ("")).Only(ctx)
 	if err != nil {
 		return nil, translatePersistenceError(err, service.ErrUserNotFound, nil)
 	}
@@ -401,7 +403,7 @@ func (r *userRepository) GetByWeChatOpenID(ctx context.Context, openID string) (
 
 // ExistsByWeChatOpenID checks if a user with the given WeChat OpenID exists
 func (r *userRepository) ExistsByWeChatOpenID(ctx context.Context, openID string) (bool, error) {
-	return r.client.User.Query().Where(dbuser.WechatOpenidEQ(openID), dbuser.WechatOpenidNEQ("")).Exist(ctx)
+	return r.client.User.Query().Where(dbuser.WechatOpenidEqualFold(openID), dbuser.WechatOpenidNEQ("")).Exist(ctx)
 }
 
 // UnbindWeChatOpenID removes the WeChat OpenID binding from a user

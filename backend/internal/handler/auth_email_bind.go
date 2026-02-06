@@ -186,16 +186,18 @@ func isWeChatSyntheticEmail(email string) bool {
 
 // extractWeChatOpenID 从微信合成邮箱中提取 OpenID
 // 例如：wechat-o_xxx@wechat-auth.invalid -> o_xxx
+// 注意：只对域名后缀做大小写不敏感检查，保留 OpenID 原始大小写
 func extractWeChatOpenID(email string) string {
-	email = strings.ToLower(email)
-	if !strings.HasSuffix(email, WeChatSyntheticEmailDomain) {
+	lowerEmail := strings.ToLower(email)
+	lowerDomain := strings.ToLower(WeChatSyntheticEmailDomain)
+	if !strings.HasSuffix(lowerEmail, lowerDomain) {
 		return ""
 	}
-	// 去掉后缀 @wechat-auth.invalid
-	localPart := strings.TrimSuffix(email, WeChatSyntheticEmailDomain)
-	// 去掉前缀 wechat-
-	if strings.HasPrefix(localPart, "wechat-") {
-		return strings.TrimPrefix(localPart, "wechat-")
+	// 用原始 email 截取，保留 OpenID 大小写
+	localPart := email[:len(email)-len(WeChatSyntheticEmailDomain)]
+	// 去掉前缀 wechat-（大小写不敏感匹配前缀，保留 OpenID 部分原始大小写）
+	if strings.HasPrefix(strings.ToLower(localPart), "wechat-") {
+		return localPart[len("wechat-"):]
 	}
 	return ""
 }

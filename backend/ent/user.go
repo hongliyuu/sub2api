@@ -41,6 +41,8 @@ type User struct {
 	Notes string `json:"notes,omitempty"`
 	// WechatOpenid holds the value of the "wechat_openid" field.
 	WechatOpenid string `json:"wechat_openid,omitempty"`
+	// HasPassword holds the value of the "has_password" field.
+	HasPassword bool `json:"has_password,omitempty"`
 	// TotpSecretEncrypted holds the value of the "totp_secret_encrypted" field.
 	TotpSecretEncrypted *string `json:"totp_secret_encrypted,omitempty"`
 	// TotpEnabled holds the value of the "totp_enabled" field.
@@ -214,7 +216,7 @@ func (*User) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
-		case user.FieldTotpEnabled, user.FieldUsageReportEnabled:
+		case user.FieldHasPassword, user.FieldTotpEnabled, user.FieldUsageReportEnabled:
 			values[i] = new(sql.NullBool)
 		case user.FieldBalance:
 			values[i] = new(sql.NullFloat64)
@@ -317,6 +319,12 @@ func (_m *User) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field wechat_openid", values[i])
 			} else if value.Valid {
 				_m.WechatOpenid = value.String
+			}
+		case user.FieldHasPassword:
+			if value, ok := values[i].(*sql.NullBool); !ok {
+				return fmt.Errorf("unexpected type %T for field has_password", values[i])
+			} else if value.Valid {
+				_m.HasPassword = value.Bool
 			}
 		case user.FieldTotpSecretEncrypted:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -494,6 +502,9 @@ func (_m *User) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("wechat_openid=")
 	builder.WriteString(_m.WechatOpenid)
+	builder.WriteString(", ")
+	builder.WriteString("has_password=")
+	builder.WriteString(fmt.Sprintf("%v", _m.HasPassword))
 	builder.WriteString(", ")
 	if v := _m.TotpSecretEncrypted; v != nil {
 		builder.WriteString("totp_secret_encrypted=")

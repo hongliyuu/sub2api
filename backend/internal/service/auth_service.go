@@ -174,6 +174,7 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 	user := &User{
 		Email:        email,
 		PasswordHash: hashedPassword,
+		HasPassword:  true,
 		Role:         RoleUser,
 		Balance:      defaultBalance,
 		Concurrency:  defaultConcurrency,
@@ -446,6 +447,7 @@ func (s *AuthService) LoginOrRegisterOAuth(ctx context.Context, email, username 
 				Email:        email,
 				Username:     username,
 				PasswordHash: hashedPassword,
+				HasPassword:  false,
 				Role:         RoleUser,
 				Balance:      defaultBalance,
 				Concurrency:  defaultConcurrency,
@@ -542,6 +544,7 @@ func (s *AuthService) LoginOrRegisterOAuthWithTokenPair(ctx context.Context, ema
 				Email:        email,
 				Username:     username,
 				PasswordHash: hashedPassword,
+				HasPassword:  false,
 				Role:         RoleUser,
 				Balance:      defaultBalance,
 				Concurrency:  defaultConcurrency,
@@ -869,6 +872,7 @@ func (s *AuthService) ResetPassword(ctx context.Context, email, token, newPasswo
 
 	// Update password and increment TokenVersion
 	user.PasswordHash = hashedPassword
+	user.HasPassword = true
 	user.TokenVersion++ // Invalidate all existing tokens
 
 	if err := s.userRepo.Update(ctx, user); err != nil {

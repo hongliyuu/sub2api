@@ -20,6 +20,7 @@ backend/code80
 
 # 测试代码目录
 backend/cmd/test_email/
+backend/test_email
 
 # Go 测试二进制
 *.test

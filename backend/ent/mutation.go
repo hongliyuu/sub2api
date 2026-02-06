@@ -23905,6 +23905,7 @@ type UserMutation struct {
 	username                      *string
 	notes                         *string
 	wechat_openid                 *string
+	has_password                  *bool
 	totp_secret_encrypted         *string
 	totp_enabled                  *bool
 	totp_enabled_at               *time.Time
@@ -24534,6 +24535,42 @@ func (m *UserMutation) OldWechatOpenid(ctx context.Context) (v string, err error
 // ResetWechatOpenid resets all changes to the "wechat_openid" field.
 func (m *UserMutation) ResetWechatOpenid() {
 	m.wechat_openid = nil
+}
+
+// SetHasPassword sets the "has_password" field.
+func (m *UserMutation) SetHasPassword(b bool) {
+	m.has_password = &b
+}
+
+// HasPassword returns the value of the "has_password" field in the mutation.
+func (m *UserMutation) HasPassword() (r bool, exists bool) {
+	v := m.has_password
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldHasPassword returns the old "has_password" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldHasPassword(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldHasPassword is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldHasPassword requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldHasPassword: %w", err)
+	}
+	return oldValue.HasPassword, nil
+}
+
+// ResetHasPassword resets all changes to the "has_password" field.
+func (m *UserMutation) ResetHasPassword() {
+	m.has_password = nil
 }
 
 // SetTotpSecretEncrypted sets the "totp_secret_encrypted" field.
@@ -25460,7 +25497,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 18)
+	fields := make([]string, 0, 19)
 	if m.created_at != nil {
 		fields = append(fields, user.FieldCreatedAt)
 	}
@@ -25496,6 +25533,9 @@ func (m *UserMutation) Fields() []string {
 	}
 	if m.wechat_openid != nil {
 		fields = append(fields, user.FieldWechatOpenid)
+	}
+	if m.has_password != nil {
+		fields = append(fields, user.FieldHasPassword)
 	}
 	if m.totp_secret_encrypted != nil {
 		fields = append(fields, user.FieldTotpSecretEncrypted)
@@ -25547,6 +25587,8 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.Notes()
 	case user.FieldWechatOpenid:
 		return m.WechatOpenid()
+	case user.FieldHasPassword:
+		return m.HasPassword()
 	case user.FieldTotpSecretEncrypted:
 		return m.TotpSecretEncrypted()
 	case user.FieldTotpEnabled:
@@ -25592,6 +25634,8 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldNotes(ctx)
 	case user.FieldWechatOpenid:
 		return m.OldWechatOpenid(ctx)
+	case user.FieldHasPassword:
+		return m.OldHasPassword(ctx)
 	case user.FieldTotpSecretEncrypted:
 		return m.OldTotpSecretEncrypted(ctx)
 	case user.FieldTotpEnabled:
@@ -25696,6 +25740,13 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetWechatOpenid(v)
+		return nil
+	case user.FieldHasPassword:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetHasPassword(v)
 		return nil
 	case user.FieldTotpSecretEncrypted:
 		v, ok := value.(string)
@@ -25871,6 +25922,9 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldWechatOpenid:
 		m.ResetWechatOpenid()
+		return nil
+	case user.FieldHasPassword:
+		m.ResetHasPassword()
 		return nil
 	case user.FieldTotpSecretEncrypted:
 		m.ResetTotpSecretEncrypted()

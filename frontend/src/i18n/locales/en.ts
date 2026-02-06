@@ -699,6 +699,20 @@ export default {
     passwordTooShort: 'Password must be at least 8 characters long',
     passwordChangeSuccess: 'Password changed successfully',
     passwordChangeFailed: 'Failed to change password',
+    // Set Password (for OAuth users)
+    setPassword: 'Set Password',
+    setPasswordDescription: 'Your account was created via third-party login and has no password set. Set a password to enable email + password login.',
+    setPasswordButton: 'Set Password',
+    settingPassword: 'Setting...',
+    setPasswordSuccess: 'Password set successfully',
+    setPasswordFailed: 'Failed to set password',
+    emailVerifyCode: 'Email Verification Code',
+    sendVerifyCode: 'Send Code',
+    sendingVerifyCode: 'Sending...',
+    verifyCodeSent: 'Verification code sent',
+    verifyCodePlaceholder: 'Enter verification code',
+    verifyCodeCountdown: 'Resend in {seconds}s',
+    bindEmailFirst: 'Please bind a real email address first before setting a password',
     // WeChat Bind
     wechatBind: {
       title: 'WeChat Binding',

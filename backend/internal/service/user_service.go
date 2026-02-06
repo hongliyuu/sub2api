@@ -9,9 +9,10 @@ import (
 )
 
 var (
-	ErrUserNotFound      = infraerrors.NotFound("USER_NOT_FOUND", "user not found")
-	ErrPasswordIncorrect = infraerrors.BadRequest("PASSWORD_INCORRECT", "current password is incorrect")
-	ErrInsufficientPerms = infraerrors.Forbidden("INSUFFICIENT_PERMISSIONS", "insufficient permissions")
+	ErrUserNotFound       = infraerrors.NotFound("USER_NOT_FOUND", "user not found")
+	ErrPasswordIncorrect  = infraerrors.BadRequest("PASSWORD_INCORRECT", "current password is incorrect")
+	ErrInsufficientPerms  = infraerrors.Forbidden("INSUFFICIENT_PERMISSIONS", "insufficient permissions")
+	ErrAlreadyHasPassword = infraerrors.BadRequest("ALREADY_HAS_PASSWORD", "user already has a password, use change password instead")
 )
 
 // UserListFilters contains all filter options for listing users
@@ -62,6 +63,11 @@ type UpdateProfileRequest struct {
 type ChangePasswordRequest struct {
 	CurrentPassword string `json:"current_password"`
 	NewPassword     string `json:"new_password"`
+}
+
+// SetPasswordRequest 设置密码请求（OAuth 用户首次设置密码）
+type SetPasswordRequest struct {
+	NewPassword string `json:"new_password"`
 }
 
 // UserService 用户服务
@@ -154,6 +160,33 @@ func (s *UserService) ChangePassword(ctx context.Context, userID int64, req Chan
 
 	// Increment TokenVersion to invalidate all existing tokens
 	// This ensures that any tokens issued before the password change become invalid
+	user.TokenVersion++
+	user.HasPassword = true
+
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		return fmt.Errorf("update user: %w", err)
+	}
+
+	return nil
+}
+
+// SetInitialPassword 为 OAuth 用户首次设置密码（需要邮箱验证码验证身份）
+// 只有 has_password = false 的用户可以调用
+func (s *UserService) SetInitialPassword(ctx context.Context, userID int64, req SetPasswordRequest) error {
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return fmt.Errorf("get user: %w", err)
+	}
+
+	if user.HasPassword {
+		return ErrAlreadyHasPassword
+	}
+
+	if err := user.SetPassword(req.NewPassword); err != nil {
+		return fmt.Errorf("set password: %w", err)
+	}
+
+	user.HasPassword = true
 	user.TokenVersion++
 
 	if err := s.userRepo.Update(ctx, user); err != nil {

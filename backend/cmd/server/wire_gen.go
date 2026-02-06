@@ -83,7 +83,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	weChatScanCache := repository.NewWeChatScanCache(redisClient)
 	weChatScanLoginService := service.NewWeChatScanLoginService(weChatQRCodeService, weChatScanCache, settingService)
 	authHandler := handler.NewAuthHandler(configConfig, authService, userService, settingService, promoService, redeemService, totpService, weChatScanLoginService)
-	userHandler := handler.NewUserHandler(userService)
+	userHandler := handler.NewUserHandler(userService, authService)
 	apiKeyHandler := handler.NewAPIKeyHandler(apiKeyService)
 	usageLogRepository := repository.NewUsageLogRepository(client, db)
 	usageService := service.NewUsageService(usageLogRepository, userRepository, client, apiKeyAuthCacheInvalidator)

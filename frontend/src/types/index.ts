@@ -33,6 +33,7 @@ export interface User {
   concurrency: number // Allowed concurrent requests
   status: 'active' | 'disabled' // Account status
   allowed_groups: number[] | null // Allowed group IDs (null = all non-exclusive groups)
+  has_password: boolean // Whether the user has set a password
   wechat_openid: string // WeChat OpenID for account binding
   subscriptions?: UserSubscription[] // User's active subscriptions
   created_at: string

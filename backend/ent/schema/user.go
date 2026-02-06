@@ -66,6 +66,10 @@ func (User) Fields() []ent.Field {
 			MaxLen(64).
 			Default(""),
 
+		// 用户是否设置了密码（OAuth 用户初始为 false）
+		field.Bool("has_password").
+			Default(true),
+
 		// TOTP 双因素认证字段
 		field.String("totp_secret_encrypted").
 			SchemaType(map[string]string{dialect.Postgres: "text"}).

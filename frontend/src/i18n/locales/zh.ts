@@ -702,6 +702,20 @@ export default {
     passwordTooShort: '密码至少需要 8 个字符',
     passwordChangeSuccess: '密码修改成功',
     passwordChangeFailed: '密码修改失败',
+    // Set Password (for OAuth users)
+    setPassword: '设置密码',
+    setPasswordDescription: '您的账户通过第三方登录注册，尚未设置密码。设置密码后可以使用邮箱+密码登录。',
+    setPasswordButton: '设置密码',
+    settingPassword: '设置中...',
+    setPasswordSuccess: '密码设置成功',
+    setPasswordFailed: '密码设置失败',
+    emailVerifyCode: '邮箱验证码',
+    sendVerifyCode: '发送验证码',
+    sendingVerifyCode: '发送中...',
+    verifyCodeSent: '验证码已发送',
+    verifyCodePlaceholder: '请输入验证码',
+    verifyCodeCountdown: '{seconds}秒后重新发送',
+    bindEmailFirst: '请先绑定真实邮箱后再设置密码',
     // WeChat Bind
     wechatBind: {
       title: '微信绑定',

@@ -185,6 +185,20 @@ func (_c *UserCreate) SetNillableWechatOpenid(v *string) *UserCreate {
 	return _c
 }
 
+// SetHasPassword sets the "has_password" field.
+func (_c *UserCreate) SetHasPassword(v bool) *UserCreate {
+	_c.mutation.SetHasPassword(v)
+	return _c
+}
+
+// SetNillableHasPassword sets the "has_password" field if the given value is not nil.
+func (_c *UserCreate) SetNillableHasPassword(v *bool) *UserCreate {
+	if v != nil {
+		_c.SetHasPassword(*v)
+	}
+	return _c
+}
+
 // SetTotpSecretEncrypted sets the "totp_secret_encrypted" field.
 func (_c *UserCreate) SetTotpSecretEncrypted(v string) *UserCreate {
 	_c.mutation.SetTotpSecretEncrypted(v)
@@ -528,6 +542,10 @@ func (_c *UserCreate) defaults() error {
 		v := user.DefaultWechatOpenid
 		_c.mutation.SetWechatOpenid(v)
 	}
+	if _, ok := _c.mutation.HasPassword(); !ok {
+		v := user.DefaultHasPassword
+		_c.mutation.SetHasPassword(v)
+	}
 	if _, ok := _c.mutation.TotpEnabled(); !ok {
 		v := user.DefaultTotpEnabled
 		_c.mutation.SetTotpEnabled(v)
@@ -611,6 +629,9 @@ func (_c *UserCreate) check() error {
 		if err := user.WechatOpenidValidator(v); err != nil {
 			return &ValidationError{Name: "wechat_openid", err: fmt.Errorf(`ent: validator failed for field "User.wechat_openid": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.HasPassword(); !ok {
+		return &ValidationError{Name: "has_password", err: errors.New(`ent: missing required field "User.has_password"`)}
 	}
 	if _, ok := _c.mutation.TotpEnabled(); !ok {
 		return &ValidationError{Name: "totp_enabled", err: errors.New(`ent: missing required field "User.totp_enabled"`)}
@@ -708,6 +729,10 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.WechatOpenid(); ok {
 		_spec.SetField(user.FieldWechatOpenid, field.TypeString, value)
 		_node.WechatOpenid = value
+	}
+	if value, ok := _c.mutation.HasPassword(); ok {
+		_spec.SetField(user.FieldHasPassword, field.TypeBool, value)
+		_node.HasPassword = value
 	}
 	if value, ok := _c.mutation.TotpSecretEncrypted(); ok {
 		_spec.SetField(user.FieldTotpSecretEncrypted, field.TypeString, value)
@@ -1131,6 +1156,18 @@ func (u *UserUpsert) UpdateWechatOpenid() *UserUpsert {
 	return u
 }
 
+// SetHasPassword sets the "has_password" field.
+func (u *UserUpsert) SetHasPassword(v bool) *UserUpsert {
+	u.Set(user.FieldHasPassword, v)
+	return u
+}
+
+// UpdateHasPassword sets the "has_password" field to the value that was provided on create.
+func (u *UserUpsert) UpdateHasPassword() *UserUpsert {
+	u.SetExcluded(user.FieldHasPassword)
+	return u
+}
+
 // SetTotpSecretEncrypted sets the "totp_secret_encrypted" field.
 func (u *UserUpsert) SetTotpSecretEncrypted(v string) *UserUpsert {
 	u.Set(user.FieldTotpSecretEncrypted, v)
@@ -1432,6 +1469,20 @@ func (u *UserUpsertOne) SetWechatOpenid(v string) *UserUpsertOne {
 func (u *UserUpsertOne) UpdateWechatOpenid() *UserUpsertOne {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateWechatOpenid()
+	})
+}
+
+// SetHasPassword sets the "has_password" field.
+func (u *UserUpsertOne) SetHasPassword(v bool) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetHasPassword(v)
+	})
+}
+
+// UpdateHasPassword sets the "has_password" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateHasPassword() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateHasPassword()
 	})
 }
 
@@ -1916,6 +1967,20 @@ func (u *UserUpsertBulk) SetWechatOpenid(v string) *UserUpsertBulk {
 func (u *UserUpsertBulk) UpdateWechatOpenid() *UserUpsertBulk {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateWechatOpenid()
+	})
+}
+
+// SetHasPassword sets the "has_password" field.
+func (u *UserUpsertBulk) SetHasPassword(v bool) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetHasPassword(v)
+	})
+}
+
+// UpdateHasPassword sets the "has_password" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateHasPassword() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateHasPassword()
 	})
 }
 
