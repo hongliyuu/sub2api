@@ -2220,7 +2220,7 @@ const form = reactive({
   credentials: {} as Record<string, unknown>,
   proxy_id: null as number | null,
   concurrency: 10,
-  priority: 1,
+  priority: 50,
   rate_multiplier: 1,
   group_ids: [] as number[],
   expires_at: null as number | null
@@ -2566,7 +2566,7 @@ const resetForm = () => {
   form.credentials = {}
   form.proxy_id = null
   form.concurrency = 10
-  form.priority = 1
+  form.priority = 50
   form.rate_multiplier = 1
   form.group_ids = []
   form.expires_at = null
