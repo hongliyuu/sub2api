@@ -101,6 +101,131 @@ export default {
       antigravity: 'Antigravity',
       more: 'More'
     },
+    // Nav anchors
+    nav: {
+      benefits: 'Benefits',
+      howItWorks: 'Install Guide',
+      pricing: 'Pricing',
+      faq: 'FAQ'
+    },
+    // Trust logos
+    trustLogos: {
+      subtitle: 'Deeply integrated with leading AI models'
+    },
+    // Benefits
+    benefits: {
+      title: 'Why Choose Us',
+      subtitle: 'Focused on user value, solving real problems',
+      items: {
+        oneLineIntegration: {
+          title: 'One-line Integration',
+          desc: 'No code changes needed — just swap the API endpoint'
+        },
+        highAvailability: {
+          title: 'High Availability',
+          desc: 'Multi-account pool with automatic failover'
+        },
+        payAsYouGo: {
+          title: 'Pay as You Go',
+          desc: 'Pay only for what you use, no minimums'
+        },
+        subscriptionToApi: {
+          title: 'Subscription to API',
+          desc: 'Convert AI subscriptions into standard API calls'
+        },
+        stickySession: {
+          title: 'Sticky Session',
+          desc: 'Session persistence ensures conversation continuity'
+        },
+        realtimeMonitoring: {
+          title: 'Real-time Monitoring',
+          desc: 'Usage, costs, and status at a glance'
+        },
+        multiModel: {
+          title: 'Multi-model Support',
+          desc: 'Claude, GPT, Gemini — all in one place'
+        },
+        flexibleQuota: {
+          title: 'Flexible Quotas',
+          desc: 'Set daily, weekly, or monthly usage limits'
+        }
+      }
+    },
+    // How it works
+    howItWorks: {
+      title: 'Get Started in 3 Steps',
+      subtitle: 'From sign-up to coding in minutes',
+      step1: {
+        title: 'Register & Get API Key',
+        desc: 'Sign up and generate your personal API key in the dashboard'
+      },
+      step2: {
+        title: 'Install CLI Tool',
+        desc: 'Choose your favorite AI coding assistant and configure it'
+      },
+      step3: {
+        title: 'Start Coding',
+        desc: 'Boost your productivity with AI-powered coding'
+      },
+      showDetail: 'View detailed install guide',
+      hideDetail: 'Hide details',
+      fullGuide: 'View full install guide'
+    },
+    // Pricing
+    pricing: {
+      title: 'Pricing',
+      subtitle: 'Choose the plan that fits you',
+      freeMode: 'Free to Use',
+      freeModeDesc: 'The system is running in free mode. Sign up to access all features',
+      recommended: 'Recommended',
+      days: ' days',
+      dailyLimit: 'Daily limit',
+      monthlyLimit: 'Monthly limit',
+      subscribe: 'Subscribe Now',
+      getStarted: 'Get Started',
+      contactSales: 'More subscription options? Contact our sales team',
+      contactWechat: 'Sales WeChat',
+      perMonth: '/mo',
+      upgrade: 'Upgrade'
+    },
+    // Testimonials
+    testimonials: {
+      title: 'What Users Say',
+      subtitle: 'Feedback from real users'
+    },
+    // FAQ
+    faq: {
+      title: 'FAQ',
+      subtitle: 'Common questions about the platform',
+      items: {
+        apiKey: {
+          q: 'What is an API Key? How do I get one?',
+          a: 'An API Key is your credential to access AI services. After signing up, go to "API Keys" in your dashboard to create one. Each key can have independent permissions and quotas.'
+        },
+        models: {
+          q: 'Which AI models are supported?',
+          a: 'We currently support Claude (Anthropic), GPT (OpenAI), Gemini (Google), and more. The supported model list is continuously updated.'
+        },
+        billing: {
+          q: 'How does billing work? How do I check my balance?',
+          a: 'Billing is based on actual token usage per API call. Log in to your dashboard to view real-time balance and detailed usage records.'
+        },
+        support: {
+          q: 'How do I get support?',
+          a: 'You can reach us through the contact information at the bottom of the page or the feedback feature in your dashboard. We typically respond within 24 hours.'
+        },
+        refund: {
+          q: 'Is there a refund policy?',
+          a: 'Unused balance can be refunded — contact the admin. Subscription plans cannot be refunded during their validity period.'
+        }
+      }
+    },
+    // Final CTA
+    finalCta: {
+      title: 'Ready to Get Started?',
+      subtitle: 'Sign up to get your API key and start using the most powerful AI coding assistants',
+      register: 'Sign Up Now'
+    },
     // CTA section
     cta: {
       title: 'Ready to Get Started?',
@@ -108,7 +233,13 @@ export default {
       button: 'Sign Up Free'
     },
     footer: {
-      allRightsReserved: 'All rights reserved.'
+      allRightsReserved: 'All rights reserved.',
+      product: 'Product',
+      support: 'Support',
+      installGuide: 'Install Guide',
+      releaseNotes: 'Release Notes',
+      faq: 'FAQ',
+      contactUs: 'Contact Us'
     }
   },
 
@@ -3437,6 +3568,22 @@ export default {
         homeContentIframeWarning: '⚠️ iframe mode note: Some websites have X-Frame-Options or CSP security policies that prevent embedding in iframes. If the page appears blank or shows an error, please verify the target website allows embedding, or consider using HTML mode to build your own content.',
         hideCcsImportButton: 'Hide CCS Import Button',
         hideCcsImportButtonHint: 'When enabled, the "Import to CCS" button will be hidden on the API Keys page'
+      },
+      installGuideVideos: {
+        title: 'Install Guide Videos',
+        description: 'Configure video links for each tool in the install guide (Bilibili and YouTube supported)',
+        overview: 'Overview Video',
+        stepInstallNode: 'Install Node.js',
+        stepInstallCli: 'Install CLI',
+        stepConfigApi: 'Configure API',
+        stepLaunch: 'Launch',
+        urlPlaceholder: 'https://www.bilibili.com/video/BVxxx or YouTube URL'
+      },
+      homeTestimonials: {
+        title: 'Homepage Testimonials',
+        description: 'Configure user testimonials shown on the homepage (JSON array format)',
+        placeholder: '[{"name":"John","role":"Developer","content":"Great service","rating":5}]',
+        hint: 'Format: JSON array, each item with name, role (optional), content, rating (1-5, optional)'
       },
       purchase: {
         title: 'Purchase Page',

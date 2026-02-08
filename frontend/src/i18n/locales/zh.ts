@@ -101,6 +101,131 @@ export default {
       antigravity: 'Antigravity',
       more: '更多'
     },
+    // 导航锚点
+    nav: {
+      benefits: '优势',
+      howItWorks: '安装教程',
+      pricing: '定价',
+      faq: '常见问题'
+    },
+    // 信任 Logo 墙
+    trustLogos: {
+      subtitle: '深度集成主流 AI 模型'
+    },
+    // 优势卡片
+    benefits: {
+      title: '为什么选择我们',
+      subtitle: '聚焦用户价值，解决实际问题',
+      items: {
+        oneLineIntegration: {
+          title: '一行代码接入',
+          desc: '无需修改代码，只需更换 API 地址即可使用'
+        },
+        highAvailability: {
+          title: '高可用保障',
+          desc: '多账户池自动切换，保证服务稳定可用'
+        },
+        payAsYouGo: {
+          title: '按量付费',
+          desc: '用多少付多少，无最低消费'
+        },
+        subscriptionToApi: {
+          title: '订阅转 API',
+          desc: '将 AI 订阅转为标准 API 调用'
+        },
+        stickySession: {
+          title: '会话保持',
+          desc: 'Sticky Session 确保对话连贯性'
+        },
+        realtimeMonitoring: {
+          title: '实时监控',
+          desc: '用量、费用、状态一目了然'
+        },
+        multiModel: {
+          title: '多模型支持',
+          desc: 'Claude、GPT、Gemini 一站式管理'
+        },
+        flexibleQuota: {
+          title: '灵活配额',
+          desc: '按包月/余额设置使用额度'
+        }
+      }
+    },
+    // 工作原理
+    howItWorks: {
+      title: '三步开始使用',
+      subtitle: '从注册到使用，只需几分钟',
+      step1: {
+        title: '注册获取 API Key',
+        desc: '注册账号并在控制台生成你的专属 API Key'
+      },
+      step2: {
+        title: '安装 CLI 工具',
+        desc: '选择你喜欢的 AI 编程助手并完成安装配置'
+      },
+      step3: {
+        title: '开始编程',
+        desc: '用 AI 助手提升你的编程效率'
+      },
+      showDetail: '查看详细安装教程',
+      hideDetail: '收起详细教程',
+      fullGuide: '查看完整安装教程'
+    },
+    // 定价
+    pricing: {
+      title: '定价方案',
+      subtitle: '选择适合你的方案',
+      freeMode: '免费使用',
+      freeModeDesc: '当前系统为免费模式，直接注册即可使用所有功能',
+      recommended: '推荐',
+      days: '天',
+      dailyLimit: '每日额度',
+      monthlyLimit: '每月额度',
+      subscribe: '立即订阅',
+      getStarted: '注册使用',
+      contactSales: '更多订阅方式，联系销售团队',
+      contactWechat: '客服微信',
+      perMonth: '/月',
+      upgrade: '升级'
+    },
+    // 用户评价
+    testimonials: {
+      title: '用户怎么说',
+      subtitle: '来自真实用户的反馈'
+    },
+    // FAQ
+    faq: {
+      title: '常见问题',
+      subtitle: '关于使用的常见疑问',
+      items: {
+        apiKey: {
+          q: '什么是 API Key？如何获取？',
+          a: 'API Key 是访问 AI 服务的密钥。注册账号后，在控制台的"API 密钥"页面即可创建。每个 Key 可以设置独立的使用权限和额度。'
+        },
+        models: {
+          q: '支持哪些 AI 模型？',
+          a: '目前支持 Claude（Anthropic）、GPT（OpenAI）、Gemini（Google）等主流 AI 模型。支持的模型列表会持续更新。'
+        },
+        billing: {
+          q: '如何计费？如何查看余额？',
+          a: '按实际 API 调用的 token 使用量计费。登录控制台即可查看实时余额和详细的使用记录。'
+        },
+        support: {
+          q: '遇到问题如何联系客服？',
+          a: '可以通过页面底部的联系方式或控制台中的反馈功能联系我们，通常会在 24 小时内回复。'
+        },
+        refund: {
+          q: '支持退款吗？',
+          a: '未使用的余额支持退款，请联系管理员处理。订阅套餐在有效期内不支持退款。'
+        }
+      }
+    },
+    // 最终 CTA
+    finalCta: {
+      title: '准备好开始了吗？',
+      subtitle: '注册即可获取 API Key，立即体验最强 AI 编程助手',
+      register: '立即注册'
+    },
     // CTA 区块
     cta: {
       title: '准备好开始了吗？',
@@ -108,7 +233,13 @@ export default {
       button: '免费注册'
     },
     footer: {
-      allRightsReserved: '保留所有权利。'
+      allRightsReserved: '保留所有权利。',
+      product: '产品',
+      support: '支持',
+      installGuide: '安装教程',
+      releaseNotes: '版本发布',
+      faq: '常见问题',
+      contactUs: '联系我们'
     }
   },
 
@@ -293,9 +424,9 @@ export default {
     expand: '展开',
     logout: '退出登录',
     github: 'GitHub',
-    mySubscriptions: '我的订阅',
+    mySubscriptions: '购买订阅',
     buySubscription: '购买订阅',
-    recharge: '充值',
+    recharge: '余额充值',
     docs: '文档'
   },
 
@@ -3612,6 +3743,22 @@ export default {
           '⚠️ iframe 模式提示：部分网站设置了 X-Frame-Options 或 CSP 安全策略，禁止被嵌入到 iframe 中。如果页面显示空白或报错，请确认目标网站允许被嵌入，或考虑使用 HTML 模式自行构建页面内容。',
         hideCcsImportButton: '隐藏 CCS 导入按钮',
         hideCcsImportButtonHint: '启用后将在 API Keys 页面隐藏"导入 CCS"按钮'
+      },
+      installGuideVideos: {
+        title: '安装教程视频',
+        description: '为安装教程页配置各工具的视频链接（支持 Bilibili 和 YouTube）',
+        overview: '总览视频',
+        stepInstallNode: '安装 Node.js',
+        stepInstallCli: '安装 CLI',
+        stepConfigApi: '配置 API',
+        stepLaunch: '启动使用',
+        urlPlaceholder: 'https://www.bilibili.com/video/BVxxx 或 YouTube 链接'
+      },
+      homeTestimonials: {
+        title: '首页用户评价',
+        description: '配置首页展示的用户评价（JSON 数组格式）',
+        placeholder: '[{"name":"张三","role":"全栈工程师","content":"效果很好","rating":5}]',
+        hint: '格式：JSON 数组，每项包含 name、role（可选）、content、rating（1-5，可选）字段'
       },
       purchase: {
         title: '购买订阅页面',

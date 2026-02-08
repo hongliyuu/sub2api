@@ -59,5 +59,7 @@ func (h *SettingHandler) GetPublicSettings(c *gin.Context) {
 		WeChatAccountQRCodeURL:      settings.WeChatAccountQRCodeURL,
 		WeChatAccountQRCodeData:     settings.WeChatAccountQRCodeData,
 		Version:                     h.version,
+		InstallGuideVideos:          settings.InstallGuideVideos,
+		HomeTestimonials:            settings.HomeTestimonials,
 	})
 }

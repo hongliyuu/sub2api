@@ -334,6 +334,8 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyWeChatAccountType,
 		SettingKeyWeChatAccountQRCodeURL,
 		SettingKeyWeChatAccountQRCodeData,
+		SettingKeyInstallGuideVideos,
+		SettingKeyHomeTestimonials,
 	}
 
 	settings, err := s.settingRepo.GetMultiple(ctx, keys)
@@ -379,6 +381,8 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		WeChatAccountType:           s.getStringOrDefault(settings, SettingKeyWeChatAccountType, WeChatAccountTypeSubscription),
 		WeChatAccountQRCodeURL:      settings[SettingKeyWeChatAccountQRCodeURL],
 		WeChatAccountQRCodeData:     settings[SettingKeyWeChatAccountQRCodeData],
+		InstallGuideVideos:          settings[SettingKeyInstallGuideVideos],
+		HomeTestimonials:            settings[SettingKeyHomeTestimonials],
 	}, nil
 }
 
@@ -430,6 +434,8 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		WeChatAccountQRCodeURL      string `json:"wechat_account_qrcode_url,omitempty"`
 		WeChatAccountQRCodeData     string `json:"wechat_account_qrcode_data,omitempty"`
 		Version                     string `json:"version,omitempty"`
+		InstallGuideVideos          string `json:"install_guide_videos,omitempty"`
+		HomeTestimonials            string `json:"home_testimonials,omitempty"`
 	}{
 		RegistrationEnabled:         settings.RegistrationEnabled,
 		EmailVerifyEnabled:          settings.EmailVerifyEnabled,
@@ -458,6 +464,8 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		WeChatAccountQRCodeURL:      settings.WeChatAccountQRCodeURL,
 		WeChatAccountQRCodeData:     settings.WeChatAccountQRCodeData,
 		Version:                     s.version,
+		InstallGuideVideos:          settings.InstallGuideVideos,
+		HomeTestimonials:            settings.HomeTestimonials,
 	}, nil
 }
 
@@ -555,6 +563,10 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	updates[SettingKeyUsageReportGlobalEnabled] = strconv.FormatBool(settings.UsageReportGlobalEnabled)
 	updates[SettingKeyUsageReportTargetScope] = settings.UsageReportTargetScope
 	updates[SettingKeyUsageReportGlobalSchedule] = settings.UsageReportGlobalSchedule
+
+	// Homepage & Install Guide
+	updates[SettingKeyInstallGuideVideos] = settings.InstallGuideVideos
+	updates[SettingKeyHomeTestimonials] = settings.HomeTestimonials
 
 	err := s.settingRepo.SetMultiple(ctx, updates)
 	if err == nil && s.onUpdate != nil {
@@ -845,6 +857,10 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	result.UsageReportGlobalEnabled = settings[SettingKeyUsageReportGlobalEnabled] == "true"
 	result.UsageReportTargetScope = s.getStringOrDefault(settings, SettingKeyUsageReportTargetScope, UsageReportScopeOptedIn)
 	result.UsageReportGlobalSchedule = s.getStringOrDefault(settings, SettingKeyUsageReportGlobalSchedule, "09:00")
+
+	// Homepage & Install Guide
+	result.InstallGuideVideos = settings[SettingKeyInstallGuideVideos]
+	result.HomeTestimonials = settings[SettingKeyHomeTestimonials]
 
 	return result
 }

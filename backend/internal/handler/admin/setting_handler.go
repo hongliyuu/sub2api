@@ -108,6 +108,8 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		UsageReportGlobalEnabled:             settings.UsageReportGlobalEnabled,
 		UsageReportTargetScope:               settings.UsageReportTargetScope,
 		UsageReportGlobalSchedule:            settings.UsageReportGlobalSchedule,
+		InstallGuideVideos:                   settings.InstallGuideVideos,
+		HomeTestimonials:                     settings.HomeTestimonials,
 	})
 }
 
@@ -191,6 +193,10 @@ type UpdateSettingsRequest struct {
 	UsageReportGlobalEnabled  *bool   `json:"usage_report_global_enabled"`
 	UsageReportTargetScope    *string `json:"usage_report_target_scope"`
 	UsageReportGlobalSchedule *string `json:"usage_report_global_schedule"`
+
+	// Homepage & Install Guide
+	InstallGuideVideos *string `json:"install_guide_videos"`
+	HomeTestimonials   *string `json:"home_testimonials"`
 }
 
 // UpdateSettings 更新系统设置
@@ -453,6 +459,18 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			return previousSettings.UsageReportGlobalSchedule
 		}(),
+		InstallGuideVideos: func() string {
+			if req.InstallGuideVideos != nil {
+				return *req.InstallGuideVideos
+			}
+			return previousSettings.InstallGuideVideos
+		}(),
+		HomeTestimonials: func() string {
+			if req.HomeTestimonials != nil {
+				return *req.HomeTestimonials
+			}
+			return previousSettings.HomeTestimonials
+		}(),
 	}
 
 	if err := h.settingService.UpdateSettings(c.Request.Context(), settings); err != nil {
@@ -528,6 +546,8 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		UsageReportGlobalEnabled:             updatedSettings.UsageReportGlobalEnabled,
 		UsageReportTargetScope:               updatedSettings.UsageReportTargetScope,
 		UsageReportGlobalSchedule:            updatedSettings.UsageReportGlobalSchedule,
+		InstallGuideVideos:                   updatedSettings.InstallGuideVideos,
+		HomeTestimonials:                     updatedSettings.HomeTestimonials,
 	})
 }
 
@@ -705,6 +725,12 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if before.UsageReportGlobalSchedule != after.UsageReportGlobalSchedule {
 		changed = append(changed, "usage_report_global_schedule")
+	}
+	if before.InstallGuideVideos != after.InstallGuideVideos {
+		changed = append(changed, "install_guide_videos")
+	}
+	if before.HomeTestimonials != after.HomeTestimonials {
+		changed = append(changed, "home_testimonials")
 	}
 	return changed
 }

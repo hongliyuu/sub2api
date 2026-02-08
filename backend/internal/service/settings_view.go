@@ -79,6 +79,10 @@ type SystemSettings struct {
 	UsageReportGlobalEnabled  bool
 	UsageReportTargetScope    string
 	UsageReportGlobalSchedule string
+
+	// Homepage & Install Guide
+	InstallGuideVideos string // JSON config for install guide video URLs
+	HomeTestimonials   string // JSON array of user testimonials
 }
 
 type PublicSettings struct {
@@ -112,6 +116,10 @@ type PublicSettings struct {
 	WeChatAccountQRCodeURL  string
 	WeChatAccountQRCodeData string // 上传的二维码图片数据 (Base64)
 	Version                 string
+
+	// Homepage & Install Guide
+	InstallGuideVideos string // JSON config for install guide video URLs
+	HomeTestimonials   string // JSON array of user testimonials
 }
 
 // StreamTimeoutSettings 流超时处理配置（仅控制超时后的处理方式，超时判定由网关配置控制）

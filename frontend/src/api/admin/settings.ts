@@ -84,6 +84,10 @@ export interface SystemSettings {
   usage_report_global_enabled: boolean
   usage_report_target_scope: 'all' | 'active_today' | 'opted_in' | string
   usage_report_global_schedule: string
+
+  // Homepage & Install Guide
+  install_guide_videos: string
+  home_testimonials: string
 }
 
 export interface UpdateSettingsRequest {
@@ -145,6 +149,10 @@ export interface UpdateSettingsRequest {
   usage_report_global_enabled?: boolean
   usage_report_target_scope?: 'all' | 'active_today' | 'opted_in' | string
   usage_report_global_schedule?: string
+
+  // Homepage & Install Guide
+  install_guide_videos?: string
+  home_testimonials?: string
 }
 
 /**

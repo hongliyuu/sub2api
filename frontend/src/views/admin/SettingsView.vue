@@ -1532,6 +1532,58 @@
               </p>
             </div>
 
+            <!-- Install Guide Videos -->
+            <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
+              <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                {{ t('admin.settings.installGuideVideos.title') }}
+              </label>
+              <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.settings.installGuideVideos.description') }}
+              </p>
+              <div class="space-y-3">
+                <div v-for="toolKey in ['claude_code', 'codex', 'gemini_cli']" :key="toolKey">
+                  <details class="rounded-lg border border-gray-200 dark:border-dark-700">
+                    <summary class="cursor-pointer px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-dark-800">
+                      {{ { claude_code: 'Claude Code', codex: 'Codex CLI', gemini_cli: 'Gemini CLI' }[toolKey] }}
+                    </summary>
+                    <div class="space-y-2 border-t border-gray-100 px-3 py-3 dark:border-dark-700">
+                      <div>
+                        <label class="mb-1 block text-xs text-gray-500 dark:text-gray-400">
+                          {{ t('admin.settings.installGuideVideos.overview') }}
+                        </label>
+                        <input
+                          type="text"
+                          :value="getVideoField(toolKey, 'overview')"
+                          @input="setVideoField(toolKey, 'overview', ($event.target as HTMLInputElement).value)"
+                          class="input text-sm"
+                          :placeholder="t('admin.settings.installGuideVideos.urlPlaceholder')"
+                        />
+                      </div>
+                    </div>
+                  </details>
+                </div>
+              </div>
+            </div>
+
+            <!-- Home Testimonials -->
+            <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
+              <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                {{ t('admin.settings.homeTestimonials.title') }}
+              </label>
+              <p class="mb-2 text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.settings.homeTestimonials.description') }}
+              </p>
+              <textarea
+                v-model="form.home_testimonials"
+                rows="4"
+                class="input font-mono text-sm"
+                :placeholder="t('admin.settings.homeTestimonials.placeholder')"
+              ></textarea>
+              <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.settings.homeTestimonials.hint') }}
+              </p>
+            </div>
+
             <!-- Hide CCS Import Button -->
             <div
               class="flex items-center justify-between border-t border-gray-100 pt-4 dark:border-dark-700"
@@ -1962,6 +2014,8 @@ const form = reactive<SettingsForm>({
   contact_qrcode_group: '',
   doc_url: '',
   home_content: '',
+  install_guide_videos: '',
+  home_testimonials: '',
   hide_ccs_import_button: false,
   purchase_subscription_enabled: false,
   purchase_subscription_url: '',
@@ -2170,6 +2224,27 @@ function handleQRCodeUpload(event: Event, type: 'wechat' | 'group') {
   input.value = ''
 }
 
+// Install guide video config helpers
+function parseVideoConfig(): Record<string, Record<string, string>> {
+  try {
+    return form.install_guide_videos ? JSON.parse(form.install_guide_videos) : {}
+  } catch {
+    return {}
+  }
+}
+
+function getVideoField(toolKey: string, field: string): string {
+  const config = parseVideoConfig()
+  return config[toolKey]?.[field] || ''
+}
+
+function setVideoField(toolKey: string, field: string, value: string) {
+  const config = parseVideoConfig()
+  if (!config[toolKey]) config[toolKey] = {}
+  config[toolKey][field] = value
+  form.install_guide_videos = JSON.stringify(config)
+}
+
 async function loadSettings() {
   loading.value = true
   try {
@@ -2211,6 +2286,8 @@ async function saveSettings() {
       contact_qrcode_group: form.contact_qrcode_group,
       doc_url: form.doc_url,
       home_content: form.home_content,
+      install_guide_videos: form.install_guide_videos,
+      home_testimonials: form.home_testimonials,
       hide_ccs_import_button: form.hide_ccs_import_button,
       purchase_subscription_enabled: form.purchase_subscription_enabled,
       purchase_subscription_url: form.purchase_subscription_url,

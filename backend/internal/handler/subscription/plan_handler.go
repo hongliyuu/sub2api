@@ -77,17 +77,7 @@ func (h *SubscriptionPlanHandler) ListPlans(c *gin.Context) {
 		}
 	}
 
-	// 如果支付未启用，返回空列表
-	if !paymentEnabled {
-		response.Success(c, ListPlansResponse{
-			Plans:          []PlanResponse{},
-			PaymentEnabled: false,
-			ContactInfo:    contactInfo,
-		})
-		return
-	}
-
-	// 获取可购买分组
+	// 始终获取可购买分组（即使支付未启用也展示套餐信息）
 	groups, err := h.groupRepo.ListPurchasable(ctx)
 	if err != nil {
 		log.Printf("[SubscriptionPlanHandler] ListPlans: failed to list purchasable groups: %v", err)
@@ -117,7 +107,7 @@ func (h *SubscriptionPlanHandler) ListPlans(c *gin.Context) {
 
 	response.Success(c, ListPlansResponse{
 		Plans:          plans,
-		PaymentEnabled: true,
+		PaymentEnabled: paymentEnabled,
 		ContactInfo:    contactInfo,
 	})
 }

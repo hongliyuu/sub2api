@@ -75,6 +75,10 @@ type SystemSettings struct {
 	UsageReportGlobalEnabled  bool   `json:"usage_report_global_enabled"`
 	UsageReportTargetScope    string `json:"usage_report_target_scope"`
 	UsageReportGlobalSchedule string `json:"usage_report_global_schedule"`
+
+	// Homepage & Install Guide
+	InstallGuideVideos string `json:"install_guide_videos"`
+	HomeTestimonials   string `json:"home_testimonials"`
 }
 
 type PublicSettings struct {
@@ -105,6 +109,10 @@ type PublicSettings struct {
 	WeChatAccountQRCodeURL      string `json:"wechat_account_qrcode_url"`
 	WeChatAccountQRCodeData     string `json:"wechat_account_qrcode_data"`
 	Version                     string `json:"version"`
+
+	// Homepage & Install Guide
+	InstallGuideVideos string `json:"install_guide_videos"`
+	HomeTestimonials   string `json:"home_testimonials"`
 }
 
 // StreamTimeoutSettings 流超时处理配置 DTO

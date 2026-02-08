@@ -195,6 +195,16 @@ const (
 	SettingKeyUsageReportGlobalSchedule = "usage_report_global_schedule"
 
 	// =========================
+	// Homepage & Install Guide
+	// =========================
+
+	// SettingKeyInstallGuideVideos stores JSON config for install guide video URLs per tool.
+	SettingKeyInstallGuideVideos = "install_guide_videos"
+
+	// SettingKeyHomeTestimonials stores JSON array of user testimonials for homepage.
+	SettingKeyHomeTestimonials = "home_testimonials"
+
+	// =========================
 	// Recharge Settings
 	// =========================
 
