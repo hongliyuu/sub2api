@@ -3757,7 +3757,7 @@ export default {
       homeTestimonials: {
         title: '首页用户评价',
         description: '配置首页展示的用户评价（JSON 数组格式）',
-        placeholder: '[{"name":"张三","role":"全栈工程师","content":"效果很好","rating":5}]',
+        placeholder: `[{'{'}"name":"张三","role":"全栈工程师","content":"效果很好","rating":5{'}'}]`,
         hint: '格式：JSON 数组，每项包含 name、role（可选）、content、rating（1-5，可选）字段'
       },
       purchase: {

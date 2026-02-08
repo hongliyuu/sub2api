@@ -3582,7 +3582,7 @@ export default {
       homeTestimonials: {
         title: 'Homepage Testimonials',
         description: 'Configure user testimonials shown on the homepage (JSON array format)',
-        placeholder: '[{"name":"John","role":"Developer","content":"Great service","rating":5}]',
+        placeholder: `[{'{'}"name":"John","role":"Developer","content":"Great service","rating":5{'}'}]`,
         hint: 'Format: JSON array, each item with name, role (optional), content, rating (1-5, optional)'
       },
       purchase: {
