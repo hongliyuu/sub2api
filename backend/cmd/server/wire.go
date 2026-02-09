@@ -82,6 +82,7 @@ func provideCleanup(
 	usageReportScheduler *service.UserUsageReportScheduler,
 	orderExpireScheduler *service.OrderExpireScheduler,
 	orderCompensationScheduler *service.OrderCompensationScheduler,
+	accountExpiryReminder *service.AccountExpiryReminderScheduler,
 	settingService *service.SettingService,
 ) func() {
 	return func() {
@@ -108,6 +109,12 @@ func provideCleanup(
 			{"OrderExpireScheduler", func() error {
 				if orderExpireScheduler != nil {
 					orderExpireScheduler.Stop()
+				}
+				return nil
+			}},
+			{"AccountExpiryReminderScheduler", func() error {
+				if accountExpiryReminder != nil {
+					accountExpiryReminder.Stop()
 				}
 				return nil
 			}},

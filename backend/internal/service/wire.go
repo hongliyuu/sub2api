@@ -234,6 +234,18 @@ func ProvideOrderCompensationScheduler(
 	return svc
 }
 
+// ProvideAccountExpiryReminderScheduler creates and starts AccountExpiryReminderScheduler.
+func ProvideAccountExpiryReminderScheduler(
+	accountRepo AccountRepository,
+	emailService *EmailService,
+	settingService *SettingService,
+	redisClient *redis.Client,
+) *AccountExpiryReminderScheduler {
+	svc := NewAccountExpiryReminderScheduler(accountRepo, emailService, settingService, redisClient)
+	svc.Start()
+	return svc
+}
+
 // ProvideAPIKeyAuthCacheInvalidator 提供 API Key 认证缓存失效能力
 func ProvideAPIKeyAuthCacheInvalidator(apiKeyService *APIKeyService) APIKeyAuthCacheInvalidator {
 	// Start Pub/Sub subscriber for L1 cache invalidation across instances
@@ -314,6 +326,7 @@ var ProviderSet = wire.NewSet(
 	NewPaymentCallbackService,
 	ProvideOrderExpireScheduler,
 	ProvideOrderCompensationScheduler,
+	ProvideAccountExpiryReminderScheduler,
 	NewRechargeRateLimitService,
 	NewWeChatScanLoginService,
 	NewErrorPassthroughService,

@@ -222,6 +222,16 @@ const (
 
 	// SettingKeyRechargeExchangeRate is the CNY to credit exchange rate.
 	SettingKeyRechargeExchangeRate = "recharge.exchange_rate"
+
+	// =========================
+	// Account Expiry Reminder
+	// =========================
+
+	// SettingKeyAccountExpiryReminderEmail is the admin email for account expiry reminders.
+	SettingKeyAccountExpiryReminderEmail = "account_expiry_reminder_email"
+
+	// SettingKeyAccountExpiryReminderAdvanceDays is how many days before expiry to start reminding (default 7).
+	SettingKeyAccountExpiryReminderAdvanceDays = "account_expiry_reminder_advance_days"
 )
 
 // AdminAPIKeyPrefix is the prefix for admin API keys (distinct from user "sk-" keys).

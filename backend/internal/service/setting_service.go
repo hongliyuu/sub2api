@@ -641,6 +641,11 @@ func (s *SettingService) IsTotpEncryptionKeyConfigured() bool {
 	return s.cfg.Totp.EncryptionKeyConfigured
 }
 
+// GetSettingValue 获取指定 key 的设置值
+func (s *SettingService) GetSettingValue(ctx context.Context, key string) (string, error) {
+	return s.settingRepo.GetValue(ctx, key)
+}
+
 // GetSiteName 获取网站名称
 func (s *SettingService) GetSiteName(ctx context.Context) string {
 	value, err := s.settingRepo.GetValue(ctx, SettingKeySiteName)

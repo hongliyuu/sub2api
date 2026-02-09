@@ -224,7 +224,8 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	userUsageReportScheduler := service.ProvideUserUsageReportScheduler(userUsageReportService, settingService, userUsageReportRepository, redisClient)
 	orderExpireScheduler := service.ProvideOrderExpireScheduler(rechargeOrderRepository, weChatPayService)
 	orderCompensationScheduler := service.ProvideOrderCompensationScheduler(configConfig, rechargeOrderRepository, weChatPayService, paymentCallbackService)
-	v := provideCleanup(client, redisClient, opsMetricsCollector, opsAggregationService, opsAlertEvaluatorService, opsCleanupService, opsScheduledReportService, schedulerSnapshotService, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, pricingService, emailQueueService, billingCacheService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, userUsageReportScheduler, orderExpireScheduler, orderCompensationScheduler, settingService)
+	accountExpiryReminderScheduler := service.ProvideAccountExpiryReminderScheduler(accountRepository, emailService, settingService, redisClient)
+	v := provideCleanup(client, redisClient, opsMetricsCollector, opsAggregationService, opsAlertEvaluatorService, opsCleanupService, opsScheduledReportService, schedulerSnapshotService, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, pricingService, emailQueueService, billingCacheService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, userUsageReportScheduler, orderExpireScheduler, orderCompensationScheduler, accountExpiryReminderScheduler, settingService)
 	application := &Application{
 		Server:  httpServer,
 		Cleanup: v,
@@ -269,6 +270,7 @@ func provideCleanup(
 	usageReportScheduler *service.UserUsageReportScheduler,
 	orderExpireScheduler *service.OrderExpireScheduler,
 	orderCompensationScheduler *service.OrderCompensationScheduler,
+	accountExpiryReminder *service.AccountExpiryReminderScheduler,
 	settingService *service.SettingService,
 ) func() {
 	return func() {
@@ -294,6 +296,12 @@ func provideCleanup(
 			{"OrderExpireScheduler", func() error {
 				if orderExpireScheduler != nil {
 					orderExpireScheduler.Stop()
+				}
+				return nil
+			}},
+			{"AccountExpiryReminderScheduler", func() error {
+				if accountExpiryReminder != nil {
+					accountExpiryReminder.Stop()
 				}
 				return nil
 			}},
