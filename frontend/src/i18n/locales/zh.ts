@@ -4461,13 +4461,9 @@ export default {
 
   // Install Guide
   installGuide: {
-    title: 'AI CLI 工具安装教程',
+    title: 'AI编程巴士CLI工具配置教程',
     subtitle: '快速配置 Claude Code、Codex CLI 和 Gemini CLI 等 AI 编程助手',
     officialDocs: '官方文档',
-    prerequisites: '环境要求',
-    installCommand: '安装命令',
-    configApiKey: '配置 API Key',
-    verifyInstall: '验证安装',
     recommended: '推荐',
     or: '或',
     claudeCode: {
@@ -4482,9 +4478,55 @@ export default {
     },
     tips: {
       title: '配置提示',
-      tip1: '环境变量设置后需要重新打开终端或执行 source 命令才能生效',
+      tip1: '配置文件修改后需重启工具才能生效',
       tip2: '建议将 API Key 保存在安全的地方，避免泄露',
       tip3: '如遇网络问题，可配置代理或使用国内镜像源'
+    },
+    step1: {
+      title: '安装 Node.js',
+      nodeRequired: '需要 Node.js {version} 或更高版本',
+      verifyNode: '验证安装',
+      recommendedMethod: '推荐方法',
+      otherMethods: '其他安装方式',
+      downloadFromNodejs: '访问 nodejs.org 下载 LTS 版本安装',
+      brewNote: '如未安装 Homebrew，先执行：',
+      nodeSourceNote: '使用 NodeSource 获取最新 LTS 版本：'
+    },
+    step2: {
+      title: '安装 CLI 工具',
+      verify: '验证安装：',
+      adminNote: '如遇权限问题，Windows 请以管理员身份运行，Linux/macOS 请加 sudo'
+    },
+    step3: {
+      title: '配置 API',
+      getToken: '获取 API Token',
+      getTokenDesc: '前往令牌管理页面创建新的 API Key',
+      goToTokenPage: '前往令牌管理',
+      selectGroupHint: '创建时请选择对应工具的专用分组',
+      configFilePath: '配置文件路径',
+      replaceKeyHint: '请将 your-api-key 替换为实际的 API Key',
+      configNote: '修改配置后需重启工具才能生效',
+      claude: {
+        settingsFile: '配置文件'
+      },
+      codex: {
+        createDir: '创建配置目录',
+        configToml: '配置文件',
+        authJson: '认证文件'
+      },
+      gemini: {
+        envFile: '环境变量文件',
+        settingsFile: '设置文件'
+      }
+    },
+    step4: {
+      title: '开始使用',
+      enterProject: '进入项目目录：',
+      startTool: '启动工具：',
+      firstTimeNotes: '首次启动提示',
+      claudeFirstTime: '选择主题 → 确认安全须知 → 配置终端 → 信任工作目录 → 开始编程',
+      codexFirstTime: '选择开发环境 → 配置偏好 → 开始 AI 辅助编程',
+      geminiFirstTime: '超大上下文窗口 · Agent Mode 自动规划 · Google Search 联网'
     }
   },
 

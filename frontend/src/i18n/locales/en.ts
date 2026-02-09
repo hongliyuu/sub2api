@@ -4268,10 +4268,6 @@ export default {
     title: 'AI CLI Installation Guide',
     subtitle: 'Quick setup for Claude Code, Codex CLI, and Gemini CLI AI coding assistants',
     officialDocs: 'Official Docs',
-    prerequisites: 'Prerequisites',
-    installCommand: 'Install Command',
-    configApiKey: 'Configure API Key',
-    verifyInstall: 'Verify Installation',
     recommended: 'recommended',
     or: 'or',
     claudeCode: {
@@ -4286,9 +4282,55 @@ export default {
     },
     tips: {
       title: 'Configuration Tips',
-      tip1: 'After setting environment variables, restart your terminal or run source command to apply changes',
+      tip1: 'Restart the tool after modifying config files for changes to take effect',
       tip2: 'Store your API Key in a secure location to prevent leaks',
       tip3: 'If you encounter network issues, consider configuring a proxy or using regional mirrors'
+    },
+    step1: {
+      title: 'Install Node.js',
+      nodeRequired: 'Requires Node.js {version} or higher',
+      verifyNode: 'Verify installation',
+      recommendedMethod: 'Recommended method',
+      otherMethods: 'Other installation methods',
+      downloadFromNodejs: 'Download LTS version from nodejs.org',
+      brewNote: 'If Homebrew is not installed, run first:',
+      nodeSourceNote: 'Use NodeSource to get the latest LTS version:'
+    },
+    step2: {
+      title: 'Install CLI Tool',
+      verify: 'Verify installation:',
+      adminNote: 'If you encounter permission issues, run as Administrator on Windows, or use sudo on Linux/macOS'
+    },
+    step3: {
+      title: 'Configure API',
+      getToken: 'Get API Token',
+      getTokenDesc: 'Go to the token management page to create a new API Key',
+      goToTokenPage: 'Go to Token Management',
+      selectGroupHint: 'Select the dedicated group for this tool when creating',
+      configFilePath: 'Config file path',
+      replaceKeyHint: 'Replace your-api-key with your actual API Key',
+      configNote: 'Restart the tool after modifying config for changes to take effect',
+      claude: {
+        settingsFile: 'Config file'
+      },
+      codex: {
+        createDir: 'Create config directory',
+        configToml: 'Config file',
+        authJson: 'Auth file'
+      },
+      gemini: {
+        envFile: 'Environment variables file',
+        settingsFile: 'Settings file'
+      }
+    },
+    step4: {
+      title: 'Start Using',
+      enterProject: 'Navigate to your project directory:',
+      startTool: 'Start the tool:',
+      firstTimeNotes: 'First launch tips',
+      claudeFirstTime: 'Choose theme → Confirm safety notice → Configure terminal → Trust workspace → Start coding',
+      codexFirstTime: 'Select dev environment → Configure preferences → Start AI-assisted coding',
+      geminiFirstTime: 'Large context window · Agent Mode auto-planning · Google Search integration'
     }
   },
 
