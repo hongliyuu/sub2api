@@ -306,10 +306,10 @@ const animationStarted = ref(false)
 
 // LLM Logo list
 const llmLogos = [
-  { name: 'Claude', src: '/llmLogo/Claude.png' },
-  { name: 'ChatGPT', src: '/llmLogo/ChatGPT.png' },
-  { name: 'Gemini', src: '/llmLogo/Gemini.jpg' },
-  { name: 'Antigravity', src: '/llmLogo/Antigravity.jpg' }
+  { name: 'Claude', src: '/llmLogo/sm/Claude.png' },
+  { name: 'ChatGPT', src: '/llmLogo/sm/ChatGPT.png' },
+  { name: 'Gemini', src: '/llmLogo/sm/Gemini.jpg' },
+  { name: 'Antigravity', src: '/llmLogo/sm/Antigravity.jpg' }
 ]
 
 // Car position state
@@ -337,21 +337,21 @@ const busHornSound = ref<HTMLAudioElement | null>(null)
 
 // Animation configuration constants
 const ANIMATION_CONFIG = {
-  PRELOAD_DELAY: 300,
-  PRELOAD_MAX_WAIT: 600,
-  PHASE1_DURATION: 4500,
-  PHASE1_PAUSE: 400,
-  PHASE2_DURATION: 1200,
-  LOGO_FLY_DURATION: 1200,
+  PRELOAD_DELAY: 150,
+  PRELOAD_MAX_WAIT: 400,
+  PHASE1_DURATION: 2200,
+  PHASE1_PAUSE: 200,
+  PHASE2_DURATION: 600,
+  LOGO_FLY_DURATION: 800,
   LOGO_FADE_START: 0.4,
-  LOGO_DROP_DELAY: 50,
-  HORN_SOUND_DELAY: 400,
-  ANIMATION_END_DELAY: 400,
+  LOGO_DROP_DELAY: 30,
+  HORN_SOUND_DELAY: 200,
+  ANIMATION_END_DELAY: 200,
   HEADER_SCROLL_OFFSET: 96,
   MIN_TOP_OFFSET: 8,
   MIN_EDGE_OFFSET: 12,
   CAR_STOP_POSITION: 0.55,
-  BOUNCING_CYCLES: 6,
+  BOUNCING_CYCLES: 4,
   BOUNCE_AMPLITUDE: 2
 } as const
 
@@ -557,7 +557,6 @@ function startAnimation() {
             animationSafetyTimer = null
           }
           showAnimation.value = false
-          showHeroContent.value = true
         }, ANIMATION_CONFIG.ANIMATION_END_DELAY)
       }
     }
@@ -593,8 +592,10 @@ async function initAnimation() {
     return
   }
 
+  // Show hero content immediately so users can scroll and interact during animation
+  revealContentImmediately()
+
   animationSafetyTimer = window.setTimeout(() => {
-    revealContentImmediately()
     showAnimation.value = false
   }, 12000)
 
