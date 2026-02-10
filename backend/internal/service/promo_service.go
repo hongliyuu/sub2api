@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -29,6 +30,7 @@ type PromoService struct {
 	billingCacheService  *BillingCacheService
 	entClient            *dbent.Client
 	authCacheInvalidator APIKeyAuthCacheInvalidator
+	balanceLotSvc        *BalanceLotService
 }
 
 // NewPromoService 创建优惠码服务实例
@@ -38,6 +40,7 @@ func NewPromoService(
 	billingCacheService *BillingCacheService,
 	entClient *dbent.Client,
 	authCacheInvalidator APIKeyAuthCacheInvalidator,
+	balanceLotSvc *BalanceLotService,
 ) *PromoService {
 	return &PromoService{
 		promoRepo:            promoRepo,
@@ -45,6 +48,7 @@ func NewPromoService(
 		billingCacheService:  billingCacheService,
 		entClient:            entClient,
 		authCacheInvalidator: authCacheInvalidator,
+		balanceLotSvc:        balanceLotSvc,
 	}
 }
 
@@ -126,6 +130,15 @@ func (s *PromoService) ApplyPromoCode(ctx context.Context, userID int64, code st
 	// 增加用户余额
 	if err := s.userRepo.UpdateBalance(txCtx, userID, promoCode.BonusAmount); err != nil {
 		return fmt.Errorf("update user balance: %w", err)
+	}
+
+	// 创建余额批次（非关键操作，失败不影响优惠码流程）
+	if s.balanceLotSvc != nil {
+		promoCodeStr := promoCode.Code
+		desc := fmt.Sprintf("优惠码赠送: %s", promoCodeStr)
+		if err := s.balanceLotSvc.CreateLot(txCtx, userID, promoCode.BonusAmount, BalanceLotSourcePromo, &promoCodeStr, desc); err != nil {
+			log.Printf("[PromoService] Failed to create balance lot for user %d, promo %s: %v", userID, promoCodeStr, err)
+		}
 	}
 
 	// 创建使用记录

@@ -572,6 +572,11 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	updates[SettingKeyAccountExpiryReminderEmail] = strings.TrimSpace(settings.AccountExpiryReminderEmail)
 	updates[SettingKeyAccountExpiryReminderAdvanceDays] = strconv.Itoa(settings.AccountExpiryReminderAdvanceDays)
 
+	// Balance lot expiry
+	updates[SettingKeyBalanceLotExpiryDays] = strconv.Itoa(settings.BalanceLotExpiryDays)
+	updates[SettingKeyBalanceExpiryReminderEnabled] = strconv.FormatBool(settings.BalanceExpiryReminderEnabled)
+	updates[SettingKeyBalanceExpiryReminderAdvanceDays] = strconv.Itoa(settings.BalanceExpiryReminderAdvanceDays)
+
 	err := s.settingRepo.SetMultiple(ctx, updates)
 	if err == nil && s.onUpdate != nil {
 		s.onUpdate() // Invalidate cache after settings update
@@ -877,6 +882,21 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	if raw := strings.TrimSpace(settings[SettingKeyAccountExpiryReminderAdvanceDays]); raw != "" {
 		if v, err := strconv.Atoi(raw); err == nil && v > 0 {
 			result.AccountExpiryReminderAdvanceDays = v
+		}
+	}
+
+	// Balance lot expiry
+	result.BalanceLotExpiryDays = 30
+	if raw := strings.TrimSpace(settings[SettingKeyBalanceLotExpiryDays]); raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil && v > 0 {
+			result.BalanceLotExpiryDays = v
+		}
+	}
+	result.BalanceExpiryReminderEnabled = settings[SettingKeyBalanceExpiryReminderEnabled] == "true"
+	result.BalanceExpiryReminderAdvanceDays = 3
+	if raw := strings.TrimSpace(settings[SettingKeyBalanceExpiryReminderAdvanceDays]); raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil && v > 0 {
+			result.BalanceExpiryReminderAdvanceDays = v
 		}
 	}
 

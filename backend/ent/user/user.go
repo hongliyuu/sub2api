@@ -73,6 +73,8 @@ const (
 	EdgePromoCodeUsages = "promo_code_usages"
 	// EdgeBalanceLogs holds the string denoting the balance_logs edge name in mutations.
 	EdgeBalanceLogs = "balance_logs"
+	// EdgeBalanceLots holds the string denoting the balance_lots edge name in mutations.
+	EdgeBalanceLots = "balance_lots"
 	// EdgeRechargeOrders holds the string denoting the recharge_orders edge name in mutations.
 	EdgeRechargeOrders = "recharge_orders"
 	// EdgeSubscriptionOrders holds the string denoting the subscription_orders edge name in mutations.
@@ -149,6 +151,13 @@ const (
 	BalanceLogsInverseTable = "balance_logs"
 	// BalanceLogsColumn is the table column denoting the balance_logs relation/edge.
 	BalanceLogsColumn = "user_id"
+	// BalanceLotsTable is the table that holds the balance_lots relation/edge.
+	BalanceLotsTable = "balance_lots"
+	// BalanceLotsInverseTable is the table name for the BalanceLot entity.
+	// It exists in this package in order to avoid circular dependency with the "balancelot" package.
+	BalanceLotsInverseTable = "balance_lots"
+	// BalanceLotsColumn is the table column denoting the balance_lots relation/edge.
+	BalanceLotsColumn = "user_id"
 	// RechargeOrdersTable is the table that holds the recharge_orders relation/edge.
 	RechargeOrdersTable = "recharge_orders"
 	// RechargeOrdersInverseTable is the table name for the RechargeOrder entity.
@@ -511,6 +520,20 @@ func ByBalanceLogs(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
+// ByBalanceLotsCount orders the results by balance_lots count.
+func ByBalanceLotsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newBalanceLotsStep(), opts...)
+	}
+}
+
+// ByBalanceLots orders the results by balance_lots terms.
+func ByBalanceLots(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newBalanceLotsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByRechargeOrdersCount orders the results by recharge_orders count.
 func ByRechargeOrdersCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -620,6 +643,13 @@ func newBalanceLogsStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(BalanceLogsInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, BalanceLogsTable, BalanceLogsColumn),
+	)
+}
+func newBalanceLotsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(BalanceLotsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, BalanceLotsTable, BalanceLotsColumn),
 	)
 }
 func newRechargeOrdersStep() *sqlgraph.Step {

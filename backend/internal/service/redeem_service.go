@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -80,6 +81,7 @@ type RedeemService struct {
 	billingCacheService  *BillingCacheService
 	entClient            *dbent.Client
 	authCacheInvalidator APIKeyAuthCacheInvalidator
+	balanceLotSvc        *BalanceLotService
 }
 
 // NewRedeemService 创建兑换码服务实例
@@ -91,6 +93,7 @@ func NewRedeemService(
 	billingCacheService *BillingCacheService,
 	entClient *dbent.Client,
 	authCacheInvalidator APIKeyAuthCacheInvalidator,
+	balanceLotSvc *BalanceLotService,
 ) *RedeemService {
 	return &RedeemService{
 		redeemRepo:           redeemRepo,
@@ -100,6 +103,7 @@ func NewRedeemService(
 		billingCacheService:  billingCacheService,
 		entClient:            entClient,
 		authCacheInvalidator: authCacheInvalidator,
+		balanceLotSvc:        balanceLotSvc,
 	}
 }
 
@@ -292,6 +296,14 @@ func (s *RedeemService) Redeem(ctx context.Context, userID int64, code string) (
 		// 增加用户余额
 		if err := s.userRepo.UpdateBalance(txCtx, userID, redeemCode.Value); err != nil {
 			return nil, fmt.Errorf("update user balance: %w", err)
+		}
+		// 创建余额批次（非关键操作，失败不影响兑换流程）
+		if s.balanceLotSvc != nil {
+			code := redeemCode.Code
+			desc := fmt.Sprintf("兑换码兑换: %s", code)
+			if err := s.balanceLotSvc.CreateLot(txCtx, userID, redeemCode.Value, BalanceLotSourceRedeem, &code, desc); err != nil {
+				log.Printf("[RedeemService] Failed to create balance lot for user %d, code %s: %v", userID, code, err)
+			}
 		}
 
 	case RedeemTypeConcurrency:

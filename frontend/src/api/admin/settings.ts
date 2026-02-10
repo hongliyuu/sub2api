@@ -92,6 +92,11 @@ export interface SystemSettings {
   // Account expiry reminder
   account_expiry_reminder_email: string
   account_expiry_reminder_advance_days: number
+
+  // Balance lot expiry
+  balance_lot_expiry_days: number
+  balance_expiry_reminder_enabled: boolean
+  balance_expiry_reminder_advance_days: number
 }
 
 export interface UpdateSettingsRequest {
@@ -161,6 +166,11 @@ export interface UpdateSettingsRequest {
   // Account expiry reminder
   account_expiry_reminder_email?: string
   account_expiry_reminder_advance_days?: number
+
+  // Balance lot expiry
+  balance_lot_expiry_days?: number
+  balance_expiry_reminder_enabled?: boolean
+  balance_expiry_reminder_advance_days?: number
 }
 
 /**

@@ -315,6 +315,7 @@ type adminServiceImpl struct {
 	proxyProber          ProxyExitInfoProber
 	proxyLatencyCache    ProxyLatencyCache
 	authCacheInvalidator APIKeyAuthCacheInvalidator
+	balanceLotSvc        *BalanceLotService
 }
 
 // NewAdminService creates a new AdminService
@@ -330,6 +331,7 @@ func NewAdminService(
 	proxyProber ProxyExitInfoProber,
 	proxyLatencyCache ProxyLatencyCache,
 	authCacheInvalidator APIKeyAuthCacheInvalidator,
+	balanceLotSvc *BalanceLotService,
 ) AdminService {
 	return &adminServiceImpl{
 		userRepo:             userRepo,
@@ -343,6 +345,7 @@ func NewAdminService(
 		proxyProber:          proxyProber,
 		proxyLatencyCache:    proxyLatencyCache,
 		authCacheInvalidator: authCacheInvalidator,
+		balanceLotSvc:        balanceLotSvc,
 	}
 }
 
@@ -532,6 +535,23 @@ func (s *adminServiceImpl) UpdateUserBalance(ctx context.Context, userID int64, 
 		return nil, err
 	}
 	balanceDiff := user.Balance - oldBalance
+
+	// 管理员余额调整时同步更新余额批次
+	if s.balanceLotSvc != nil && balanceDiff != 0 {
+		if balanceDiff > 0 {
+			// 增加余额：创建新批次
+			desc := fmt.Sprintf("管理员调整余额: %s %.2f", operation, balance)
+			if err := s.balanceLotSvc.CreateLot(ctx, userID, balanceDiff, BalanceLotSourceAdjust, nil, desc); err != nil {
+				log.Printf("[AdminService] Failed to create balance lot for user %d: %v", userID, err)
+			}
+		} else {
+			// 减少余额：仅从批次中扣减（user.balance 已由 userRepo.Update 设置）
+			if err := s.balanceLotSvc.DeductFromLotsOnly(ctx, userID, -balanceDiff); err != nil {
+				log.Printf("[AdminService] Failed to deduct from balance lots for user %d: %v", userID, err)
+			}
+		}
+	}
+
 	if s.authCacheInvalidator != nil && balanceDiff != 0 {
 		s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, userID)
 	}

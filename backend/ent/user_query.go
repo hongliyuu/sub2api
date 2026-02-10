@@ -16,6 +16,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/balancelog"
+	"github.com/Wei-Shaw/sub2api/ent/balancelot"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
@@ -46,6 +47,7 @@ type UserQuery struct {
 	withAttributeValues       *UserAttributeValueQuery
 	withPromoCodeUsages       *PromoCodeUsageQuery
 	withBalanceLogs           *BalanceLogQuery
+	withBalanceLots           *BalanceLotQuery
 	withRechargeOrders        *RechargeOrderQuery
 	withSubscriptionOrders    *SubscriptionOrderQuery
 	withUserAllowedGroups     *UserAllowedGroupQuery
@@ -299,6 +301,28 @@ func (_q *UserQuery) QueryBalanceLogs() *BalanceLogQuery {
 			sqlgraph.From(user.Table, user.FieldID, selector),
 			sqlgraph.To(balancelog.Table, balancelog.FieldID),
 			sqlgraph.Edge(sqlgraph.O2M, false, user.BalanceLogsTable, user.BalanceLogsColumn),
+		)
+		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
+		return fromU, nil
+	}
+	return query
+}
+
+// QueryBalanceLots chains the current query on the "balance_lots" edge.
+func (_q *UserQuery) QueryBalanceLots() *BalanceLotQuery {
+	query := (&BalanceLotClient{config: _q.config}).Query()
+	query.path = func(ctx context.Context) (fromU *sql.Selector, err error) {
+		if err := _q.prepareQuery(ctx); err != nil {
+			return nil, err
+		}
+		selector := _q.sqlQuery(ctx)
+		if err := selector.Err(); err != nil {
+			return nil, err
+		}
+		step := sqlgraph.NewStep(
+			sqlgraph.From(user.Table, user.FieldID, selector),
+			sqlgraph.To(balancelot.Table, balancelot.FieldID),
+			sqlgraph.Edge(sqlgraph.O2M, false, user.BalanceLotsTable, user.BalanceLotsColumn),
 		)
 		fromU = sqlgraph.SetNeighbors(_q.driver.Dialect(), step)
 		return fromU, nil
@@ -574,6 +598,7 @@ func (_q *UserQuery) Clone() *UserQuery {
 		withAttributeValues:       _q.withAttributeValues.Clone(),
 		withPromoCodeUsages:       _q.withPromoCodeUsages.Clone(),
 		withBalanceLogs:           _q.withBalanceLogs.Clone(),
+		withBalanceLots:           _q.withBalanceLots.Clone(),
 		withRechargeOrders:        _q.withRechargeOrders.Clone(),
 		withSubscriptionOrders:    _q.withSubscriptionOrders.Clone(),
 		withUserAllowedGroups:     _q.withUserAllowedGroups.Clone(),
@@ -693,6 +718,17 @@ func (_q *UserQuery) WithBalanceLogs(opts ...func(*BalanceLogQuery)) *UserQuery 
 	return _q
 }
 
+// WithBalanceLots tells the query-builder to eager-load the nodes that are connected to
+// the "balance_lots" edge. The optional arguments are used to configure the query builder of the edge.
+func (_q *UserQuery) WithBalanceLots(opts ...func(*BalanceLotQuery)) *UserQuery {
+	query := (&BalanceLotClient{config: _q.config}).Query()
+	for _, opt := range opts {
+		opt(query)
+	}
+	_q.withBalanceLots = query
+	return _q
+}
+
 // WithRechargeOrders tells the query-builder to eager-load the nodes that are connected to
 // the "recharge_orders" edge. The optional arguments are used to configure the query builder of the edge.
 func (_q *UserQuery) WithRechargeOrders(opts ...func(*RechargeOrderQuery)) *UserQuery {
@@ -804,7 +840,7 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 	var (
 		nodes       = []*User{}
 		_spec       = _q.querySpec()
-		loadedTypes = [13]bool{
+		loadedTypes = [14]bool{
 			_q.withAPIKeys != nil,
 			_q.withRedeemCodes != nil,
 			_q.withSubscriptions != nil,
@@ -815,6 +851,7 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 			_q.withAttributeValues != nil,
 			_q.withPromoCodeUsages != nil,
 			_q.withBalanceLogs != nil,
+			_q.withBalanceLots != nil,
 			_q.withRechargeOrders != nil,
 			_q.withSubscriptionOrders != nil,
 			_q.withUserAllowedGroups != nil,
@@ -910,6 +947,13 @@ func (_q *UserQuery) sqlAll(ctx context.Context, hooks ...queryHook) ([]*User, e
 		if err := _q.loadBalanceLogs(ctx, query, nodes,
 			func(n *User) { n.Edges.BalanceLogs = []*BalanceLog{} },
 			func(n *User, e *BalanceLog) { n.Edges.BalanceLogs = append(n.Edges.BalanceLogs, e) }); err != nil {
+			return nil, err
+		}
+	}
+	if query := _q.withBalanceLots; query != nil {
+		if err := _q.loadBalanceLots(ctx, query, nodes,
+			func(n *User) { n.Edges.BalanceLots = []*BalanceLot{} },
+			func(n *User, e *BalanceLot) { n.Edges.BalanceLots = append(n.Edges.BalanceLots, e) }); err != nil {
 			return nil, err
 		}
 	}
@@ -1261,6 +1305,36 @@ func (_q *UserQuery) loadBalanceLogs(ctx context.Context, query *BalanceLogQuery
 	}
 	query.Where(predicate.BalanceLog(func(s *sql.Selector) {
 		s.Where(sql.InValues(s.C(user.BalanceLogsColumn), fks...))
+	}))
+	neighbors, err := query.All(ctx)
+	if err != nil {
+		return err
+	}
+	for _, n := range neighbors {
+		fk := n.UserID
+		node, ok := nodeids[fk]
+		if !ok {
+			return fmt.Errorf(`unexpected referenced foreign-key "user_id" returned %v for node %v`, fk, n.ID)
+		}
+		assign(node, n)
+	}
+	return nil
+}
+func (_q *UserQuery) loadBalanceLots(ctx context.Context, query *BalanceLotQuery, nodes []*User, init func(*User), assign func(*User, *BalanceLot)) error {
+	fks := make([]driver.Value, 0, len(nodes))
+	nodeids := make(map[int64]*User)
+	for i := range nodes {
+		fks = append(fks, nodes[i].ID)
+		nodeids[nodes[i].ID] = nodes[i]
+		if init != nil {
+			init(nodes[i])
+		}
+	}
+	if len(query.ctx.Fields) > 0 {
+		query.ctx.AppendFieldOnce(balancelot.FieldUserID)
+	}
+	query.Where(predicate.BalanceLot(func(s *sql.Selector) {
+		s.Where(sql.InValues(s.C(user.BalanceLotsColumn), fks...))
 	}))
 	neighbors, err := query.All(ctx)
 	if err != nil {

@@ -11,6 +11,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/balancelog"
+	"github.com/Wei-Shaw/sub2api/ent/balancelot"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/paymentcallback"
@@ -330,6 +331,57 @@ func init() {
 	balancelog.DefaultOperatorType = balancelogDescOperatorType.Default.(string)
 	// balancelog.OperatorTypeValidator is a validator for the "operator_type" field. It is called by the builders before save.
 	balancelog.OperatorTypeValidator = balancelogDescOperatorType.Validators[0].(func(string) error)
+	balancelotMixin := schema.BalanceLot{}.Mixin()
+	balancelotMixinFields0 := balancelotMixin[0].Fields()
+	_ = balancelotMixinFields0
+	balancelotFields := schema.BalanceLot{}.Fields()
+	_ = balancelotFields
+	// balancelotDescCreatedAt is the schema descriptor for created_at field.
+	balancelotDescCreatedAt := balancelotMixinFields0[0].Descriptor()
+	// balancelot.DefaultCreatedAt holds the default value on creation for the created_at field.
+	balancelot.DefaultCreatedAt = balancelotDescCreatedAt.Default.(func() time.Time)
+	// balancelotDescUpdatedAt is the schema descriptor for updated_at field.
+	balancelotDescUpdatedAt := balancelotMixinFields0[1].Descriptor()
+	// balancelot.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	balancelot.DefaultUpdatedAt = balancelotDescUpdatedAt.Default.(func() time.Time)
+	// balancelot.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	balancelot.UpdateDefaultUpdatedAt = balancelotDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// balancelotDescUserID is the schema descriptor for user_id field.
+	balancelotDescUserID := balancelotFields[0].Descriptor()
+	// balancelot.UserIDValidator is a validator for the "user_id" field. It is called by the builders before save.
+	balancelot.UserIDValidator = balancelotDescUserID.Validators[0].(func(int64) error)
+	// balancelotDescSourceType is the schema descriptor for source_type field.
+	balancelotDescSourceType := balancelotFields[1].Descriptor()
+	// balancelot.SourceTypeValidator is a validator for the "source_type" field. It is called by the builders before save.
+	balancelot.SourceTypeValidator = func() func(string) error {
+		validators := balancelotDescSourceType.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(source_type string) error {
+			for _, fn := range fns {
+				if err := fn(source_type); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// balancelotDescSourceRef is the schema descriptor for source_ref field.
+	balancelotDescSourceRef := balancelotFields[2].Descriptor()
+	// balancelot.SourceRefValidator is a validator for the "source_ref" field. It is called by the builders before save.
+	balancelot.SourceRefValidator = balancelotDescSourceRef.Validators[0].(func(string) error)
+	// balancelotDescStatus is the schema descriptor for status field.
+	balancelotDescStatus := balancelotFields[5].Descriptor()
+	// balancelot.DefaultStatus holds the default value on creation for the status field.
+	balancelot.DefaultStatus = balancelotDescStatus.Default.(string)
+	// balancelot.StatusValidator is a validator for the "status" field. It is called by the builders before save.
+	balancelot.StatusValidator = balancelotDescStatus.Validators[0].(func(string) error)
+	// balancelotDescDescription is the schema descriptor for description field.
+	balancelotDescDescription := balancelotFields[8].Descriptor()
+	// balancelot.DefaultDescription holds the default value on creation for the description field.
+	balancelot.DefaultDescription = balancelotDescDescription.Default.(string)
 	errorpassthroughruleMixin := schema.ErrorPassthroughRule{}.Mixin()
 	errorpassthroughruleMixinFields0 := errorpassthroughruleMixin[0].Fields()
 	_ = errorpassthroughruleMixinFields0

@@ -1944,6 +1944,60 @@
           </div>
         </div>
 
+        <!-- Balance Lot Expiry Settings -->
+        <div class="card">
+          <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+            <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+              {{ t('admin.settings.balanceLotExpiry.title') }}
+            </h2>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {{ t('admin.settings.balanceLotExpiry.description') }}
+            </p>
+          </div>
+          <div class="space-y-4 p-6">
+            <div>
+              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                {{ t('admin.settings.balanceLotExpiry.expiryDays') }}
+              </label>
+              <input
+                v-model.number="form.balance_lot_expiry_days"
+                type="number"
+                min="1"
+                max="365"
+                class="input w-40"
+              />
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.settings.balanceLotExpiry.expiryDaysHint') }}
+              </p>
+            </div>
+            <div class="flex items-center gap-3">
+              <input
+                v-model="form.balance_expiry_reminder_enabled"
+                type="checkbox"
+                class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+              />
+              <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
+                {{ t('admin.settings.balanceLotExpiry.reminderEnabled') }}
+              </label>
+            </div>
+            <div v-if="form.balance_expiry_reminder_enabled">
+              <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                {{ t('admin.settings.balanceLotExpiry.reminderAdvanceDays') }}
+              </label>
+              <input
+                v-model.number="form.balance_expiry_reminder_advance_days"
+                type="number"
+                min="1"
+                max="30"
+                class="input w-40"
+              />
+              <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.settings.balanceLotExpiry.reminderAdvanceDaysHint') }}
+              </p>
+            </div>
+          </div>
+        </div>
+
         <!-- Save Button -->
         <div class="flex justify-end">
           <button type="submit" :disabled="saving" class="btn btn-primary">
@@ -2112,7 +2166,11 @@ const form = reactive<SettingsForm>({
   usage_report_global_schedule: '09:00',
   // Account expiry reminder
   account_expiry_reminder_email: '',
-  account_expiry_reminder_advance_days: 7
+  account_expiry_reminder_advance_days: 7,
+  // Balance lot expiry
+  balance_lot_expiry_days: 30,
+  balance_expiry_reminder_enabled: false,
+  balance_expiry_reminder_advance_days: 3
 })
 
 // LinuxDo OAuth redirect URL suggestion
@@ -2372,7 +2430,11 @@ async function saveSettings() {
       usage_report_global_schedule: form.usage_report_global_schedule,
       // Account expiry reminder
       account_expiry_reminder_email: form.account_expiry_reminder_email,
-      account_expiry_reminder_advance_days: form.account_expiry_reminder_advance_days
+      account_expiry_reminder_advance_days: form.account_expiry_reminder_advance_days,
+      // Balance lot expiry
+      balance_lot_expiry_days: form.balance_lot_expiry_days,
+      balance_expiry_reminder_enabled: form.balance_expiry_reminder_enabled,
+      balance_expiry_reminder_advance_days: form.balance_expiry_reminder_advance_days
     }
     const updated = await adminAPI.settings.updateSettings(payload)
     Object.assign(form, updated)

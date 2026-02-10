@@ -613,6 +613,7 @@ export default {
     tokens: 'Tokens',
     actual: 'Actual',
     standard: 'Standard',
+    expiringSoon: 'expiring soon',
     input: 'Input',
     output: 'Output',
     cache: 'Cache',
@@ -1230,6 +1231,21 @@ export default {
       failedToLoadBalanceHistory: 'Failed to load balance history',
       createdAt: 'Created',
       totalRecharged: 'Total Recharged',
+      // Balance Lots
+      balanceLots: 'Balance Lots',
+      balanceLotsTitle: 'User Balance Lots',
+      noBalanceLots: 'No balance lots found',
+      allStatuses: 'All Statuses',
+      balanceLotActive: 'Active',
+      balanceLotDepleted: 'Depleted',
+      balanceLotExpired: 'Expired',
+      balanceLotExpiresAt: 'Expires',
+      balanceLotExpiredAt: 'Expired at',
+      balanceLotSourceRecharge: 'Recharge',
+      balanceLotSourceRedeem: 'Redeem Code',
+      balanceLotSourcePromo: 'Promo Code',
+      balanceLotSourceAdjust: 'Admin Adjustment',
+      balanceLotSourceMigration: 'Migration',
       roles: {
         admin: 'Admin',
         user: 'User'
@@ -3674,6 +3690,15 @@ export default {
         emailHint: 'Admin email to receive expiry reminders. Leave empty to disable',
         advanceDays: 'Advance Reminder Days',
         advanceDaysHint: 'How many days before expiry to start sending reminders (default 7)'
+      },
+      balanceLotExpiry: {
+        title: 'Balance Lot Expiry',
+        description: 'Configure expiry duration and reminders for user balance lots',
+        expiryDays: 'Expiry Days',
+        expiryDaysHint: 'Number of days before a balance lot expires (default 30)',
+        reminderEnabled: 'Enable Expiry Reminder',
+        reminderAdvanceDays: 'Advance Reminder Days',
+        reminderAdvanceDaysHint: 'How many days before expiry to send reminders (default 3)'
       },
       opsMonitoring: {
         title: 'Ops Monitoring',

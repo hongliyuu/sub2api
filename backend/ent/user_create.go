@@ -14,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/balancelog"
+	"github.com/Wei-Shaw/sub2api/ent/balancelot"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/rechargeorder"
@@ -431,6 +432,21 @@ func (_c *UserCreate) AddBalanceLogs(v ...*BalanceLog) *UserCreate {
 		ids[i] = v[i].ID
 	}
 	return _c.AddBalanceLogIDs(ids...)
+}
+
+// AddBalanceLotIDs adds the "balance_lots" edge to the BalanceLot entity by IDs.
+func (_c *UserCreate) AddBalanceLotIDs(ids ...int64) *UserCreate {
+	_c.mutation.AddBalanceLotIDs(ids...)
+	return _c
+}
+
+// AddBalanceLots adds the "balance_lots" edges to the BalanceLot entity.
+func (_c *UserCreate) AddBalanceLots(v ...*BalanceLot) *UserCreate {
+	ids := make([]int64, len(v))
+	for i := range v {
+		ids[i] = v[i].ID
+	}
+	return _c.AddBalanceLotIDs(ids...)
 }
 
 // AddRechargeOrderIDs adds the "recharge_orders" edge to the RechargeOrder entity by IDs.
@@ -915,6 +931,22 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 			Bidi:    false,
 			Target: &sqlgraph.EdgeTarget{
 				IDSpec: sqlgraph.NewFieldSpec(balancelog.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges = append(_spec.Edges, edge)
+	}
+	if nodes := _c.mutation.BalanceLotsIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.O2M,
+			Inverse: false,
+			Table:   user.BalanceLotsTable,
+			Columns: []string{user.BalanceLotsColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(balancelot.FieldID, field.TypeInt64),
 			},
 		}
 		for _, k := range nodes {

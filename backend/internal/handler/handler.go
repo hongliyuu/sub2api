@@ -46,6 +46,7 @@ type Handlers struct {
 	Setting          *SettingHandler
 	Totp             *TotpHandler
 	UsageReport      *UserUsageReportHandler
+	BalanceLot       *BalanceLotHandler
 	Recharge         *recharge.RechargeHandler
 	WeChatPayWebhook *webhook.WeChatPayWebhookHandler
 	SubscriptionPlan *subscription.SubscriptionPlanHandler

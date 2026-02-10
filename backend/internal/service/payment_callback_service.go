@@ -21,13 +21,14 @@ import (
 // - 余额变动日志记录
 // - 异步发送充值成功通知
 type PaymentCallbackService struct {
-	entClient      *dbent.Client
-	redisClient    *redis.Client
-	orderRepo      RechargeOrderRepository
-	userRepo       UserRepository
-	balanceLogRepo BalanceLogRepository
-	emailService   *EmailService
-	settingService *SettingService
+	entClient       *dbent.Client
+	redisClient     *redis.Client
+	orderRepo       RechargeOrderRepository
+	userRepo        UserRepository
+	balanceLogRepo  BalanceLogRepository
+	emailService    *EmailService
+	settingService  *SettingService
+	balanceLotSvc   *BalanceLotService
 }
 
 // NewPaymentCallbackService 创建支付回调业务处理服务
@@ -39,6 +40,7 @@ func NewPaymentCallbackService(
 	balanceLogRepo BalanceLogRepository,
 	emailService *EmailService,
 	settingService *SettingService,
+	balanceLotSvc *BalanceLotService,
 ) *PaymentCallbackService {
 	return &PaymentCallbackService{
 		entClient:      entClient,
@@ -48,6 +50,7 @@ func NewPaymentCallbackService(
 		balanceLogRepo: balanceLogRepo,
 		emailService:   emailService,
 		settingService: settingService,
+		balanceLotSvc:  balanceLotSvc,
 	}
 }
 
@@ -378,6 +381,14 @@ func (s *PaymentCallbackService) processPaymentInTransactionWithDesc(
 	if err := s.userRepo.UpdateBalance(txCtx, order.UserID, creditedAmount); err != nil {
 		_ = tx.Rollback()
 		return fmt.Errorf("update user balance: %w", err)
+	}
+
+	// 创建余额批次（非关键操作，失败不影响支付流程）
+	if s.balanceLotSvc != nil {
+		if err := s.balanceLotSvc.CreateLot(txCtx, order.UserID, creditedAmount, BalanceLotSourceRecharge, &order.OrderNo, description); err != nil {
+			log.Printf("[PaymentCallback] Failed to create balance lot for order %s, user %d, amount %.2f: %v (payment still processed)",
+				order.OrderNo, order.UserID, creditedAmount, err)
+		}
 	}
 
 	// 插入余额变动日志

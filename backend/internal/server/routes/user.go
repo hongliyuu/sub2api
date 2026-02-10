@@ -90,6 +90,13 @@ func RegisterUserRoutes(
 			subscriptions.GET("/summary", h.Subscription.GetSummary)
 		}
 
+		// 余额批次
+		balanceLots := authenticated.Group("/balance-lots")
+		{
+			balanceLots.GET("", h.BalanceLot.List)
+			balanceLots.GET("/summary", h.BalanceLot.Summary)
+		}
+
 		// 使用报告
 		usageReport := authenticated.Group("/usage-report")
 		{

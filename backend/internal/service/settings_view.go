@@ -87,6 +87,11 @@ type SystemSettings struct {
 	// Account expiry reminder
 	AccountExpiryReminderEmail       string
 	AccountExpiryReminderAdvanceDays int
+
+	// Balance lot expiry
+	BalanceLotExpiryDays              int
+	BalanceExpiryReminderEnabled      bool
+	BalanceExpiryReminderAdvanceDays  int
 }
 
 type PublicSettings struct {

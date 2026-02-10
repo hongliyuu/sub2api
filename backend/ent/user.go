@@ -83,6 +83,8 @@ type UserEdges struct {
 	PromoCodeUsages []*PromoCodeUsage `json:"promo_code_usages,omitempty"`
 	// BalanceLogs holds the value of the balance_logs edge.
 	BalanceLogs []*BalanceLog `json:"balance_logs,omitempty"`
+	// BalanceLots holds the value of the balance_lots edge.
+	BalanceLots []*BalanceLot `json:"balance_lots,omitempty"`
 	// RechargeOrders holds the value of the recharge_orders edge.
 	RechargeOrders []*RechargeOrder `json:"recharge_orders,omitempty"`
 	// SubscriptionOrders holds the value of the subscription_orders edge.
@@ -91,7 +93,7 @@ type UserEdges struct {
 	UserAllowedGroups []*UserAllowedGroup `json:"user_allowed_groups,omitempty"`
 	// loadedTypes holds the information for reporting if a
 	// type was loaded (or requested) in eager-loading or not.
-	loadedTypes [13]bool
+	loadedTypes [14]bool
 }
 
 // APIKeysOrErr returns the APIKeys value or an error if the edge
@@ -184,10 +186,19 @@ func (e UserEdges) BalanceLogsOrErr() ([]*BalanceLog, error) {
 	return nil, &NotLoadedError{edge: "balance_logs"}
 }
 
+// BalanceLotsOrErr returns the BalanceLots value or an error if the edge
+// was not loaded in eager-loading.
+func (e UserEdges) BalanceLotsOrErr() ([]*BalanceLot, error) {
+	if e.loadedTypes[10] {
+		return e.BalanceLots, nil
+	}
+	return nil, &NotLoadedError{edge: "balance_lots"}
+}
+
 // RechargeOrdersOrErr returns the RechargeOrders value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) RechargeOrdersOrErr() ([]*RechargeOrder, error) {
-	if e.loadedTypes[10] {
+	if e.loadedTypes[11] {
 		return e.RechargeOrders, nil
 	}
 	return nil, &NotLoadedError{edge: "recharge_orders"}
@@ -196,7 +207,7 @@ func (e UserEdges) RechargeOrdersOrErr() ([]*RechargeOrder, error) {
 // SubscriptionOrdersOrErr returns the SubscriptionOrders value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) SubscriptionOrdersOrErr() ([]*SubscriptionOrder, error) {
-	if e.loadedTypes[11] {
+	if e.loadedTypes[12] {
 		return e.SubscriptionOrders, nil
 	}
 	return nil, &NotLoadedError{edge: "subscription_orders"}
@@ -205,7 +216,7 @@ func (e UserEdges) SubscriptionOrdersOrErr() ([]*SubscriptionOrder, error) {
 // UserAllowedGroupsOrErr returns the UserAllowedGroups value or an error if the edge
 // was not loaded in eager-loading.
 func (e UserEdges) UserAllowedGroupsOrErr() ([]*UserAllowedGroup, error) {
-	if e.loadedTypes[12] {
+	if e.loadedTypes[13] {
 		return e.UserAllowedGroups, nil
 	}
 	return nil, &NotLoadedError{edge: "user_allowed_groups"}
@@ -425,6 +436,11 @@ func (_m *User) QueryPromoCodeUsages() *PromoCodeUsageQuery {
 // QueryBalanceLogs queries the "balance_logs" edge of the User entity.
 func (_m *User) QueryBalanceLogs() *BalanceLogQuery {
 	return NewUserClient(_m.config).QueryBalanceLogs(_m)
+}
+
+// QueryBalanceLots queries the "balance_lots" edge of the User entity.
+func (_m *User) QueryBalanceLots() *BalanceLotQuery {
+	return NewUserClient(_m.config).QueryBalanceLots(_m)
 }
 
 // QueryRechargeOrders queries the "recharge_orders" edge of the User entity.

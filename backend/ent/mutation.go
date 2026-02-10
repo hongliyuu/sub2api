@@ -18,6 +18,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/balancelog"
+	"github.com/Wei-Shaw/sub2api/ent/balancelot"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/paymentcallback"
@@ -54,6 +55,7 @@ const (
 	TypeAnnouncement            = "Announcement"
 	TypeAnnouncementRead        = "AnnouncementRead"
 	TypeBalanceLog              = "BalanceLog"
+	TypeBalanceLot              = "BalanceLot"
 	TypeErrorPassthroughRule    = "ErrorPassthroughRule"
 	TypeGroup                   = "Group"
 	TypePaymentCallback         = "PaymentCallback"
@@ -6835,6 +6837,1036 @@ func (m *BalanceLogMutation) ResetEdge(name string) error {
 		return nil
 	}
 	return fmt.Errorf("unknown BalanceLog edge %s", name)
+}
+
+// BalanceLotMutation represents an operation that mutates the BalanceLot nodes in the graph.
+type BalanceLotMutation struct {
+	config
+	op                  Op
+	typ                 string
+	id                  *int64
+	created_at          *time.Time
+	updated_at          *time.Time
+	source_type         *string
+	source_ref          *string
+	original_amount     *float64
+	addoriginal_amount  *float64
+	remaining_amount    *float64
+	addremaining_amount *float64
+	status              *string
+	expires_at          *time.Time
+	expired_at          *time.Time
+	description         *string
+	clearedFields       map[string]struct{}
+	user                *int64
+	cleareduser         bool
+	done                bool
+	oldValue            func(context.Context) (*BalanceLot, error)
+	predicates          []predicate.BalanceLot
+}
+
+var _ ent.Mutation = (*BalanceLotMutation)(nil)
+
+// balancelotOption allows management of the mutation configuration using functional options.
+type balancelotOption func(*BalanceLotMutation)
+
+// newBalanceLotMutation creates new mutation for the BalanceLot entity.
+func newBalanceLotMutation(c config, op Op, opts ...balancelotOption) *BalanceLotMutation {
+	m := &BalanceLotMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeBalanceLot,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withBalanceLotID sets the ID field of the mutation.
+func withBalanceLotID(id int64) balancelotOption {
+	return func(m *BalanceLotMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *BalanceLot
+		)
+		m.oldValue = func(ctx context.Context) (*BalanceLot, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().BalanceLot.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withBalanceLot sets the old BalanceLot of the mutation.
+func withBalanceLot(node *BalanceLot) balancelotOption {
+	return func(m *BalanceLotMutation) {
+		m.oldValue = func(context.Context) (*BalanceLot, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m BalanceLotMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m BalanceLotMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *BalanceLotMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *BalanceLotMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().BalanceLot.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *BalanceLotMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *BalanceLotMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the BalanceLot entity.
+// If the BalanceLot object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceLotMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *BalanceLotMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *BalanceLotMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *BalanceLotMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the BalanceLot entity.
+// If the BalanceLot object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceLotMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *BalanceLotMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetUserID sets the "user_id" field.
+func (m *BalanceLotMutation) SetUserID(i int64) {
+	m.user = &i
+}
+
+// UserID returns the value of the "user_id" field in the mutation.
+func (m *BalanceLotMutation) UserID() (r int64, exists bool) {
+	v := m.user
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserID returns the old "user_id" field's value of the BalanceLot entity.
+// If the BalanceLot object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceLotMutation) OldUserID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserID: %w", err)
+	}
+	return oldValue.UserID, nil
+}
+
+// ResetUserID resets all changes to the "user_id" field.
+func (m *BalanceLotMutation) ResetUserID() {
+	m.user = nil
+}
+
+// SetSourceType sets the "source_type" field.
+func (m *BalanceLotMutation) SetSourceType(s string) {
+	m.source_type = &s
+}
+
+// SourceType returns the value of the "source_type" field in the mutation.
+func (m *BalanceLotMutation) SourceType() (r string, exists bool) {
+	v := m.source_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSourceType returns the old "source_type" field's value of the BalanceLot entity.
+// If the BalanceLot object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceLotMutation) OldSourceType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSourceType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSourceType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSourceType: %w", err)
+	}
+	return oldValue.SourceType, nil
+}
+
+// ResetSourceType resets all changes to the "source_type" field.
+func (m *BalanceLotMutation) ResetSourceType() {
+	m.source_type = nil
+}
+
+// SetSourceRef sets the "source_ref" field.
+func (m *BalanceLotMutation) SetSourceRef(s string) {
+	m.source_ref = &s
+}
+
+// SourceRef returns the value of the "source_ref" field in the mutation.
+func (m *BalanceLotMutation) SourceRef() (r string, exists bool) {
+	v := m.source_ref
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSourceRef returns the old "source_ref" field's value of the BalanceLot entity.
+// If the BalanceLot object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceLotMutation) OldSourceRef(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSourceRef is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSourceRef requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSourceRef: %w", err)
+	}
+	return oldValue.SourceRef, nil
+}
+
+// ClearSourceRef clears the value of the "source_ref" field.
+func (m *BalanceLotMutation) ClearSourceRef() {
+	m.source_ref = nil
+	m.clearedFields[balancelot.FieldSourceRef] = struct{}{}
+}
+
+// SourceRefCleared returns if the "source_ref" field was cleared in this mutation.
+func (m *BalanceLotMutation) SourceRefCleared() bool {
+	_, ok := m.clearedFields[balancelot.FieldSourceRef]
+	return ok
+}
+
+// ResetSourceRef resets all changes to the "source_ref" field.
+func (m *BalanceLotMutation) ResetSourceRef() {
+	m.source_ref = nil
+	delete(m.clearedFields, balancelot.FieldSourceRef)
+}
+
+// SetOriginalAmount sets the "original_amount" field.
+func (m *BalanceLotMutation) SetOriginalAmount(f float64) {
+	m.original_amount = &f
+	m.addoriginal_amount = nil
+}
+
+// OriginalAmount returns the value of the "original_amount" field in the mutation.
+func (m *BalanceLotMutation) OriginalAmount() (r float64, exists bool) {
+	v := m.original_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOriginalAmount returns the old "original_amount" field's value of the BalanceLot entity.
+// If the BalanceLot object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceLotMutation) OldOriginalAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOriginalAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOriginalAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOriginalAmount: %w", err)
+	}
+	return oldValue.OriginalAmount, nil
+}
+
+// AddOriginalAmount adds f to the "original_amount" field.
+func (m *BalanceLotMutation) AddOriginalAmount(f float64) {
+	if m.addoriginal_amount != nil {
+		*m.addoriginal_amount += f
+	} else {
+		m.addoriginal_amount = &f
+	}
+}
+
+// AddedOriginalAmount returns the value that was added to the "original_amount" field in this mutation.
+func (m *BalanceLotMutation) AddedOriginalAmount() (r float64, exists bool) {
+	v := m.addoriginal_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetOriginalAmount resets all changes to the "original_amount" field.
+func (m *BalanceLotMutation) ResetOriginalAmount() {
+	m.original_amount = nil
+	m.addoriginal_amount = nil
+}
+
+// SetRemainingAmount sets the "remaining_amount" field.
+func (m *BalanceLotMutation) SetRemainingAmount(f float64) {
+	m.remaining_amount = &f
+	m.addremaining_amount = nil
+}
+
+// RemainingAmount returns the value of the "remaining_amount" field in the mutation.
+func (m *BalanceLotMutation) RemainingAmount() (r float64, exists bool) {
+	v := m.remaining_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldRemainingAmount returns the old "remaining_amount" field's value of the BalanceLot entity.
+// If the BalanceLot object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceLotMutation) OldRemainingAmount(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldRemainingAmount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldRemainingAmount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldRemainingAmount: %w", err)
+	}
+	return oldValue.RemainingAmount, nil
+}
+
+// AddRemainingAmount adds f to the "remaining_amount" field.
+func (m *BalanceLotMutation) AddRemainingAmount(f float64) {
+	if m.addremaining_amount != nil {
+		*m.addremaining_amount += f
+	} else {
+		m.addremaining_amount = &f
+	}
+}
+
+// AddedRemainingAmount returns the value that was added to the "remaining_amount" field in this mutation.
+func (m *BalanceLotMutation) AddedRemainingAmount() (r float64, exists bool) {
+	v := m.addremaining_amount
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetRemainingAmount resets all changes to the "remaining_amount" field.
+func (m *BalanceLotMutation) ResetRemainingAmount() {
+	m.remaining_amount = nil
+	m.addremaining_amount = nil
+}
+
+// SetStatus sets the "status" field.
+func (m *BalanceLotMutation) SetStatus(s string) {
+	m.status = &s
+}
+
+// Status returns the value of the "status" field in the mutation.
+func (m *BalanceLotMutation) Status() (r string, exists bool) {
+	v := m.status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldStatus returns the old "status" field's value of the BalanceLot entity.
+// If the BalanceLot object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceLotMutation) OldStatus(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldStatus: %w", err)
+	}
+	return oldValue.Status, nil
+}
+
+// ResetStatus resets all changes to the "status" field.
+func (m *BalanceLotMutation) ResetStatus() {
+	m.status = nil
+}
+
+// SetExpiresAt sets the "expires_at" field.
+func (m *BalanceLotMutation) SetExpiresAt(t time.Time) {
+	m.expires_at = &t
+}
+
+// ExpiresAt returns the value of the "expires_at" field in the mutation.
+func (m *BalanceLotMutation) ExpiresAt() (r time.Time, exists bool) {
+	v := m.expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExpiresAt returns the old "expires_at" field's value of the BalanceLot entity.
+// If the BalanceLot object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceLotMutation) OldExpiresAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExpiresAt: %w", err)
+	}
+	return oldValue.ExpiresAt, nil
+}
+
+// ResetExpiresAt resets all changes to the "expires_at" field.
+func (m *BalanceLotMutation) ResetExpiresAt() {
+	m.expires_at = nil
+}
+
+// SetExpiredAt sets the "expired_at" field.
+func (m *BalanceLotMutation) SetExpiredAt(t time.Time) {
+	m.expired_at = &t
+}
+
+// ExpiredAt returns the value of the "expired_at" field in the mutation.
+func (m *BalanceLotMutation) ExpiredAt() (r time.Time, exists bool) {
+	v := m.expired_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldExpiredAt returns the old "expired_at" field's value of the BalanceLot entity.
+// If the BalanceLot object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceLotMutation) OldExpiredAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldExpiredAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldExpiredAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldExpiredAt: %w", err)
+	}
+	return oldValue.ExpiredAt, nil
+}
+
+// ClearExpiredAt clears the value of the "expired_at" field.
+func (m *BalanceLotMutation) ClearExpiredAt() {
+	m.expired_at = nil
+	m.clearedFields[balancelot.FieldExpiredAt] = struct{}{}
+}
+
+// ExpiredAtCleared returns if the "expired_at" field was cleared in this mutation.
+func (m *BalanceLotMutation) ExpiredAtCleared() bool {
+	_, ok := m.clearedFields[balancelot.FieldExpiredAt]
+	return ok
+}
+
+// ResetExpiredAt resets all changes to the "expired_at" field.
+func (m *BalanceLotMutation) ResetExpiredAt() {
+	m.expired_at = nil
+	delete(m.clearedFields, balancelot.FieldExpiredAt)
+}
+
+// SetDescription sets the "description" field.
+func (m *BalanceLotMutation) SetDescription(s string) {
+	m.description = &s
+}
+
+// Description returns the value of the "description" field in the mutation.
+func (m *BalanceLotMutation) Description() (r string, exists bool) {
+	v := m.description
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDescription returns the old "description" field's value of the BalanceLot entity.
+// If the BalanceLot object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *BalanceLotMutation) OldDescription(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDescription is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDescription requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDescription: %w", err)
+	}
+	return oldValue.Description, nil
+}
+
+// ResetDescription resets all changes to the "description" field.
+func (m *BalanceLotMutation) ResetDescription() {
+	m.description = nil
+}
+
+// ClearUser clears the "user" edge to the User entity.
+func (m *BalanceLotMutation) ClearUser() {
+	m.cleareduser = true
+	m.clearedFields[balancelot.FieldUserID] = struct{}{}
+}
+
+// UserCleared reports if the "user" edge to the User entity was cleared.
+func (m *BalanceLotMutation) UserCleared() bool {
+	return m.cleareduser
+}
+
+// UserIDs returns the "user" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// UserID instead. It exists only for internal usage by the builders.
+func (m *BalanceLotMutation) UserIDs() (ids []int64) {
+	if id := m.user; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetUser resets all changes to the "user" edge.
+func (m *BalanceLotMutation) ResetUser() {
+	m.user = nil
+	m.cleareduser = false
+}
+
+// Where appends a list predicates to the BalanceLotMutation builder.
+func (m *BalanceLotMutation) Where(ps ...predicate.BalanceLot) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the BalanceLotMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *BalanceLotMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.BalanceLot, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *BalanceLotMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *BalanceLotMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (BalanceLot).
+func (m *BalanceLotMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *BalanceLotMutation) Fields() []string {
+	fields := make([]string, 0, 11)
+	if m.created_at != nil {
+		fields = append(fields, balancelot.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, balancelot.FieldUpdatedAt)
+	}
+	if m.user != nil {
+		fields = append(fields, balancelot.FieldUserID)
+	}
+	if m.source_type != nil {
+		fields = append(fields, balancelot.FieldSourceType)
+	}
+	if m.source_ref != nil {
+		fields = append(fields, balancelot.FieldSourceRef)
+	}
+	if m.original_amount != nil {
+		fields = append(fields, balancelot.FieldOriginalAmount)
+	}
+	if m.remaining_amount != nil {
+		fields = append(fields, balancelot.FieldRemainingAmount)
+	}
+	if m.status != nil {
+		fields = append(fields, balancelot.FieldStatus)
+	}
+	if m.expires_at != nil {
+		fields = append(fields, balancelot.FieldExpiresAt)
+	}
+	if m.expired_at != nil {
+		fields = append(fields, balancelot.FieldExpiredAt)
+	}
+	if m.description != nil {
+		fields = append(fields, balancelot.FieldDescription)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *BalanceLotMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case balancelot.FieldCreatedAt:
+		return m.CreatedAt()
+	case balancelot.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case balancelot.FieldUserID:
+		return m.UserID()
+	case balancelot.FieldSourceType:
+		return m.SourceType()
+	case balancelot.FieldSourceRef:
+		return m.SourceRef()
+	case balancelot.FieldOriginalAmount:
+		return m.OriginalAmount()
+	case balancelot.FieldRemainingAmount:
+		return m.RemainingAmount()
+	case balancelot.FieldStatus:
+		return m.Status()
+	case balancelot.FieldExpiresAt:
+		return m.ExpiresAt()
+	case balancelot.FieldExpiredAt:
+		return m.ExpiredAt()
+	case balancelot.FieldDescription:
+		return m.Description()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *BalanceLotMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case balancelot.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case balancelot.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case balancelot.FieldUserID:
+		return m.OldUserID(ctx)
+	case balancelot.FieldSourceType:
+		return m.OldSourceType(ctx)
+	case balancelot.FieldSourceRef:
+		return m.OldSourceRef(ctx)
+	case balancelot.FieldOriginalAmount:
+		return m.OldOriginalAmount(ctx)
+	case balancelot.FieldRemainingAmount:
+		return m.OldRemainingAmount(ctx)
+	case balancelot.FieldStatus:
+		return m.OldStatus(ctx)
+	case balancelot.FieldExpiresAt:
+		return m.OldExpiresAt(ctx)
+	case balancelot.FieldExpiredAt:
+		return m.OldExpiredAt(ctx)
+	case balancelot.FieldDescription:
+		return m.OldDescription(ctx)
+	}
+	return nil, fmt.Errorf("unknown BalanceLot field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *BalanceLotMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case balancelot.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case balancelot.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case balancelot.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserID(v)
+		return nil
+	case balancelot.FieldSourceType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSourceType(v)
+		return nil
+	case balancelot.FieldSourceRef:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSourceRef(v)
+		return nil
+	case balancelot.FieldOriginalAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOriginalAmount(v)
+		return nil
+	case balancelot.FieldRemainingAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetRemainingAmount(v)
+		return nil
+	case balancelot.FieldStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetStatus(v)
+		return nil
+	case balancelot.FieldExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExpiresAt(v)
+		return nil
+	case balancelot.FieldExpiredAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetExpiredAt(v)
+		return nil
+	case balancelot.FieldDescription:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDescription(v)
+		return nil
+	}
+	return fmt.Errorf("unknown BalanceLot field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *BalanceLotMutation) AddedFields() []string {
+	var fields []string
+	if m.addoriginal_amount != nil {
+		fields = append(fields, balancelot.FieldOriginalAmount)
+	}
+	if m.addremaining_amount != nil {
+		fields = append(fields, balancelot.FieldRemainingAmount)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *BalanceLotMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case balancelot.FieldOriginalAmount:
+		return m.AddedOriginalAmount()
+	case balancelot.FieldRemainingAmount:
+		return m.AddedRemainingAmount()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *BalanceLotMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case balancelot.FieldOriginalAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddOriginalAmount(v)
+		return nil
+	case balancelot.FieldRemainingAmount:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddRemainingAmount(v)
+		return nil
+	}
+	return fmt.Errorf("unknown BalanceLot numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *BalanceLotMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(balancelot.FieldSourceRef) {
+		fields = append(fields, balancelot.FieldSourceRef)
+	}
+	if m.FieldCleared(balancelot.FieldExpiredAt) {
+		fields = append(fields, balancelot.FieldExpiredAt)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *BalanceLotMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *BalanceLotMutation) ClearField(name string) error {
+	switch name {
+	case balancelot.FieldSourceRef:
+		m.ClearSourceRef()
+		return nil
+	case balancelot.FieldExpiredAt:
+		m.ClearExpiredAt()
+		return nil
+	}
+	return fmt.Errorf("unknown BalanceLot nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *BalanceLotMutation) ResetField(name string) error {
+	switch name {
+	case balancelot.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case balancelot.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case balancelot.FieldUserID:
+		m.ResetUserID()
+		return nil
+	case balancelot.FieldSourceType:
+		m.ResetSourceType()
+		return nil
+	case balancelot.FieldSourceRef:
+		m.ResetSourceRef()
+		return nil
+	case balancelot.FieldOriginalAmount:
+		m.ResetOriginalAmount()
+		return nil
+	case balancelot.FieldRemainingAmount:
+		m.ResetRemainingAmount()
+		return nil
+	case balancelot.FieldStatus:
+		m.ResetStatus()
+		return nil
+	case balancelot.FieldExpiresAt:
+		m.ResetExpiresAt()
+		return nil
+	case balancelot.FieldExpiredAt:
+		m.ResetExpiredAt()
+		return nil
+	case balancelot.FieldDescription:
+		m.ResetDescription()
+		return nil
+	}
+	return fmt.Errorf("unknown BalanceLot field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *BalanceLotMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.user != nil {
+		edges = append(edges, balancelot.EdgeUser)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *BalanceLotMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case balancelot.EdgeUser:
+		if id := m.user; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *BalanceLotMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *BalanceLotMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *BalanceLotMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.cleareduser {
+		edges = append(edges, balancelot.EdgeUser)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *BalanceLotMutation) EdgeCleared(name string) bool {
+	switch name {
+	case balancelot.EdgeUser:
+		return m.cleareduser
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *BalanceLotMutation) ClearEdge(name string) error {
+	switch name {
+	case balancelot.EdgeUser:
+		m.ClearUser()
+		return nil
+	}
+	return fmt.Errorf("unknown BalanceLot unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *BalanceLotMutation) ResetEdge(name string) error {
+	switch name {
+	case balancelot.EdgeUser:
+		m.ResetUser()
+		return nil
+	}
+	return fmt.Errorf("unknown BalanceLot edge %s", name)
 }
 
 // ErrorPassthroughRuleMutation represents an operation that mutates the ErrorPassthroughRule nodes in the graph.
@@ -24030,6 +25062,9 @@ type UserMutation struct {
 	balance_logs                  map[int64]struct{}
 	removedbalance_logs           map[int64]struct{}
 	clearedbalance_logs           bool
+	balance_lots                  map[int64]struct{}
+	removedbalance_lots           map[int64]struct{}
+	clearedbalance_lots           bool
 	recharge_orders               map[int64]struct{}
 	removedrecharge_orders        map[int64]struct{}
 	clearedrecharge_orders        bool
@@ -25442,6 +26477,60 @@ func (m *UserMutation) ResetBalanceLogs() {
 	m.removedbalance_logs = nil
 }
 
+// AddBalanceLotIDs adds the "balance_lots" edge to the BalanceLot entity by ids.
+func (m *UserMutation) AddBalanceLotIDs(ids ...int64) {
+	if m.balance_lots == nil {
+		m.balance_lots = make(map[int64]struct{})
+	}
+	for i := range ids {
+		m.balance_lots[ids[i]] = struct{}{}
+	}
+}
+
+// ClearBalanceLots clears the "balance_lots" edge to the BalanceLot entity.
+func (m *UserMutation) ClearBalanceLots() {
+	m.clearedbalance_lots = true
+}
+
+// BalanceLotsCleared reports if the "balance_lots" edge to the BalanceLot entity was cleared.
+func (m *UserMutation) BalanceLotsCleared() bool {
+	return m.clearedbalance_lots
+}
+
+// RemoveBalanceLotIDs removes the "balance_lots" edge to the BalanceLot entity by IDs.
+func (m *UserMutation) RemoveBalanceLotIDs(ids ...int64) {
+	if m.removedbalance_lots == nil {
+		m.removedbalance_lots = make(map[int64]struct{})
+	}
+	for i := range ids {
+		delete(m.balance_lots, ids[i])
+		m.removedbalance_lots[ids[i]] = struct{}{}
+	}
+}
+
+// RemovedBalanceLots returns the removed IDs of the "balance_lots" edge to the BalanceLot entity.
+func (m *UserMutation) RemovedBalanceLotsIDs() (ids []int64) {
+	for id := range m.removedbalance_lots {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// BalanceLotsIDs returns the "balance_lots" edge IDs in the mutation.
+func (m *UserMutation) BalanceLotsIDs() (ids []int64) {
+	for id := range m.balance_lots {
+		ids = append(ids, id)
+	}
+	return
+}
+
+// ResetBalanceLots resets all changes to the "balance_lots" edge.
+func (m *UserMutation) ResetBalanceLots() {
+	m.balance_lots = nil
+	m.clearedbalance_lots = false
+	m.removedbalance_lots = nil
+}
+
 // AddRechargeOrderIDs adds the "recharge_orders" edge to the RechargeOrder entity by ids.
 func (m *UserMutation) AddRechargeOrderIDs(ids ...int64) {
 	if m.recharge_orders == nil {
@@ -26037,7 +27126,7 @@ func (m *UserMutation) ResetField(name string) error {
 
 // AddedEdges returns all edge names that were set/added in this mutation.
 func (m *UserMutation) AddedEdges() []string {
-	edges := make([]string, 0, 12)
+	edges := make([]string, 0, 13)
 	if m.api_keys != nil {
 		edges = append(edges, user.EdgeAPIKeys)
 	}
@@ -26067,6 +27156,9 @@ func (m *UserMutation) AddedEdges() []string {
 	}
 	if m.balance_logs != nil {
 		edges = append(edges, user.EdgeBalanceLogs)
+	}
+	if m.balance_lots != nil {
+		edges = append(edges, user.EdgeBalanceLots)
 	}
 	if m.recharge_orders != nil {
 		edges = append(edges, user.EdgeRechargeOrders)
@@ -26141,6 +27233,12 @@ func (m *UserMutation) AddedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case user.EdgeBalanceLots:
+		ids := make([]ent.Value, 0, len(m.balance_lots))
+		for id := range m.balance_lots {
+			ids = append(ids, id)
+		}
+		return ids
 	case user.EdgeRechargeOrders:
 		ids := make([]ent.Value, 0, len(m.recharge_orders))
 		for id := range m.recharge_orders {
@@ -26159,7 +27257,7 @@ func (m *UserMutation) AddedIDs(name string) []ent.Value {
 
 // RemovedEdges returns all edge names that were removed in this mutation.
 func (m *UserMutation) RemovedEdges() []string {
-	edges := make([]string, 0, 12)
+	edges := make([]string, 0, 13)
 	if m.removedapi_keys != nil {
 		edges = append(edges, user.EdgeAPIKeys)
 	}
@@ -26189,6 +27287,9 @@ func (m *UserMutation) RemovedEdges() []string {
 	}
 	if m.removedbalance_logs != nil {
 		edges = append(edges, user.EdgeBalanceLogs)
+	}
+	if m.removedbalance_lots != nil {
+		edges = append(edges, user.EdgeBalanceLots)
 	}
 	if m.removedrecharge_orders != nil {
 		edges = append(edges, user.EdgeRechargeOrders)
@@ -26263,6 +27364,12 @@ func (m *UserMutation) RemovedIDs(name string) []ent.Value {
 			ids = append(ids, id)
 		}
 		return ids
+	case user.EdgeBalanceLots:
+		ids := make([]ent.Value, 0, len(m.removedbalance_lots))
+		for id := range m.removedbalance_lots {
+			ids = append(ids, id)
+		}
+		return ids
 	case user.EdgeRechargeOrders:
 		ids := make([]ent.Value, 0, len(m.removedrecharge_orders))
 		for id := range m.removedrecharge_orders {
@@ -26281,7 +27388,7 @@ func (m *UserMutation) RemovedIDs(name string) []ent.Value {
 
 // ClearedEdges returns all edge names that were cleared in this mutation.
 func (m *UserMutation) ClearedEdges() []string {
-	edges := make([]string, 0, 12)
+	edges := make([]string, 0, 13)
 	if m.clearedapi_keys {
 		edges = append(edges, user.EdgeAPIKeys)
 	}
@@ -26311,6 +27418,9 @@ func (m *UserMutation) ClearedEdges() []string {
 	}
 	if m.clearedbalance_logs {
 		edges = append(edges, user.EdgeBalanceLogs)
+	}
+	if m.clearedbalance_lots {
+		edges = append(edges, user.EdgeBalanceLots)
 	}
 	if m.clearedrecharge_orders {
 		edges = append(edges, user.EdgeRechargeOrders)
@@ -26345,6 +27455,8 @@ func (m *UserMutation) EdgeCleared(name string) bool {
 		return m.clearedpromo_code_usages
 	case user.EdgeBalanceLogs:
 		return m.clearedbalance_logs
+	case user.EdgeBalanceLots:
+		return m.clearedbalance_lots
 	case user.EdgeRechargeOrders:
 		return m.clearedrecharge_orders
 	case user.EdgeSubscriptionOrders:
@@ -26394,6 +27506,9 @@ func (m *UserMutation) ResetEdge(name string) error {
 		return nil
 	case user.EdgeBalanceLogs:
 		m.ResetBalanceLogs()
+		return nil
+	case user.EdgeBalanceLots:
+		m.ResetBalanceLots()
 		return nil
 	case user.EdgeRechargeOrders:
 		m.ResetRechargeOrders()

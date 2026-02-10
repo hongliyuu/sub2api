@@ -11,6 +11,7 @@ const (
 	BalanceChangeTypeConsume  = "consume"  // 消费
 	BalanceChangeTypeRefund   = "refund"   // 退款
 	BalanceChangeTypeAdjust   = "adjust"   // 调整
+	BalanceChangeTypeExpire   = "expire"   // 过期清零
 )
 
 // 操作人类型常量

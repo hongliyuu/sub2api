@@ -617,6 +617,7 @@ export default {
     input: '输入',
     output: '输出',
     cache: '缓存',
+    expiringSoon: '即将过期',
     recentUsage: '最近使用',
     last7Days: '近 7 天',
     noUsageRecords: '暂无使用记录',
@@ -1291,6 +1292,20 @@ export default {
       failedToLoadBalanceHistory: '加载余额记录失败',
       createdAt: '创建时间',
       totalRecharged: '总充值',
+      // Balance Lots
+      balanceLots: '余额批次',
+      balanceLotsTitle: '用户余额批次明细',
+      noBalanceLots: '暂无余额批次记录',
+      balanceLotActive: '有效',
+      balanceLotDepleted: '已用完',
+      balanceLotExpired: '已过期',
+      balanceLotExpiresAt: '过期时间',
+      balanceLotExpiredAt: '过期于',
+      balanceLotSourceRecharge: '充值',
+      balanceLotSourceRedeem: '兑换码',
+      balanceLotSourcePromo: '优惠码',
+      balanceLotSourceAdjust: '管理员调整',
+      balanceLotSourceMigration: '历史迁移',
       // Settings Dropdowns
       filterSettings: '筛选设置',
       columnSettings: '列设置',
@@ -3849,6 +3864,15 @@ export default {
         emailHint: '接收到期提醒的管理员邮箱，留空则不发送提醒',
         advanceDays: '提前提醒天数',
         advanceDaysHint: '账号过期前多少天开始发送提醒（默认 7 天）'
+      },
+      balanceLotExpiry: {
+        title: '余额过期设置',
+        description: '配置用户余额批次的过期时间和过期提醒',
+        expiryDays: '过期天数',
+        expiryDaysHint: '每笔充值余额的有效期天数（默认 30 天）',
+        reminderEnabled: '启用过期提醒',
+        reminderAdvanceDays: '提前提醒天数',
+        reminderAdvanceDaysHint: '余额过期前多少天开始发送提醒（默认 3 天）'
       },
       opsMonitoring: {
         title: '运维监控',

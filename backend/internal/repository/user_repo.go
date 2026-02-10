@@ -351,6 +351,22 @@ func (r *userRepository) DeductBalance(ctx context.Context, id int64, amount flo
 	return nil
 }
 
+// SetBalance 直接设置用户余额为指定值（用于过期重算等场景）
+func (r *userRepository) SetBalance(ctx context.Context, id int64, balance float64) error {
+	client := clientFromContext(ctx, r.client)
+	n, err := client.User.Update().
+		Where(dbuser.IDEQ(id)).
+		SetBalance(balance).
+		Save(ctx)
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return service.ErrUserNotFound
+	}
+	return nil
+}
+
 func (r *userRepository) UpdateConcurrency(ctx context.Context, id int64, amount int) error {
 	client := clientFromContext(ctx, r.client)
 	n, err := client.User.Update().Where(dbuser.IDEQ(id)).AddConcurrency(amount).Save(ctx)

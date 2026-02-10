@@ -66,12 +66,15 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	apiKeyCache := repository.NewAPIKeyCache(redisClient)
 	apiKeyService := service.NewAPIKeyService(apiKeyRepository, userRepository, groupRepository, userSubscriptionRepository, userGroupRateRepository, apiKeyCache, configConfig)
 	apiKeyAuthCacheInvalidator := service.ProvideAPIKeyAuthCacheInvalidator(apiKeyService)
-	promoService := service.NewPromoService(promoCodeRepository, userRepository, billingCacheService, client, apiKeyAuthCacheInvalidator)
-	authService := service.NewAuthService(userRepository, redeemCodeRepository, refreshTokenCache, configConfig, settingService, emailService, turnstileService, emailQueueService, promoService)
+	balanceLotRepository := repository.NewBalanceLotRepository(client)
+	balanceLogRepository := repository.NewBalanceLogRepository(client)
+	balanceLotService := service.NewBalanceLotService(balanceLotRepository, userRepository, balanceLogRepository, billingCacheService, settingService, client)
+	promoService := service.NewPromoService(promoCodeRepository, userRepository, billingCacheService, client, apiKeyAuthCacheInvalidator, balanceLotService)
+	authService := service.NewAuthService(userRepository, redeemCodeRepository, refreshTokenCache, configConfig, settingService, emailService, turnstileService, emailQueueService, promoService, balanceLotService)
 	userService := service.NewUserService(userRepository, apiKeyAuthCacheInvalidator)
 	subscriptionService := service.NewSubscriptionService(groupRepository, userSubscriptionRepository, billingCacheService)
 	redeemCache := repository.NewRedeemCache(redisClient)
-	redeemService := service.NewRedeemService(redeemCodeRepository, userRepository, subscriptionService, redeemCache, billingCacheService, client, apiKeyAuthCacheInvalidator)
+	redeemService := service.NewRedeemService(redeemCodeRepository, userRepository, subscriptionService, redeemCache, billingCacheService, client, apiKeyAuthCacheInvalidator, balanceLotService)
 	secretEncryptor, err := repository.NewAESEncryptor(configConfig)
 	if err != nil {
 		return nil, err
@@ -108,7 +111,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	proxyRepository := repository.NewProxyRepository(client, db)
 	proxyExitInfoProber := repository.NewProxyExitInfoProber(configConfig)
 	proxyLatencyCache := repository.NewProxyLatencyCache(redisClient)
-	adminService := service.NewAdminService(userRepository, groupRepository, accountRepository, proxyRepository, apiKeyRepository, redeemCodeRepository, userGroupRateRepository, billingCacheService, proxyExitInfoProber, proxyLatencyCache, apiKeyAuthCacheInvalidator)
+	adminService := service.NewAdminService(userRepository, groupRepository, accountRepository, proxyRepository, apiKeyRepository, redeemCodeRepository, userGroupRateRepository, billingCacheService, proxyExitInfoProber, proxyLatencyCache, apiKeyAuthCacheInvalidator, balanceLotService)
 	concurrencyCache := repository.ProvideConcurrencyCache(redisClient, configConfig)
 	concurrencyService := service.ProvideConcurrencyService(concurrencyCache, accountRepository, configConfig)
 	adminUserHandler := admin.NewUserHandler(adminService, concurrencyService)
@@ -162,7 +165,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	deferredService := service.ProvideDeferredService(accountRepository, timingWheelService)
 	claudeTokenProvider := service.NewClaudeTokenProvider(accountRepository, geminiTokenCache, oAuthService)
 	digestSessionStore := service.NewDigestSessionStore()
-	gatewayService := service.NewGatewayService(accountRepository, groupRepository, usageLogRepository, userRepository, userSubscriptionRepository, userGroupRateRepository, gatewayCache, configConfig, schedulerSnapshotService, concurrencyService, billingService, rateLimitService, billingCacheService, identityService, httpUpstream, deferredService, claudeTokenProvider, sessionLimitCache, digestSessionStore)
+	gatewayService := service.NewGatewayService(accountRepository, groupRepository, usageLogRepository, userRepository, userSubscriptionRepository, userGroupRateRepository, gatewayCache, configConfig, schedulerSnapshotService, concurrencyService, billingService, rateLimitService, billingCacheService, identityService, httpUpstream, deferredService, claudeTokenProvider, sessionLimitCache, digestSessionStore, balanceLotService)
 	openAITokenProvider := service.NewOpenAITokenProvider(accountRepository, geminiTokenCache, openAIOAuthService)
 	openAIGatewayService := service.NewOpenAIGatewayService(accountRepository, usageLogRepository, userRepository, userSubscriptionRepository, gatewayCache, configConfig, schedulerSnapshotService, concurrencyService, billingService, rateLimitService, billingCacheService, httpUpstream, deferredService, openAITokenProvider)
 	geminiMessagesCompatService := service.NewGeminiMessagesCompatService(accountRepository, groupRepository, gatewayCache, schedulerSnapshotService, geminiTokenProvider, rateLimitService, httpUpstream, antigravityGatewayService, configConfig)
@@ -184,8 +187,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	userAttributeService := service.NewUserAttributeService(userAttributeDefinitionRepository, userAttributeValueRepository)
 	userAttributeHandler := admin.NewUserAttributeHandler(userAttributeService)
 	rechargeOrderRepository := repository.NewRechargeOrderRepository(client)
-	balanceLogRepository := repository.NewBalanceLogRepository(client)
-	paymentCallbackService := service.NewPaymentCallbackService(client, redisClient, rechargeOrderRepository, userRepository, balanceLogRepository, emailService, settingService)
+	paymentCallbackService := service.NewPaymentCallbackService(client, redisClient, rechargeOrderRepository, userRepository, balanceLogRepository, emailService, settingService, balanceLotService)
 	rechargeOrderService := service.NewRechargeOrderService(configConfig, rechargeOrderRepository, weChatPayService, paymentCallbackService, client, userRepository, balanceLogRepository, redisClient)
 	rechargeHandler := admin.NewRechargeHandler(rechargeOrderService, balanceLogRepository)
 	errorPassthroughRepository := repository.NewErrorPassthroughRepository(client)
@@ -200,6 +202,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	userUsageReportRepository := repository.NewUserUsageReportRepository(client, db)
 	userUsageReportService := service.NewUserUsageReportService(userRepository, usageService, settingService, emailService, userUsageReportRepository)
 	userUsageReportHandler := handler.NewUserUsageReportHandler(userUsageReportService, settingService, userRepository)
+	balanceLotHandler := handler.NewBalanceLotHandler(balanceLotService)
 	rechargeRateLimitService := service.NewRechargeRateLimitService(configConfig, redisClient)
 	rechargeRechargeHandler := recharge.NewRechargeHandler(weChatPayService, rechargeOrderService, rechargeRateLimitService, turnstileService, settingService)
 	paymentCallbackRepository := repository.NewPaymentCallbackRepository(client)
@@ -207,7 +210,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	subscriptionOrderService := service.NewSubscriptionOrderService(configConfig, subscriptionOrderRepository, groupRepository, weChatPayService, subscriptionService, client, redisClient, emailService, settingService, userRepository)
 	weChatPayWebhookHandler := webhook.NewWeChatPayWebhookHandler(paymentCallbackRepository, weChatPayService, paymentCallbackService, rechargeOrderService, subscriptionOrderService)
 	subscriptionPlanHandler := subscription.NewSubscriptionPlanHandler(groupRepository, weChatPayService, subscriptionOrderService, rechargeRateLimitService, turnstileService, settingService)
-	handlers := handler.ProvideHandlers(authHandler, userHandler, apiKeyHandler, usageHandler, redeemHandler, subscriptionHandler, announcementHandler, adminHandlers, gatewayHandler, openAIGatewayHandler, handlerSettingHandler, totpHandler, userUsageReportHandler, rechargeRechargeHandler, weChatPayWebhookHandler, subscriptionPlanHandler)
+	handlers := handler.ProvideHandlers(authHandler, userHandler, apiKeyHandler, usageHandler, redeemHandler, subscriptionHandler, announcementHandler, adminHandlers, gatewayHandler, openAIGatewayHandler, handlerSettingHandler, totpHandler, userUsageReportHandler, balanceLotHandler, rechargeRechargeHandler, weChatPayWebhookHandler, subscriptionPlanHandler)
 	jwtAuthMiddleware := middleware.NewJWTAuthMiddleware(authService, userService)
 	adminAuthMiddleware := middleware.NewAdminAuthMiddleware(authService, userService, settingService)
 	apiKeyAuthMiddleware := middleware.NewAPIKeyAuthMiddleware(apiKeyService, subscriptionService, configConfig)
@@ -225,7 +228,9 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	orderExpireScheduler := service.ProvideOrderExpireScheduler(rechargeOrderRepository, weChatPayService)
 	orderCompensationScheduler := service.ProvideOrderCompensationScheduler(configConfig, rechargeOrderRepository, weChatPayService, paymentCallbackService)
 	accountExpiryReminderScheduler := service.ProvideAccountExpiryReminderScheduler(accountRepository, emailService, settingService, redisClient)
-	v := provideCleanup(client, redisClient, opsMetricsCollector, opsAggregationService, opsAlertEvaluatorService, opsCleanupService, opsScheduledReportService, schedulerSnapshotService, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, pricingService, emailQueueService, billingCacheService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, userUsageReportScheduler, orderExpireScheduler, orderCompensationScheduler, accountExpiryReminderScheduler, settingService)
+	balanceLotExpiryScheduler := service.ProvideBalanceLotExpiryScheduler(balanceLotService, redisClient)
+	balanceExpiryReminderScheduler := service.ProvideBalanceExpiryReminderScheduler(balanceLotRepository, userRepository, emailService, settingService, redisClient)
+	v := provideCleanup(client, redisClient, opsMetricsCollector, opsAggregationService, opsAlertEvaluatorService, opsCleanupService, opsScheduledReportService, schedulerSnapshotService, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, pricingService, emailQueueService, billingCacheService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, userUsageReportScheduler, orderExpireScheduler, orderCompensationScheduler, accountExpiryReminderScheduler, balanceLotExpiryScheduler, balanceExpiryReminderScheduler, settingService)
 	application := &Application{
 		Server:  httpServer,
 		Cleanup: v,
@@ -271,6 +276,8 @@ func provideCleanup(
 	orderExpireScheduler *service.OrderExpireScheduler,
 	orderCompensationScheduler *service.OrderCompensationScheduler,
 	accountExpiryReminder *service.AccountExpiryReminderScheduler,
+	balanceLotExpiry *service.BalanceLotExpiryScheduler,
+	balanceExpiryReminder *service.BalanceExpiryReminderScheduler,
 	settingService *service.SettingService,
 ) func() {
 	return func() {
@@ -302,6 +309,18 @@ func provideCleanup(
 			{"AccountExpiryReminderScheduler", func() error {
 				if accountExpiryReminder != nil {
 					accountExpiryReminder.Stop()
+				}
+				return nil
+			}},
+			{"BalanceLotExpiryScheduler", func() error {
+				if balanceLotExpiry != nil {
+					balanceLotExpiry.Stop()
+				}
+				return nil
+			}},
+			{"BalanceExpiryReminderScheduler", func() error {
+				if balanceExpiryReminder != nil {
+					balanceExpiryReminder.Stop()
 				}
 				return nil
 			}},

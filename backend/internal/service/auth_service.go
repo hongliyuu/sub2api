@@ -65,6 +65,7 @@ type AuthService struct {
 	turnstileService  *TurnstileService
 	emailQueueService *EmailQueueService
 	promoService      *PromoService
+	balanceLotSvc     *BalanceLotService
 }
 
 // NewAuthService 创建认证服务实例
@@ -78,6 +79,7 @@ func NewAuthService(
 	turnstileService *TurnstileService,
 	emailQueueService *EmailQueueService,
 	promoService *PromoService,
+	balanceLotSvc *BalanceLotService,
 ) *AuthService {
 	return &AuthService{
 		userRepo:          userRepo,
@@ -89,6 +91,7 @@ func NewAuthService(
 		turnstileService:  turnstileService,
 		emailQueueService: emailQueueService,
 		promoService:      promoService,
+		balanceLotSvc:     balanceLotSvc,
 	}
 }
 
@@ -188,6 +191,14 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 		}
 		log.Printf("[Auth] Database error creating user: %v", err)
 		return "", nil, ErrServiceUnavailable
+	}
+
+	// 为新用户的默认余额创建批次
+	if s.balanceLotSvc != nil && defaultBalance > 0 {
+		desc := "新用户注册默认余额"
+		if err := s.balanceLotSvc.CreateLot(ctx, user.ID, defaultBalance, BalanceLotSourceAdjust, nil, desc); err != nil {
+			log.Printf("[Auth] Failed to create balance lot for new user %d: %v", user.ID, err)
+		}
 	}
 
 	// 标记邀请码为已使用（如果使用了邀请码）
@@ -468,6 +479,13 @@ func (s *AuthService) LoginOrRegisterOAuth(ctx context.Context, email, username 
 				}
 			} else {
 				user = newUser
+				// 为 OAuth 新用户的默认余额创建批次
+				if s.balanceLotSvc != nil && defaultBalance > 0 {
+					desc := "OAuth 新用户注册默认余额"
+					if lotErr := s.balanceLotSvc.CreateLot(ctx, newUser.ID, defaultBalance, BalanceLotSourceAdjust, nil, desc); lotErr != nil {
+						log.Printf("[Auth] Failed to create balance lot for oauth user %d: %v", newUser.ID, lotErr)
+					}
+				}
 			}
 		} else {
 			log.Printf("[Auth] Database error during oauth login: %v", err)
@@ -564,6 +582,13 @@ func (s *AuthService) LoginOrRegisterOAuthWithTokenPair(ctx context.Context, ema
 				}
 			} else {
 				user = newUser
+				// 为微信新用户的默认余额创建批次
+				if s.balanceLotSvc != nil && defaultBalance > 0 {
+					desc := "微信新用户注册默认余额"
+					if lotErr := s.balanceLotSvc.CreateLot(ctx, newUser.ID, defaultBalance, BalanceLotSourceAdjust, nil, desc); lotErr != nil {
+						log.Printf("[Auth] Failed to create balance lot for wechat user %d: %v", newUser.ID, lotErr)
+					}
+				}
 			}
 		} else {
 			log.Printf("[Auth] Database error during oauth login: %v", err)

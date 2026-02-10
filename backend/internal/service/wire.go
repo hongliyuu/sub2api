@@ -246,6 +246,29 @@ func ProvideAccountExpiryReminderScheduler(
 	return svc
 }
 
+// ProvideBalanceLotExpiryScheduler creates and starts BalanceLotExpiryScheduler.
+func ProvideBalanceLotExpiryScheduler(
+	balanceLotService *BalanceLotService,
+	redisClient *redis.Client,
+) *BalanceLotExpiryScheduler {
+	svc := NewBalanceLotExpiryScheduler(balanceLotService, redisClient)
+	svc.Start()
+	return svc
+}
+
+// ProvideBalanceExpiryReminderScheduler creates and starts BalanceExpiryReminderScheduler.
+func ProvideBalanceExpiryReminderScheduler(
+	lotRepo BalanceLotRepository,
+	userRepo UserRepository,
+	emailService *EmailService,
+	settingService *SettingService,
+	redisClient *redis.Client,
+) *BalanceExpiryReminderScheduler {
+	svc := NewBalanceExpiryReminderScheduler(lotRepo, userRepo, emailService, settingService, redisClient)
+	svc.Start()
+	return svc
+}
+
 // ProvideAPIKeyAuthCacheInvalidator 提供 API Key 认证缓存失效能力
 func ProvideAPIKeyAuthCacheInvalidator(apiKeyService *APIKeyService) APIKeyAuthCacheInvalidator {
 	// Start Pub/Sub subscriber for L1 cache invalidation across instances
@@ -327,6 +350,9 @@ var ProviderSet = wire.NewSet(
 	ProvideOrderExpireScheduler,
 	ProvideOrderCompensationScheduler,
 	ProvideAccountExpiryReminderScheduler,
+	NewBalanceLotService,
+	ProvideBalanceLotExpiryScheduler,
+	ProvideBalanceExpiryReminderScheduler,
 	NewRechargeRateLimitService,
 	NewWeChatScanLoginService,
 	NewErrorPassthroughService,

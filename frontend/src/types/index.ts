@@ -305,6 +305,36 @@ export interface PaginatedResponse<T> {
   pages: number
 }
 
+// ==================== Balance Lot Types ====================
+
+export type BalanceLotStatus = 'active' | 'depleted' | 'expired'
+export type BalanceLotSourceType = 'recharge' | 'redeem' | 'promo' | 'adjust' | 'migration'
+
+export interface BalanceLot {
+  id: number
+  user_id: number
+  source_type: BalanceLotSourceType
+  source_ref?: string | null
+  original_amount: number
+  remaining_amount: number
+  status: BalanceLotStatus
+  expires_at: string
+  expired_at?: string | null
+  description: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ExpiringSoonDetail {
+  amount: number
+  earliest_expiry: string
+}
+
+export interface BalanceLotSummary {
+  total_balance: number
+  expiring_soon?: ExpiringSoonDetail | null
+}
+
 // ==================== UI State Types ====================
 
 export type ToastType = 'success' | 'error' | 'info' | 'warning'

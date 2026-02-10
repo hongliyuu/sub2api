@@ -4,7 +4,7 @@
  */
 
 import { apiClient } from '../client'
-import type { AdminUser, UpdateUserRequest, PaginatedResponse } from '@/types'
+import type { AdminUser, UpdateUserRequest, PaginatedResponse, BalanceLot } from '@/types'
 
 /**
  * List all users with pagination
@@ -221,6 +221,30 @@ export async function getUserBalanceHistory(
   return data
 }
 
+/**
+ * Get user's balance lots
+ * @param id - User ID
+ * @param page - Page number
+ * @param pageSize - Items per page
+ * @returns Paginated balance lots
+ */
+export async function getUserBalanceLots(
+  id: number,
+  page: number = 1,
+  pageSize: number = 20,
+  status?: string,
+): Promise<PaginatedResponse<BalanceLot>> {
+  const params: Record<string, unknown> = { page, page_size: pageSize }
+  if (status) {
+    params.status = status
+  }
+  const { data } = await apiClient.get<PaginatedResponse<BalanceLot>>(
+    `/admin/users/${id}/balance-lots`,
+    { params }
+  )
+  return data
+}
+
 export const usersAPI = {
   list,
   getById,
@@ -232,7 +256,8 @@ export const usersAPI = {
   toggleStatus,
   getUserApiKeys,
   getUserUsageStats,
-  getUserBalanceHistory
+  getUserBalanceHistory,
+  getUserBalanceLots
 }
 
 export default usersAPI

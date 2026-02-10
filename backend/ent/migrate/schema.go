@@ -365,6 +365,52 @@ var (
 			},
 		},
 	}
+	// BalanceLotsColumns holds the columns for the "balance_lots" table.
+	BalanceLotsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "source_type", Type: field.TypeString, Size: 20},
+		{Name: "source_ref", Type: field.TypeString, Nullable: true, Size: 100},
+		{Name: "original_amount", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
+		{Name: "remaining_amount", Type: field.TypeFloat64, SchemaType: map[string]string{"postgres": "decimal(20,8)"}},
+		{Name: "status", Type: field.TypeString, Size: 20, Default: "active"},
+		{Name: "expires_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "expired_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "description", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "user_id", Type: field.TypeInt64},
+	}
+	// BalanceLotsTable holds the schema information for the "balance_lots" table.
+	BalanceLotsTable = &schema.Table{
+		Name:       "balance_lots",
+		Columns:    BalanceLotsColumns,
+		PrimaryKey: []*schema.Column{BalanceLotsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "balance_lots_users_balance_lots",
+				Columns:    []*schema.Column{BalanceLotsColumns[11]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "balancelot_user_id_status_expires_at",
+				Unique:  false,
+				Columns: []*schema.Column{BalanceLotsColumns[11], BalanceLotsColumns[7], BalanceLotsColumns[8]},
+			},
+			{
+				Name:    "balancelot_status_expires_at",
+				Unique:  false,
+				Columns: []*schema.Column{BalanceLotsColumns[7], BalanceLotsColumns[8]},
+			},
+			{
+				Name:    "balancelot_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{BalanceLotsColumns[11]},
+			},
+		},
+	}
 	// ErrorPassthroughRulesColumns holds the columns for the "error_passthrough_rules" table.
 	ErrorPassthroughRulesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -1250,6 +1296,7 @@ var (
 		AnnouncementsTable,
 		AnnouncementReadsTable,
 		BalanceLogsTable,
+		BalanceLotsTable,
 		ErrorPassthroughRulesTable,
 		GroupsTable,
 		PaymentCallbacksTable,
@@ -1296,6 +1343,10 @@ func init() {
 	BalanceLogsTable.ForeignKeys[0].RefTable = UsersTable
 	BalanceLogsTable.Annotation = &entsql.Annotation{
 		Table: "balance_logs",
+	}
+	BalanceLotsTable.ForeignKeys[0].RefTable = UsersTable
+	BalanceLotsTable.Annotation = &entsql.Annotation{
+		Table: "balance_lots",
 	}
 	ErrorPassthroughRulesTable.Annotation = &entsql.Annotation{
 		Table: "error_passthrough_rules",

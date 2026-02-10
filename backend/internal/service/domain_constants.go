@@ -232,6 +232,19 @@ const (
 
 	// SettingKeyAccountExpiryReminderAdvanceDays is how many days before expiry to start reminding (default 7).
 	SettingKeyAccountExpiryReminderAdvanceDays = "account_expiry_reminder_advance_days"
+
+	// =========================
+	// Balance Lot Expiry
+	// =========================
+
+	// SettingKeyBalanceLotExpiryDays 余额批次过期天数（默认30）
+	SettingKeyBalanceLotExpiryDays = "balance_lot_expiry_days"
+
+	// SettingKeyBalanceExpiryReminderEnabled 是否启用余额过期提醒
+	SettingKeyBalanceExpiryReminderEnabled = "balance_expiry_reminder_enabled"
+
+	// SettingKeyBalanceExpiryReminderAdvanceDays 余额过期提前提醒天数（默认3）
+	SettingKeyBalanceExpiryReminderAdvanceDays = "balance_expiry_reminder_advance_days"
 )
 
 // AdminAPIKeyPrefix is the prefix for admin API keys (distinct from user "sk-" keys).

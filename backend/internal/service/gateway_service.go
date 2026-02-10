@@ -392,6 +392,7 @@ type GatewayService struct {
 	concurrencyService  *ConcurrencyService
 	claudeTokenProvider *ClaudeTokenProvider
 	sessionLimitCache   SessionLimitCache // 会话数量限制缓存（仅 Anthropic OAuth/SetupToken）
+	balanceLotSvc       *BalanceLotService
 }
 
 // NewGatewayService creates a new GatewayService
@@ -415,6 +416,7 @@ func NewGatewayService(
 	claudeTokenProvider *ClaudeTokenProvider,
 	sessionLimitCache SessionLimitCache,
 	digestStore *DigestSessionStore,
+	balanceLotSvc *BalanceLotService,
 ) *GatewayService {
 	return &GatewayService{
 		accountRepo:         accountRepo,
@@ -436,6 +438,7 @@ func NewGatewayService(
 		deferredService:     deferredService,
 		claudeTokenProvider: claudeTokenProvider,
 		sessionLimitCache:   sessionLimitCache,
+		balanceLotSvc:       balanceLotSvc,
 	}
 }
 
@@ -4570,8 +4573,14 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 	} else {
 		// 余额模式：扣除用户余额（使用 ActualCost 考虑倍率后的费用）
 		if shouldBill && cost.ActualCost > 0 {
-			if err := s.userRepo.DeductBalance(ctx, user.ID, cost.ActualCost); err != nil {
-				log.Printf("Deduct balance failed: %v", err)
+			if s.balanceLotSvc != nil {
+				if err := s.balanceLotSvc.DeductFromLots(ctx, user.ID, cost.ActualCost); err != nil {
+					log.Printf("Deduct from balance lots failed: %v", err)
+				}
+			} else {
+				if err := s.userRepo.DeductBalance(ctx, user.ID, cost.ActualCost); err != nil {
+					log.Printf("Deduct balance failed: %v", err)
+				}
 			}
 			// 异步更新余额缓存
 			s.billingCacheService.QueueDeductBalance(user.ID, cost.ActualCost)

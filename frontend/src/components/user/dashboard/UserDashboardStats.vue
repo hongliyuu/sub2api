@@ -12,7 +12,10 @@
         <div>
           <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('dashboard.balance') }}</p>
           <p class="text-xl font-bold text-emerald-600 dark:text-emerald-400">${{ formatBalance(balance) }}</p>
-          <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('common.available') }}</p>
+          <p v-if="lotSummary?.expiring_soon" class="text-xs text-amber-600 dark:text-amber-400">
+            ${{ formatBalance(lotSummary.expiring_soon.amount) }} {{ t('dashboard.expiringSoon') }}
+          </p>
+          <p v-else class="text-xs text-gray-500 dark:text-gray-400">{{ t('common.available') }}</p>
         </div>
       </div>
     </div>
@@ -134,15 +137,29 @@
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 import type { UserDashboardStats as UserStatsType } from '@/api/usage'
+import { balanceLotsAPI } from '@/api'
+import type { BalanceLotSummary } from '@/types'
 
-defineProps<{
+const props = defineProps<{
   stats: UserStatsType
   balance: number
   isSimple: boolean
 }>()
+
+const lotSummary = ref<BalanceLotSummary | null>(null)
+
+onMounted(async () => {
+  if (props.isSimple) return
+  try {
+    lotSummary.value = await balanceLotsAPI.summary()
+  } catch {
+    // silently ignore - feature may not be available
+  }
+})
 const { t } = useI18n()
 
 const formatBalance = (b: number) =>
