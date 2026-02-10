@@ -68,7 +68,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	apiKeyAuthCacheInvalidator := service.ProvideAPIKeyAuthCacheInvalidator(apiKeyService)
 	balanceLotRepository := repository.NewBalanceLotRepository(client)
 	balanceLogRepository := repository.NewBalanceLogRepository(client)
-	balanceLotService := service.NewBalanceLotService(balanceLotRepository, userRepository, balanceLogRepository, billingCacheService, settingService, client)
+	balanceLotService := service.NewBalanceLotService(balanceLotRepository, userRepository, balanceLogRepository, billingCacheService, settingService, client, emailService, redisClient)
 	promoService := service.NewPromoService(promoCodeRepository, userRepository, billingCacheService, client, apiKeyAuthCacheInvalidator, balanceLotService)
 	authService := service.NewAuthService(userRepository, redeemCodeRepository, refreshTokenCache, configConfig, settingService, emailService, turnstileService, emailQueueService, promoService, balanceLotService)
 	userService := service.NewUserService(userRepository, apiKeyAuthCacheInvalidator)

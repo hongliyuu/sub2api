@@ -124,6 +124,9 @@ type PublicSettings struct {
 	// Homepage & Install Guide
 	InstallGuideVideos string `json:"install_guide_videos"`
 	HomeTestimonials   string `json:"home_testimonials"`
+
+	// Balance lot expiry (public)
+	BalanceLotExpiryDays int `json:"balance_lot_expiry_days"`
 }
 
 // StreamTimeoutSettings 流超时处理配置 DTO

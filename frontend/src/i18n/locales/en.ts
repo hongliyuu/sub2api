@@ -839,6 +839,29 @@ export default {
     userAgent: 'User-Agent'
   },
 
+  // Balance Lots (user-facing)
+  balanceLots: {
+    title: 'Balance Details',
+    active: 'Active',
+    depleted: 'Depleted',
+    expired: 'Expired',
+    allStatuses: 'All Statuses',
+    expiresAt: 'Expires',
+    expiredAt: 'Expired at',
+    sourceRecharge: 'Recharge',
+    sourceRedeem: 'Redeem Code',
+    sourcePromo: 'Promo Code',
+    sourceAdjust: 'Admin Adjustment',
+    sourceMigration: 'Migration',
+    noLots: 'No balance records',
+    expiryConfirmTitle: 'Balance Validity Notice',
+    expiryConfirmMessage: 'Your balance will be used against Claude Max monthly subscription quotas. Due to upstream billing cycles, the balance is valid for {days} days. Unused balance will be automatically cleared upon expiry. Continue?',
+    redeemExpiryConfirmMessage: 'If the code includes balance, the credited amount will be used against Claude Max monthly subscription quotas. Due to upstream billing cycles, the balance is valid for {days} days. Unused balance will be automatically cleared upon expiry. Continue?',
+    clickToViewDetails: 'Click to view balance details',
+    confirm: 'Confirm',
+    cancel: 'Cancel',
+  },
+
   // Redeem
   redeem: {
     title: 'Redeem Code',

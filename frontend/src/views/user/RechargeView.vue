@@ -25,8 +25,15 @@
         </div>
         <!-- 余额标签 -->
         <span class="block text-sm opacity-80">{{ t('recharge.currentBalance') }}</span>
-        <!-- 余额数值 -->
-        <span class="mt-2 block text-5xl font-bold">${{ formattedBalance }}</span>
+        <!-- 余额数值（可点击查看明细） -->
+        <button
+          type="button"
+          class="mt-2 block w-full text-5xl font-bold text-white hover:opacity-80 transition-opacity cursor-pointer"
+          :title="t('balanceLots.clickToViewDetails')"
+          @click="showBalanceLotsModal = true"
+        >
+          ${{ formattedBalance }}
+        </button>
       </div>
 
       <!-- 充值表单区域 -->
@@ -295,6 +302,32 @@
       @repay="openPaymentModal"
       @status-changed="loadOrders"
     />
+
+    <!-- 余额有效期确认弹框 -->
+    <BaseDialog
+      :show="showExpiryConfirm"
+      :title="t('balanceLots.expiryConfirmTitle')"
+      :close-on-click-outside="true"
+      @close="showExpiryConfirm = false"
+    >
+      <p class="text-sm text-gray-700 dark:text-gray-300">
+        {{ t('balanceLots.expiryConfirmMessage', { days: balanceLotExpiryDays }) }}
+      </p>
+      <div class="mt-6 flex justify-end gap-3">
+        <button type="button" class="btn btn-secondary" @click="showExpiryConfirm = false">
+          {{ t('balanceLots.cancel') }}
+        </button>
+        <button type="button" class="btn btn-primary" @click="confirmSubmit">
+          {{ t('balanceLots.confirm') }}
+        </button>
+      </div>
+    </BaseDialog>
+
+    <!-- 余额批次明细弹框 -->
+    <BalanceLotsModal
+      :show="showBalanceLotsModal"
+      @close="showBalanceLotsModal = false"
+    />
     </div>
   </AppLayout>
 </template>
@@ -310,6 +343,8 @@ import PaymentMethodSelector from '@/components/user/recharge/PaymentMethodSelec
 import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import PaymentModal from '@/components/user/recharge/PaymentModal.vue'
 import OrderDetailModal from '@/components/user/recharge/OrderDetailModal.vue'
+import BaseDialog from '@/components/common/BaseDialog.vue'
+import BalanceLotsModal from '@/components/user/BalanceLotsModal.vue'
 
 const { t } = useI18n()
 const authStore = useAuthStore()
@@ -346,6 +381,13 @@ const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
 
 // 待支付订单（刚创建的）
 const pendingOrder = ref<{ order_no: string; amount: number } | null>(null)
+
+// 余额有效期确认
+const showExpiryConfirm = ref(false)
+const balanceLotExpiryDays = ref(30)
+
+// 余额批次明细弹框
+const showBalanceLotsModal = ref(false)
 
 // 订单列表相关
 const orders = ref<OrderListItem[]>([])
@@ -448,8 +490,8 @@ const resetCaptcha = () => {
   }
 }
 
-// 提交处理
-const handleSubmit = async () => {
+// 提交处理：先弹出有效期确认框
+const handleSubmit = () => {
   if (!canSubmit.value || submitting.value || rateLimitCountdown.value > 0) {
     return
   }
@@ -459,6 +501,12 @@ const handleSubmit = async () => {
     return
   }
 
+  showExpiryConfirm.value = true
+}
+
+// 用户确认后执行实际的订单创建
+const confirmSubmit = async () => {
+  showExpiryConfirm.value = false
   errorMessage.value = ''
   submitting.value = true
 
@@ -633,14 +681,18 @@ const formatDate = (dateStr: string) => {
   })
 }
 
-// 页面加载时刷新用户数据以获取最新余额
+// 页面加载时刷新用户数据以获取最新余额，并预取公开设置
 onMounted(async () => {
   try {
     await Promise.all([
       authStore.refreshUser(),
       rechargeStore.fetchConfig(),
-      loadOrders()
+      loadOrders(),
     ])
+    const settings = await appStore.fetchPublicSettings()
+    if (settings?.balance_lot_expiry_days) {
+      balanceLotExpiryDays.value = settings.balance_lot_expiry_days
+    }
   } catch (error) {
     console.error('Failed to refresh data:', error)
   } finally {

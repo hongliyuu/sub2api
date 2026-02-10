@@ -346,7 +346,8 @@ export const useAppStore = defineStore('app', () => {
         force_email_bind: false,
         install_guide_videos: '',
         home_testimonials: '',
-        version: siteVersion.value
+        version: siteVersion.value,
+        balance_lot_expiry_days: 30
       }
     }
 

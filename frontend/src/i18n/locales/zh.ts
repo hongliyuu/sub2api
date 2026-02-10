@@ -845,6 +845,29 @@ export default {
     userAgent: 'User-Agent'
   },
 
+  // Balance Lots (user-facing)
+  balanceLots: {
+    title: '余额明细',
+    active: '有效',
+    depleted: '已用完',
+    expired: '已过期',
+    allStatuses: '全部状态',
+    expiresAt: '过期时间',
+    expiredAt: '过期于',
+    sourceRecharge: '充值',
+    sourceRedeem: '兑换码',
+    sourcePromo: '优惠码',
+    sourceAdjust: '管理员调整',
+    sourceMigration: '历史迁移',
+    noLots: '暂无余额记录',
+    expiryConfirmTitle: '余额有效期提醒',
+    expiryConfirmMessage: '您的充值余额将用于消耗纯血 Claude Max 包月帐号额度，受上游订阅周期限制，余额有效期为 {days} 天，到期后未使用的余额将自动清零。确认继续充值？',
+    redeemExpiryConfirmMessage: '如果兑换码包含余额，充入的余额将用于消耗纯血 Claude Max 包月帐号额度，受上游订阅周期限制，有效期为 {days} 天，到期后未使用的余额将自动清零。确认继续？',
+    clickToViewDetails: '点击查看余额明细',
+    confirm: '确认',
+    cancel: '取消',
+  },
+
   // Redeem
   redeem: {
     title: '兑换码',

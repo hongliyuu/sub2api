@@ -337,6 +337,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyForceEmailBind,
 		SettingKeyInstallGuideVideos,
 		SettingKeyHomeTestimonials,
+		SettingKeyBalanceLotExpiryDays,
 	}
 
 	settings, err := s.settingRepo.GetMultiple(ctx, keys)
@@ -385,7 +386,18 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		ForceEmailBind:              settings[SettingKeyForceEmailBind] == "true",
 		InstallGuideVideos:          settings[SettingKeyInstallGuideVideos],
 		HomeTestimonials:            settings[SettingKeyHomeTestimonials],
+		BalanceLotExpiryDays:        s.parseBalanceLotExpiryDays(settings[SettingKeyBalanceLotExpiryDays]),
 	}, nil
+}
+
+// parseBalanceLotExpiryDays 解析余额批次过期天数，默认 30
+func (s *SettingService) parseBalanceLotExpiryDays(raw string) int {
+	if raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil && v > 0 {
+			return v
+		}
+	}
+	return 30
 }
 
 // SetOnUpdateCallback sets a callback function to be called when settings are updated
@@ -439,6 +451,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		Version                     string `json:"version,omitempty"`
 		InstallGuideVideos          string `json:"install_guide_videos,omitempty"`
 		HomeTestimonials            string `json:"home_testimonials,omitempty"`
+		BalanceLotExpiryDays        int    `json:"balance_lot_expiry_days"`
 	}{
 		RegistrationEnabled:         settings.RegistrationEnabled,
 		EmailVerifyEnabled:          settings.EmailVerifyEnabled,
@@ -470,6 +483,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		Version:                     s.version,
 		InstallGuideVideos:          settings.InstallGuideVideos,
 		HomeTestimonials:            settings.HomeTestimonials,
+		BalanceLotExpiryDays:        settings.BalanceLotExpiryDays,
 	}, nil
 }
 
@@ -894,12 +908,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	}
 
 	// Balance lot expiry
-	result.BalanceLotExpiryDays = 30
-	if raw := strings.TrimSpace(settings[SettingKeyBalanceLotExpiryDays]); raw != "" {
-		if v, err := strconv.Atoi(raw); err == nil && v > 0 {
-			result.BalanceLotExpiryDays = v
-		}
-	}
+	result.BalanceLotExpiryDays = s.parseBalanceLotExpiryDays(settings[SettingKeyBalanceLotExpiryDays])
 	result.BalanceExpiryReminderEnabled = settings[SettingKeyBalanceExpiryReminderEnabled] == "true"
 	result.BalanceExpiryReminderAdvanceDays = 3
 	if raw := strings.TrimSpace(settings[SettingKeyBalanceExpiryReminderAdvanceDays]); raw != "" {

@@ -104,6 +104,7 @@ export interface PublicSettings {
   install_guide_videos: string
   home_testimonials: string
   version: string
+  balance_lot_expiry_days: number
 }
 
 export interface AuthResponse {

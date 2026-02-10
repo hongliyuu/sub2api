@@ -131,6 +131,9 @@ type PublicSettings struct {
 	// Homepage & Install Guide
 	InstallGuideVideos string // JSON config for install guide video URLs
 	HomeTestimonials   string // JSON array of user testimonials
+
+	// Balance lot expiry (public)
+	BalanceLotExpiryDays int
 }
 
 // StreamTimeoutSettings 流超时处理配置（仅控制超时后的处理方式，超时判定由网关配置控制）

@@ -9,9 +9,14 @@ import type { BalanceLot, BalanceLotSummary, PaginatedResponse } from '@/types'
 export async function getUserBalanceLots(
   page: number = 1,
   pageSize: number = 20,
+  status?: string,
 ): Promise<PaginatedResponse<BalanceLot>> {
+  const params: Record<string, unknown> = { page, page_size: pageSize }
+  if (status) {
+    params.status = status
+  }
   const { data } = await apiClient.get<PaginatedResponse<BalanceLot>>('/balance-lots', {
-    params: { page, page_size: pageSize },
+    params,
   })
   return data
 }

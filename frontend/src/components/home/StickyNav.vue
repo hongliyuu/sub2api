@@ -45,11 +45,19 @@
           :href="docUrl"
           target="_blank"
           rel="noopener noreferrer"
-          class="hidden rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 dark:text-dark-400 dark:hover:bg-dark-800 sm:inline-flex"
-          :title="t('home.docs')"
+          class="hidden items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100 dark:text-dark-400 dark:hover:bg-dark-800 sm:inline-flex"
         >
           <Icon name="book" size="sm" />
+          <span>{{ t('home.docs') }}</span>
         </a>
+        <!-- Release Notes -->
+        <router-link
+          to="/release-notes"
+          class="hidden items-center gap-1 rounded-lg px-2 py-1.5 text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100 dark:text-dark-400 dark:hover:bg-dark-800 sm:inline-flex"
+        >
+          <Icon name="sparkles" size="sm" />
+          <span>{{ t('home.releaseNotes') }}</span>
+        </router-link>
         <!-- Install Guide -->
         <router-link
           to="/install-guide"

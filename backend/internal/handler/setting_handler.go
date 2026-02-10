@@ -62,5 +62,6 @@ func (h *SettingHandler) GetPublicSettings(c *gin.Context) {
 		Version:                     h.version,
 		InstallGuideVideos:          settings.InstallGuideVideos,
 		HomeTestimonials:            settings.HomeTestimonials,
+		BalanceLotExpiryDays:        settings.BalanceLotExpiryDays,
 	})
 }

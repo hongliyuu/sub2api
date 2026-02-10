@@ -10,9 +10,14 @@
             <Icon name="creditCard" size="xl" class="text-white" />
           </div>
           <p class="text-sm font-medium text-primary-100">{{ t('redeem.currentBalance') }}</p>
-          <p class="mt-2 text-4xl font-bold text-white">
+          <button
+            type="button"
+            class="mt-2 block w-full text-4xl font-bold text-white hover:opacity-80 transition-opacity cursor-pointer"
+            :title="t('balanceLots.clickToViewDetails')"
+            @click="showBalanceLotsModal = true"
+          >
             ${{ user?.balance?.toFixed(2) || '0.00' }}
-          </p>
+          </button>
           <p class="mt-2 text-sm text-primary-100">
             {{ t('redeem.concurrency') }}: {{ user?.concurrency || 0 }} {{ t('redeem.requests') }}
           </p>
@@ -338,6 +343,32 @@
         </div>
       </div>
     </div>
+
+    <!-- 余额有效期确认弹框 -->
+    <BaseDialog
+      :show="showExpiryConfirm"
+      :title="t('balanceLots.expiryConfirmTitle')"
+      :close-on-click-outside="true"
+      @close="showExpiryConfirm = false"
+    >
+      <p class="text-sm text-gray-700 dark:text-gray-300">
+        {{ t('balanceLots.redeemExpiryConfirmMessage', { days: balanceLotExpiryDays }) }}
+      </p>
+      <div class="mt-6 flex justify-end gap-3">
+        <button type="button" class="btn btn-secondary" @click="showExpiryConfirm = false">
+          {{ t('balanceLots.cancel') }}
+        </button>
+        <button type="button" class="btn btn-primary" @click="confirmRedeem">
+          {{ t('balanceLots.confirm') }}
+        </button>
+      </div>
+    </BaseDialog>
+
+    <!-- 余额批次明细弹框 -->
+    <BalanceLotsModal
+      :show="showBalanceLotsModal"
+      @close="showBalanceLotsModal = false"
+    />
   </AppLayout>
 </template>
 
@@ -347,9 +378,11 @@ import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { useSubscriptionStore } from '@/stores/subscriptions'
-import { redeemAPI, authAPI, type RedeemHistoryItem } from '@/api'
+import { redeemAPI, type RedeemHistoryItem } from '@/api'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
+import BaseDialog from '@/components/common/BaseDialog.vue'
+import BalanceLotsModal from '@/components/user/BalanceLotsModal.vue'
 import { formatDateTime } from '@/utils/format'
 
 const { t } = useI18n()
@@ -376,6 +409,13 @@ const errorMessage = ref('')
 const history = ref<RedeemHistoryItem[]>([])
 const loadingHistory = ref(false)
 const contactInfo = ref('')
+
+// 余额有效期确认
+const showExpiryConfirm = ref(false)
+const balanceLotExpiryDays = ref(30)
+
+// 余额批次明细弹框
+const showBalanceLotsModal = ref(false)
 
 // Helper functions for history display
 const isBalanceType = (type: string) => {
@@ -431,12 +471,18 @@ const fetchHistory = async () => {
   }
 }
 
-const handleRedeem = async () => {
+const handleRedeem = () => {
   if (!redeemCode.value.trim()) {
     appStore.showError(t('redeem.pleaseEnterCode'))
     return
   }
 
+  showExpiryConfirm.value = true
+}
+
+// 用户确认后执行实际兑换
+const confirmRedeem = async () => {
+  showExpiryConfirm.value = false
   submitting.value = true
   errorMessage.value = ''
   redeemResult.value = null
@@ -479,10 +525,15 @@ const handleRedeem = async () => {
 onMounted(async () => {
   fetchHistory()
   try {
-    const settings = await authAPI.getPublicSettings()
-    contactInfo.value = settings.contact_info || ''
+    const settings = await appStore.fetchPublicSettings()
+    if (settings) {
+      contactInfo.value = settings.contact_info || ''
+      if (settings.balance_lot_expiry_days) {
+        balanceLotExpiryDays.value = settings.balance_lot_expiry_days
+      }
+    }
   } catch (error) {
-    console.error('Failed to load contact info:', error)
+    console.error('Failed to load settings:', error)
   }
 })
 </script>

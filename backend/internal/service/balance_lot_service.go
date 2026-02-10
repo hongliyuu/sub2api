@@ -3,22 +3,27 @@ package service
 import (
 	"context"
 	"fmt"
+	"html"
 	"log"
 	"math"
 	"strconv"
+	"strings"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/redis/go-redis/v9"
 )
 
 // BalanceLotService 余额批次服务
 type BalanceLotService struct {
-	lotRepo         BalanceLotRepository
-	userRepo        UserRepository
-	balanceLogRepo  BalanceLogRepository
-	billingCache    *BillingCacheService
-	settingService  *SettingService
-	entClient       *dbent.Client
+	lotRepo        BalanceLotRepository
+	userRepo       UserRepository
+	balanceLogRepo BalanceLogRepository
+	billingCache   *BillingCacheService
+	settingService *SettingService
+	entClient      *dbent.Client
+	emailService   *EmailService
+	redisClient    *redis.Client
 }
 
 // NewBalanceLotService 创建余额批次服务
@@ -29,6 +34,8 @@ func NewBalanceLotService(
 	billingCache *BillingCacheService,
 	settingService *SettingService,
 	entClient *dbent.Client,
+	emailService *EmailService,
+	redisClient *redis.Client,
 ) *BalanceLotService {
 	return &BalanceLotService{
 		lotRepo:        lotRepo,
@@ -37,6 +44,8 @@ func NewBalanceLotService(
 		billingCache:   billingCache,
 		settingService: settingService,
 		entClient:      entClient,
+		emailService:   emailService,
+		redisClient:    redisClient,
 	}
 }
 
@@ -301,6 +310,15 @@ func (s *BalanceLotService) expireUserLots(ctx context.Context, userID int64, lo
 	log.Printf("[BalanceLotService] Expired %.2f balance for user %d (%d lots), new balance: %.2f",
 		totalExpired, userID, len(lots), newBalance)
 
+	// 异步发送过期通知邮件（非关键操作，失败不影响主流程）
+	// 深拷贝 lots 数据，避免 goroutine 引用事务作用域内的指针
+	lotsCopy := make([]*BalanceLot, len(lots))
+	for i, lot := range lots {
+		copied := *lot
+		lotsCopy[i] = &copied
+	}
+	go s.sendExpiryNotification(userID, user.Email, totalExpired, newBalance, lotsCopy)
+
 	return nil
 }
 
@@ -373,4 +391,99 @@ func (s *BalanceLotService) GetUserSummary(ctx context.Context, userID int64) (*
 // CountByUser 统计用户的批次数量
 func (s *BalanceLotService) CountByUser(ctx context.Context, userID int64) (int64, error) {
 	return s.lotRepo.CountByUser(ctx, userID)
+}
+
+// sendExpiryNotification 发送余额过期通知邮件
+func (s *BalanceLotService) sendExpiryNotification(userID int64, email string, expiredAmount, newBalance float64, lots []*BalanceLot) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// 检查是否启用过期提醒
+	enabled, err := s.settingService.GetSettingValue(ctx, SettingKeyBalanceExpiryReminderEnabled)
+	if err != nil || enabled != "true" {
+		return
+	}
+
+	// 跳过无邮箱用户
+	if email == "" {
+		return
+	}
+
+	// Redis 去重：每天每用户只发一次过期通知
+	dedupeKey := fmt.Sprintf("balance_expiry_notification:%d:%s", userID, time.Now().Format("2006-01-02"))
+	ok, err := s.redisClient.SetNX(ctx, dedupeKey, "1", 25*time.Hour).Result()
+	if err != nil || !ok {
+		return
+	}
+
+	// 获取站点名称
+	siteName, _ := s.settingService.GetSettingValue(ctx, SettingKeySiteName)
+	if siteName == "" {
+		siteName = "Sub2API"
+	}
+
+	subject := fmt.Sprintf("[%s] 余额过期通知", siteName)
+	body := s.buildExpiryNotificationEmail(siteName, email, expiredAmount, newBalance, lots)
+
+	if err := s.emailService.SendEmail(ctx, email, subject, body); err != nil {
+		log.Printf("[BalanceLotService] Failed to send expiry notification to user %d (%s): %v", userID, email, err)
+		// 发送失败时删除去重键，允许下次重试
+		s.redisClient.Del(ctx, dedupeKey)
+		return
+	}
+
+	log.Printf("[BalanceLotService] Sent expiry notification to user %d (%s), expired: %.2f", userID, email, expiredAmount)
+}
+
+// buildExpiryNotificationEmail 构建余额已过期通知邮件 HTML
+func (s *BalanceLotService) buildExpiryNotificationEmail(siteName, email string, expiredAmount, newBalance float64, lots []*BalanceLot) string {
+	var b strings.Builder
+
+	b.WriteString(`<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">`)
+
+	// 标题
+	b.WriteString(fmt.Sprintf(`<h2 style="color: #c62828;">%s - 余额过期通知</h2>`, html.EscapeString(siteName)))
+
+	// 概要
+	b.WriteString(fmt.Sprintf(`<p>您好，%s：</p>`, html.EscapeString(email)))
+	b.WriteString(fmt.Sprintf(`<p>您有 <strong style="color: #c62828;">%.2f</strong> 元余额已过期并被清零，当前剩余余额为 <strong>%.2f</strong> 元。</p>`,
+		expiredAmount, newBalance))
+
+	// 批次明细表格
+	b.WriteString(`<table style="width: 100%; border-collapse: collapse; margin: 16px 0;">`)
+	b.WriteString(`<tr style="background: #f5f5f5;">`)
+	b.WriteString(`<th style="padding: 8px; border: 1px solid #ddd; text-align: left;">来源</th>`)
+	b.WriteString(`<th style="padding: 8px; border: 1px solid #ddd; text-align: right;">过期金额</th>`)
+	b.WriteString(`<th style="padding: 8px; border: 1px solid #ddd; text-align: center;">过期时间</th>`)
+	b.WriteString(`</tr>`)
+
+	sourceTypeNames := map[string]string{
+		BalanceLotSourceRecharge:  "充值",
+		BalanceLotSourceRedeem:    "兑换码",
+		BalanceLotSourcePromo:     "优惠码",
+		BalanceLotSourceAdjust:    "管理员调整",
+		BalanceLotSourceMigration: "历史迁移",
+	}
+
+	for _, lot := range lots {
+		sourceName := sourceTypeNames[lot.SourceType]
+		if sourceName == "" {
+			sourceName = lot.SourceType
+		}
+		b.WriteString(fmt.Sprintf(`<tr>
+			<td style="padding: 8px; border: 1px solid #ddd;">%s</td>
+			<td style="padding: 8px; border: 1px solid #ddd; text-align: right;">%.2f</td>
+			<td style="padding: 8px; border: 1px solid #ddd; text-align: center;">%s</td>
+		</tr>`, html.EscapeString(sourceName), lot.RemainingAmount, lot.ExpiresAt.Format("2006-01-02 15:04")))
+	}
+
+	b.WriteString(`</table>`)
+
+	// 提示
+	b.WriteString(`<p style="color: #666;">如需继续使用服务，请及时充值。</p>`)
+	b.WriteString(fmt.Sprintf(`<p style="color: #999; font-size: 12px;">此邮件由 %s 系统自动发送，请勿回复。</p>`, html.EscapeString(siteName)))
+
+	b.WriteString(`</body></html>`)
+
+	return b.String()
 }
