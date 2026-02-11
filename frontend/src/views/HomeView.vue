@@ -6,25 +6,27 @@
     :class="isDark ? 'bg-dark-950/50' : 'bg-gray-50/50'"
   >
     <!-- Car (clickable for horn sound) - Light theme -->
-    <img
-      v-show="!isDark"
-      ref="carRef"
-      src="/car.png"
-      alt="car"
-      class="car-animation absolute h-20 w-auto cursor-pointer pointer-events-auto"
-      :style="carStyle"
-      @click="playHorn"
-    />
+    <picture v-show="!isDark" class="car-animation absolute h-20 w-auto cursor-pointer pointer-events-auto" :style="carStyle">
+      <source srcset="/car.webp" type="image/webp" />
+      <img
+        ref="carRef"
+        src="/car.png"
+        alt="car"
+        class="h-full w-auto"
+        @click="playHorn"
+      />
+    </picture>
     <!-- Car (clickable for horn sound) - Dark theme -->
-    <img
-      v-show="isDark"
-      ref="carRef"
-      src="/car_night.png"
-      alt="car"
-      class="car-animation absolute h-20 w-auto cursor-pointer pointer-events-auto"
-      :style="carStyle"
-      @click="playHorn"
-    />
+    <picture v-show="isDark" class="car-animation absolute h-20 w-auto cursor-pointer pointer-events-auto" :style="carStyle">
+      <source srcset="/car_night.webp" type="image/webp" />
+      <img
+        ref="carRef"
+        src="/car_night.png"
+        alt="car"
+        class="h-full w-auto"
+        @click="playHorn"
+      />
+    </picture>
     <!-- Falling Logos -->
     <img
       v-for="(logo, index) in fallingLogos"
@@ -338,7 +340,7 @@ const busHornSound = ref<HTMLAudioElement | null>(null)
 // Animation configuration constants
 const ANIMATION_CONFIG = {
   PRELOAD_DELAY: 150,
-  PRELOAD_MAX_WAIT: 400,
+  PRELOAD_MAX_WAIT: 800,
   PHASE1_DURATION: 2200,
   PHASE1_PAUSE: 200,
   PHASE2_DURATION: 600,
@@ -376,7 +378,11 @@ function getCarMetrics() {
 }
 
 function preloadAnimationAssets(): Promise<void> {
-  const imagesToPreload = ['/car.png', '/car_night.png', ...llmLogos.map(logo => logo.src)]
+  const supportsWebP = document.createElement('canvas').toDataURL('image/webp').startsWith('data:image/webp')
+  const carImages = supportsWebP
+    ? ['/car.webp', '/car_night.webp']
+    : ['/car.png', '/car_night.png']
+  const imagesToPreload = [...carImages, ...llmLogos.map(logo => logo.src)]
   return preloadImages(imagesToPreload)
 }
 
@@ -557,6 +563,10 @@ function startAnimation() {
             animationSafetyTimer = null
           }
           showAnimation.value = false
+          if (scrollCleanup) {
+            scrollCleanup()
+            scrollCleanup = null
+          }
         }, ANIMATION_CONFIG.ANIMATION_END_DELAY)
       }
     }
@@ -584,6 +594,23 @@ function revealContentImmediately() {
 }
 
 let animationSafetyTimer: number | null = null
+let scrollCleanup: (() => void) | null = null
+
+function endAnimationEarly() {
+  if (!showAnimation.value) return
+  if (animationSafetyTimer) {
+    window.clearTimeout(animationSafetyTimer)
+    animationSafetyTimer = null
+  }
+  if (busDrivingSound.value) {
+    busDrivingSound.value.pause()
+  }
+  showAnimation.value = false
+  if (scrollCleanup) {
+    scrollCleanup()
+    scrollCleanup = null
+  }
+}
 
 async function initAnimation() {
   if (shouldSkipAnimation()) {
@@ -595,8 +622,17 @@ async function initAnimation() {
   // Show hero content immediately so users can scroll and interact during animation
   revealContentImmediately()
 
+  // 用户滚动时快速结束动画，避免 fixed overlay 与滚动内容坐标错位
+  const onScroll = () => endAnimationEarly()
+  window.addEventListener('scroll', onScroll, { once: true, passive: true })
+  scrollCleanup = () => window.removeEventListener('scroll', onScroll)
+
   animationSafetyTimer = window.setTimeout(() => {
     showAnimation.value = false
+    if (scrollCleanup) {
+      scrollCleanup()
+      scrollCleanup = null
+    }
   }, 12000)
 
   const fallbackTimer = window.setTimeout(() => {
@@ -624,6 +660,10 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  if (scrollCleanup) {
+    scrollCleanup()
+    scrollCleanup = null
+  }
   if (animationSafetyTimer) {
     window.clearTimeout(animationSafetyTimer)
     animationSafetyTimer = null

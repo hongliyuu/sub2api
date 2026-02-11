@@ -72,53 +72,34 @@
           </p>
         </div>
 
-        <!-- Version List -->
+        <!-- Release List -->
         <div class="space-y-6 sm:space-y-8">
-          <!-- Version Card -->
           <div
-            v-for="version in versions"
-            :key="version.version"
+            v-for="entry in releases"
+            :key="entry.date"
             class="card overflow-hidden"
           >
-            <div class="card-header flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div class="flex items-center gap-3 sm:gap-4">
-                <div
-                  class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br shadow-lg sm:h-12 sm:w-12"
-                  :class="version.type === 'major' ? 'from-red-500 to-red-600 shadow-red-500/30' :
-                           version.type === 'minor' ? 'from-blue-500 to-blue-600 shadow-blue-500/30' :
-                           'from-emerald-500 to-emerald-600 shadow-emerald-500/30'"
-                >
-                  <Icon name="badge" size="md" class="text-white" />
-                </div>
-                <div>
-                  <h2 class="text-lg font-semibold text-gray-900 dark:text-white sm:text-xl">
-                    {{ version.version }}
-                  </h2>
-                  <p class="text-xs text-gray-500 dark:text-dark-400 sm:text-sm">
-                    {{ formatDate(version.date) }}
-                  </p>
-                </div>
-              </div>
-              <span
-                class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium"
-                :class="version.type === 'major' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
-                         version.type === 'minor' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
-                         'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'"
+            <div class="card-header flex items-center gap-3 sm:gap-4">
+              <div
+                class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 shadow-lg shadow-primary-500/30 sm:h-12 sm:w-12"
               >
-                {{ t(`releaseNotes.types.${version.type}`) }}
-              </span>
+                <Icon name="badge" size="md" class="text-white" />
+              </div>
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white sm:text-xl">
+                {{ formatDate(entry.date) }}
+              </h2>
             </div>
 
             <div class="card-body">
               <!-- Features -->
-              <div v-if="version.features.length > 0" class="mb-6">
+              <div v-if="entry.features.length > 0" class="mb-6">
                 <h3 class="mb-3 flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-white">
                   <Icon name="sparkles" size="sm" class="text-blue-500" />
                   {{ t('releaseNotes.sections.features') }}
                 </h3>
                 <ul class="space-y-2">
                   <li
-                    v-for="(feature, index) in version.features"
+                    v-for="(feature, index) in entry.features"
                     :key="index"
                     class="flex items-start gap-3 text-sm text-gray-700 dark:text-dark-300"
                   >
@@ -129,14 +110,14 @@
               </div>
 
               <!-- Improvements -->
-              <div v-if="version.improvements.length > 0" class="mb-6">
+              <div v-if="entry.improvements.length > 0" class="mb-6">
                 <h3 class="mb-3 flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-white">
                   <Icon name="arrowUp" size="sm" class="text-emerald-500" />
                   {{ t('releaseNotes.sections.improvements') }}
                 </h3>
                 <ul class="space-y-2">
                   <li
-                    v-for="(improvement, index) in version.improvements"
+                    v-for="(improvement, index) in entry.improvements"
                     :key="index"
                     class="flex items-start gap-3 text-sm text-gray-700 dark:text-dark-300"
                   >
@@ -147,14 +128,14 @@
               </div>
 
               <!-- Bug Fixes -->
-              <div v-if="version.bugFixes.length > 0">
+              <div v-if="entry.bugFixes.length > 0">
                 <h3 class="mb-3 flex items-center gap-2 text-base font-semibold text-gray-900 dark:text-white">
                   <Icon name="exclamationCircle" size="sm" class="text-red-500" />
                   {{ t('releaseNotes.sections.bugFixes') }}
                 </h3>
                 <ul class="space-y-2">
                   <li
-                    v-for="(fix, index) in version.bugFixes"
+                    v-for="(fix, index) in entry.bugFixes"
                     :key="index"
                     class="flex items-start gap-3 text-sm text-gray-700 dark:text-dark-300"
                   >
@@ -209,141 +190,310 @@ const currentLogo = computed(() => {
 // Current year for footer
 const currentYear = computed(() => new Date().getFullYear())
 
-// Version data structure
-interface Version {
-  version: string
+interface ReleaseEntry {
   date: string
-  type: 'major' | 'minor' | 'patch'
   features: string[]
   improvements: string[]
   bugFixes: string[]
 }
 
-// Release versions (sample data - replace with actual release notes)
-const versions = computed<Version[]>(() => {
+const releases = computed<ReleaseEntry[]>(() => {
   if (locale.value === 'zh') {
     return [
       {
-        version: 'v0.1.64',
-        date: '2026-01-30',
-        type: 'minor',
+        date: '2026-02-08',
         features: [
-          '增加用户每日使用报告邮件功能',
-          '支持管理员配置报告发送时间和邮件模板',
-          '新增使用报告测试发送功能'
+          'Antigravity 添加 onboardUser 支持并修复 project_id 补齐逻辑',
+          '余额批次系统完善——过期通知邮件、余额明细弹框、首页导航优化',
+          '用户余额历史中整合微信充值订单记录',
+          '强制绑定邮箱改为可配置系统设置',
+          '微信用户强制绑定邮箱并设置密码'
         ],
         improvements: [
-          '优化邮件发送队列性能',
-          '改进使用量统计精度',
-          '增强邮件模板可定制性'
+          '错误处理性能优化',
+          '错误透传规则支持 skip_monitoring 跳过运维监控记录'
         ],
         bugFixes: [
-          '修复使用报告配置保存后状态重置的问题',
-          '修复SSE流式响应中usage数据被覆盖的问题',
-          '修复邮件发送失败时的错误处理'
+          '修复微信登录绑定状态、邮箱绑定密码校验及余额历史分页问题',
+          '修复错误透传规则 skip_monitoring 未生效的问题',
+          '修复支付回调和兑换码事务污染及订单状态补偿问题'
         ]
       },
       {
-        version: 'v0.1.63',
-        date: '2026-01-25',
-        type: 'minor',
+        date: '2026-02-03',
         features: [
-          '添加订阅购买功能（iframe集成）',
-          '支持微信支付配置',
-          '新增订单管理系统'
+          '余额批次过期功能（Balance Lots）',
+          '完善余额批次过期功能——设置 API、网关扣费和迁移重试',
+          '添加账号到期提醒邮件配置 UI',
+          'Claude OAuth 账号到期提醒定时任务',
+          'Antigravity 转发与测试支持 daily/prod 单 URL 切换'
         ],
         improvements: [
-          '优化前端构建性能',
-          '改进主题切换体验',
-          '增强移动端响应式设计'
+          'MODEL_CAPACITY_EXHAUSTED 使用固定 1s 间隔重试 60 次，不切换账号',
+          '同账号瞬态错误先重试再故障转移',
+          '空流式响应时自动故障转移并临时取消调度',
+          'Google "Invalid project resource name" 400 错误自动故障转移'
         ],
         bugFixes: [
-          '修复订单创建时的并发问题',
-          '修复支付回调处理异常',
-          '修复订阅状态同步延迟'
+          '移除特定 system 以适配新版 CC 客户端缓存失效的 bug',
+          '移除 Antigravity apikey 账户额外的表单'
         ]
       },
       {
-        version: 'v0.1.60',
-        date: '2026-01-20',
-        type: 'minor',
+        date: '2026-01-27',
         features: [
-          'Linux.DO OAuth登录集成',
-          '添加运维监控面板',
-          '新增错误日志分析功能'
+          '首页导航栏添加文档链接按钮',
+          '首页重构',
+          '重构安装教程页为分平台分工具详细指南',
+          '添加 Antigravity 单账号 503 退避重试机制'
         ],
         improvements: [
-          '优化API网关性能',
-          '改进账户调度算法',
-          '增强安全策略配置'
+          '将 scope 级别限流重构为 model 级别限流',
+          '同排序分组内随机打散账号，防止惊群效应',
+          'Antigravity 账号故障转移之间添加线性延迟',
+          '统一 Antigravity + Gemini 错误策略并支持自定义错误码'
         ],
         bugFixes: [
-          '修复OAuth回调处理问题',
-          '修复并发限制计数错误',
-          '修复会话粘性失效问题'
+          '单账号分组首次 503 不设模型限流标记，避免后续请求雪崩',
+          '修复粘性会话故障转移时缓存计费豁免问题',
+          '修复 Gemini 原生请求格式解析导致的会话哈希生成错误',
+          '防止不同用户相同消息的 sessionHash 碰撞'
+        ]
+      },
+      {
+        date: '2026-01-21',
+        features: [
+          '普通用户新手引导流程',
+          '管理后台分组拖拽排序',
+          '用户列表页显示当前并发数',
+          'OpenAI OAuth 账号支持批量 RT 输入创建',
+          '首页 SaaS 落地页重设计 + 安装教程页重构'
+        ],
+        improvements: [
+          '将 upstream 账号类型重构为 apikey，自动追加 /antigravity',
+          '客户端透传所有请求头，取代手动 header 设置',
+          '检测流式传输中客户端断开连接并继续消耗上游数据用于计费',
+          '将基于 Trie 的 digest 会话存储替换为扁平缓存'
+        ],
+        bugFixes: [
+          '修复创建账户表单默认优先级从 1 改为 50，与后端 schema 一致',
+          '修复前端 upstream 账户编辑字段和创建时 mixed_scheduling 问题',
+          '修复 upstream 账户转发的专用方法'
+        ]
+      },
+      {
+        date: '2026-01-17',
+        features: [
+          '智能重试最多 1 次 + 失败时清除粘性会话',
+          '添加 Anthropic 粘性会话 digest chain 匹配',
+          'Antigravity 全面增强——模型映射、限流、调度和运维',
+          '全局错误透传规则功能',
+          '订阅套餐升级功能（从低价套餐升级到高价套餐）'
+        ],
+        improvements: [
+          '简化粘性会话限流处理——任何限流立即切换',
+          '移除 Anthropic digest chain 从 Messages handler',
+          '前端限流时间显示精确到秒'
+        ],
+        bugFixes: [
+          '修复管理页面活跃会话数始终显示为 0 的问题',
+          '修复 codex 更新用量窗口异常的 bug',
+          '修复 Antigravity 429 回退冷却时间从 5 分钟改为 30 秒',
+          '修复 Antigravity 自动修复 max_tokens <= budget_tokens 导致的 400 错误'
+        ]
+      },
+      {
+        date: '2026-01-14',
+        features: [
+          '支持用户专属分组倍率配置',
+          '实现 Refresh Token 机制',
+          '微信绑定支持订阅号扫码模式，每日报告默认启用',
+          '支持 HTTP/2 Cleartext (h2c) 连接配置',
+          'API Key 独立配额和过期时间支持'
+        ],
+        improvements: [
+          '/v1/usage 端点按 API Key 过滤统计而非 UserID',
+          '增强 Gemini API 授权错误处理，自动提取并显示激活 URL',
+          '代理探测添加多 URL 回退机制'
+        ],
+        bugFixes: [
+          '修复模型前缀映射逻辑错误',
+          '优化 Gemini 接口认证兼容性，支持 Authorization: Bearer',
+          '移除上游请求中不支持的 safety_identifier 和 previous_response_id 字段',
+          '修复 thinking 块被意外修改导致的 400 错误'
+        ]
+      },
+      {
+        date: '2026-01-11',
+        features: [
+          '增加邀请码注册功能',
+          '微信账号类型配置支持订阅号/未认证服务号',
+          '用户微信账号解绑功能',
+          '管理后台用户余额/并发历史弹框',
+          '从其他分组复制账号功能',
+          'Gemini 200K 长上下文双倍计费功能'
+        ],
+        improvements: [
+          '支持过滤无效 API Key 错误，不写入错误日志',
+          '将 USER_INACTIVE 错误排除在 SLA 统计之外',
+          '增强 /v1/usage 端点返回完整用量统计',
+          '数据导入导出功能（账号、代理等）'
+        ],
+        bugFixes: [
+          '修复 Gemini 已注册用户 OAuth 授权时错误调用 onboardUser 的问题',
+          '修复 OAuth token 刷新后调度器缓存不一致问题',
+          '修复 Redis TLS 配置选项位置错误',
+          '修复 Gemini 工具调用缺少 thoughtSignature 导致 INVALID_ARGUMENT 错误'
         ]
       }
     ]
   } else {
     return [
       {
-        version: 'v0.1.64',
-        date: '2026-01-30',
-        type: 'minor',
+        date: '2026-02-08',
         features: [
-          'Added daily usage report email feature',
-          'Admin can configure report sending time and email template',
-          'Added test send function for usage reports'
+          'Antigravity onboardUser support with project_id auto-fill',
+          'Balance lots system improvements — expiry notifications, balance detail modal, homepage nav',
+          'Integrated WeChat recharge orders into user balance history',
+          'Made mandatory email binding a configurable system setting',
+          'WeChat users mandatory email binding and password setup'
         ],
         improvements: [
-          'Optimized email queue performance',
-          'Improved usage statistics accuracy',
-          'Enhanced email template customization'
+          'Error handling performance optimization',
+          'Error passthrough rules support skip_monitoring to skip ops logging'
         ],
         bugFixes: [
-          'Fixed usage report configuration reset issue after saving',
-          'Fixed usage data overwrite issue in SSE streaming response',
-          'Fixed error handling when email sending fails'
+          'Fixed WeChat login binding status, email binding password validation and balance history pagination',
+          'Fixed error passthrough rule skip_monitoring not taking effect',
+          'Fixed payment callback and redeem code transaction contamination and order status compensation'
         ]
       },
       {
-        version: 'v0.1.63',
-        date: '2026-01-25',
-        type: 'minor',
+        date: '2026-02-03',
         features: [
-          'Added subscription purchase feature (iframe integration)',
-          'WeChat Pay configuration support',
-          'New order management system'
+          'Balance Lots expiration feature',
+          'Balance lots expiration improvements — settings API, gateway billing deduction and migration retry',
+          'Account expiry reminder email configuration UI',
+          'Claude OAuth account expiry reminder scheduled task',
+          'Antigravity forwarding and testing support for daily/prod single URL switching'
         ],
         improvements: [
-          'Optimized frontend build performance',
-          'Improved theme switching experience',
-          'Enhanced mobile responsive design'
+          'MODEL_CAPACITY_EXHAUSTED retry with fixed 1s interval 60 times without switching accounts',
+          'Same-account retry before failover for transient errors',
+          'Auto failover and temp-unschedule on empty stream response',
+          'Auto failover on Google "Invalid project resource name" 400 error'
         ],
         bugFixes: [
-          'Fixed concurrency issue in order creation',
-          'Fixed payment callback handling exception',
-          'Fixed subscription status sync delay'
+          'Removed specific system prompt to fix new CC client cache invalidation bug',
+          'Removed extra form for Antigravity API key accounts'
         ]
       },
       {
-        version: 'v0.1.60',
-        date: '2026-01-20',
-        type: 'minor',
+        date: '2026-01-27',
         features: [
-          'Linux.DO OAuth login integration',
-          'Added ops monitoring dashboard',
-          'New error log analysis feature'
+          'Added documentation link button to homepage navigation',
+          'CRS sync preview and account selection',
+          'Homepage redesign',
+          'Rebuilt installation tutorial as platform-specific detailed guide',
+          'Antigravity single-account 503 backoff retry mechanism'
         ],
         improvements: [
-          'Optimized API gateway performance',
-          'Improved account scheduling algorithm',
-          'Enhanced security policy configuration'
+          'Replaced scope-level rate limiting with model-level rate limiting',
+          'Shuffle accounts within same sort group to prevent thundering herd',
+          'Linear delay between Antigravity account failover switches',
+          'Unified error policy for Antigravity + custom error codes for Gemini accounts'
         ],
         bugFixes: [
-          'Fixed OAuth callback handling issue',
-          'Fixed concurrent limit counting error',
-          'Fixed sticky session failure issue'
+          'First 503 in single-account group no longer sets model rate limit mark to prevent cascading failures',
+          'Fixed sticky session failover cache billing exemption',
+          'Fixed Gemini native request format parsing for correct session hash generation',
+          'Prevented sessionHash collision for different users with same messages'
+        ]
+      },
+      {
+        date: '2026-01-21',
+        features: [
+          'User onboarding guide flow',
+          'Admin drag-and-drop group sort order',
+          'User list page shows current concurrency count',
+          'OpenAI OAuth accounts support batch RT input creation',
+          'Homepage SaaS landing page redesign + installation tutorial rebuild'
+        ],
+        improvements: [
+          'Replaced upstream account type with apikey, auto-append /antigravity',
+          'Passthrough all client headers instead of manual header setting',
+          'Detect client disconnect during streaming and continue draining upstream for billing',
+          'Replaced Trie-based digest session store with flat cache'
+        ],
+        bugFixes: [
+          'Fixed create account form default priority from 1 to 50 to match backend schema',
+          'Fixed frontend upstream account edit fields and mixed_scheduling on create',
+          'Restored upstream account forwarding with dedicated methods'
+        ]
+      },
+      {
+        date: '2026-01-17',
+        features: [
+          'Smart retry max 1 attempt + clear sticky session on failure',
+          'Anthropic sticky session digest chain matching via Trie',
+          'Antigravity comprehensive enhancements — model mapping, rate limiting, scheduling & ops',
+          'Global error passthrough rules',
+          'Subscription plan upgrade (from lower to higher price plan)'
+        ],
+        improvements: [
+          'Simplified sticky session rate limit handling — switch immediately on any rate limit',
+          'Removed Anthropic digest chain from Messages handler',
+          'Frontend rate limit time display shows seconds'
+        ],
+        bugFixes: [
+          'Fixed admin page active sessions always showing 0',
+          'Fixed codex usage window update anomaly',
+          'Reduced Antigravity 429 fallback cooldown from 5min to 30s',
+          'Fixed Antigravity auto-fix max_tokens <= budget_tokens causing 400 error'
+        ]
+      },
+      {
+        date: '2026-01-14',
+        features: [
+          'User-specific group rate multiplier configuration',
+          'Refresh Token mechanism implementation',
+          'WeChat binding supports subscription account QR scan mode, daily report enabled by default',
+          'HTTP/2 Cleartext (h2c) connection configuration support',
+          'API Key independent quota and expiration support'
+        ],
+        improvements: [
+          '/v1/usage endpoint filters by API Key instead of UserID',
+          'Enhanced Gemini API authorization error handling with automatic activation URL extraction',
+          'Proxy detection with multi-URL fallback mechanism'
+        ],
+        bugFixes: [
+          'Fixed model prefix mapping logic error',
+          'Optimized Gemini API auth compatibility with Authorization: Bearer support',
+          'Removed unsupported safety_identifier and previous_response_id fields from upstream requests',
+          'Fixed thinking block accidental modification causing 400 error'
+        ]
+      },
+      {
+        date: '2026-01-11',
+        features: [
+          'Invitation code registration',
+          'WeChat account type configuration for subscription/unverified official accounts',
+          'User WeChat account unbind functionality',
+          'Admin user balance/concurrency history modal',
+          'Copy accounts from other groups',
+          'Gemini 200K long context double billing'
+        ],
+        improvements: [
+          'Filter invalid API Key errors from error logs',
+          'Exclude USER_INACTIVE errors from SLA statistics',
+          'Enhanced /v1/usage endpoint with full usage statistics',
+          'Data import/export bundle (accounts, proxies, etc.)'
+        ],
+        bugFixes: [
+          'Fixed registered user OAuth triggering onboardUser incorrectly for Gemini',
+          'Fixed scheduler cache inconsistency after OAuth token refresh',
+          'Fixed Redis TLS configuration option positioning',
+          'Fixed missing thoughtSignature for Gemini tool calls causing INVALID_ARGUMENT error'
         ]
       }
     ]
