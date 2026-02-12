@@ -310,9 +310,10 @@ import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api'
 import type { WeChatPayStatus, RechargeSettings } from '@/api/admin/settings'
 import { useAppStore } from '@/stores'
+import type { SettingsForm } from './types'
 
 defineProps<{
-  form: any
+  form: SettingsForm
 }>()
 
 const { t } = useI18n()

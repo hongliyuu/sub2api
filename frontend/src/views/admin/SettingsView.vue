@@ -29,11 +29,9 @@
 
         <!-- Tab Content -->
         <form @submit.prevent="saveSettings" class="space-y-6">
-          <SettingsGeneralTab v-if="activeTab === 'general'" :form="form" />
-          <SettingsAuthTab v-else-if="activeTab === 'auth'" :form="form" />
-          <SettingsPaymentTab v-else-if="activeTab === 'payment'" :form="form" />
-          <SettingsEmailTab v-else-if="activeTab === 'email'" :form="form" />
-          <SettingsAdvancedTab v-else-if="activeTab === 'advanced'" />
+          <KeepAlive>
+            <component :is="activeComponent" v-bind="activeTabProps" />
+          </KeepAlive>
 
           <!-- Global Save Button -->
           <div
@@ -75,11 +73,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { adminAPI } from '@/api'
-import type { SystemSettings, UpdateSettingsRequest } from '@/api/admin/settings'
+import type { UpdateSettingsRequest } from '@/api/admin/settings'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import { useAppStore } from '@/stores'
 import SettingsGeneralTab from './settings/SettingsGeneralTab.vue'
@@ -87,6 +85,7 @@ import SettingsAuthTab from './settings/SettingsAuthTab.vue'
 import SettingsPaymentTab from './settings/SettingsPaymentTab.vue'
 import SettingsEmailTab from './settings/SettingsEmailTab.vue'
 import SettingsAdvancedTab from './settings/SettingsAdvancedTab.vue'
+import type { SettingsForm } from './settings/types'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -108,22 +107,36 @@ const tabs = computed(() => [
   { key: 'advanced' as TabKey, label: t('admin.settings.tabs.advanced') }
 ])
 
-const activeTab = ref<TabKey>((validTabs.includes(route.query.tab as TabKey) ? route.query.tab : 'general') as TabKey)
+function normalizeTab(queryTab: unknown): TabKey {
+  const tab = Array.isArray(queryTab) ? queryTab[0] : queryTab
+  return validTabs.includes(tab as TabKey) ? (tab as TabKey) : 'general'
+}
+
+const activeTab = ref<TabKey>(normalizeTab(route.query.tab))
+
+watch(
+  () => route.query.tab,
+  (tab) => {
+    const rawTab = Array.isArray(tab) ? tab[0] : tab
+    const normalized = normalizeTab(tab)
+    if (activeTab.value !== normalized) {
+      activeTab.value = normalized
+    }
+
+    if (rawTab !== undefined && rawTab !== normalized) {
+      router.replace({ query: { ...route.query, tab: normalized } })
+    }
+  },
+  { immediate: true }
+)
 
 function switchTab(tab: TabKey) {
+  if (activeTab.value === tab && normalizeTab(route.query.tab) === tab) return
   activeTab.value = tab
   router.replace({ query: { ...route.query, tab } })
 }
 
 // Shared form state
-type SettingsForm = SystemSettings & {
-  smtp_password: string
-  turnstile_secret_key: string
-  linuxdo_connect_client_secret: string
-  wechat_server_token: string
-  wechat_app_secret: string
-}
-
 const form = reactive<SettingsForm>({
   registration_enabled: true,
   email_verify_enabled: false,
@@ -197,6 +210,17 @@ const form = reactive<SettingsForm>({
   balance_expiry_reminder_enabled: false,
   balance_expiry_reminder_advance_days: 3
 })
+
+const tabComponents = {
+  general: SettingsGeneralTab,
+  auth: SettingsAuthTab,
+  payment: SettingsPaymentTab,
+  email: SettingsEmailTab,
+  advanced: SettingsAdvancedTab
+} as const
+
+const activeComponent = computed(() => tabComponents[activeTab.value])
+const activeTabProps = computed(() => (activeTab.value === 'advanced' ? {} : { form }))
 
 async function loadSettings() {
   loading.value = true

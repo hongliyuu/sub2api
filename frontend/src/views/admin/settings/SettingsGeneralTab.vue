@@ -528,11 +528,12 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 import Toggle from '@/components/common/Toggle.vue'
+import type { SettingsForm } from './types'
 
 const { t } = useI18n()
 
 const props = defineProps<{
-  form: any
+  form: SettingsForm
 }>()
 
 const logoError = ref('')

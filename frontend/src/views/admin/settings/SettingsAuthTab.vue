@@ -738,9 +738,10 @@ import Icon from '@/components/icons/Icon.vue'
 import Toggle from '@/components/common/Toggle.vue'
 import { useClipboard } from '@/composables/useClipboard'
 import { useAppStore } from '@/stores'
+import type { SettingsForm } from './types'
 
 const props = defineProps<{
-  form: any
+  form: SettingsForm
 }>()
 
 const { t } = useI18n()

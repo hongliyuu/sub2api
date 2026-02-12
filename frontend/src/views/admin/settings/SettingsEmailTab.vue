@@ -319,9 +319,10 @@ import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api'
 import Toggle from '@/components/common/Toggle.vue'
 import { useAppStore } from '@/stores'
+import type { SettingsForm } from './types'
 
 const props = defineProps<{
-  form: any
+  form: SettingsForm
 }>()
 
 const { t } = useI18n()
