@@ -1,0 +1,63 @@
+name: Sync Upstream
+
+on:
+  schedule:
+    - cron: '0 8 * * *'  # 每天 UTC 8:00 (北京时间 16:00) 执行
+  workflow_dispatch:       # 支持手动触发
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Add upstream remote
+        run: git remote add upstream https://github.com/Wei-Shaw/sub2api.git
+
+      - name: Fetch upstream
+        run: git fetch upstream
+
+      - name: Check for new commits
+        id: check
+        run: |
+          COMMITS=$(git log main..upstream/main --oneline)
+          if [ -z "$COMMITS" ]; then
+            echo "has_updates=false" >> $GITHUB_OUTPUT
+            echo "No new commits from upstream"
+          else
+            echo "has_updates=true" >> $GITHUB_OUTPUT
+            echo "New commits found:"
+            echo "$COMMITS"
+          fi
+
+      - name: Create sync branch and PR
+        if: steps.check.outputs.has_updates == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="sync-upstream/$(date +%Y%m%d)"
+          git checkout -b "$BRANCH" upstream/main
+          git push origin "$BRANCH"
+
+          gh pr create \
+            --title "Sync upstream $(date +%Y-%m-%d)" \
+            --body "$(cat <<'EOF'
+          ## 上游同步
+
+          自动从 [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api) 同步最新代码。
+
+          **新增提交：**
+          $(git log main..upstream/main --oneline)
+
+          请审核后决定是否合并。
+          EOF
+          )" \
+            --base main \
+            --head "$BRANCH"
