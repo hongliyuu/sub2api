@@ -3569,6 +3569,13 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 		}
 	}
 
+	// Strip context-management beta when thinking is not enabled.
+	// The context-management-2025-06-27 beta activates the clear_thinking_20251015
+	// strategy server-side, which requires thinking to be enabled or adaptive.
+	// When a client (e.g. Claude Code) sends this beta but the request doesn't
+	// have thinking enabled, the API returns a 400 error. Strip it proactively.
+	stripContextManagementBetaIfNeeded(req, body)
+
 	// Always capture a compact fingerprint line for later error diagnostics.
 	// We only print it when needed (or when the explicit debug flag is enabled).
 	if c != nil && tokenType == "oauth" {
@@ -3710,6 +3717,43 @@ func mergeAnthropicBetaDropping(required []string, incoming string, drop map[str
 		out = append(out, p)
 	}
 	return strings.Join(out, ",")
+}
+
+// stripContextManagementBetaIfNeeded removes context-management-* betas from
+// the anthropic-beta header when thinking is not enabled in the request body.
+// The context-management-2025-06-27 beta activates the clear_thinking_20251015
+// strategy on the Anthropic API, which requires thinking.type to be "enabled"
+// or "adaptive". Without this, the API returns a 400 error.
+// See: https://github.com/anthropics/claude-code/issues/11690
+func stripContextManagementBetaIfNeeded(req *http.Request, body []byte) {
+	if req == nil {
+		return
+	}
+	betaHeader := req.Header.Get("anthropic-beta")
+	if betaHeader == "" || !strings.Contains(betaHeader, "context-management") {
+		return
+	}
+
+	// Check if thinking is enabled in the request body
+	thinkingType := gjson.GetBytes(body, "thinking.type").String()
+	if strings.EqualFold(thinkingType, "enabled") || strings.EqualFold(thinkingType, "adaptive") {
+		return // thinking is enabled, context-management beta is safe
+	}
+
+	// Strip all context-management-* betas
+	var filtered []string
+	for _, part := range strings.Split(betaHeader, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" || strings.HasPrefix(part, "context-management") {
+			continue
+		}
+		filtered = append(filtered, part)
+	}
+	if len(filtered) == 0 {
+		req.Header.Del("anthropic-beta")
+	} else {
+		req.Header.Set("anthropic-beta", strings.Join(filtered, ","))
+	}
 }
 
 // applyClaudeCodeMimicHeaders forces "Claude Code-like" request headers.
@@ -5158,6 +5202,9 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 			}
 		}
 	}
+
+	// Strip context-management beta when thinking is not enabled (same as messages path).
+	stripContextManagementBetaIfNeeded(req, body)
 
 	if c != nil && tokenType == "oauth" {
 		c.Set(claudeMimicDebugInfoKey, buildClaudeMimicDebugLine(req, body, account, tokenType, mimicClaudeCode))
