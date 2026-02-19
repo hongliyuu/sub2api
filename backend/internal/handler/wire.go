@@ -32,6 +32,7 @@ func ProvideAdminHandlers(
 	userAttributeHandler *admin.UserAttributeHandler,
 	rechargeHandler *admin.RechargeHandler,
 	errorPassthroughHandler *admin.ErrorPassthroughHandler,
+	lotteryHandler *admin.LotteryHandler,
 ) *AdminHandlers {
 	return &AdminHandlers{
 		Dashboard:        dashboardHandler,
@@ -54,6 +55,7 @@ func ProvideAdminHandlers(
 		UserAttribute:    userAttributeHandler,
 		Recharge:         rechargeHandler,
 		ErrorPassthrough: errorPassthroughHandler,
+		Lottery:          lotteryHandler,
 	}
 }
 
@@ -86,6 +88,7 @@ func ProvideHandlers(
 	rechargeHandler *recharge.RechargeHandler,
 	wechatPayWebhookHandler *webhook.WeChatPayWebhookHandler,
 	subscriptionPlanHandler *subscription.SubscriptionPlanHandler,
+	lotteryHandler *LotteryHandler,
 ) *Handlers {
 	return &Handlers{
 		Auth:             authHandler,
@@ -105,6 +108,7 @@ func ProvideHandlers(
 		Recharge:         rechargeHandler,
 		WeChatPayWebhook: wechatPayWebhookHandler,
 		SubscriptionPlan: subscriptionPlanHandler,
+		Lottery:          lotteryHandler,
 	}
 }
 
@@ -149,6 +153,8 @@ var ProviderSet = wire.NewSet(
 	admin.NewUserAttributeHandler,
 	admin.NewRechargeHandler,
 	admin.NewErrorPassthroughHandler,
+	admin.NewLotteryHandler,
+	NewLotteryHandler,
 
 	// AdminHandlers and Handlers constructors
 	ProvideAdminHandlers,

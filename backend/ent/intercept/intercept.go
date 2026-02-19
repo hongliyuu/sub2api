@@ -17,6 +17,9 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/balancelot"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/lotteryactivity"
+	"github.com/Wei-Shaw/sub2api/ent/lotterycoupon"
+	"github.com/Wei-Shaw/sub2api/ent/lotteryparticipant"
 	"github.com/Wei-Shaw/sub2api/ent/paymentcallback"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
@@ -332,6 +335,87 @@ func (f TraverseGroup) Traverse(ctx context.Context, q ent.Query) error {
 		return f(ctx, q)
 	}
 	return fmt.Errorf("unexpected query type %T. expect *ent.GroupQuery", q)
+}
+
+// The LotteryActivityFunc type is an adapter to allow the use of ordinary function as a Querier.
+type LotteryActivityFunc func(context.Context, *ent.LotteryActivityQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f LotteryActivityFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.LotteryActivityQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.LotteryActivityQuery", q)
+}
+
+// The TraverseLotteryActivity type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseLotteryActivity func(context.Context, *ent.LotteryActivityQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseLotteryActivity) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseLotteryActivity) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.LotteryActivityQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.LotteryActivityQuery", q)
+}
+
+// The LotteryCouponFunc type is an adapter to allow the use of ordinary function as a Querier.
+type LotteryCouponFunc func(context.Context, *ent.LotteryCouponQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f LotteryCouponFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.LotteryCouponQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.LotteryCouponQuery", q)
+}
+
+// The TraverseLotteryCoupon type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseLotteryCoupon func(context.Context, *ent.LotteryCouponQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseLotteryCoupon) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseLotteryCoupon) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.LotteryCouponQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.LotteryCouponQuery", q)
+}
+
+// The LotteryParticipantFunc type is an adapter to allow the use of ordinary function as a Querier.
+type LotteryParticipantFunc func(context.Context, *ent.LotteryParticipantQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f LotteryParticipantFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.LotteryParticipantQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.LotteryParticipantQuery", q)
+}
+
+// The TraverseLotteryParticipant type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseLotteryParticipant func(context.Context, *ent.LotteryParticipantQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseLotteryParticipant) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseLotteryParticipant) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.LotteryParticipantQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.LotteryParticipantQuery", q)
 }
 
 // The PaymentCallbackFunc type is an adapter to allow the use of ordinary function as a Querier.
@@ -760,6 +844,12 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.ErrorPassthroughRuleQuery, predicate.ErrorPassthroughRule, errorpassthroughrule.OrderOption]{typ: ent.TypeErrorPassthroughRule, tq: q}, nil
 	case *ent.GroupQuery:
 		return &query[*ent.GroupQuery, predicate.Group, group.OrderOption]{typ: ent.TypeGroup, tq: q}, nil
+	case *ent.LotteryActivityQuery:
+		return &query[*ent.LotteryActivityQuery, predicate.LotteryActivity, lotteryactivity.OrderOption]{typ: ent.TypeLotteryActivity, tq: q}, nil
+	case *ent.LotteryCouponQuery:
+		return &query[*ent.LotteryCouponQuery, predicate.LotteryCoupon, lotterycoupon.OrderOption]{typ: ent.TypeLotteryCoupon, tq: q}, nil
+	case *ent.LotteryParticipantQuery:
+		return &query[*ent.LotteryParticipantQuery, predicate.LotteryParticipant, lotteryparticipant.OrderOption]{typ: ent.TypeLotteryParticipant, tq: q}, nil
 	case *ent.PaymentCallbackQuery:
 		return &query[*ent.PaymentCallbackQuery, predicate.PaymentCallback, paymentcallback.OrderOption]{typ: ent.TypePaymentCallback, tq: q}, nil
 	case *ent.PromoCodeQuery:

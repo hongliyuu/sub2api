@@ -216,8 +216,8 @@ func ProvideUserUsageReportScheduler(
 }
 
 // ProvideOrderExpireScheduler creates and starts OrderExpireScheduler.
-func ProvideOrderExpireScheduler(repo RechargeOrderRepository, wechatPayService *WeChatPayService) *OrderExpireScheduler {
-	svc := NewOrderExpireScheduler(repo, wechatPayService)
+func ProvideOrderExpireScheduler(repo RechargeOrderRepository, wechatPayService *WeChatPayService, lotteryCouponRepo LotteryCouponRepository) *OrderExpireScheduler {
+	svc := NewOrderExpireScheduler(repo, wechatPayService, lotteryCouponRepo)
 	svc.Start()
 	return svc
 }
@@ -265,6 +265,22 @@ func ProvideBalanceExpiryReminderScheduler(
 	redisClient *redis.Client,
 ) *BalanceExpiryReminderScheduler {
 	svc := NewBalanceExpiryReminderScheduler(lotRepo, userRepo, emailService, settingService, redisClient)
+	svc.Start()
+	return svc
+}
+
+// ProvideLotteryScheduler creates and starts LotteryScheduler.
+func ProvideLotteryScheduler(
+	drawService *LotteryDrawService,
+	activityRepo LotteryActivityRepository,
+	couponRepo LotteryCouponRepository,
+	groupService *GroupService,
+	emailService *EmailService,
+	settingService *SettingService,
+	userRepo UserRepository,
+	redisClient *redis.Client,
+) *LotteryScheduler {
+	svc := NewLotteryScheduler(drawService, activityRepo, couponRepo, groupService, emailService, settingService, userRepo, redisClient)
 	svc.Start()
 	return svc
 }
@@ -357,4 +373,7 @@ var ProviderSet = wire.NewSet(
 	NewWeChatScanLoginService,
 	NewErrorPassthroughService,
 	NewDigestSessionStore,
+	NewLotteryService,
+	NewLotteryDrawService,
+	ProvideLotteryScheduler,
 )

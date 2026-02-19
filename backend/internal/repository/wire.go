@@ -74,6 +74,9 @@ var ProviderSet = wire.NewSet(
 	NewBalanceLotRepository,
 	NewUserGroupRateRepository,
 	NewErrorPassthroughRepository,
+	NewLotteryActivityRepository,
+	NewLotteryParticipantRepository,
+	NewLotteryCouponRepository,
 
 	// Cache implementations
 	NewGatewayCache,

@@ -576,3 +576,86 @@ func PromoCodeUsageFromService(u *service.PromoCodeUsage) *PromoCodeUsage {
 		User:        UserFromServiceShallow(u.User),
 	}
 }
+
+// ==========================================
+// Lottery Mappers
+// ==========================================
+
+func LotteryActivityFromService(a *service.LotteryActivity) *LotteryActivity {
+	if a == nil {
+		return nil
+	}
+	return &LotteryActivity{
+		ID:                    a.ID,
+		Title:                 a.Title,
+		Description:           a.Description,
+		ShareCode:             a.ShareCode,
+		Status:                a.Status,
+		DrawAt:                a.DrawAt,
+		ActivityStartAt:       a.ActivityStartAt,
+		ActivityEndAt:         a.ActivityEndAt,
+		MinParticipants:       a.MinParticipants,
+		BaseWinRate:           a.BaseWinRate,
+		WinnerDiscountPercent: a.WinnerDiscountPercent,
+		LoserCouponAmount:     a.LoserCouponAmount,
+		TempGroupID:           a.TempGroupID,
+		ParticipantCount:      a.ParticipantCount,
+		WinnerCount:           a.WinnerCount,
+		CreatedBy:             a.CreatedBy,
+		CreatedAt:             a.CreatedAt,
+		UpdatedAt:             a.UpdatedAt,
+	}
+}
+
+func LotteryParticipantFromService(p *service.LotteryParticipant) *LotteryParticipant {
+	if p == nil {
+		return nil
+	}
+	result := &LotteryParticipant{
+		ID:               p.ID,
+		ActivityID:       p.ActivityID,
+		UserID:           p.UserID,
+		UserCategory:     p.UserCategory,
+		WeightMultiplier: p.WeightMultiplier,
+		IsWinner:         p.IsWinner,
+		CouponID:         p.CouponID,
+		ParticipatedAt:   p.ParticipatedAt,
+	}
+	if p.User != nil {
+		result.User = UserFromServiceShallow(p.User)
+	}
+	return result
+}
+
+func LotteryCouponFromService(c *service.LotteryCoupon) *LotteryCoupon {
+	if c == nil {
+		return nil
+	}
+	return &LotteryCoupon{
+		ID:              c.ID,
+		ActivityID:      c.ActivityID,
+		UserID:          c.UserID,
+		CouponType:      c.CouponType,
+		DiscountPercent: c.DiscountPercent,
+		ReductionAmount: c.ReductionAmount,
+		ApplicableScope: c.ApplicableScope,
+		Status:          c.Status,
+		UsedAt:          c.UsedAt,
+		UsedOrderID:     c.UsedOrderID,
+		ExpiresAt:       c.ExpiresAt,
+		Reminded:        c.Reminded,
+		CreatedAt:       c.CreatedAt,
+	}
+}
+
+func LotteryDrawResultFromService(r *service.LotteryDrawResult) *LotteryDrawResult {
+	if r == nil {
+		return nil
+	}
+	return &LotteryDrawResult{
+		ActivityID:          r.ActivityID,
+		TotalParticipants:   r.TotalParticipants,
+		WinnerCount:         r.WinnerCount,
+		BelowMinParticipant: r.BelowMinParticipant,
+	}
+}

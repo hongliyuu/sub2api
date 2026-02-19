@@ -73,6 +73,9 @@ func RegisterAdminRoutes(
 
 		// 错误透传规则管理
 		registerErrorPassthroughRoutes(admin, h)
+
+		// 抽奖活动管理
+		registerLotteryRoutes(admin, h)
 	}
 }
 
@@ -427,6 +430,18 @@ func registerRechargeAdminRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		recharge.GET("/orders/:order_no/logs", h.Admin.Recharge.GetOrderLogs)
 		// 退款
 		recharge.POST("/orders/:order_no/refund", h.Admin.Recharge.RefundOrder)
+	}
+}
+
+func registerLotteryRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	lottery := admin.Group("/lottery")
+	{
+		lottery.POST("", h.Admin.Lottery.Create)
+		lottery.GET("", h.Admin.Lottery.List)
+		lottery.GET("/:id", h.Admin.Lottery.GetByID)
+		lottery.POST("/:id/draw", h.Admin.Lottery.Draw)
+		lottery.DELETE("/:id", h.Admin.Lottery.Cancel)
+		lottery.GET("/:id/participants", h.Admin.Lottery.ListParticipants)
 	}
 }
 

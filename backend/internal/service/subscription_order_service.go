@@ -109,6 +109,7 @@ type SubscriptionOrderService struct {
 	emailService        *EmailService
 	settingService      *SettingService
 	userRepo            UserRepository
+	lotteryCouponRepo   LotteryCouponRepository
 }
 
 // NewSubscriptionOrderService 创建订阅订单服务
@@ -123,6 +124,7 @@ func NewSubscriptionOrderService(
 	emailService *EmailService,
 	settingService *SettingService,
 	userRepo UserRepository,
+	lotteryCouponRepo LotteryCouponRepository,
 ) *SubscriptionOrderService {
 	return &SubscriptionOrderService{
 		cfg:                 cfg,
@@ -135,6 +137,7 @@ func NewSubscriptionOrderService(
 		emailService:        emailService,
 		settingService:      settingService,
 		userRepo:            userRepo,
+		lotteryCouponRepo:   lotteryCouponRepo,
 	}
 }
 
@@ -210,21 +213,53 @@ func (s *SubscriptionOrderService) CreateOrder(ctx context.Context, userID int64
 		validityDays = 30
 	}
 
+	// 查找并应用抽奖优惠券（未中奖者订阅立减券）
+	actualAmount := *group.PriceCNY
+	var originalAmount *float64
+	var discountAmount *float64
+	var appliedCouponID int64
+	if s.lotteryCouponRepo != nil {
+		coupon, findErr := s.lotteryCouponRepo.FindActiveForUser(ctx, userID, LotteryCouponScopeMonthlySubscription)
+		if findErr == nil && coupon != nil && coupon.ReductionAmount != nil {
+			reduction := *coupon.ReductionAmount
+			orig := actualAmount
+			originalAmount = &orig
+			discounted := actualAmount - reduction
+			if discounted < 0.01 {
+				discounted = 0.01 // 最低 1 分钱
+			}
+			discounted = math.Round(discounted*100) / 100
+			disc := orig - discounted
+			discountAmount = &disc
+			actualAmount = discounted
+			appliedCouponID = coupon.ID
+		}
+	}
+
 	order := &SubscriptionOrder{
 		OrderNo:        orderNo,
 		UserID:         userID,
 		GroupID:        req.GroupID,
-		Amount:         *group.PriceCNY,
+		Amount:         actualAmount,
 		ValidityDays:   validityDays,
 		PaymentMethod:  req.PaymentMethod,
 		PaymentChannel: paymentChannel,
 		Status:         OrderStatusPending,
 		ExpireAt:       expireAt,
 		Group:          group,
+		OriginalAmount: originalAmount,
+		DiscountAmount: discountAmount,
 	}
 
 	if err := s.repo.Create(ctx, order); err != nil {
 		return nil, fmt.Errorf("create order: %w", err)
+	}
+
+	// 订单创建成功后才标记优惠券为已使用
+	if appliedCouponID > 0 {
+		if markErr := s.lotteryCouponRepo.MarkUsed(ctx, appliedCouponID, orderNo); markErr != nil {
+			log.Printf("[SubscriptionOrder] Warning: failed to mark lottery coupon %d as used: %v", appliedCouponID, markErr)
+		}
 	}
 
 	return order, nil
@@ -309,6 +344,13 @@ func (s *SubscriptionOrderService) CancelOrder(ctx context.Context, userID int64
 
 	if rowsAffected == 0 {
 		return ErrOrderCancelConflict
+	}
+
+	// 释放该订单占用的抽奖优惠券（如有）
+	if s.lotteryCouponRepo != nil {
+		if releaseErr := s.lotteryCouponRepo.ReleaseByOrderID(ctx, orderNo); releaseErr != nil {
+			log.Printf("[SubscriptionOrder] Warning: failed to release lottery coupon for cancelled order %s: %v", orderNo, releaseErr)
+		}
 	}
 
 	return nil

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"log"
+	"math"
 	"math/big"
 	"time"
 
@@ -165,6 +166,7 @@ type RechargeOrderService struct {
 	userRepo               UserRepository
 	balanceLogRepo         BalanceLogRepository
 	redisClient            *redis.Client
+	lotteryCouponRepo      LotteryCouponRepository
 }
 
 // NewRechargeOrderService 创建充值订单服务
@@ -177,6 +179,7 @@ func NewRechargeOrderService(
 	userRepo UserRepository,
 	balanceLogRepo BalanceLogRepository,
 	redisClient *redis.Client,
+	lotteryCouponRepo LotteryCouponRepository,
 ) *RechargeOrderService {
 	return &RechargeOrderService{
 		cfg:                    cfg,
@@ -187,6 +190,7 @@ func NewRechargeOrderService(
 		userRepo:               userRepo,
 		balanceLogRepo:         balanceLogRepo,
 		redisClient:            redisClient,
+		lotteryCouponRepo:      lotteryCouponRepo,
 	}
 }
 
@@ -266,18 +270,42 @@ func (s *RechargeOrderService) CreateOrder(ctx context.Context, userID int64, re
 	}
 	expireAt := time.Now().Add(time.Duration(expireMinutes) * time.Minute)
 
+	// 查找并应用抽奖优惠券（中奖者充值折扣券）
+	actualAmount := req.Amount
+	var couponNotes string
+	var appliedCouponID int64
+	if s.lotteryCouponRepo != nil {
+		coupon, findErr := s.lotteryCouponRepo.FindActiveForUser(ctx, userID, LotteryCouponScopeRecharge)
+		if findErr == nil && coupon != nil && coupon.DiscountPercent != nil {
+			// 应用折扣：amount × (discount_percent / 100)
+			discountedAmount := actualAmount * float64(*coupon.DiscountPercent) / 100.0
+			discountedAmount = math.Round(discountedAmount*100) / 100
+			couponNotes = fmt.Sprintf("已使用抽奖优惠券 #%d（%d%%折扣），原价 ¥%.2f → ¥%.2f", coupon.ID, *coupon.DiscountPercent, actualAmount, discountedAmount)
+			actualAmount = discountedAmount
+			appliedCouponID = coupon.ID
+		}
+	}
+
 	order := &RechargeOrder{
 		OrderNo:        orderNo,
 		UserID:         userID,
-		Amount:         req.Amount,
+		Amount:         actualAmount,
 		PaymentMethod:  req.PaymentMethod,
 		PaymentChannel: paymentChannel,
 		Status:         OrderStatusPending,
 		ExpireAt:       expireAt,
+		Notes:          couponNotes,
 	}
 
 	if err := s.repo.Create(ctx, order); err != nil {
 		return nil, fmt.Errorf("create order: %w", err)
+	}
+
+	// 订单创建成功后才标记优惠券为已使用
+	if appliedCouponID > 0 {
+		if markErr := s.lotteryCouponRepo.MarkUsed(ctx, appliedCouponID, orderNo); markErr != nil {
+			log.Printf("[RechargeOrder] Warning: failed to mark lottery coupon %d as used: %v", appliedCouponID, markErr)
+		}
 	}
 
 	return order, nil
@@ -377,6 +405,13 @@ func (s *RechargeOrderService) CancelOrder(ctx context.Context, userID int64, or
 	// 如果没有更新到任何行，说明订单状态已经改变（并发冲突）
 	if rowsAffected == 0 {
 		return ErrOrderCancelConflict
+	}
+
+	// 释放该订单占用的抽奖优惠券（如有）
+	if s.lotteryCouponRepo != nil {
+		if releaseErr := s.lotteryCouponRepo.ReleaseByOrderID(ctx, orderNo); releaseErr != nil {
+			log.Printf("[RechargeOrder] Warning: failed to release lottery coupon for cancelled order %s: %v", orderNo, releaseErr)
+		}
 	}
 
 	return nil

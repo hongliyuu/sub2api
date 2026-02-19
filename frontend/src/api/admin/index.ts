@@ -21,6 +21,7 @@ import userAttributesAPI from './userAttributes'
 import opsAPI from './ops'
 import rechargeAPI from './recharge'
 import errorPassthroughAPI from './errorPassthrough'
+import lotteryAPI from './lottery'
 
 /**
  * Unified admin API object for convenient access
@@ -43,7 +44,8 @@ export const adminAPI = {
   userAttributes: userAttributesAPI,
   ops: opsAPI,
   recharge: rechargeAPI,
-  errorPassthrough: errorPassthroughAPI
+  errorPassthrough: errorPassthroughAPI,
+  lottery: lotteryAPI
 }
 
 export {
@@ -64,7 +66,8 @@ export {
   userAttributesAPI,
   opsAPI,
   rechargeAPI,
-  errorPassthroughAPI
+  errorPassthroughAPI,
+  lotteryAPI
 }
 
 export default adminAPI

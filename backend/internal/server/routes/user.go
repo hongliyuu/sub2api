@@ -117,6 +117,16 @@ func RegisterUserRoutes(
 			recharge.POST("/orders/:order_no/sync", h.Recharge.SyncOrderStatus)
 		}
 
+		// 抽奖活动
+		lottery := authenticated.Group("/lottery")
+		{
+			lottery.GET("/active", h.Lottery.GetActive)
+			lottery.GET("/my", h.Lottery.GetMyParticipations)
+			lottery.GET("/coupons", h.Lottery.GetMyCoupons)
+			lottery.GET("/:id", h.Lottery.GetByID)
+			lottery.POST("/:id/participate", h.Lottery.Participate)
+		}
+
 		// 订阅套餐订单（需认证的接口）
 		subscriptionOrders := authenticated.Group("/subscription-orders")
 		{

@@ -72,6 +72,12 @@ func RegisterAuthRoutes(
 		settings.GET("/gallery", h.Setting.GetHomeGallery)
 	}
 
+	// 抽奖分享页（无需认证）
+	lottery := v1.Group("/lottery")
+	{
+		lottery.GET("/share/:code", h.Lottery.GetByShareCode)
+	}
+
 	// 充值配置（无需认证）
 	recharge := v1.Group("/recharge")
 	{

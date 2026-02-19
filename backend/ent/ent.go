@@ -21,6 +21,9 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/balancelot"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/lotteryactivity"
+	"github.com/Wei-Shaw/sub2api/ent/lotterycoupon"
+	"github.com/Wei-Shaw/sub2api/ent/lotteryparticipant"
 	"github.com/Wei-Shaw/sub2api/ent/paymentcallback"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
@@ -105,6 +108,9 @@ func checkColumn(t, c string) error {
 			balancelot.Table:              balancelot.ValidColumn,
 			errorpassthroughrule.Table:    errorpassthroughrule.ValidColumn,
 			group.Table:                   group.ValidColumn,
+			lotteryactivity.Table:         lotteryactivity.ValidColumn,
+			lotterycoupon.Table:           lotterycoupon.ValidColumn,
+			lotteryparticipant.Table:      lotteryparticipant.ValidColumn,
 			paymentcallback.Table:         paymentcallback.ValidColumn,
 			promocode.Table:               promocode.ValidColumn,
 			promocodeusage.Table:          promocodeusage.ValidColumn,

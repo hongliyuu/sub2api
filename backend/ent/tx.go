@@ -32,6 +32,12 @@ type Tx struct {
 	ErrorPassthroughRule *ErrorPassthroughRuleClient
 	// Group is the client for interacting with the Group builders.
 	Group *GroupClient
+	// LotteryActivity is the client for interacting with the LotteryActivity builders.
+	LotteryActivity *LotteryActivityClient
+	// LotteryCoupon is the client for interacting with the LotteryCoupon builders.
+	LotteryCoupon *LotteryCouponClient
+	// LotteryParticipant is the client for interacting with the LotteryParticipant builders.
+	LotteryParticipant *LotteryParticipantClient
 	// PaymentCallback is the client for interacting with the PaymentCallback builders.
 	PaymentCallback *PaymentCallbackClient
 	// PromoCode is the client for interacting with the PromoCode builders.
@@ -202,6 +208,9 @@ func (tx *Tx) init() {
 	tx.BalanceLot = NewBalanceLotClient(tx.config)
 	tx.ErrorPassthroughRule = NewErrorPassthroughRuleClient(tx.config)
 	tx.Group = NewGroupClient(tx.config)
+	tx.LotteryActivity = NewLotteryActivityClient(tx.config)
+	tx.LotteryCoupon = NewLotteryCouponClient(tx.config)
+	tx.LotteryParticipant = NewLotteryParticipantClient(tx.config)
 	tx.PaymentCallback = NewPaymentCallbackClient(tx.config)
 	tx.PromoCode = NewPromoCodeClient(tx.config)
 	tx.PromoCodeUsage = NewPromoCodeUsageClient(tx.config)

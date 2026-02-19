@@ -434,6 +434,56 @@ const routes: RouteRecordRaw[] = [
     }
   },
 
+  // ==================== Lottery Routes ====================
+  {
+    path: '/admin/lottery',
+    name: 'AdminLottery',
+    component: () => import('@/views/admin/LotteryView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Lottery Management',
+      titleKey: 'admin.lottery.title',
+      descriptionKey: 'admin.lottery.description'
+    }
+  },
+  {
+    path: '/lottery',
+    name: 'LotteryList',
+    component: () => import('@/views/user/LotteryListView.vue'),
+    meta: {
+      requiresAuth: true,
+      title: 'Lottery Activities'
+    }
+  },
+  {
+    path: '/lottery/coupons',
+    name: 'LotteryCoupons',
+    component: () => import('@/views/user/LotteryCouponsView.vue'),
+    meta: {
+      requiresAuth: true,
+      title: 'My Coupons'
+    }
+  },
+  {
+    path: '/lottery/:id',
+    name: 'LotteryDetail',
+    component: () => import('@/views/user/LotteryDetailView.vue'),
+    meta: {
+      requiresAuth: true,
+      title: 'Lottery Detail'
+    }
+  },
+  {
+    path: '/lottery/share/:code',
+    name: 'LotteryShare',
+    component: () => import('@/views/LotteryShareView.vue'),
+    meta: {
+      requiresAuth: false,
+      title: 'Lottery'
+    }
+  },
+
   // ==================== 404 Not Found ====================
   {
     path: '/:pathMatch(.*)*',

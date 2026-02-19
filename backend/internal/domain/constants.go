@@ -66,6 +66,43 @@ const (
 	SubscriptionStatusUpgraded  = "upgraded"
 )
 
+// Lottery activity status constants
+const (
+	LotteryStatusPending   = "pending"
+	LotteryStatusActive    = "active"
+	LotteryStatusDrawing   = "drawing"
+	LotteryStatusCompleted = "completed"
+	LotteryStatusCancelled = "cancelled"
+	LotteryStatusExpired   = "expired" // 正常开奖完成后过期（区别于 cancelled 人为取消）
+)
+
+// Lottery user category constants
+const (
+	LotteryUserCategoryNewUser    = "new_user"
+	LotteryUserCategoryRegular    = "regular"
+	LotteryUserCategoryPaid       = "paid"
+	LotteryUserCategorySubscriber = "subscriber"
+)
+
+// Lottery coupon type constants
+const (
+	LotteryCouponTypeWinnerDiscount  = "winner_discount"
+	LotteryCouponTypeLoserReduction  = "loser_reduction"
+)
+
+// Lottery coupon scope constants
+const (
+	LotteryCouponScopeRecharge            = "recharge"
+	LotteryCouponScopeMonthlySubscription = "monthly_subscription"
+)
+
+// Lottery coupon status constants
+const (
+	LotteryCouponStatusActive  = "active"
+	LotteryCouponStatusUsed    = "used"
+	LotteryCouponStatusExpired = "expired"
+)
+
 // DefaultAntigravityModelMapping 是 Antigravity 平台的默认模型映射
 // 当账号未配置 model_mapping 时使用此默认值
 // 与前端 useModelWhitelist.ts 中的 antigravityDefaultMappings 保持一致

@@ -524,6 +524,140 @@ var (
 			},
 		},
 	}
+	// LotteryActivitiesColumns holds the columns for the "lottery_activities" table.
+	LotteryActivitiesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "title", Type: field.TypeString, Size: 200},
+		{Name: "description", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "share_code", Type: field.TypeString, Unique: true, Size: 32},
+		{Name: "status", Type: field.TypeString, Size: 20, Default: "pending"},
+		{Name: "draw_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "activity_start_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "activity_end_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "min_participants", Type: field.TypeInt, Default: 10},
+		{Name: "base_win_rate", Type: field.TypeFloat64, Default: 0.1, SchemaType: map[string]string{"postgres": "decimal(5,4)"}},
+		{Name: "weight_config", Type: field.TypeString, Default: "{\"new_user\":3.0,\"regular\":1.0,\"paid\":0.3,\"subscriber\":0.1}", SchemaType: map[string]string{"postgres": "jsonb"}},
+		{Name: "winner_discount_percent", Type: field.TypeInt, Default: 95},
+		{Name: "loser_coupon_amount", Type: field.TypeFloat64, Default: 30, SchemaType: map[string]string{"postgres": "decimal(20,2)"}},
+		{Name: "temp_group_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "participant_count", Type: field.TypeInt, Default: 0},
+		{Name: "winner_count", Type: field.TypeInt, Default: 0},
+		{Name: "created_by", Type: field.TypeInt64},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+	}
+	// LotteryActivitiesTable holds the schema information for the "lottery_activities" table.
+	LotteryActivitiesTable = &schema.Table{
+		Name:       "lottery_activities",
+		Columns:    LotteryActivitiesColumns,
+		PrimaryKey: []*schema.Column{LotteryActivitiesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "lotteryactivity_status",
+				Unique:  false,
+				Columns: []*schema.Column{LotteryActivitiesColumns[4]},
+			},
+			{
+				Name:    "lotteryactivity_draw_at",
+				Unique:  false,
+				Columns: []*schema.Column{LotteryActivitiesColumns[5]},
+			},
+			{
+				Name:    "lotteryactivity_activity_end_at",
+				Unique:  false,
+				Columns: []*schema.Column{LotteryActivitiesColumns[7]},
+			},
+		},
+	}
+	// LotteryCouponsColumns holds the columns for the "lottery_coupons" table.
+	LotteryCouponsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "user_id", Type: field.TypeInt64},
+		{Name: "coupon_type", Type: field.TypeString, Size: 20},
+		{Name: "discount_percent", Type: field.TypeInt, Nullable: true},
+		{Name: "reduction_amount", Type: field.TypeFloat64, Nullable: true, SchemaType: map[string]string{"postgres": "decimal(20,2)"}},
+		{Name: "applicable_scope", Type: field.TypeString, Size: 50},
+		{Name: "status", Type: field.TypeString, Size: 20, Default: "active"},
+		{Name: "used_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "used_order_id", Type: field.TypeString, Nullable: true, Size: 100},
+		{Name: "expires_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "reminded", Type: field.TypeBool, Default: false},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "activity_id", Type: field.TypeInt64},
+	}
+	// LotteryCouponsTable holds the schema information for the "lottery_coupons" table.
+	LotteryCouponsTable = &schema.Table{
+		Name:       "lottery_coupons",
+		Columns:    LotteryCouponsColumns,
+		PrimaryKey: []*schema.Column{LotteryCouponsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "lottery_coupons_lottery_activities_coupons",
+				Columns:    []*schema.Column{LotteryCouponsColumns[12]},
+				RefColumns: []*schema.Column{LotteryActivitiesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "lotterycoupon_user_id_status",
+				Unique:  false,
+				Columns: []*schema.Column{LotteryCouponsColumns[1], LotteryCouponsColumns[6]},
+			},
+			{
+				Name:    "lotterycoupon_activity_id",
+				Unique:  false,
+				Columns: []*schema.Column{LotteryCouponsColumns[12]},
+			},
+			{
+				Name:    "lotterycoupon_expires_at",
+				Unique:  false,
+				Columns: []*schema.Column{LotteryCouponsColumns[9]},
+			},
+		},
+	}
+	// LotteryParticipantsColumns holds the columns for the "lottery_participants" table.
+	LotteryParticipantsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "user_id", Type: field.TypeInt64},
+		{Name: "user_category", Type: field.TypeString, Size: 20},
+		{Name: "weight_multiplier", Type: field.TypeFloat64, Default: 1, SchemaType: map[string]string{"postgres": "decimal(5,2)"}},
+		{Name: "is_winner", Type: field.TypeBool, Nullable: true},
+		{Name: "coupon_id", Type: field.TypeInt64, Nullable: true},
+		{Name: "participated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "activity_id", Type: field.TypeInt64},
+	}
+	// LotteryParticipantsTable holds the schema information for the "lottery_participants" table.
+	LotteryParticipantsTable = &schema.Table{
+		Name:       "lottery_participants",
+		Columns:    LotteryParticipantsColumns,
+		PrimaryKey: []*schema.Column{LotteryParticipantsColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "lottery_participants_lottery_activities_participants",
+				Columns:    []*schema.Column{LotteryParticipantsColumns[7]},
+				RefColumns: []*schema.Column{LotteryActivitiesColumns[0]},
+				OnDelete:   schema.NoAction,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "lotteryparticipant_activity_id_user_id",
+				Unique:  true,
+				Columns: []*schema.Column{LotteryParticipantsColumns[7], LotteryParticipantsColumns[1]},
+			},
+			{
+				Name:    "lotteryparticipant_activity_id",
+				Unique:  false,
+				Columns: []*schema.Column{LotteryParticipantsColumns[7]},
+			},
+			{
+				Name:    "lotteryparticipant_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{LotteryParticipantsColumns[1]},
+			},
+		},
+	}
 	// PaymentCallbacksColumns holds the columns for the "payment_callbacks" table.
 	PaymentCallbacksColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -1301,6 +1435,9 @@ var (
 		BalanceLotsTable,
 		ErrorPassthroughRulesTable,
 		GroupsTable,
+		LotteryActivitiesTable,
+		LotteryCouponsTable,
+		LotteryParticipantsTable,
 		PaymentCallbacksTable,
 		PromoCodesTable,
 		PromoCodeUsagesTable,
@@ -1355,6 +1492,17 @@ func init() {
 	}
 	GroupsTable.Annotation = &entsql.Annotation{
 		Table: "groups",
+	}
+	LotteryActivitiesTable.Annotation = &entsql.Annotation{
+		Table: "lottery_activities",
+	}
+	LotteryCouponsTable.ForeignKeys[0].RefTable = LotteryActivitiesTable
+	LotteryCouponsTable.Annotation = &entsql.Annotation{
+		Table: "lottery_coupons",
+	}
+	LotteryParticipantsTable.ForeignKeys[0].RefTable = LotteryActivitiesTable
+	LotteryParticipantsTable.Annotation = &entsql.Annotation{
+		Table: "lottery_participants",
 	}
 	PaymentCallbacksTable.Annotation = &entsql.Annotation{
 		Table: "payment_callbacks",

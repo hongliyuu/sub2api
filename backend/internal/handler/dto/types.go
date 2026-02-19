@@ -419,3 +419,80 @@ type PromoCodeUsage struct {
 
 	User *User `json:"user,omitempty"`
 }
+
+// ==========================================
+// Lottery (抽奖拉新)
+// ==========================================
+
+// LotteryActivity 抽奖活动 DTO
+type LotteryActivity struct {
+	ID                    int64      `json:"id"`
+	Title                 string     `json:"title"`
+	Description           string     `json:"description"`
+	ShareCode             string     `json:"share_code"`
+	Status                string     `json:"status"`
+	DrawAt                time.Time  `json:"draw_at"`
+	ActivityStartAt       time.Time  `json:"activity_start_at"`
+	ActivityEndAt         time.Time  `json:"activity_end_at"`
+	MinParticipants       int        `json:"min_participants"`
+	BaseWinRate           float64    `json:"base_win_rate"`
+	WinnerDiscountPercent int        `json:"winner_discount_percent"`
+	LoserCouponAmount     float64    `json:"loser_coupon_amount"`
+	TempGroupID           *int64     `json:"temp_group_id"`
+	ParticipantCount      int        `json:"participant_count"`
+	WinnerCount           int        `json:"winner_count"`
+	CreatedBy             int64      `json:"created_by"`
+	CreatedAt             time.Time  `json:"created_at"`
+	UpdatedAt             time.Time  `json:"updated_at"`
+}
+
+// LotteryParticipant 参与记录 DTO
+type LotteryParticipant struct {
+	ID               int64      `json:"id"`
+	ActivityID       int64      `json:"activity_id"`
+	UserID           int64      `json:"user_id"`
+	UserCategory     string     `json:"user_category"`
+	WeightMultiplier float64    `json:"weight_multiplier"`
+	IsWinner         *bool      `json:"is_winner"`
+	CouponID         *int64     `json:"coupon_id"`
+	ParticipatedAt   time.Time  `json:"participated_at"`
+
+	User *User `json:"user,omitempty"`
+}
+
+// LotteryCoupon 优惠券 DTO
+type LotteryCoupon struct {
+	ID              int64      `json:"id"`
+	ActivityID      int64      `json:"activity_id"`
+	UserID          int64      `json:"user_id"`
+	CouponType      string     `json:"coupon_type"`
+	DiscountPercent *int       `json:"discount_percent"`
+	ReductionAmount *float64   `json:"reduction_amount"`
+	ApplicableScope string     `json:"applicable_scope"`
+	Status          string     `json:"status"`
+	UsedAt          *time.Time `json:"used_at"`
+	UsedOrderID     *string    `json:"used_order_id"`
+	ExpiresAt       time.Time  `json:"expires_at"`
+	Reminded        bool       `json:"reminded"`
+	CreatedAt       time.Time  `json:"created_at"`
+}
+
+// LotteryDrawResult 开奖结果 DTO
+type LotteryDrawResult struct {
+	ActivityID          int64 `json:"activity_id"`
+	TotalParticipants   int   `json:"total_participants"`
+	WinnerCount         int   `json:"winner_count"`
+	BelowMinParticipant bool  `json:"below_min_participant"`
+}
+
+// CreateLotteryActivityRequest 创建活动请求
+type CreateLotteryActivityRequest struct {
+	Title                 string  `json:"title" binding:"required"`
+	Description           string  `json:"description"`
+	DrawAt                *int64  `json:"draw_at"`                   // 秒级时间戳，nil 则默认次日 10:00
+	MinParticipants       int     `json:"min_participants"`
+	BaseWinRate           float64 `json:"base_win_rate"`
+	WinnerDiscountPercent int     `json:"winner_discount_percent"`
+	LoserCouponAmount     float64 `json:"loser_coupon_amount"`
+	AccountIDs            []int64 `json:"account_ids"`               // 绑定的过期账号 ID
+}

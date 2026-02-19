@@ -33,6 +33,15 @@ type ErrorPassthroughRule func(*sql.Selector)
 // Group is the predicate function for group builders.
 type Group func(*sql.Selector)
 
+// LotteryActivity is the predicate function for lotteryactivity builders.
+type LotteryActivity func(*sql.Selector)
+
+// LotteryCoupon is the predicate function for lotterycoupon builders.
+type LotteryCoupon func(*sql.Selector)
+
+// LotteryParticipant is the predicate function for lotteryparticipant builders.
+type LotteryParticipant func(*sql.Selector)
+
 // PaymentCallback is the predicate function for paymentcallback builders.
 type PaymentCallback func(*sql.Selector)
 

@@ -85,6 +85,7 @@ func provideCleanup(
 	accountExpiryReminder *service.AccountExpiryReminderScheduler,
 	balanceLotExpiry *service.BalanceLotExpiryScheduler,
 	balanceExpiryReminder *service.BalanceExpiryReminderScheduler,
+	lotteryScheduler *service.LotteryScheduler,
 	settingService *service.SettingService,
 ) func() {
 	return func() {
@@ -129,6 +130,12 @@ func provideCleanup(
 			{"BalanceExpiryReminderScheduler", func() error {
 				if balanceExpiryReminder != nil {
 					balanceExpiryReminder.Stop()
+				}
+				return nil
+			}},
+			{"LotteryScheduler", func() error {
+				if lotteryScheduler != nil {
+					lotteryScheduler.Stop()
 				}
 				return nil
 			}},

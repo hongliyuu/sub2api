@@ -441,6 +441,9 @@ export default {
     redeemCodes: 'Redeem Codes',
     ops: 'Ops',
     promoCodes: 'Promo Codes',
+    lottery: 'Lottery',
+    lotteryManagement: 'Lottery Management',
+    lotteryCoupons: 'My Coupons',
     settings: 'Settings',
     myAccount: 'My Account',
     lightMode: 'Light Mode',
@@ -3981,6 +3984,88 @@ export default {
       failedToSave: 'Failed to save rule',
       failedToDelete: 'Failed to delete rule',
       failedToToggle: 'Failed to toggle status'
+    },
+
+    lottery: {
+      title: 'Lottery Management',
+      createActivity: 'Create Activity',
+      activityList: 'Activities',
+      activityDetail: 'Activity Detail',
+      noActivities: 'No activities',
+      id: 'ID',
+      activityTitle: 'Title',
+      status: {
+        label: 'Status',
+        pending: 'Pending',
+        active: 'Active',
+        drawing: 'Drawing',
+        completed: 'Completed',
+        cancelled: 'Cancelled'
+      },
+      drawAt: 'Draw Time',
+      createdAt: 'Created',
+      participants: 'Participants',
+      winners: 'Winners',
+      actions: 'Actions',
+      viewDetail: 'Details',
+      manualDraw: 'Manual Draw',
+      cancelActivity: 'Cancel',
+      copyShareLink: 'Copy Share Link',
+      shareLinkCopied: 'Share link copied',
+      create: {
+        title: 'Create Lottery Activity',
+        activityTitle: 'Title',
+        activityTitlePlaceholder: 'Enter activity title',
+        description: 'Description',
+        descriptionPlaceholder: 'Enter description (optional)',
+        drawAt: 'Draw Time',
+        drawAtHint: 'Defaults to tomorrow 10:00 AM if empty',
+        minParticipants: 'Min Participants',
+        baseWinRate: 'Base Win Rate',
+        winnerDiscount: 'Winner Discount (%)',
+        winnerDiscountHint: '95 means 5% off (pay 95%)',
+        loserCouponAmount: 'Loser Coupon Amount (¥)',
+        submit: 'Create',
+        submitting: 'Creating...',
+        success: 'Activity created successfully',
+        failed: 'Failed to create activity'
+      },
+      detail: {
+        basicInfo: 'Basic Info',
+        shareCode: 'Share Code',
+        activityPeriod: 'Activity Period',
+        drawTime: 'Draw Time',
+        winRate: 'Win Rate',
+        winnerDiscount: 'Winner Discount',
+        loserCoupon: 'Loser Coupon',
+        participantList: 'Participants',
+        noParticipants: 'No participants yet',
+        userId: 'User ID',
+        userCategory: 'Category',
+        weight: 'Weight',
+        isWinner: 'Winner',
+        participatedAt: 'Joined At',
+        yes: 'Yes',
+        no: 'No',
+        pending: 'Pending',
+        userCategories: {
+          new_user: 'New User',
+          regular: 'Regular',
+          paid: 'Paid User',
+          subscriber: 'Subscriber'
+        }
+      },
+      draw: {
+        confirm: 'Confirm manual draw? This action cannot be undone.',
+        success: 'Draw completed! {count} winners',
+        failed: 'Draw failed',
+        belowMinParticipant: 'Below minimum participant requirement'
+      },
+      cancel: {
+        confirm: 'Confirm cancel? This action cannot be undone.',
+        success: 'Activity cancelled',
+        failed: 'Failed to cancel activity'
+      }
     }
   },
 
@@ -4497,6 +4582,100 @@ export default {
   codeBlock: {
     copy: 'Copy',
     copied: 'Copied'
+  },
+
+  // Lottery (User-facing)
+  lottery: {
+    title: 'Lottery',
+    activeActivities: 'Active Activities',
+    noActiveActivities: 'No active activities',
+    myParticipations: 'My Participations',
+    noParticipations: 'No participations yet',
+    endTime: 'End Time',
+    drawTime: 'Draw Time',
+    participantCount: 'Participants',
+    winRate: 'Win Rate',
+    participate: 'Join Now',
+    participating: 'Joining...',
+    participated: 'Joined',
+    participateSuccess: 'Joined successfully! Awaiting draw results',
+    participateFailed: 'Failed to join',
+    needEmailBind: 'Please bind your email before joining',
+    activityEnded: 'Activity ended',
+    activityNotStarted: 'Activity not started',
+    detail: {
+      title: 'Activity Details',
+      description: 'Description',
+      rules: 'Rules',
+      rule1: 'Each user can only participate once per activity',
+      rule2: 'Email binding required to participate',
+      rule3: 'New users have higher chance of winning',
+      rule4: 'Winners get recharge discount, others get subscription reduction',
+      rule5: 'Coupons valid until activity ends',
+      status: 'My Status',
+      notParticipated: 'Not joined',
+      waitingDraw: 'Waiting for draw',
+      won: '🎉 Congratulations! You won!',
+      lost: 'Not won',
+      myCategory: 'User Category',
+      myWeight: 'Win Weight',
+      results: 'Draw Results',
+      totalParticipants: 'Total Participants',
+      totalWinners: 'Total Winners'
+    },
+    coupons: {
+      title: 'My Coupons',
+      noCoupons: 'No coupons',
+      status: {
+        all: 'All',
+        active: 'Active',
+        used: 'Used',
+        expired: 'Expired'
+      },
+      type: {
+        winner_discount: 'Recharge Discount',
+        loser_reduction: 'Subscription Reduction'
+      },
+      scope: {
+        recharge: 'Recharge',
+        monthly_subscription: 'Monthly Subscription'
+      },
+      discount: '{percent}% Discount',
+      reduction: '¥{amount} Off',
+      validUntil: 'Valid until',
+      usedAt: 'Used at',
+      fromActivity: 'From activity'
+    },
+    share: {
+      title: 'Join the Lottery',
+      loading: 'Loading...',
+      notFound: 'Activity Not Found',
+      notFoundDesc: 'This activity does not exist or has been removed',
+      backHome: 'Back to Home',
+      joinNow: 'Join Now',
+      loginToJoin: 'Log in to Join',
+      registerToJoin: 'Register to Join',
+      activityInfo: 'Activity Info',
+      drawTime: 'Draw Time',
+      participants: 'Participants',
+      winRate: 'Win Rate',
+      prizes: 'Prizes',
+      winnerPrize: 'Winner Prize',
+      loserPrize: 'Participation Prize',
+      participationPrize: 'Participation Prize',
+      discountCoupon: 'Recharge {percent}% off coupon',
+      rechargeDiscount: 'Recharge {percent}% discount',
+      reductionCoupon: 'Subscription ¥{amount} off coupon',
+      subscriptionReduction: 'Monthly subscription ¥{amount} off',
+      participate: 'Join Now',
+      expired: 'Activity ended',
+      activityEnded: 'Activity Ended',
+      hasAccount: 'Have an account? Log in',
+      newUser: 'New user? Register',
+      qrCode: 'Scan to Join',
+      copyLink: 'Copy Link',
+      linkCopied: 'Link copied'
+    }
   },
 
   // Release Notes - Version release page

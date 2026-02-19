@@ -14,6 +14,9 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/balancelot"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/lotteryactivity"
+	"github.com/Wei-Shaw/sub2api/ent/lotterycoupon"
+	"github.com/Wei-Shaw/sub2api/ent/lotteryparticipant"
 	"github.com/Wei-Shaw/sub2api/ent/paymentcallback"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
@@ -536,6 +539,134 @@ func init() {
 	groupDescSortOrder := groupFields[25].Descriptor()
 	// group.DefaultSortOrder holds the default value on creation for the sort_order field.
 	group.DefaultSortOrder = groupDescSortOrder.Default.(int)
+	lotteryactivityFields := schema.LotteryActivity{}.Fields()
+	_ = lotteryactivityFields
+	// lotteryactivityDescTitle is the schema descriptor for title field.
+	lotteryactivityDescTitle := lotteryactivityFields[0].Descriptor()
+	// lotteryactivity.TitleValidator is a validator for the "title" field. It is called by the builders before save.
+	lotteryactivity.TitleValidator = func() func(string) error {
+		validators := lotteryactivityDescTitle.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(title string) error {
+			for _, fn := range fns {
+				if err := fn(title); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// lotteryactivityDescShareCode is the schema descriptor for share_code field.
+	lotteryactivityDescShareCode := lotteryactivityFields[2].Descriptor()
+	// lotteryactivity.ShareCodeValidator is a validator for the "share_code" field. It is called by the builders before save.
+	lotteryactivity.ShareCodeValidator = func() func(string) error {
+		validators := lotteryactivityDescShareCode.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(share_code string) error {
+			for _, fn := range fns {
+				if err := fn(share_code); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// lotteryactivityDescStatus is the schema descriptor for status field.
+	lotteryactivityDescStatus := lotteryactivityFields[3].Descriptor()
+	// lotteryactivity.DefaultStatus holds the default value on creation for the status field.
+	lotteryactivity.DefaultStatus = lotteryactivityDescStatus.Default.(string)
+	// lotteryactivity.StatusValidator is a validator for the "status" field. It is called by the builders before save.
+	lotteryactivity.StatusValidator = lotteryactivityDescStatus.Validators[0].(func(string) error)
+	// lotteryactivityDescActivityStartAt is the schema descriptor for activity_start_at field.
+	lotteryactivityDescActivityStartAt := lotteryactivityFields[5].Descriptor()
+	// lotteryactivity.DefaultActivityStartAt holds the default value on creation for the activity_start_at field.
+	lotteryactivity.DefaultActivityStartAt = lotteryactivityDescActivityStartAt.Default.(func() time.Time)
+	// lotteryactivityDescMinParticipants is the schema descriptor for min_participants field.
+	lotteryactivityDescMinParticipants := lotteryactivityFields[7].Descriptor()
+	// lotteryactivity.DefaultMinParticipants holds the default value on creation for the min_participants field.
+	lotteryactivity.DefaultMinParticipants = lotteryactivityDescMinParticipants.Default.(int)
+	// lotteryactivityDescBaseWinRate is the schema descriptor for base_win_rate field.
+	lotteryactivityDescBaseWinRate := lotteryactivityFields[8].Descriptor()
+	// lotteryactivity.DefaultBaseWinRate holds the default value on creation for the base_win_rate field.
+	lotteryactivity.DefaultBaseWinRate = lotteryactivityDescBaseWinRate.Default.(float64)
+	// lotteryactivityDescWeightConfig is the schema descriptor for weight_config field.
+	lotteryactivityDescWeightConfig := lotteryactivityFields[9].Descriptor()
+	// lotteryactivity.DefaultWeightConfig holds the default value on creation for the weight_config field.
+	lotteryactivity.DefaultWeightConfig = lotteryactivityDescWeightConfig.Default.(string)
+	// lotteryactivityDescWinnerDiscountPercent is the schema descriptor for winner_discount_percent field.
+	lotteryactivityDescWinnerDiscountPercent := lotteryactivityFields[10].Descriptor()
+	// lotteryactivity.DefaultWinnerDiscountPercent holds the default value on creation for the winner_discount_percent field.
+	lotteryactivity.DefaultWinnerDiscountPercent = lotteryactivityDescWinnerDiscountPercent.Default.(int)
+	// lotteryactivityDescLoserCouponAmount is the schema descriptor for loser_coupon_amount field.
+	lotteryactivityDescLoserCouponAmount := lotteryactivityFields[11].Descriptor()
+	// lotteryactivity.DefaultLoserCouponAmount holds the default value on creation for the loser_coupon_amount field.
+	lotteryactivity.DefaultLoserCouponAmount = lotteryactivityDescLoserCouponAmount.Default.(float64)
+	// lotteryactivityDescParticipantCount is the schema descriptor for participant_count field.
+	lotteryactivityDescParticipantCount := lotteryactivityFields[13].Descriptor()
+	// lotteryactivity.DefaultParticipantCount holds the default value on creation for the participant_count field.
+	lotteryactivity.DefaultParticipantCount = lotteryactivityDescParticipantCount.Default.(int)
+	// lotteryactivityDescWinnerCount is the schema descriptor for winner_count field.
+	lotteryactivityDescWinnerCount := lotteryactivityFields[14].Descriptor()
+	// lotteryactivity.DefaultWinnerCount holds the default value on creation for the winner_count field.
+	lotteryactivity.DefaultWinnerCount = lotteryactivityDescWinnerCount.Default.(int)
+	// lotteryactivityDescCreatedAt is the schema descriptor for created_at field.
+	lotteryactivityDescCreatedAt := lotteryactivityFields[16].Descriptor()
+	// lotteryactivity.DefaultCreatedAt holds the default value on creation for the created_at field.
+	lotteryactivity.DefaultCreatedAt = lotteryactivityDescCreatedAt.Default.(func() time.Time)
+	// lotteryactivityDescUpdatedAt is the schema descriptor for updated_at field.
+	lotteryactivityDescUpdatedAt := lotteryactivityFields[17].Descriptor()
+	// lotteryactivity.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	lotteryactivity.DefaultUpdatedAt = lotteryactivityDescUpdatedAt.Default.(func() time.Time)
+	// lotteryactivity.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	lotteryactivity.UpdateDefaultUpdatedAt = lotteryactivityDescUpdatedAt.UpdateDefault.(func() time.Time)
+	lotterycouponFields := schema.LotteryCoupon{}.Fields()
+	_ = lotterycouponFields
+	// lotterycouponDescCouponType is the schema descriptor for coupon_type field.
+	lotterycouponDescCouponType := lotterycouponFields[2].Descriptor()
+	// lotterycoupon.CouponTypeValidator is a validator for the "coupon_type" field. It is called by the builders before save.
+	lotterycoupon.CouponTypeValidator = lotterycouponDescCouponType.Validators[0].(func(string) error)
+	// lotterycouponDescApplicableScope is the schema descriptor for applicable_scope field.
+	lotterycouponDescApplicableScope := lotterycouponFields[5].Descriptor()
+	// lotterycoupon.ApplicableScopeValidator is a validator for the "applicable_scope" field. It is called by the builders before save.
+	lotterycoupon.ApplicableScopeValidator = lotterycouponDescApplicableScope.Validators[0].(func(string) error)
+	// lotterycouponDescStatus is the schema descriptor for status field.
+	lotterycouponDescStatus := lotterycouponFields[6].Descriptor()
+	// lotterycoupon.DefaultStatus holds the default value on creation for the status field.
+	lotterycoupon.DefaultStatus = lotterycouponDescStatus.Default.(string)
+	// lotterycoupon.StatusValidator is a validator for the "status" field. It is called by the builders before save.
+	lotterycoupon.StatusValidator = lotterycouponDescStatus.Validators[0].(func(string) error)
+	// lotterycouponDescUsedOrderID is the schema descriptor for used_order_id field.
+	lotterycouponDescUsedOrderID := lotterycouponFields[8].Descriptor()
+	// lotterycoupon.UsedOrderIDValidator is a validator for the "used_order_id" field. It is called by the builders before save.
+	lotterycoupon.UsedOrderIDValidator = lotterycouponDescUsedOrderID.Validators[0].(func(string) error)
+	// lotterycouponDescReminded is the schema descriptor for reminded field.
+	lotterycouponDescReminded := lotterycouponFields[10].Descriptor()
+	// lotterycoupon.DefaultReminded holds the default value on creation for the reminded field.
+	lotterycoupon.DefaultReminded = lotterycouponDescReminded.Default.(bool)
+	// lotterycouponDescCreatedAt is the schema descriptor for created_at field.
+	lotterycouponDescCreatedAt := lotterycouponFields[11].Descriptor()
+	// lotterycoupon.DefaultCreatedAt holds the default value on creation for the created_at field.
+	lotterycoupon.DefaultCreatedAt = lotterycouponDescCreatedAt.Default.(func() time.Time)
+	lotteryparticipantFields := schema.LotteryParticipant{}.Fields()
+	_ = lotteryparticipantFields
+	// lotteryparticipantDescUserCategory is the schema descriptor for user_category field.
+	lotteryparticipantDescUserCategory := lotteryparticipantFields[2].Descriptor()
+	// lotteryparticipant.UserCategoryValidator is a validator for the "user_category" field. It is called by the builders before save.
+	lotteryparticipant.UserCategoryValidator = lotteryparticipantDescUserCategory.Validators[0].(func(string) error)
+	// lotteryparticipantDescWeightMultiplier is the schema descriptor for weight_multiplier field.
+	lotteryparticipantDescWeightMultiplier := lotteryparticipantFields[3].Descriptor()
+	// lotteryparticipant.DefaultWeightMultiplier holds the default value on creation for the weight_multiplier field.
+	lotteryparticipant.DefaultWeightMultiplier = lotteryparticipantDescWeightMultiplier.Default.(float64)
+	// lotteryparticipantDescParticipatedAt is the schema descriptor for participated_at field.
+	lotteryparticipantDescParticipatedAt := lotteryparticipantFields[6].Descriptor()
+	// lotteryparticipant.DefaultParticipatedAt holds the default value on creation for the participated_at field.
+	lotteryparticipant.DefaultParticipatedAt = lotteryparticipantDescParticipatedAt.Default.(func() time.Time)
 	paymentcallbackMixin := schema.PaymentCallback{}.Mixin()
 	paymentcallbackMixinFields0 := paymentcallbackMixin[0].Fields()
 	_ = paymentcallbackMixinFields0

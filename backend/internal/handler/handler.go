@@ -29,6 +29,7 @@ type AdminHandlers struct {
 	UserAttribute    *admin.UserAttributeHandler
 	Recharge         *admin.RechargeHandler
 	ErrorPassthrough *admin.ErrorPassthroughHandler
+	Lottery          *admin.LotteryHandler
 }
 
 // Handlers contains all HTTP handlers
@@ -50,6 +51,7 @@ type Handlers struct {
 	Recharge         *recharge.RechargeHandler
 	WeChatPayWebhook *webhook.WeChatPayWebhookHandler
 	SubscriptionPlan *subscription.SubscriptionPlanHandler
+	Lottery          *LotteryHandler
 }
 
 // BuildInfo contains build-time information

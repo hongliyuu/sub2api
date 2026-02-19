@@ -12,10 +12,11 @@ import (
 // 定时扫描过期的 pending 订单并将其标记为 expired
 // 同时异步调用微信关闭订单 API
 type OrderExpireScheduler struct {
-	repo             RechargeOrderRepository
-	wechatPayService *WeChatPayService
-	stopCh           chan struct{}
-	wg               sync.WaitGroup
+	repo              RechargeOrderRepository
+	wechatPayService  *WeChatPayService
+	lotteryCouponRepo LotteryCouponRepository // 用于释放过期订单占用的优惠券
+	stopCh            chan struct{}
+	wg                sync.WaitGroup
 
 	// 配置
 	interval int // 执行间隔（秒）
@@ -23,13 +24,14 @@ type OrderExpireScheduler struct {
 }
 
 // NewOrderExpireScheduler 创建订单过期调度器
-func NewOrderExpireScheduler(repo RechargeOrderRepository, wechatPayService *WeChatPayService) *OrderExpireScheduler {
+func NewOrderExpireScheduler(repo RechargeOrderRepository, wechatPayService *WeChatPayService, lotteryCouponRepo LotteryCouponRepository) *OrderExpireScheduler {
 	return &OrderExpireScheduler{
-		repo:             repo,
-		wechatPayService: wechatPayService,
-		stopCh:           make(chan struct{}),
-		interval:         60,  // 默认每分钟执行一次
-		limit:            100, // 默认每次最多处理 100 条
+		repo:              repo,
+		wechatPayService:  wechatPayService,
+		lotteryCouponRepo: lotteryCouponRepo,
+		stopCh:            make(chan struct{}),
+		interval:          60,  // 默认每分钟执行一次
+		limit:             100, // 默认每次最多处理 100 条
 	}
 }
 
@@ -80,8 +82,15 @@ func (s *OrderExpireScheduler) processExpiredOrders() {
 	if len(orderNos) > 0 {
 		log.Printf("[OrderExpireScheduler] Marked %d orders as expired", len(orderNos))
 
-		// 异步调用微信关闭订单 API
 		for _, orderNo := range orderNos {
+			// 释放过期订单占用的抽奖优惠券（如有）
+			if s.lotteryCouponRepo != nil {
+				if releaseErr := s.lotteryCouponRepo.ReleaseByOrderID(ctx, orderNo); releaseErr != nil {
+					log.Printf("[OrderExpireScheduler] Failed to release lottery coupon for order %s: %v", orderNo, releaseErr)
+				}
+			}
+
+			// 异步调用微信关闭订单 API
 			go s.closeWeChatOrder(orderNo)
 		}
 	}

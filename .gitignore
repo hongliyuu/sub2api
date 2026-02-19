@@ -147,3 +147,5 @@ docs/*
 /.codex/
 /scripts/deploy.local.conf
 /scripts/deploy-zero-downtime.sh
+/公众号/2026-02-16-Windows运行Shell脚本的4种方法实战指南.md
+/公众号/

@@ -1413,3 +1413,74 @@ export interface TotpLogin2FARequest {
   temp_token: string
   totp_code: string
 }
+
+// ==========================================
+// Lottery (抽奖拉新)
+// ==========================================
+
+export interface LotteryActivity {
+  id: number
+  title: string
+  description: string
+  share_code: string
+  status: 'pending' | 'active' | 'drawing' | 'completed' | 'cancelled' | 'expired'
+  draw_at: string
+  activity_start_at: string
+  activity_end_at: string
+  min_participants: number
+  base_win_rate: number
+  winner_discount_percent: number
+  loser_coupon_amount: number
+  temp_group_id: number | null
+  participant_count: number
+  winner_count: number
+  created_by: number
+  created_at: string
+  updated_at: string
+}
+
+export interface LotteryParticipant {
+  id: number
+  activity_id: number
+  user_id: number
+  user_category: 'new_user' | 'regular' | 'paid' | 'subscriber'
+  weight_multiplier: number
+  is_winner: boolean | null
+  coupon_id: number | null
+  participated_at: string
+  user?: User
+}
+
+export interface LotteryCoupon {
+  id: number
+  activity_id: number
+  user_id: number
+  coupon_type: 'winner_discount' | 'loser_reduction'
+  discount_percent: number | null
+  reduction_amount: number | null
+  applicable_scope: 'recharge' | 'monthly_subscription'
+  status: 'active' | 'used' | 'expired'
+  used_at: string | null
+  used_order_id: string | null
+  expires_at: string
+  reminded: boolean
+  created_at: string
+}
+
+export interface LotteryDrawResult {
+  activity_id: number
+  total_participants: number
+  winner_count: number
+  below_min_participant: boolean
+}
+
+export interface CreateLotteryActivityRequest {
+  title: string
+  description?: string
+  draw_at?: number | null  // unix timestamp seconds
+  min_participants?: number
+  base_win_rate?: number
+  winner_discount_percent?: number
+  loser_coupon_amount?: number
+  account_ids?: number[]
+}

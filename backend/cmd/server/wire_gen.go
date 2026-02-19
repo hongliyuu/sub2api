@@ -188,13 +188,20 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	userAttributeService := service.NewUserAttributeService(userAttributeDefinitionRepository, userAttributeValueRepository)
 	userAttributeHandler := admin.NewUserAttributeHandler(userAttributeService)
 	paymentCallbackService := service.NewPaymentCallbackService(client, redisClient, rechargeOrderRepository, userRepository, balanceLogRepository, emailService, settingService, balanceLotService)
-	rechargeOrderService := service.NewRechargeOrderService(configConfig, rechargeOrderRepository, weChatPayService, paymentCallbackService, client, userRepository, balanceLogRepository, redisClient)
+	lotteryCouponRepository := repository.NewLotteryCouponRepository(client)
+	rechargeOrderService := service.NewRechargeOrderService(configConfig, rechargeOrderRepository, weChatPayService, paymentCallbackService, client, userRepository, balanceLogRepository, redisClient, lotteryCouponRepository)
 	rechargeHandler := admin.NewRechargeHandler(rechargeOrderService, balanceLogRepository)
 	errorPassthroughRepository := repository.NewErrorPassthroughRepository(client)
 	errorPassthroughCache := repository.NewErrorPassthroughCache(redisClient)
 	errorPassthroughService := service.NewErrorPassthroughService(errorPassthroughRepository, errorPassthroughCache)
 	errorPassthroughHandler := admin.NewErrorPassthroughHandler(errorPassthroughService)
-	adminHandlers := handler.ProvideAdminHandlers(dashboardHandler, adminUserHandler, groupHandler, accountHandler, adminAnnouncementHandler, oAuthHandler, openAIOAuthHandler, geminiOAuthHandler, antigravityOAuthHandler, proxyHandler, adminRedeemHandler, promoHandler, settingHandler, opsHandler, systemHandler, adminSubscriptionHandler, adminUsageHandler, userAttributeHandler, rechargeHandler, errorPassthroughHandler)
+	lotteryActivityRepository := repository.NewLotteryActivityRepository(client)
+	lotteryParticipantRepository := repository.NewLotteryParticipantRepository(client)
+	groupService := service.NewGroupService(groupRepository, apiKeyAuthCacheInvalidator)
+	lotteryService := service.NewLotteryService(lotteryActivityRepository, lotteryParticipantRepository, lotteryCouponRepository, groupService, accountRepository, client)
+	lotteryDrawService := service.NewLotteryDrawService(lotteryActivityRepository, lotteryParticipantRepository, lotteryCouponRepository, userRepository, rechargeOrderRepository, userSubscriptionRepository, emailService, settingService, redisClient, client)
+	lotteryHandler := admin.NewLotteryHandler(lotteryService, lotteryDrawService)
+	adminHandlers := handler.ProvideAdminHandlers(dashboardHandler, adminUserHandler, groupHandler, accountHandler, adminAnnouncementHandler, oAuthHandler, openAIOAuthHandler, geminiOAuthHandler, antigravityOAuthHandler, proxyHandler, adminRedeemHandler, promoHandler, settingHandler, opsHandler, systemHandler, adminSubscriptionHandler, adminUsageHandler, userAttributeHandler, rechargeHandler, errorPassthroughHandler, lotteryHandler)
 	gatewayHandler := handler.NewGatewayHandler(gatewayService, geminiMessagesCompatService, antigravityGatewayService, userService, concurrencyService, billingCacheService, usageService, apiKeyService, errorPassthroughService, configConfig)
 	openAIGatewayHandler := handler.NewOpenAIGatewayHandler(openAIGatewayService, concurrencyService, billingCacheService, apiKeyService, errorPassthroughService, configConfig)
 	handlerSettingHandler := handler.ProvideSettingHandler(settingService, buildInfo)
@@ -207,10 +214,11 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	rechargeRechargeHandler := recharge.NewRechargeHandler(weChatPayService, rechargeOrderService, rechargeRateLimitService, turnstileService, settingService)
 	paymentCallbackRepository := repository.NewPaymentCallbackRepository(client)
 	subscriptionOrderRepository := repository.NewSubscriptionOrderRepository(client)
-	subscriptionOrderService := service.NewSubscriptionOrderService(configConfig, subscriptionOrderRepository, groupRepository, weChatPayService, subscriptionService, client, redisClient, emailService, settingService, userRepository)
+	subscriptionOrderService := service.NewSubscriptionOrderService(configConfig, subscriptionOrderRepository, groupRepository, weChatPayService, subscriptionService, client, redisClient, emailService, settingService, userRepository, lotteryCouponRepository)
 	weChatPayWebhookHandler := webhook.NewWeChatPayWebhookHandler(paymentCallbackRepository, weChatPayService, paymentCallbackService, rechargeOrderService, subscriptionOrderService)
 	subscriptionPlanHandler := subscription.NewSubscriptionPlanHandler(groupRepository, weChatPayService, subscriptionOrderService, rechargeRateLimitService, turnstileService, settingService)
-	handlers := handler.ProvideHandlers(authHandler, userHandler, apiKeyHandler, usageHandler, redeemHandler, subscriptionHandler, announcementHandler, adminHandlers, gatewayHandler, openAIGatewayHandler, handlerSettingHandler, totpHandler, userUsageReportHandler, balanceLotHandler, rechargeRechargeHandler, weChatPayWebhookHandler, subscriptionPlanHandler)
+	handlerLotteryHandler := handler.NewLotteryHandler(lotteryService, lotteryDrawService)
+	handlers := handler.ProvideHandlers(authHandler, userHandler, apiKeyHandler, usageHandler, redeemHandler, subscriptionHandler, announcementHandler, adminHandlers, gatewayHandler, openAIGatewayHandler, handlerSettingHandler, totpHandler, userUsageReportHandler, balanceLotHandler, rechargeRechargeHandler, weChatPayWebhookHandler, subscriptionPlanHandler, handlerLotteryHandler)
 	jwtAuthMiddleware := middleware.NewJWTAuthMiddleware(authService, userService)
 	adminAuthMiddleware := middleware.NewAdminAuthMiddleware(authService, userService, settingService)
 	apiKeyAuthMiddleware := middleware.NewAPIKeyAuthMiddleware(apiKeyService, subscriptionService, configConfig)
@@ -225,12 +233,13 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	accountExpiryService := service.ProvideAccountExpiryService(accountRepository)
 	subscriptionExpiryService := service.ProvideSubscriptionExpiryService(userSubscriptionRepository)
 	userUsageReportScheduler := service.ProvideUserUsageReportScheduler(userUsageReportService, settingService, userUsageReportRepository, redisClient)
-	orderExpireScheduler := service.ProvideOrderExpireScheduler(rechargeOrderRepository, weChatPayService)
+	orderExpireScheduler := service.ProvideOrderExpireScheduler(rechargeOrderRepository, weChatPayService, lotteryCouponRepository)
 	orderCompensationScheduler := service.ProvideOrderCompensationScheduler(configConfig, rechargeOrderRepository, weChatPayService, paymentCallbackService)
 	accountExpiryReminderScheduler := service.ProvideAccountExpiryReminderScheduler(accountRepository, emailService, settingService, redisClient)
 	balanceLotExpiryScheduler := service.ProvideBalanceLotExpiryScheduler(balanceLotService, redisClient)
 	balanceExpiryReminderScheduler := service.ProvideBalanceExpiryReminderScheduler(balanceLotRepository, userRepository, emailService, settingService, redisClient)
-	v := provideCleanup(client, redisClient, opsMetricsCollector, opsAggregationService, opsAlertEvaluatorService, opsCleanupService, opsScheduledReportService, schedulerSnapshotService, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, pricingService, emailQueueService, billingCacheService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, userUsageReportScheduler, orderExpireScheduler, orderCompensationScheduler, accountExpiryReminderScheduler, balanceLotExpiryScheduler, balanceExpiryReminderScheduler, settingService)
+	lotteryScheduler := service.ProvideLotteryScheduler(lotteryDrawService, lotteryActivityRepository, lotteryCouponRepository, groupService, emailService, settingService, userRepository, redisClient)
+	v := provideCleanup(client, redisClient, opsMetricsCollector, opsAggregationService, opsAlertEvaluatorService, opsCleanupService, opsScheduledReportService, schedulerSnapshotService, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, pricingService, emailQueueService, billingCacheService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, userUsageReportScheduler, orderExpireScheduler, orderCompensationScheduler, accountExpiryReminderScheduler, balanceLotExpiryScheduler, balanceExpiryReminderScheduler, lotteryScheduler, settingService)
 	application := &Application{
 		Server:  httpServer,
 		Cleanup: v,
@@ -278,6 +287,7 @@ func provideCleanup(
 	accountExpiryReminder *service.AccountExpiryReminderScheduler,
 	balanceLotExpiry *service.BalanceLotExpiryScheduler,
 	balanceExpiryReminder *service.BalanceExpiryReminderScheduler,
+	lotteryScheduler *service.LotteryScheduler,
 	settingService *service.SettingService,
 ) func() {
 	return func() {
@@ -321,6 +331,12 @@ func provideCleanup(
 			{"BalanceExpiryReminderScheduler", func() error {
 				if balanceExpiryReminder != nil {
 					balanceExpiryReminder.Stop()
+				}
+				return nil
+			}},
+			{"LotteryScheduler", func() error {
+				if lotteryScheduler != nil {
+					lotteryScheduler.Stop()
 				}
 				return nil
 			}},

@@ -68,6 +68,43 @@ const (
 	SubscriptionStatusUpgraded  = domain.SubscriptionStatusUpgraded
 )
 
+// Lottery activity status constants
+const (
+	LotteryStatusPending   = domain.LotteryStatusPending
+	LotteryStatusActive    = domain.LotteryStatusActive
+	LotteryStatusDrawing   = domain.LotteryStatusDrawing
+	LotteryStatusCompleted = domain.LotteryStatusCompleted
+	LotteryStatusCancelled = domain.LotteryStatusCancelled
+	LotteryStatusExpired   = domain.LotteryStatusExpired
+)
+
+// Lottery user category constants
+const (
+	LotteryUserCategoryNewUser    = domain.LotteryUserCategoryNewUser
+	LotteryUserCategoryRegular    = domain.LotteryUserCategoryRegular
+	LotteryUserCategoryPaid       = domain.LotteryUserCategoryPaid
+	LotteryUserCategorySubscriber = domain.LotteryUserCategorySubscriber
+)
+
+// Lottery coupon type constants
+const (
+	LotteryCouponTypeWinnerDiscount = domain.LotteryCouponTypeWinnerDiscount
+	LotteryCouponTypeLoserReduction = domain.LotteryCouponTypeLoserReduction
+)
+
+// Lottery coupon scope constants
+const (
+	LotteryCouponScopeRecharge            = domain.LotteryCouponScopeRecharge
+	LotteryCouponScopeMonthlySubscription = domain.LotteryCouponScopeMonthlySubscription
+)
+
+// Lottery coupon status constants
+const (
+	LotteryCouponStatusActive  = domain.LotteryCouponStatusActive
+	LotteryCouponStatusUsed    = domain.LotteryCouponStatusUsed
+	LotteryCouponStatusExpired = domain.LotteryCouponStatusExpired
+)
+
 // LinuxDoConnectSyntheticEmailDomain 是 LinuxDo Connect 用户的合成邮箱后缀（RFC 保留域名）。
 const LinuxDoConnectSyntheticEmailDomain = "@linuxdo-connect.invalid"
 

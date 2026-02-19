@@ -441,6 +441,9 @@ export default {
     redeemCodes: '兑换码',
     ops: '运维监控',
     promoCodes: '优惠码',
+    lottery: '抽奖活动',
+    lotteryManagement: '抽奖管理',
+    lotteryCoupons: '我的优惠券',
     settings: '系统设置',
     myAccount: '我的账户',
     lightMode: '浅色模式',
@@ -4155,6 +4158,89 @@ export default {
       failedToSave: '保存规则失败',
       failedToDelete: '删除规则失败',
       failedToToggle: '切换状态失败'
+    },
+
+    lottery: {
+      title: '抽奖管理',
+      createActivity: '创建活动',
+      activityList: '活动列表',
+      activityDetail: '活动详情',
+      noActivities: '暂无活动',
+      id: 'ID',
+      activityTitle: '标题',
+      status: {
+        label: '状态',
+        pending: '待开始',
+        active: '进行中',
+        drawing: '开奖中',
+        completed: '已完成',
+        cancelled: '已取消',
+        expired: '已过期'
+      },
+      drawAt: '开奖时间',
+      createdAt: '创建时间',
+      participants: '参与人数',
+      winners: '中奖人数',
+      actions: '操作',
+      viewDetail: '详情',
+      manualDraw: '手动开奖',
+      cancelActivity: '取消活动',
+      copyShareLink: '复制分享链接',
+      shareLinkCopied: '分享链接已复制',
+      create: {
+        title: '创建抽奖活动',
+        activityTitle: '活动标题',
+        activityTitlePlaceholder: '输入活动标题',
+        description: '活动描述',
+        descriptionPlaceholder: '输入活动描述（可选）',
+        drawAt: '开奖时间',
+        drawAtHint: '留空默认明天上午 10:00',
+        minParticipants: '最低参与人数',
+        baseWinRate: '基础中奖率',
+        winnerDiscount: '中奖折扣 (%)',
+        winnerDiscountHint: '95 表示九五折（付 95%）',
+        loserCouponAmount: '未中奖立减金额 (¥)',
+        submit: '创建',
+        submitting: '创建中...',
+        success: '活动创建成功',
+        failed: '创建失败'
+      },
+      detail: {
+        basicInfo: '基本信息',
+        shareCode: '分享码',
+        activityPeriod: '活动时间',
+        drawTime: '开奖时间',
+        winRate: '中奖率',
+        winnerDiscount: '中奖折扣',
+        loserCoupon: '未中奖立减',
+        participantList: '参与者列表',
+        noParticipants: '暂无参与者',
+        userId: '用户 ID',
+        userCategory: '用户类别',
+        weight: '权重',
+        isWinner: '是否中奖',
+        participatedAt: '参与时间',
+        yes: '是',
+        no: '否',
+        pending: '待开奖',
+        userCategories: {
+          new_user: '新用户',
+          regular: '普通用户',
+          paid: '付费用户',
+          subscriber: '订阅用户'
+        }
+      },
+      draw: {
+        confirm: '确认手动开奖？此操作不可撤销。',
+        success: '开奖成功！中奖 {count} 人',
+        failed: '开奖失败',
+        belowMinParticipant: '参与人数未达到最低要求'
+      },
+      cancel: {
+        confirm: '确认取消活动？此操作不可撤销。',
+        success: '活动已取消',
+        failed: '取消失败'
+      }
     }
   },
 
@@ -4693,6 +4779,100 @@ export default {
   codeBlock: {
     copy: '复制',
     copied: '已复制'
+  },
+
+  // Lottery (用户端)
+  lottery: {
+    title: '抽奖活动',
+    activeActivities: '进行中的活动',
+    noActiveActivities: '暂无进行中的活动',
+    myParticipations: '我参与的活动',
+    noParticipations: '暂无参与记录',
+    endTime: '结束时间',
+    drawTime: '开奖时间',
+    participantCount: '参与人数',
+    winRate: '中奖率',
+    participate: '立即参与',
+    participating: '参与中...',
+    participated: '已参与',
+    participateSuccess: '参与成功！等待开奖结果',
+    participateFailed: '参与失败',
+    needEmailBind: '请先绑定邮箱再参与抽奖',
+    activityEnded: '活动已结束',
+    activityNotStarted: '活动未开始',
+    detail: {
+      title: '活动详情',
+      description: '活动描述',
+      rules: '活动规则',
+      rule1: '每位用户每个活动限参与一次',
+      rule2: '需绑定邮箱方可参与',
+      rule3: '新注册用户中奖率更高',
+      rule4: '中奖者获得充值折扣券，未中奖者获得订阅立减券',
+      rule5: '优惠券有效期至活动结束',
+      status: '我的状态',
+      notParticipated: '尚未参与',
+      waitingDraw: '等待开奖',
+      won: '🎉 恭喜中奖！',
+      lost: '未中奖',
+      myCategory: '用户类别',
+      myWeight: '中奖权重',
+      results: '开奖结果',
+      totalParticipants: '总参与人数',
+      totalWinners: '中奖人数'
+    },
+    coupons: {
+      title: '我的优惠券',
+      noCoupons: '暂无优惠券',
+      status: {
+        all: '全部',
+        active: '可用',
+        used: '已使用',
+        expired: '已过期'
+      },
+      type: {
+        winner_discount: '充值折扣券',
+        loser_reduction: '订阅立减券'
+      },
+      scope: {
+        recharge: '充值',
+        monthly_subscription: '包月订阅'
+      },
+      discount: '{percent}% 折扣',
+      reduction: '立减 ¥{amount}',
+      validUntil: '有效期至',
+      usedAt: '使用时间',
+      fromActivity: '来自活动'
+    },
+    share: {
+      title: '邀请参与抽奖',
+      loading: '加载中...',
+      notFound: '活动未找到',
+      notFoundDesc: '该活动不存在或已被删除',
+      backHome: '返回首页',
+      joinNow: '立即参与',
+      loginToJoin: '登录后参与',
+      registerToJoin: '注册并参与',
+      activityInfo: '活动信息',
+      drawTime: '开奖时间',
+      participants: '参与人数',
+      winRate: '中奖率',
+      prizes: '奖品设置',
+      winnerPrize: '中奖奖品',
+      loserPrize: '参与奖',
+      participationPrize: '参与奖',
+      discountCoupon: '充值{percent}折优惠券',
+      rechargeDiscount: '充值享{percent}%折扣',
+      reductionCoupon: '订阅立减 ¥{amount} 优惠券',
+      subscriptionReduction: '包月订阅立减 ¥{amount}',
+      participate: '立即参与',
+      expired: '活动已结束',
+      activityEnded: '活动已结束',
+      hasAccount: '已有账户？登录',
+      newUser: '新用户？注册',
+      qrCode: '扫码参与',
+      copyLink: '复制链接',
+      linkCopied: '链接已复制'
+    }
   },
 
   // Release Notes - 版本发布页面
