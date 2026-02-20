@@ -149,14 +149,17 @@ func (s *LotteryService) CreateActivity(ctx context.Context, input CreateLottery
 		return nil, fmt.Errorf("create lottery activity: %w", err)
 	}
 
-	// 开启强制绑定邮箱（活动期间全局生效）
-	// 使用同一 Redis 锁防止与 syncForceEmailBindOff 竞态：
-	// 必须获取锁后再 SetForceEmailBind(true)，否则可能被并发的 syncOff 覆盖
-	acquireForceEmailBindLock(ctx, s.redisClient)
+	// 开启强制绑定邮箱（活动期间全局生效）。
+	// 使用同一 Redis 锁防止与 syncForceEmailBindOff 竞态。
+	// 即使获锁失败，由于活动已入库，syncForceEmailBindOff 会查到此活动而不会关闭开关，
+	// 故仍可安全设置 ForceEmailBind(true)。
+	acquired := acquireForceEmailBindLock(ctx, s.redisClient)
 	if err := s.settingService.SetForceEmailBind(ctx, true); err != nil {
 		log.Printf("[Lottery] Failed to enable force email bind for activity %d: %v", activity.ID, err)
 	}
-	releaseForceEmailBindLock(ctx, s.redisClient)
+	if acquired {
+		releaseForceEmailBindLock(ctx, s.redisClient)
+	}
 
 	log.Printf("[Lottery] Created activity %d (share_code=%s, draw_at=%s)", activity.ID, shareCode, drawAt.Format(time.RFC3339))
 
@@ -271,23 +274,26 @@ func (s *LotteryService) ListUserCoupons(ctx context.Context, userID int64, stat
 
 const forceEmailBindLockKey = "lottery_force_email_bind_sync"
 
-// acquireForceEmailBindLock 获取强制绑定邮箱开关的分布式锁（自旋等待，最多 5 秒）
-func acquireForceEmailBindLock(ctx context.Context, redisClient *redis.Client) {
+// acquireForceEmailBindLock 获取强制绑定邮箱开关的分布式锁（自旋等待，最多 5 秒）。
+// 返回 true 表示成功获取锁，false 表示超时或 Redis 错误。
+// 无 Redis 时始终返回 true（单机模式，跳过互斥）。
+func acquireForceEmailBindLock(ctx context.Context, redisClient *redis.Client) bool {
 	if redisClient == nil {
-		return
+		return true
 	}
 	for i := 0; i < 10; i++ {
 		locked, err := redisClient.SetNX(ctx, forceEmailBindLockKey, "1", 10*time.Second).Result()
 		if err != nil {
 			log.Printf("[Lottery] Redis lock error for email bind sync: %v", err)
-			return
+			return false
 		}
 		if locked {
-			return
+			return true
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
-	log.Printf("[Lottery] Warning: failed to acquire email bind lock after retries, proceeding anyway")
+	log.Printf("[Lottery] Failed to acquire email bind lock after retries")
+	return false
 }
 
 // releaseForceEmailBindLock 释放强制绑定邮箱开关的分布式锁
@@ -302,24 +308,32 @@ func releaseForceEmailBindLock(ctx context.Context, redisClient *redis.Client) {
 // 使用 Redis 分布式锁防止与 CreateActivity 的 SetForceEmailBind(true) 产生 TOCTOU 竞态。
 // 用于活动取消、开奖完成、活动过期等场景。
 func syncForceEmailBindOff(ctx context.Context, settingService *SettingService, activityRepo LotteryActivityRepository, redisClient *redis.Client) {
-	acquireForceEmailBindLock(ctx, redisClient)
+	if !acquireForceEmailBindLock(ctx, redisClient) {
+		log.Printf("[Lottery] Skipping email bind sync: could not acquire lock")
+		return
+	}
 	defer releaseForceEmailBindLock(ctx, redisClient)
 
 	syncForceEmailBindOffNoLock(ctx, settingService, activityRepo)
 }
 
 func syncForceEmailBindOffNoLock(ctx context.Context, settingService *SettingService, activityRepo LotteryActivityRepository) {
-	activities, err := activityRepo.ListByStatus(ctx, LotteryStatusActive)
-	if err != nil {
-		log.Printf("[Lottery] Failed to check active activities for email bind switch: %v", err)
-		return
-	}
-	if len(activities) == 0 {
-		if err := settingService.SetForceEmailBind(ctx, false); err != nil {
-			log.Printf("[Lottery] Failed to disable force email bind: %v", err)
-		} else {
-			log.Printf("[Lottery] Disabled force email bind (no active activities)")
+	// 同时检查 active 和 drawing 两个状态：开奖过程中活动处于 drawing，
+	// 若仅查 active 会误判为"无活跃活动"而错误关闭强制绑定邮箱开关。
+	for _, status := range []string{LotteryStatusActive, LotteryStatusDrawing} {
+		activities, err := activityRepo.ListByStatus(ctx, status)
+		if err != nil {
+			log.Printf("[Lottery] Failed to check %s activities for email bind switch: %v", status, err)
+			return
 		}
+		if len(activities) > 0 {
+			return // 仍有进行中的活动，不关闭开关
+		}
+	}
+	if err := settingService.SetForceEmailBind(ctx, false); err != nil {
+		log.Printf("[Lottery] Failed to disable force email bind: %v", err)
+	} else {
+		log.Printf("[Lottery] Disabled force email bind (no active/drawing activities)")
 	}
 }
 
@@ -328,18 +342,15 @@ func deleteTempGroup(ctx context.Context, groupService *GroupService, tempGroupI
 	if tempGroupID == nil || groupService == nil {
 		return
 	}
-	// 先清除 account_group 关联关系
-	if n, err := groupService.groupRepo.DeleteAccountGroupsByGroupID(ctx, *tempGroupID); err != nil {
-		log.Printf("[Lottery] Failed to clear account bindings for temp group %d (activity %d): %v", *tempGroupID, activityID, err)
-	} else if n > 0 {
+	n, err := groupService.DeleteWithBindings(ctx, *tempGroupID)
+	if err != nil {
+		log.Printf("[Lottery] Failed to delete temp group %d for activity %d: %v", *tempGroupID, activityID, err)
+		return
+	}
+	if n > 0 {
 		log.Printf("[Lottery] Cleared %d account binding(s) from temp group %d (activity %d)", n, *tempGroupID, activityID)
 	}
-	// 删除分组
-	if err := groupService.Delete(ctx, *tempGroupID); err != nil {
-		log.Printf("[Lottery] Failed to delete temp group %d for activity %d: %v", *tempGroupID, activityID, err)
-	} else {
-		log.Printf("[Lottery] Deleted temp group %d for activity %d", *tempGroupID, activityID)
-	}
+	log.Printf("[Lottery] Deleted temp group %d for activity %d", *tempGroupID, activityID)
 }
 
 // generateShareCode 生成8字节随机十六进制分享码（16字符）

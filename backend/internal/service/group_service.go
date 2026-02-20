@@ -202,6 +202,23 @@ func (s *GroupService) Delete(ctx context.Context, id int64) error {
 	return nil
 }
 
+// DeleteWithBindings 删除分组并清除所有账号绑定关系。
+// 用于临时分组清理，避免直接访问 groupRepo 私有字段。
+// 返回清除的绑定关系数量。
+func (s *GroupService) DeleteWithBindings(ctx context.Context, id int64) (int64, error) {
+	n, err := s.groupRepo.DeleteAccountGroupsByGroupID(ctx, id)
+	if err != nil {
+		return 0, fmt.Errorf("clear account bindings for group %d: %w", id, err)
+	}
+	if s.authCacheInvalidator != nil {
+		s.authCacheInvalidator.InvalidateAuthCacheByGroupID(ctx, id)
+	}
+	if err := s.groupRepo.Delete(ctx, id); err != nil {
+		return n, fmt.Errorf("delete group %d: %w", id, err)
+	}
+	return n, nil
+}
+
 // GetStats 获取分组统计信息
 func (s *GroupService) GetStats(ctx context.Context, id int64) (map[string]any, error) {
 	group, err := s.groupRepo.GetByID(ctx, id)
