@@ -170,7 +170,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { AuthLayout } from '@/components/layout'
 import Icon from '@/components/icons/Icon.vue'
@@ -183,6 +183,7 @@ const { t } = useI18n()
 // ==================== Router & Stores ====================
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 const appStore = useAppStore()
 
@@ -396,8 +397,10 @@ async function handleVerify(): Promise<void> {
     // Show success toast
     appStore.showSuccess('Account created successfully! Welcome to ' + siteName.value + '.')
 
-    // Redirect to dashboard
-    await router.push('/dashboard')
+    // Redirect to intended destination or dashboard (validate to prevent open redirect)
+    const redirect = route.query.redirect as string
+    const safeRedirect = (redirect && redirect.startsWith('/') && !redirect.startsWith('//')) ? redirect : '/dashboard'
+    await router.push(safeRedirect)
   } catch (error: unknown) {
     const err = error as { message?: string; response?: { data?: { detail?: string } } }
 

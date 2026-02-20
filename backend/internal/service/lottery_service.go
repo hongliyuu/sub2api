@@ -11,6 +11,7 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	"github.com/redis/go-redis/v9"
 )
 
 var (
@@ -27,8 +28,10 @@ type LotteryService struct {
 	participantRepo LotteryParticipantRepository
 	couponRepo      LotteryCouponRepository
 	groupService    *GroupService
+	settingService  *SettingService
 	accountRepo     AccountRepository
 	entClient       *dbent.Client
+	redisClient     *redis.Client
 }
 
 // NewLotteryService 创建抽奖服务实例
@@ -37,16 +40,20 @@ func NewLotteryService(
 	participantRepo LotteryParticipantRepository,
 	couponRepo LotteryCouponRepository,
 	groupService *GroupService,
+	settingService *SettingService,
 	accountRepo AccountRepository,
 	entClient *dbent.Client,
+	redisClient *redis.Client,
 ) *LotteryService {
 	return &LotteryService{
 		activityRepo:    activityRepo,
 		participantRepo: participantRepo,
 		couponRepo:      couponRepo,
 		groupService:    groupService,
+		settingService:  settingService,
 		accountRepo:     accountRepo,
 		entClient:       entClient,
+		redisClient:     redisClient,
 	}
 }
 
@@ -67,7 +74,11 @@ func (s *LotteryService) CreateActivity(ctx context.Context, input CreateLottery
 	}
 
 	activityStartAt := now
-	activityEndAt := drawAt.Add(3 * 24 * time.Hour)
+	validityDays := input.ValidityDays
+	if validityDays <= 0 {
+		validityDays = 3 // 默认 3 天
+	}
+	activityEndAt := drawAt.Add(time.Duration(validityDays) * 24 * time.Hour)
 
 	// 设置默认值
 	baseWinRate := input.BaseWinRate
@@ -87,14 +98,22 @@ func (s *LotteryService) CreateActivity(ctx context.Context, input CreateLottery
 		minParticipants = 10
 	}
 
-	// 创建临时分组
-	groupName := fmt.Sprintf("lottery-%s", shareCode)
+	// 每日限额默认 20 美元
+	dailyLimit := input.DailyLimitUSD
+	if dailyLimit <= 0 {
+		dailyLimit = 20
+	}
+
+	// 创建订阅类型临时分组（名称含活动标题避免重复）
+	groupName := fmt.Sprintf("ClaudeMax%d天体验-%s", validityDays, shareCode[:8])
 	groupDesc := fmt.Sprintf("抽奖活动临时分组: %s", input.Title)
 	group, err := s.groupService.Create(ctx, CreateGroupRequest{
-		Name:           groupName,
-		Description:    groupDesc,
-		IsExclusive:    false,
-		RateMultiplier: 1.0,
+		Name:             groupName,
+		Description:      groupDesc,
+		IsExclusive:      false,
+		RateMultiplier:   1.0,
+		SubscriptionType: SubscriptionTypeSubscription,
+		DailyLimitUSD:    &dailyLimit,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create temp group: %w", err)
@@ -125,22 +144,33 @@ func (s *LotteryService) CreateActivity(ctx context.Context, input CreateLottery
 	}
 
 	if err := s.activityRepo.Create(ctx, activity); err != nil {
+		// 活动入库失败，清理已创建的临时分组
+		deleteTempGroup(ctx, s.groupService, &group.ID, 0)
 		return nil, fmt.Errorf("create lottery activity: %w", err)
 	}
 
+	// 开启强制绑定邮箱（活动期间全局生效）
+	// 使用同一 Redis 锁防止与 syncForceEmailBindOff 竞态：
+	// 必须获取锁后再 SetForceEmailBind(true)，否则可能被并发的 syncOff 覆盖
+	acquireForceEmailBindLock(ctx, s.redisClient)
+	if err := s.settingService.SetForceEmailBind(ctx, true); err != nil {
+		log.Printf("[Lottery] Failed to enable force email bind for activity %d: %v", activity.ID, err)
+	}
+	releaseForceEmailBindLock(ctx, s.redisClient)
+
 	log.Printf("[Lottery] Created activity %d (share_code=%s, draw_at=%s)", activity.ID, shareCode, drawAt.Format(time.RFC3339))
 
-	// 将指定的过期账号绑定到临时分组
+	// 将指定的过期账号追加到临时分组（不影响账号已有的其他分组）
 	if len(input.AccountIDs) > 0 {
 		boundCount := 0
 		for _, accountID := range input.AccountIDs {
-			if err := s.accountRepo.BindGroups(ctx, accountID, []int64{group.ID}); err != nil {
-				log.Printf("[Lottery] Warning: failed to bind account %d to temp group %d: %v", accountID, group.ID, err)
+			if err := s.accountRepo.AddToGroup(ctx, accountID, group.ID, 0); err != nil {
+				log.Printf("[Lottery] Warning: failed to add account %d to temp group %d: %v", accountID, group.ID, err)
 				continue
 			}
 			boundCount++
 		}
-		log.Printf("[Lottery] Bound %d/%d accounts to temp group %d for activity %d",
+		log.Printf("[Lottery] Added %d/%d accounts to temp group %d for activity %d",
 			boundCount, len(input.AccountIDs), group.ID, activity.ID)
 	}
 
@@ -192,12 +222,18 @@ func (s *LotteryService) CancelActivity(ctx context.Context, id int64) error {
 		log.Printf("[Lottery] Failed to expire coupons for activity %d: %v", id, err)
 	}
 
+	// 禁用临时分组
+	deleteTempGroup(ctx, s.groupService, activity.TempGroupID, id)
+
+	// 若无其他活跃活动，关闭强制绑定邮箱开关
+	syncForceEmailBindOff(ctx, s.settingService, s.activityRepo, s.redisClient)
+
 	log.Printf("[Lottery] Cancelled activity %d", id)
 
 	return nil
 }
 
-// GetActiveActivity 获取当前活跃的抽奖活动（返回第一个）
+// GetActiveActivity 获取当前活跃的抽奖活动（返回第一个，内部使用）
 func (s *LotteryService) GetActiveActivity(ctx context.Context) (*LotteryActivity, error) {
 	activities, err := s.activityRepo.ListByStatus(ctx, LotteryStatusActive)
 	if err != nil {
@@ -207,6 +243,15 @@ func (s *LotteryService) GetActiveActivity(ctx context.Context) (*LotteryActivit
 		return nil, nil
 	}
 	return &activities[0], nil
+}
+
+// ListActiveActivities 获取所有活跃的抽奖活动
+func (s *LotteryService) ListActiveActivities(ctx context.Context) ([]LotteryActivity, error) {
+	activities, err := s.activityRepo.ListByStatus(ctx, LotteryStatusActive)
+	if err != nil {
+		return nil, fmt.Errorf("list active activities: %w", err)
+	}
+	return activities, nil
 }
 
 // ListParticipants 获取活动参与者列表
@@ -222,6 +267,79 @@ func (s *LotteryService) ListUserParticipations(ctx context.Context, userID int6
 // ListUserCoupons 获取用户优惠券列表
 func (s *LotteryService) ListUserCoupons(ctx context.Context, userID int64, status string, params pagination.PaginationParams) ([]LotteryCoupon, *pagination.PaginationResult, error) {
 	return s.couponRepo.ListByUser(ctx, userID, status, params)
+}
+
+const forceEmailBindLockKey = "lottery_force_email_bind_sync"
+
+// acquireForceEmailBindLock 获取强制绑定邮箱开关的分布式锁（自旋等待，最多 5 秒）
+func acquireForceEmailBindLock(ctx context.Context, redisClient *redis.Client) {
+	if redisClient == nil {
+		return
+	}
+	for i := 0; i < 10; i++ {
+		locked, err := redisClient.SetNX(ctx, forceEmailBindLockKey, "1", 10*time.Second).Result()
+		if err != nil {
+			log.Printf("[Lottery] Redis lock error for email bind sync: %v", err)
+			return
+		}
+		if locked {
+			return
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	log.Printf("[Lottery] Warning: failed to acquire email bind lock after retries, proceeding anyway")
+}
+
+// releaseForceEmailBindLock 释放强制绑定邮箱开关的分布式锁
+func releaseForceEmailBindLock(ctx context.Context, redisClient *redis.Client) {
+	if redisClient == nil {
+		return
+	}
+	redisClient.Del(ctx, forceEmailBindLockKey)
+}
+
+// syncForceEmailBindOff 原子检查是否还有活跃活动，若无则关闭强制绑定邮箱开关。
+// 使用 Redis 分布式锁防止与 CreateActivity 的 SetForceEmailBind(true) 产生 TOCTOU 竞态。
+// 用于活动取消、开奖完成、活动过期等场景。
+func syncForceEmailBindOff(ctx context.Context, settingService *SettingService, activityRepo LotteryActivityRepository, redisClient *redis.Client) {
+	acquireForceEmailBindLock(ctx, redisClient)
+	defer releaseForceEmailBindLock(ctx, redisClient)
+
+	syncForceEmailBindOffNoLock(ctx, settingService, activityRepo)
+}
+
+func syncForceEmailBindOffNoLock(ctx context.Context, settingService *SettingService, activityRepo LotteryActivityRepository) {
+	activities, err := activityRepo.ListByStatus(ctx, LotteryStatusActive)
+	if err != nil {
+		log.Printf("[Lottery] Failed to check active activities for email bind switch: %v", err)
+		return
+	}
+	if len(activities) == 0 {
+		if err := settingService.SetForceEmailBind(ctx, false); err != nil {
+			log.Printf("[Lottery] Failed to disable force email bind: %v", err)
+		} else {
+			log.Printf("[Lottery] Disabled force email bind (no active activities)")
+		}
+	}
+}
+
+// deleteTempGroup 删除活动关联的临时分组（先解除账号绑定，再删除分组）
+func deleteTempGroup(ctx context.Context, groupService *GroupService, tempGroupID *int64, activityID int64) {
+	if tempGroupID == nil || groupService == nil {
+		return
+	}
+	// 先清除 account_group 关联关系
+	if n, err := groupService.groupRepo.DeleteAccountGroupsByGroupID(ctx, *tempGroupID); err != nil {
+		log.Printf("[Lottery] Failed to clear account bindings for temp group %d (activity %d): %v", *tempGroupID, activityID, err)
+	} else if n > 0 {
+		log.Printf("[Lottery] Cleared %d account binding(s) from temp group %d (activity %d)", n, *tempGroupID, activityID)
+	}
+	// 删除分组
+	if err := groupService.Delete(ctx, *tempGroupID); err != nil {
+		log.Printf("[Lottery] Failed to delete temp group %d for activity %d: %v", *tempGroupID, activityID, err)
+	} else {
+		log.Printf("[Lottery] Deleted temp group %d for activity %d", *tempGroupID, activityID)
+	}
 }
 
 // generateShareCode 生成8字节随机十六进制分享码（16字符）

@@ -118,6 +118,12 @@ func (s *accountRepoStub) AutoPauseExpiredAccounts(ctx context.Context, now time
 func (s *accountRepoStub) BindGroups(ctx context.Context, accountID int64, groupIDs []int64) error {
 	panic("unexpected BindGroups call")
 }
+func (s *accountRepoStub) AddToGroup(ctx context.Context, accountID, groupID int64, priority int) error {
+	panic("unexpected AddToGroup call")
+}
+func (s *accountRepoStub) RemoveFromGroup(ctx context.Context, accountID, groupID int64) error {
+	panic("unexpected RemoveFromGroup call")
+}
 
 func (s *accountRepoStub) ListSchedulable(ctx context.Context) ([]Account, error) {
 	panic("unexpected ListSchedulable call")

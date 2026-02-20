@@ -31,6 +31,12 @@ func (s *accountRepoStubForBulkUpdate) BindGroups(_ context.Context, accountID i
 	}
 	return nil
 }
+func (s *accountRepoStubForBulkUpdate) AddToGroup(_ context.Context, _ int64, _ int64, _ int) error {
+	return nil
+}
+func (s *accountRepoStubForBulkUpdate) RemoveFromGroup(_ context.Context, _ int64, _ int64) error {
+	return nil
+}
 
 // TestAdminService_BulkUpdateAccounts_AllSuccessIDs 验证批量更新成功时返回 success_ids/failed_ids。
 func TestAdminService_BulkUpdateAccounts_AllSuccessIDs(t *testing.T) {

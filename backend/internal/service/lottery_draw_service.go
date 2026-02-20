@@ -24,6 +24,7 @@ type LotteryDrawService struct {
 	userSubRepo       UserSubscriptionRepository
 	emailService      *EmailService
 	settingService    *SettingService
+	groupService      *GroupService
 	redisClient       *redis.Client
 	entClient         *dbent.Client
 }
@@ -38,6 +39,7 @@ func NewLotteryDrawService(
 	userSubRepo UserSubscriptionRepository,
 	emailService *EmailService,
 	settingService *SettingService,
+	groupService *GroupService,
 	redisClient *redis.Client,
 	entClient *dbent.Client,
 ) *LotteryDrawService {
@@ -50,6 +52,7 @@ func NewLotteryDrawService(
 		userSubRepo:       userSubRepo,
 		emailService:      emailService,
 		settingService:    settingService,
+		groupService:      groupService,
 		redisClient:       redisClient,
 		entClient:         entClient,
 	}
@@ -205,8 +208,15 @@ func (s *LotteryDrawService) ExecuteDraw(ctx context.Context, activityID int64) 
 		activity.Status = LotteryStatusCancelled
 		if err := s.activityRepo.Update(ctx, activity); err != nil {
 			log.Printf("[LotteryDraw] Failed to cancel under-min activity %d: %v", activityID, err)
+			return nil, fmt.Errorf("cancel under-min activity: %w", err)
 		}
 		drawSuccess = true // 状态已更新为 cancelled，无需回滚
+
+		// 禁用临时分组
+		deleteTempGroup(ctx, s.groupService, activity.TempGroupID, activityID)
+
+		// 若无其他活跃活动，关闭强制绑定邮箱开关
+		syncForceEmailBindOff(ctx, s.settingService, s.activityRepo, s.redisClient)
 
 		log.Printf("[LotteryDraw] Activity %d cancelled: participants=%d < min=%d",
 			activityID, len(participants), activity.MinParticipants)
@@ -220,9 +230,15 @@ func (s *LotteryDrawService) ExecuteDraw(ctx context.Context, activityID int64) 
 	}
 
 	// 6. 开奖：为每个参与者计算是否中奖
-	drawAt := time.Now()
-	couponExpiresAt := drawAt.Add(3 * 24 * time.Hour) // 统一过期时间：实际开奖时间 + 3 天
+	// 从管理员配置的有效期（ActivityEndAt - DrawAt = validityDays）重建有效期时长，
+	// 加到当前实际开奖时间，作为券过期时间。这样即使开奖晚于预设 DrawAt，用户仍享有完整有效期。
+	validityDuration := activity.ActivityEndAt.Sub(activity.DrawAt)
+	if validityDuration <= 0 {
+		validityDuration = 3 * 24 * time.Hour // 兜底默认 3 天
+	}
+	couponExpiresAt := time.Now().Add(validityDuration)
 	winnerCount := 0
+	couponFailCount := 0
 
 	for i := range participants {
 		p := &participants[i]
@@ -265,6 +281,7 @@ func (s *LotteryDrawService) ExecuteDraw(ctx context.Context, activityID int64) 
 		}
 
 		if err := s.couponRepo.Create(ctx, coupon); err != nil {
+			couponFailCount++
 			log.Printf("[LotteryDraw] Failed to create coupon for user %d in activity %d: %v",
 				p.UserID, activityID, err)
 			continue
@@ -276,15 +293,26 @@ func (s *LotteryDrawService) ExecuteDraw(ctx context.Context, activityID int64) 
 		}
 	}
 
-	// 9. 更新活动开奖结果（统一使用实际开奖时间 + 3 天作为 activity_end_at）
+	// 9. 更新活动开奖结果（activity_end_at 更新为实际开奖时间 + 有效期时长）
 	if err := s.activityRepo.UpdateDrawResult(ctx, activityID, winnerCount, couponExpiresAt); err != nil {
 		log.Printf("[LotteryDraw] Failed to update draw result for activity %d: %v", activityID, err)
 		return nil, fmt.Errorf("update draw result: %w", err)
 	}
 	drawSuccess = true // 状态已更新为 completed，无需回滚
 
-	log.Printf("[LotteryDraw] Draw completed for activity %d: total=%d, winners=%d, below_min=%v",
-		activityID, len(participants), winnerCount, belowMin)
+	// 无人获奖时删除临时分组（不再需要）
+	if winnerCount == 0 {
+		deleteTempGroup(ctx, s.groupService, activity.TempGroupID, activityID)
+	}
+
+	// 若无其他活跃活动，关闭强制绑定邮箱开关
+	syncForceEmailBindOff(ctx, s.settingService, s.activityRepo, s.redisClient)
+
+	if couponFailCount > 0 {
+		log.Printf("[LotteryDraw] WARNING: %d coupon(s) failed to create for activity %d", couponFailCount, activityID)
+	}
+	log.Printf("[LotteryDraw] Draw completed for activity %d: total=%d, winners=%d, coupon_failures=%d",
+		activityID, len(participants), winnerCount, couponFailCount)
 
 	// 10. 异步发送通知邮件
 	go s.sendDrawResultEmails(activityID)

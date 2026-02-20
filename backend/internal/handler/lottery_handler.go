@@ -29,19 +29,18 @@ func NewLotteryHandler(
 	}
 }
 
-// GetActive 获取进行中的活动（返回数组）
+// GetActive 获取进行中的活动列表
 // GET /api/v1/lottery/active
 func (h *LotteryHandler) GetActive(c *gin.Context) {
-	activity, err := h.lotteryService.GetActiveActivity(c.Request.Context())
+	activities, err := h.lotteryService.ListActiveActivities(c.Request.Context())
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
 
-	// 返回数组以匹配前端契约
-	out := make([]dto.LotteryActivity, 0, 1)
-	if activity != nil {
-		out = append(out, *dto.LotteryActivityFromService(activity))
+	out := make([]dto.LotteryActivity, 0, len(activities))
+	for i := range activities {
+		out = append(out, *dto.LotteryActivityFromService(&activities[i]))
 	}
 	response.Success(c, out)
 }

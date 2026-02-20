@@ -46,10 +46,12 @@ type GroupSortOrderUpdate struct {
 
 // CreateGroupRequest 创建分组请求
 type CreateGroupRequest struct {
-	Name           string  `json:"name"`
-	Description    string  `json:"description"`
-	RateMultiplier float64 `json:"rate_multiplier"`
-	IsExclusive    bool    `json:"is_exclusive"`
+	Name             string   `json:"name"`
+	Description      string   `json:"description"`
+	RateMultiplier   float64  `json:"rate_multiplier"`
+	IsExclusive      bool     `json:"is_exclusive"`
+	SubscriptionType string   `json:"subscription_type"` // standard/subscription，默认 standard
+	DailyLimitUSD    *float64 `json:"daily_limit_usd"`
 }
 
 // UpdateGroupRequest 更新分组请求
@@ -87,6 +89,10 @@ func (s *GroupService) Create(ctx context.Context, req CreateGroupRequest) (*Gro
 	}
 
 	// 创建分组
+	subscriptionType := req.SubscriptionType
+	if subscriptionType == "" {
+		subscriptionType = SubscriptionTypeStandard
+	}
 	group := &Group{
 		Name:             req.Name,
 		Description:      req.Description,
@@ -94,7 +100,8 @@ func (s *GroupService) Create(ctx context.Context, req CreateGroupRequest) (*Gro
 		RateMultiplier:   req.RateMultiplier,
 		IsExclusive:      req.IsExclusive,
 		Status:           StatusActive,
-		SubscriptionType: SubscriptionTypeStandard,
+		SubscriptionType: subscriptionType,
+		DailyLimitUSD:    req.DailyLimitUSD,
 	}
 
 	if err := s.groupRepo.Create(ctx, group); err != nil {

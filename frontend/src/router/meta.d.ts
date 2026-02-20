@@ -31,6 +31,11 @@ declare module 'vue-router' {
     title?: string
 
     /**
+     * i18n key for page title (translated at runtime)
+     */
+    titleKey?: string
+
+    /**
      * Optional breadcrumb items for navigation
      */
     breadcrumbs?: Array<{

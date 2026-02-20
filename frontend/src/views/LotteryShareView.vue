@@ -42,23 +42,15 @@
         </div>
 
         <!-- Activity Info -->
-        <div class="mb-6 grid grid-cols-3 gap-4 rounded-2xl bg-gray-50 p-4 dark:bg-dark-700">
+        <div class="mb-6 rounded-2xl bg-gray-50 p-4 dark:bg-dark-700">
           <div class="text-center">
             <p class="text-sm text-gray-500 dark:text-dark-400">{{ t('lottery.share.drawTime') }}</p>
             <p class="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{{ formatDrawTime }}</p>
           </div>
-          <div class="text-center">
-            <p class="text-sm text-gray-500 dark:text-dark-400">{{ t('lottery.share.participants') }}</p>
-            <p class="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{{ activity.participant_count }}</p>
-          </div>
-          <div class="text-center">
-            <p class="text-sm text-gray-500 dark:text-dark-400">{{ t('lottery.share.winRate') }}</p>
-            <p class="mt-1 text-sm font-semibold text-gray-900 dark:text-white">{{ (activity.base_win_rate * 100).toFixed(0) }}%</p>
-          </div>
         </div>
 
         <!-- Prize Info -->
-        <div class="mb-8 space-y-3">
+        <div v-if="validityDays > 0" class="mb-8">
           <div class="flex items-center gap-3 rounded-xl border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-800/50 dark:bg-yellow-900/20">
             <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-yellow-100 dark:bg-yellow-900/40">
               <svg class="h-5 w-5 text-yellow-600 dark:text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
@@ -67,19 +59,7 @@
             </div>
             <div>
               <p class="text-sm font-medium text-yellow-800 dark:text-yellow-300">{{ t('lottery.share.winnerPrize') }}</p>
-              <p class="text-sm text-yellow-700 dark:text-yellow-400">{{ t('lottery.share.rechargeDiscount', { percent: activity.winner_discount_percent }) }}</p>
-            </div>
-          </div>
-
-          <div class="flex items-center gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4 dark:border-blue-800/50 dark:bg-blue-900/20">
-            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/40">
-              <svg class="h-5 w-5 text-blue-600 dark:text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 6v.75m0 3v.75m0 3v.75m0 3V18m-9-5.25h5.25M7.5 15h3M3.375 5.25c-.621 0-1.125.504-1.125 1.125v3.026a2.999 2.999 0 010 5.198v3.026c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-3.026a2.999 2.999 0 010-5.198V6.375c0-.621-.504-1.125-1.125-1.125H3.375z" />
-              </svg>
-            </div>
-            <div>
-              <p class="text-sm font-medium text-blue-800 dark:text-blue-300">{{ t('lottery.share.participationPrize') }}</p>
-              <p class="text-sm text-blue-700 dark:text-blue-400">{{ t('lottery.share.subscriptionReduction', { amount: activity.loser_coupon_amount }) }}</p>
+              <p class="text-sm text-yellow-700 dark:text-yellow-400">{{ t('lottery.detail.prizeDesc', { days: validityDays }) }}</p>
             </div>
           </div>
         </div>
@@ -102,11 +82,11 @@
 
         <!-- Auth Links -->
         <div class="mt-6 flex items-center justify-center gap-4 text-sm">
-          <router-link to="/login" class="text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300">
+          <router-link :to="{ path: '/login', query: activity ? { redirect: `/lottery/${activity.id}?auto_join=1` } : {} }" class="text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300">
             {{ t('lottery.share.hasAccount') }}
           </router-link>
           <span class="text-gray-300 dark:text-dark-600">|</span>
-          <router-link to="/register" class="text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300">
+          <router-link :to="{ path: '/register', query: activity ? { redirect: `/lottery/${activity.id}?auto_join=1` } : {} }" class="text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300">
             {{ t('lottery.share.newUser') }}
           </router-link>
         </div>
@@ -135,6 +115,14 @@ const isActive = computed(() => {
   return activity.value.status === 'active'
 })
 
+// Compute validity_days from draw_at and activity_end_at
+const validityDays = computed(() => {
+  if (!activity.value?.draw_at || !activity.value?.activity_end_at) return 0
+  const drawAt = new Date(activity.value.draw_at).getTime()
+  const endAt = new Date(activity.value.activity_end_at).getTime()
+  return Math.round((endAt - drawAt) / (24 * 60 * 60 * 1000))
+})
+
 const formatDrawTime = computed(() => {
   if (!activity.value?.draw_at) return '-'
   const date = new Date(activity.value.draw_at)
@@ -148,7 +136,7 @@ const formatDrawTime = computed(() => {
 
 const handleParticipate = () => {
   if (!activity.value) return
-  router.push(`/lottery/${activity.value.id}`)
+  router.push(`/lottery/${activity.value.id}?auto_join=1`)
 }
 
 onMounted(async () => {

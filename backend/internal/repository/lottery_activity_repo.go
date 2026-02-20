@@ -175,7 +175,7 @@ func (r *lotteryActivityRepository) ListExpired(ctx context.Context) ([]service.
 	now := time.Now()
 	activities, err := r.client.LotteryActivity.Query().
 		Where(
-			lotteryactivity.StatusEQ("completed"),
+			lotteryactivity.StatusIn("completed", "cancelled"),
 			lotteryactivity.ActivityEndAtLTE(now),
 		).
 		Order(dbent.Asc(lotteryactivity.FieldActivityEndAt)).

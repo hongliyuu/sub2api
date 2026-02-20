@@ -1478,9 +1478,11 @@ export interface CreateLotteryActivityRequest {
   title: string
   description?: string
   draw_at?: number | null  // unix timestamp seconds
+  validity_days?: number   // 开奖后有效期天数（默认 3）
   min_participants?: number
   base_win_rate?: number
   winner_discount_percent?: number
   loser_coupon_amount?: number
   account_ids?: number[]
+  daily_limit_usd?: number // 每日限额（美元），默认 20
 }

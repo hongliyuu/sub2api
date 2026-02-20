@@ -12,8 +12,9 @@ import (
 
 // LotteryScheduler 抽奖定时任务调度器
 // 每小时检查：
+// 0. 卡在 drawing 状态超过 10 分钟的活动 → 重置为 active 以便重试
 // 1. 到达 draw_at 的活动 → 触发自动开奖
-// 2. 到达 activity_end_at 的活动 → 过期优惠券 + 禁用临时分组
+// 2. 到达 activity_end_at 的活动 → 过期优惠券 + 禁用临时分组 + 同步强制邮箱绑定开关
 // 3. 距 activity_end_at ≤ 24 小时 → 提醒持有未使用优惠券的中奖用户
 type LotteryScheduler struct {
 	drawService    *LotteryDrawService
@@ -181,15 +182,7 @@ func (s *LotteryScheduler) checkExpiredActivities(ctx context.Context) {
 		}
 
 		// 禁用临时分组
-		if activity.TempGroupID != nil {
-			disabledStatus := StatusDisabled
-			_, err := s.groupService.Update(ctx, *activity.TempGroupID, UpdateGroupRequest{
-				Status: &disabledStatus,
-			})
-			if err != nil {
-				log.Printf("[LotteryScheduler] Failed to disable temp group %d: %v", *activity.TempGroupID, err)
-			}
-		}
+		deleteTempGroup(ctx, s.groupService, activity.TempGroupID, activity.ID)
 
 		// 更新活动状态为 expired（正常结束后过期，区别于人为 cancelled）
 		a := activity
@@ -197,6 +190,11 @@ func (s *LotteryScheduler) checkExpiredActivities(ctx context.Context) {
 		if err := s.activityRepo.Update(ctx, &a); err != nil {
 			log.Printf("[LotteryScheduler] Failed to update expired activity %d: %v", activity.ID, err)
 		}
+	}
+
+	// 若无其他活跃活动，关闭强制绑定邮箱开关
+	if len(activities) > 0 {
+		syncForceEmailBindOff(ctx, s.settingService, s.activityRepo, s.redisClient)
 	}
 }
 

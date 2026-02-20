@@ -276,6 +276,9 @@ func (s *RechargeOrderService) CreateOrder(ctx context.Context, userID int64, re
 	var appliedCouponID int64
 	if s.lotteryCouponRepo != nil {
 		coupon, findErr := s.lotteryCouponRepo.FindActiveForUser(ctx, userID, LotteryCouponScopeRecharge)
+		if findErr != nil {
+			log.Printf("[RechargeOrder] Failed to find active coupon for user %d: %v", userID, findErr)
+		}
 		if findErr == nil && coupon != nil && coupon.DiscountPercent != nil {
 			// 应用折扣：amount × (discount_percent / 100)
 			discountedAmount := actualAmount * float64(*coupon.DiscountPercent) / 100.0
@@ -283,6 +286,17 @@ func (s *RechargeOrderService) CreateOrder(ctx context.Context, userID int64, re
 			couponNotes = fmt.Sprintf("已使用抽奖优惠券 #%d（%d%%折扣），原价 ¥%.2f → ¥%.2f", coupon.ID, *coupon.DiscountPercent, actualAmount, discountedAmount)
 			actualAmount = discountedAmount
 			appliedCouponID = coupon.ID
+		}
+	}
+
+	// 先原子占用优惠券（MarkUsed 用 WHERE status='active' 保证并发安全）
+	// 若占用失败（并发竞争已被他人使用），回退到原价
+	if appliedCouponID > 0 {
+		if markErr := s.lotteryCouponRepo.MarkUsed(ctx, appliedCouponID, orderNo); markErr != nil {
+			log.Printf("[RechargeOrder] Coupon %d no longer available, reverting to full price: %v", appliedCouponID, markErr)
+			actualAmount = req.Amount
+			couponNotes = ""
+			appliedCouponID = 0
 		}
 	}
 
@@ -298,14 +312,13 @@ func (s *RechargeOrderService) CreateOrder(ctx context.Context, userID int64, re
 	}
 
 	if err := s.repo.Create(ctx, order); err != nil {
-		return nil, fmt.Errorf("create order: %w", err)
-	}
-
-	// 订单创建成功后才标记优惠券为已使用
-	if appliedCouponID > 0 {
-		if markErr := s.lotteryCouponRepo.MarkUsed(ctx, appliedCouponID, orderNo); markErr != nil {
-			log.Printf("[RechargeOrder] Warning: failed to mark lottery coupon %d as used: %v", appliedCouponID, markErr)
+		// 订单创建失败，释放已占用的优惠券
+		if appliedCouponID > 0 {
+			if releaseErr := s.lotteryCouponRepo.ReleaseByOrderID(ctx, orderNo); releaseErr != nil {
+				log.Printf("[RechargeOrder] Failed to release coupon for failed order %s: %v", orderNo, releaseErr)
+			}
 		}
+		return nil, fmt.Errorf("create order: %w", err)
 	}
 
 	return order, nil

@@ -131,6 +131,7 @@ AGENTS.md
 scripts/*
 !scripts/db/
 !scripts/*.sh
+!scripts/*.ps1
 !scripts/*.conf
 .code-review-state
 openspec/

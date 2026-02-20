@@ -308,7 +308,7 @@
       <p class="text-gray-500 dark:text-dark-400">
         {{ t('auth.alreadyHaveAccount') }}
         <router-link
-          to="/login"
+          :to="{ path: '/login', query: $route.query.redirect ? { redirect: $route.query.redirect } : {} }"
           class="font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
         >
           {{ t('auth.signIn') }}
@@ -720,8 +720,9 @@ async function handleRegister(): Promise<void> {
         })
       )
 
-      // Navigate to email verification page
-      await router.push('/email-verify')
+      // Navigate to email verification page (preserve redirect param)
+      const redirect = route.query.redirect as string
+      await router.push({ path: '/email-verify', query: redirect ? { redirect } : {} })
       return
     }
 
@@ -737,8 +738,10 @@ async function handleRegister(): Promise<void> {
     // Show success toast
     appStore.showSuccess(t('auth.accountCreatedSuccess', { siteName: siteName.value }))
 
-    // Redirect to dashboard
-    await router.push('/dashboard')
+    // Redirect to intended destination or dashboard (validate to prevent open redirect)
+    const redirect = route.query.redirect as string
+    const safeRedirect = (redirect && redirect.startsWith('/') && !redirect.startsWith('//')) ? redirect : '/dashboard'
+    await router.push(safeRedirect)
   } catch (error: unknown) {
     // Reset Turnstile on error
     if (turnstileRef.value) {

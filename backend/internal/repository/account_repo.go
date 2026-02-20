@@ -451,6 +451,14 @@ func (r *accountRepository) ListWithFilters(ctx context.Context, params paginati
 		switch status {
 		case "rate_limited":
 			q = q.Where(dbaccount.RateLimitResetAtGT(time.Now()))
+		case "expiring":
+			now := time.Now()
+			threshold := now.Add(9 * 24 * time.Hour)
+			q = q.Where(
+				dbaccount.ExpiresAtNotNil(),
+				dbaccount.ExpiresAtLTE(threshold),
+				dbaccount.ExpiresAtGT(now),
+			)
 		default:
 			q = q.Where(dbaccount.StatusEQ(status))
 		}

@@ -490,9 +490,11 @@ type CreateLotteryActivityRequest struct {
 	Title                 string  `json:"title" binding:"required"`
 	Description           string  `json:"description"`
 	DrawAt                *int64  `json:"draw_at"`                   // 秒级时间戳，nil 则默认次日 10:00
+	ValidityDays          int     `json:"validity_days" binding:"omitempty,min=1,max=30"` // 开奖后有效期天数（默认 3 天，最大 30 天）
 	MinParticipants       int     `json:"min_participants"`
 	BaseWinRate           float64 `json:"base_win_rate"`
 	WinnerDiscountPercent int     `json:"winner_discount_percent"`
 	LoserCouponAmount     float64 `json:"loser_coupon_amount"`
 	AccountIDs            []int64 `json:"account_ids"`               // 绑定的过期账号 ID
+	DailyLimitUSD         float64 `json:"daily_limit_usd"`           // 每日限额（美元），默认 20
 }

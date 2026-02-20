@@ -220,6 +220,9 @@ func (s *SubscriptionOrderService) CreateOrder(ctx context.Context, userID int64
 	var appliedCouponID int64
 	if s.lotteryCouponRepo != nil {
 		coupon, findErr := s.lotteryCouponRepo.FindActiveForUser(ctx, userID, LotteryCouponScopeMonthlySubscription)
+		if findErr != nil {
+			log.Printf("[SubscriptionOrder] Failed to find active coupon for user %d: %v", userID, findErr)
+		}
 		if findErr == nil && coupon != nil && coupon.ReductionAmount != nil {
 			reduction := *coupon.ReductionAmount
 			orig := actualAmount
@@ -233,6 +236,18 @@ func (s *SubscriptionOrderService) CreateOrder(ctx context.Context, userID int64
 			discountAmount = &disc
 			actualAmount = discounted
 			appliedCouponID = coupon.ID
+		}
+	}
+
+	// 先原子占用优惠券（MarkUsed 用 WHERE status='active' 保证并发安全）
+	// 若占用失败（并发竞争已被他人使用），回退到原价
+	if appliedCouponID > 0 {
+		if markErr := s.lotteryCouponRepo.MarkUsed(ctx, appliedCouponID, orderNo); markErr != nil {
+			log.Printf("[SubscriptionOrder] Coupon %d no longer available, reverting to full price: %v", appliedCouponID, markErr)
+			actualAmount = *group.PriceCNY
+			originalAmount = nil
+			discountAmount = nil
+			appliedCouponID = 0
 		}
 	}
 
@@ -252,14 +267,13 @@ func (s *SubscriptionOrderService) CreateOrder(ctx context.Context, userID int64
 	}
 
 	if err := s.repo.Create(ctx, order); err != nil {
-		return nil, fmt.Errorf("create order: %w", err)
-	}
-
-	// 订单创建成功后才标记优惠券为已使用
-	if appliedCouponID > 0 {
-		if markErr := s.lotteryCouponRepo.MarkUsed(ctx, appliedCouponID, orderNo); markErr != nil {
-			log.Printf("[SubscriptionOrder] Warning: failed to mark lottery coupon %d as used: %v", appliedCouponID, markErr)
+		// 订单创建失败，释放已占用的优惠券
+		if appliedCouponID > 0 {
+			if releaseErr := s.lotteryCouponRepo.ReleaseByOrderID(ctx, orderNo); releaseErr != nil {
+				log.Printf("[SubscriptionOrder] Failed to release coupon for failed order %s: %v", orderNo, releaseErr)
+			}
 		}
+		return nil, fmt.Errorf("create order: %w", err)
 	}
 
 	return order, nil

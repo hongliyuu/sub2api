@@ -101,11 +101,13 @@ type CreateLotteryActivityInput struct {
 	Title                 string
 	Description           string
 	DrawAt                *time.Time // nil 则默认次日 10:00
+	ValidityDays          int        // 开奖后有效期天数（默认 3 天）
 	MinParticipants       int
 	BaseWinRate           float64
 	WinnerDiscountPercent int
 	LoserCouponAmount     float64
 	AccountIDs            []int64 // 绑定的过期账号 ID
+	DailyLimitUSD         float64 // 每日限额（美元），默认 20
 }
 
 // LotteryDrawResult 开奖结果

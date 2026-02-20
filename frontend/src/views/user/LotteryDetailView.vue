@@ -35,44 +35,22 @@
               {{ activity.description }}
             </p>
 
-            <!-- Activity Info Grid -->
-            <div class="grid grid-cols-2 gap-4 text-sm">
+            <!-- Activity Info -->
+            <div class="text-sm">
               <div>
                 <span class="text-gray-500 dark:text-dark-400">{{ t('lottery.drawTime') }}</span>
                 <p class="font-medium text-gray-900 dark:text-white">{{ formatDateTime(activity.draw_at) }}</p>
               </div>
-              <div>
-                <span class="text-gray-500 dark:text-dark-400">{{ t('lottery.endTime') }}</span>
-                <p class="font-medium text-gray-900 dark:text-white">{{ formatDateTime(activity.activity_end_at) }}</p>
-              </div>
-              <div>
-                <span class="text-gray-500 dark:text-dark-400">{{ t('lottery.participantCount') }}</span>
-                <p class="font-medium text-gray-900 dark:text-white">{{ activity.participant_count }}</p>
-              </div>
-              <div>
-                <span class="text-gray-500 dark:text-dark-400">{{ t('lottery.winRate') }}</span>
-                <p class="font-medium text-gray-900 dark:text-white">{{ (activity.base_win_rate * 100).toFixed(0) }}%</p>
-              </div>
             </div>
 
-            <!-- Prizes -->
-            <div class="rounded-lg bg-gray-50 p-4 dark:bg-dark-700">
+            <!-- Prize Info (only show validity-based prize) -->
+            <div v-if="validityDays > 0" class="rounded-lg bg-gray-50 p-4 dark:bg-dark-700">
               <h3 class="mb-2 text-sm font-semibold text-gray-900 dark:text-white">{{ t('lottery.share.prizes') }}</h3>
-              <div class="space-y-2 text-sm">
-                <div class="flex items-center gap-2">
-                  <span class="inline-block h-2 w-2 rounded-full bg-green-500"></span>
-                  <span class="text-gray-600 dark:text-dark-400">{{ t('lottery.share.winnerPrize') }}:</span>
-                  <span class="font-medium text-gray-900 dark:text-white">
-                    {{ t('lottery.share.discountCoupon', { percent: activity.winner_discount_percent }) }}
-                  </span>
-                </div>
-                <div class="flex items-center gap-2">
-                  <span class="inline-block h-2 w-2 rounded-full bg-blue-500"></span>
-                  <span class="text-gray-600 dark:text-dark-400">{{ t('lottery.share.loserPrize') }}:</span>
-                  <span class="font-medium text-gray-900 dark:text-white">
-                    {{ t('lottery.share.reductionCoupon', { amount: activity.loser_coupon_amount }) }}
-                  </span>
-                </div>
+              <div class="flex items-center gap-2 text-sm">
+                <span class="inline-block h-2 w-2 rounded-full bg-green-500"></span>
+                <span class="font-medium text-gray-900 dark:text-white">
+                  {{ t('lottery.detail.prizeDesc', { days: validityDays }) }}
+                </span>
               </div>
             </div>
           </div>
@@ -90,23 +68,11 @@
               <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-primary-500"></span>
               {{ t('lottery.detail.rule2') }}
             </li>
-            <li class="flex items-start gap-2">
-              <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-primary-500"></span>
-              {{ t('lottery.detail.rule3') }}
-            </li>
-            <li class="flex items-start gap-2">
-              <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-primary-500"></span>
-              {{ t('lottery.detail.rule4') }}
-            </li>
-            <li class="flex items-start gap-2">
-              <span class="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-primary-500"></span>
-              {{ t('lottery.detail.rule5') }}
-            </li>
           </ul>
         </div>
 
-        <!-- Share -->
-        <div v-if="activity.status === 'active' && activity.share_code" class="card p-6">
+        <!-- Share (only show if not participated yet) -->
+        <div v-if="activity.status === 'active' && activity.share_code && !myParticipation" class="card p-6">
           <h2 class="mb-4 text-base font-semibold text-gray-900 dark:text-white">{{ t('lottery.share.qrCode') }}</h2>
           <div class="flex flex-col items-center">
             <LotteryShareQRCode :share-code="activity.share_code" :size="180" />
@@ -137,17 +103,7 @@
 
           <!-- Already participated -->
           <div v-else class="space-y-3">
-            <div class="flex items-center justify-between text-sm">
-              <span class="text-gray-500 dark:text-dark-400">{{ t('lottery.detail.myCategory') }}</span>
-              <span class="rounded bg-gray-100 px-2 py-0.5 text-xs font-medium dark:bg-dark-700">
-                {{ t(`admin.lottery.detail.userCategories.${myParticipation.user_category}`) }}
-              </span>
-            </div>
-            <div class="flex items-center justify-between text-sm">
-              <span class="text-gray-500 dark:text-dark-400">{{ t('lottery.detail.myWeight') }}</span>
-              <span class="font-medium text-gray-900 dark:text-white">{{ myParticipation.weight_multiplier }}x</span>
-            </div>
-            <div class="mt-4 rounded-lg p-4 text-center" :class="resultBgClass">
+            <div class="rounded-lg p-4 text-center" :class="resultBgClass">
               <span v-if="myParticipation.is_winner === true" class="text-lg font-bold text-green-700 dark:text-green-400">
                 {{ t('lottery.detail.won') }}
               </span>
@@ -218,6 +174,14 @@ const statusClass = computed(() => {
   return map[activity.value?.status || ''] || 'bg-white/20 text-white'
 })
 
+// Compute validity_days from draw_at and activity_end_at
+const validityDays = computed(() => {
+  if (!activity.value?.draw_at || !activity.value?.activity_end_at) return 0
+  const drawAt = new Date(activity.value.draw_at).getTime()
+  const endAt = new Date(activity.value.activity_end_at).getTime()
+  return Math.round((endAt - drawAt) / (24 * 60 * 60 * 1000))
+})
+
 const resultBgClass = computed(() => {
   if (!myParticipation.value) return ''
   if (myParticipation.value.is_winner === true) return 'bg-green-50 dark:bg-green-900/20'
@@ -271,6 +235,16 @@ onMounted(async () => {
     await Promise.all([loadActivity(), loadMyParticipation()])
   } finally {
     loading.value = false
+  }
+
+  // 自动参与：从分享页注册/登录后跳转回来时自动触发参与
+  if (route.query.auto_join === '1' && !myParticipation.value && activity.value?.status === 'active') {
+    try {
+      await handleParticipate()
+    } finally {
+      // 无论成功失败都清除 auto_join 参数，避免刷新后重复触发
+      router.replace({ path: route.path, query: {} })
+    }
   }
 })
 </script>

@@ -22,14 +22,15 @@ import (
 // - 余额变动日志记录
 // - 异步发送充值成功通知
 type PaymentCallbackService struct {
-	entClient      *dbent.Client
-	redisClient    *redis.Client
-	orderRepo      RechargeOrderRepository
-	userRepo       UserRepository
-	balanceLogRepo BalanceLogRepository
-	emailService   *EmailService
-	settingService *SettingService
-	balanceLotSvc  *BalanceLotService
+	entClient         *dbent.Client
+	redisClient       *redis.Client
+	orderRepo         RechargeOrderRepository
+	userRepo          UserRepository
+	balanceLogRepo    BalanceLogRepository
+	emailService      *EmailService
+	settingService    *SettingService
+	balanceLotSvc     *BalanceLotService
+	lotteryCouponRepo LotteryCouponRepository // 用于延迟支付成功时重新占用优惠券
 }
 
 // NewPaymentCallbackService 创建支付回调业务处理服务
@@ -42,16 +43,18 @@ func NewPaymentCallbackService(
 	emailService *EmailService,
 	settingService *SettingService,
 	balanceLotSvc *BalanceLotService,
+	lotteryCouponRepo LotteryCouponRepository,
 ) *PaymentCallbackService {
 	return &PaymentCallbackService{
-		entClient:      entClient,
-		redisClient:    redisClient,
-		orderRepo:      orderRepo,
-		userRepo:       userRepo,
-		balanceLogRepo: balanceLogRepo,
-		emailService:   emailService,
-		settingService: settingService,
-		balanceLotSvc:  balanceLotSvc,
+		entClient:         entClient,
+		redisClient:       redisClient,
+		orderRepo:         orderRepo,
+		userRepo:          userRepo,
+		balanceLogRepo:    balanceLogRepo,
+		emailService:      emailService,
+		settingService:    settingService,
+		balanceLotSvc:     balanceLotSvc,
+		lotteryCouponRepo: lotteryCouponRepo,
 	}
 }
 
@@ -188,6 +191,7 @@ func (s *PaymentCallbackService) ProcessPaymentCallback(
 	}
 	if order.Status != OrderStatusPending {
 		log.Printf("[PaymentCallback] Processing successful payment for non-pending order: order_no=%s, status=%s", orderNo, order.Status)
+		s.tryReOccupyCoupon(ctx, orderNo)
 	}
 
 	// 3. 验证金额（以分为单位）
@@ -297,6 +301,7 @@ func (s *PaymentCallbackService) ProcessPaymentSuccess(
 	if order.Status != OrderStatusPending {
 		log.Printf("[PaymentCallback] Processing successful payment for non-pending order: order_no=%s, status=%s, source=%s",
 			params.OrderNo, order.Status, params.Source)
+		s.tryReOccupyCoupon(ctx, params.OrderNo)
 	}
 
 	// 4. 验证金额（仅当 AmountInFen > 0 时验证）
@@ -528,6 +533,24 @@ func (s *PaymentCallbackService) sendRechargeSuccessNotification(result *Process
 
 	log.Printf("[PaymentCallback] Notification email sent: order_no=%s, email=%s",
 		result.OrderNo, user.Email)
+}
+
+// tryReOccupyCoupon 延迟支付成功时尝试重新占用被释放的优惠券
+// 防止已释放的券被用户再次使用（双花）。不阻断支付流程。
+func (s *PaymentCallbackService) tryReOccupyCoupon(ctx context.Context, orderNo string) {
+	if s.lotteryCouponRepo == nil {
+		return
+	}
+	affected, reoccupyErr := s.lotteryCouponRepo.ReOccupyByOrderID(ctx, orderNo)
+	if reoccupyErr != nil {
+		log.Printf("[PaymentCallback] Failed to re-occupy lottery coupon for order %s: %v", orderNo, reoccupyErr)
+		return
+	}
+	if affected == 0 {
+		log.Printf("[PaymentCallback] No coupon to re-occupy for order %s (coupon may have been reused by another order)", orderNo)
+	} else {
+		log.Printf("[PaymentCallback] Re-occupied %d coupon(s) for delayed payment order %s", affected, orderNo)
+	}
 }
 
 // buildRechargeSuccessEmailBody 构建充值成功邮件内容

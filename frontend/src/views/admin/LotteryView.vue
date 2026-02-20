@@ -38,7 +38,7 @@
                 <Icon name="eye" size="sm" />
               </button>
               <button v-if="row.status === 'active'" @click="handleDraw(row)" class="flex items-center rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-yellow-50 hover:text-yellow-600 dark:hover:bg-yellow-900/20 dark:hover:text-yellow-400" :title="t('admin.lottery.draw')">
-                <Icon name="zap" size="sm" />
+                <Icon name="play" size="sm" />
               </button>
               <button v-if="row.status === 'pending' || row.status === 'active'" @click="handleCancel(row)" class="flex items-center rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400" :title="t('common.cancel')">
                 <Icon name="trash" size="sm" />
@@ -74,19 +74,30 @@
             <input v-model.number="createForm.min_participants" type="number" min="1" class="input" />
           </div>
           <div>
-            <label class="input-label">{{ t('admin.lottery.fields.baseWinRate') }}</label>
-            <input v-model.number="createForm.base_win_rate" type="number" min="0" max="1" step="0.01" class="input" />
+            <label class="input-label">{{ t('admin.lottery.fields.validityDays', 'Validity Days') }}</label>
+            <input v-model.number="createForm.validity_days" type="number" min="1" max="30" class="input" />
           </div>
         </div>
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <label class="input-label">{{ t('admin.lottery.fields.winnerDiscount') }}</label>
-            <input v-model.number="createForm.winner_discount_percent" type="number" min="1" max="100" class="input" />
+            <label class="input-label">{{ t('admin.lottery.fields.baseWinRate') }}</label>
+            <input v-model.number="createForm.base_win_rate" type="number" min="0" max="1" step="0.01" class="input" />
           </div>
           <div>
-            <label class="input-label">{{ t('admin.lottery.fields.loserCoupon') }}</label>
-            <input v-model.number="createForm.loser_coupon_amount" type="number" min="0" class="input" />
+            <label class="input-label">{{ t('admin.lottery.fields.dailyLimit') }}</label>
+            <input v-model.number="createForm.daily_limit_usd" type="number" min="1" step="1" class="input" />
           </div>
+        </div>
+        <!-- Account binding -->
+        <div>
+          <label class="input-label">{{ t('admin.lottery.fields.accountIds', 'Bind Accounts (optional)') }}</label>
+          <div v-if="availableAccounts.length > 0" class="max-h-40 overflow-y-auto rounded border border-gray-200 p-2 dark:border-dark-600">
+            <label v-for="acc in availableAccounts" :key="acc.id" class="flex items-center gap-2 py-1 text-sm">
+              <input type="checkbox" :value="acc.id" v-model="createForm.account_ids" class="rounded" />
+              <span class="text-gray-700 dark:text-dark-300">#{{ acc.id }} - {{ acc.name || acc.email || 'Account' }}</span>
+            </label>
+          </div>
+          <p v-else class="text-sm text-gray-400 dark:text-dark-500">{{ t('admin.lottery.noAccounts', 'No accounts available') }}</p>
         </div>
       </form>
       <template #footer>
@@ -203,14 +214,17 @@ const getDefaultDrawAt = () => {
   return d.toISOString().slice(0, 16)
 }
 
+const availableAccounts = ref<Array<{ id: number; name?: string; email?: string }>>([])
+
 const createForm = reactive({
   title: '',
   description: '',
   draw_at_str: getDefaultDrawAt(),
+  validity_days: 3,
   min_participants: 10,
   base_win_rate: 0.1,
-  winner_discount_percent: 95,
-  loser_coupon_amount: 30
+  daily_limit_usd: 20,
+  account_ids: [] as number[]
 })
 
 const statusBadgeClass: Record<string, string> = {
@@ -277,10 +291,11 @@ const handleCreate = async () => {
       title: createForm.title,
       description: createForm.description || undefined,
       draw_at: createForm.draw_at_str ? Math.floor(new Date(createForm.draw_at_str).getTime() / 1000) : undefined,
+      validity_days: createForm.validity_days,
       min_participants: createForm.min_participants,
       base_win_rate: createForm.base_win_rate,
-      winner_discount_percent: createForm.winner_discount_percent,
-      loser_coupon_amount: createForm.loser_coupon_amount
+      daily_limit_usd: createForm.daily_limit_usd,
+      account_ids: createForm.account_ids.length > 0 ? createForm.account_ids : undefined
     }
     await adminAPI.lottery.create(req)
     appStore.showSuccess(t('admin.lottery.activityCreated'))
@@ -296,8 +311,8 @@ const handleCreate = async () => {
 
 const resetCreateForm = () => {
   Object.assign(createForm, {
-    title: '', description: '', draw_at_str: getDefaultDrawAt(),
-    min_participants: 10, base_win_rate: 0.1, winner_discount_percent: 95, loser_coupon_amount: 30
+    title: '', description: '', draw_at_str: getDefaultDrawAt(), validity_days: 3,
+    min_participants: 10, base_win_rate: 0.1, daily_limit_usd: 20, account_ids: []
   })
 }
 
@@ -366,6 +381,17 @@ const confirmCancel = async () => {
   }
 }
 
-onMounted(() => { loadActivities() })
+const loadAccounts = async () => {
+  try {
+    const res = await adminAPI.accounts.list(1, 100, { platform: 'anthropic', type: 'oauth' })
+    availableAccounts.value = res.items
+      .filter((a: any) => a.status === 'active')
+      .map((a: any) => ({ id: a.id, name: a.name, email: a.email }))
+  } catch {
+    availableAccounts.value = []
+  }
+}
+
+onMounted(() => { loadActivities(); loadAccounts() })
 onUnmounted(() => { abortController?.abort() })
 </script>

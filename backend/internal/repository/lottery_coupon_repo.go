@@ -125,17 +125,49 @@ func (r *lotteryCouponRepository) MarkUsed(ctx context.Context, id int64, orderI
 
 func (r *lotteryCouponRepository) ReleaseByOrderID(ctx context.Context, orderID string) error {
 	client := clientFromContext(ctx, r.client)
-	// 将该订单占用的优惠券释放回 active 状态（仅当当前状态为 used 且未过期时）
+	now := time.Now()
+	// 将该订单占用的优惠券释放回 active 状态（仅当当前状态为 used 且券本身未过期时）
+	// 保留 used_order_id：供 ReOccupyByOrderID 在延迟支付到达时通过旧 order_id 重新占用。
+	// 若用户先用该券创建新订单，MarkUsed 会覆写 order_id，ReOccupy 自然找不到旧 id（无影响）。
 	_, err := client.LotteryCoupon.Update().
 		Where(
 			lotterycoupon.UsedOrderIDEQ(orderID),
 			lotterycoupon.StatusEQ("used"),
+			lotterycoupon.ExpiresAtGT(now), // 仅释放未过期的券
 		).
 		SetStatus("active").
 		ClearUsedAt().
-		ClearUsedOrderID().
+		Save(ctx)
+	if err != nil {
+		return err
+	}
+
+	// 将该订单关联的已过期券标记为 expired（避免永久卡在 used 状态）
+	_, err = client.LotteryCoupon.Update().
+		Where(
+			lotterycoupon.UsedOrderIDEQ(orderID),
+			lotterycoupon.StatusEQ("used"),
+			lotterycoupon.ExpiresAtLTE(now),
+		).
+		SetStatus("expired").
 		Save(ctx)
 	return err
+}
+
+func (r *lotteryCouponRepository) ReOccupyByOrderID(ctx context.Context, orderID string) (int, error) {
+	client := clientFromContext(ctx, r.client)
+	now := time.Now()
+	// 延迟支付成功时，重新将被释放的券标记为 used（防止券被再次使用）。
+	// 若用户已用该券创建新订单（order_id 已被覆写），此操作不会匹配到任何行，属正常情况。
+	affected, err := client.LotteryCoupon.Update().
+		Where(
+			lotterycoupon.UsedOrderIDEQ(orderID),
+			lotterycoupon.StatusEQ("active"),
+		).
+		SetStatus("used").
+		SetUsedAt(now).
+		Save(ctx)
+	return affected, err
 }
 
 func (r *lotteryCouponRepository) ExpireByActivity(ctx context.Context, activityID int64) error {
@@ -185,6 +217,8 @@ func (r *lotteryCouponRepository) MarkReminded(ctx context.Context, id int64) er
 
 func (r *lotteryCouponRepository) FindActiveForUser(ctx context.Context, userID int64, scope string) (*service.LotteryCoupon, error) {
 	now := time.Now()
+	// 注意：不按 used_order_id 过滤。释放后的券 status=active 但可能保留旧 order_id（供 ReOccupy）。
+	// 若用户选中该券创建新订单，MarkUsed 会覆写 order_id；若旧支付先到达，ReOccupy 会将其标回 used。
 	m, err := r.client.LotteryCoupon.Query().
 		Where(
 			lotterycoupon.UserIDEQ(userID),

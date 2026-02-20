@@ -9,6 +9,7 @@ import { useAppStore } from '@/stores/app'
 import { useRechargeStore } from '@/stores/recharge'
 import { useNavigationLoadingState } from '@/composables/useNavigationLoading'
 import { useRoutePrefetch } from '@/composables/useRoutePrefetch'
+import { i18n } from '@/i18n'
 
 /**
  * Route definitions with lazy loading
@@ -471,7 +472,7 @@ const routes: RouteRecordRaw[] = [
     component: () => import('@/views/user/LotteryDetailView.vue'),
     meta: {
       requiresAuth: true,
-      title: 'Lottery Detail'
+      titleKey: 'lottery.detail.title'
     }
   },
   {
@@ -544,10 +545,13 @@ router.beforeEach(async (to, _from, next) => {
     authInitialized = true
   }
 
-  // Set page title
+  // Set page title (supports i18n keys like 'lottery.detail.title')
   const appStore = useAppStore()
   const siteName = appStore.siteName || 'Code80'
-  if (to.meta.title) {
+  if (to.meta.titleKey) {
+    const t = i18n.global.t as (key: string) => string
+    document.title = `${t(to.meta.titleKey as string)} - ${siteName}`
+  } else if (to.meta.title) {
     document.title = `${to.meta.title} - ${siteName}`
   } else {
     document.title = siteName

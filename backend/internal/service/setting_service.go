@@ -1303,6 +1303,22 @@ func (s *SettingService) GetWeChatAppCredentials(ctx context.Context) (appID, ap
 		nil
 }
 
+// SetForceEmailBind 设置是否强制绑定邮箱
+func (s *SettingService) SetForceEmailBind(ctx context.Context, enabled bool) error {
+	return s.settingRepo.Set(ctx, SettingKeyForceEmailBind, strconv.FormatBool(enabled))
+}
+
+// IsForceEmailBindEnabled 获取强制绑定邮箱开关状态
+// 数据库查询失败时 fail-closed（返回 true），防止安全检查被绕过
+func (s *SettingService) IsForceEmailBindEnabled(ctx context.Context) bool {
+	val, err := s.settingRepo.GetValue(ctx, SettingKeyForceEmailBind)
+	if err != nil {
+		log.Printf("[SettingService] Failed to get force email bind setting, defaulting to enabled: %v", err)
+		return true // fail-closed: 数据库不可用时保持强制绑定
+	}
+	return val == "true"
+}
+
 // SetWeChatQRCodeURL 设置微信公众号二维码 URL
 func (s *SettingService) SetWeChatQRCodeURL(ctx context.Context, qrcodeURL string) error {
 	return s.settingRepo.Set(ctx, SettingKeyWeChatAccountQRCodeURL, qrcodeURL)

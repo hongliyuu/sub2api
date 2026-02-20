@@ -48,11 +48,13 @@ func (h *LotteryHandler) Create(c *gin.Context) {
 	input := service.CreateLotteryActivityInput{
 		Title:                 req.Title,
 		Description:           req.Description,
+		ValidityDays:          req.ValidityDays,
 		MinParticipants:       req.MinParticipants,
 		BaseWinRate:           req.BaseWinRate,
 		WinnerDiscountPercent: req.WinnerDiscountPercent,
 		LoserCouponAmount:     req.LoserCouponAmount,
 		AccountIDs:            req.AccountIDs,
+		DailyLimitUSD:         req.DailyLimitUSD,
 	}
 	if req.DrawAt != nil {
 		t := time.Unix(*req.DrawAt, 0)

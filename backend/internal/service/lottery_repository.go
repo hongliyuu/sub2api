@@ -16,7 +16,7 @@ type LotteryActivityRepository interface {
 	List(ctx context.Context, params pagination.PaginationParams, status string) ([]LotteryActivity, *pagination.PaginationResult, error)
 	ListByStatus(ctx context.Context, status string) ([]LotteryActivity, error)
 	ListActiveForDraw(ctx context.Context) ([]LotteryActivity, error) // draw_at <= now && status = active
-	ListExpired(ctx context.Context) ([]LotteryActivity, error)      // activity_end_at <= now && status = completed
+	ListExpired(ctx context.Context) ([]LotteryActivity, error)      // activity_end_at <= now && status in (completed, cancelled)
 	IncrementParticipantCount(ctx context.Context, id int64) error
 	UpdateDrawResult(ctx context.Context, id int64, winnerCount int, activityEndAt time.Time) error
 }
@@ -38,7 +38,8 @@ type LotteryCouponRepository interface {
 	ListByUser(ctx context.Context, userID int64, status string, params pagination.PaginationParams) ([]LotteryCoupon, *pagination.PaginationResult, error)
 	ListByActivity(ctx context.Context, activityID int64) ([]LotteryCoupon, error)
 	MarkUsed(ctx context.Context, id int64, orderID string) error
-	ReleaseByOrderID(ctx context.Context, orderID string) error // 释放被订单占用的优惠券（订单取消/过期时）
+	ReleaseByOrderID(ctx context.Context, orderID string) error        // 释放被订单占用的优惠券（订单取消/过期时），未过期券恢复为 active，已过期券标记为 expired
+	ReOccupyByOrderID(ctx context.Context, orderID string) (int, error) // 重新占用被释放的券（延迟支付成功时），返回 affected 行数
 	ExpireByActivity(ctx context.Context, activityID int64) error
 	ListUnremindedExpiringSoon(ctx context.Context, withinHours int) ([]LotteryCoupon, error)
 	MarkReminded(ctx context.Context, id int64) error
