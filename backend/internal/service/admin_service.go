@@ -158,16 +158,17 @@ type UpdateGroupInput struct {
 }
 
 type CreateAccountInput struct {
-	Name               string
-	Notes              *string
-	Platform           string
-	Type               string
-	Credentials        map[string]any
-	Extra              map[string]any
-	ProxyID            *int64
-	Concurrency        int
-	Priority           int
-	RateMultiplier     *float64 // 账号计费倍率（>=0，允许 0）
+	Name                string
+	Notes               *string
+	Platform            string
+	Type                string
+	Credentials         map[string]any
+	Extra               map[string]any
+	ProxyID             *int64
+	Concurrency         int
+	ReservedConcurrency int
+	Priority            int
+	RateMultiplier      *float64 // 账号计费倍率（>=0，允许 0）
 	GroupIDs           []int64
 	ExpiresAt          *int64
 	AutoPauseOnExpired *bool
@@ -186,6 +187,7 @@ type UpdateAccountInput struct {
 	Extra                 map[string]any
 	ProxyID               *int64
 	Concurrency           *int     // 使用指针区分"未提供"和"设置为0"
+	ReservedConcurrency   *int     // 使用指针区分"未提供"和"设置为0"
 	Priority              *int     // 使用指针区分"未提供"和"设置为0"
 	RateMultiplier        *float64 // 账号计费倍率（>=0，允许 0）
 	Status                string
@@ -201,6 +203,7 @@ type BulkUpdateAccountsInput struct {
 	Name           string
 	ProxyID        *int64
 	Concurrency    *int
+	ReservedConcurrency *int
 	Priority       *int
 	RateMultiplier *float64 // 账号计费倍率（>=0，允许 0）
 	Status         string
@@ -1072,17 +1075,18 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 	}
 
 	account := &Account{
-		Name:        input.Name,
-		Notes:       normalizeAccountNotes(input.Notes),
-		Platform:    input.Platform,
-		Type:        input.Type,
-		Credentials: input.Credentials,
-		Extra:       input.Extra,
-		ProxyID:     input.ProxyID,
-		Concurrency: input.Concurrency,
-		Priority:    input.Priority,
-		Status:      StatusActive,
-		Schedulable: true,
+		Name:                input.Name,
+		Notes:               normalizeAccountNotes(input.Notes),
+		Platform:            input.Platform,
+		Type:                input.Type,
+		Credentials:         input.Credentials,
+		Extra:               input.Extra,
+		ProxyID:             input.ProxyID,
+		Concurrency:         input.Concurrency,
+		ReservedConcurrency: input.ReservedConcurrency,
+		Priority:            input.Priority,
+		Status:              StatusActive,
+		Schedulable:         true,
 	}
 	if input.ExpiresAt != nil && *input.ExpiresAt > 0 {
 		expiresAt := time.Unix(*input.ExpiresAt, 0)
@@ -1146,6 +1150,10 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	// 只在指针非 nil 时更新 Concurrency（支持设置为 0）
 	if input.Concurrency != nil {
 		account.Concurrency = *input.Concurrency
+	}
+	// 只在指针非 nil 时更新 ReservedConcurrency（支持设置为 0）
+	if input.ReservedConcurrency != nil {
+		account.ReservedConcurrency = *input.ReservedConcurrency
 	}
 	// 只在指针非 nil 时更新 Priority（支持设置为 0）
 	if input.Priority != nil {
@@ -1249,6 +1257,9 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 	}
 	if input.Concurrency != nil {
 		repoUpdates.Concurrency = input.Concurrency
+	}
+	if input.ReservedConcurrency != nil {
+		repoUpdates.ReservedConcurrency = input.ReservedConcurrency
 	}
 	if input.Priority != nil {
 		repoUpdates.Priority = input.Priority

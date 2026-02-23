@@ -1611,6 +1611,8 @@ export default {
       proxy: 'Proxy',
       noProxy: 'No Proxy',
       concurrency: 'Concurrency',
+      reservedConcurrency: 'Reserved Concurrency',
+      reservedConcurrencyHint: 'Number of concurrency slots reserved for bound sessions, new sessions can only use concurrency - reserved slots',
       priority: 'Priority',
       priorityHint: 'Lower value accounts are used first',
       billingRateMultiplier: 'Billing Rate Multiplier',

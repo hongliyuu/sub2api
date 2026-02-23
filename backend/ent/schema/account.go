@@ -97,6 +97,12 @@ func (Account) Fields() []ent.Field {
 		field.Int("concurrency").
 			Default(3),
 
+		// reserved_concurrency: 为已绑定 sticky session 预留的并发槽位数
+		// 新 session 只能使用 concurrency - reserved_concurrency 个槽位
+		// 默认值 0 表示不预留，完全向后兼容
+		field.Int("reserved_concurrency").
+			Default(0),
+
 		// priority: 账户优先级，数值越小优先级越高
 		// 调度器会优先使用高优先级的账户
 		field.Int("priority").

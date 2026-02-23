@@ -80,6 +80,7 @@ func (r *accountRepository) Create(ctx context.Context, account *service.Account
 		SetCredentials(normalizeJSONMap(account.Credentials)).
 		SetExtra(normalizeJSONMap(account.Extra)).
 		SetConcurrency(account.Concurrency).
+		SetReservedConcurrency(account.ReservedConcurrency).
 		SetPriority(account.Priority).
 		SetStatus(account.Status).
 		SetErrorMessage(account.ErrorMessage).
@@ -323,6 +324,7 @@ func (r *accountRepository) Update(ctx context.Context, account *service.Account
 		SetCredentials(normalizeJSONMap(account.Credentials)).
 		SetExtra(normalizeJSONMap(account.Extra)).
 		SetConcurrency(account.Concurrency).
+		SetReservedConcurrency(account.ReservedConcurrency).
 		SetPriority(account.Priority).
 		SetStatus(account.Status).
 		SetErrorMessage(account.ErrorMessage).
@@ -1127,6 +1129,11 @@ func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates
 		args = append(args, *updates.Concurrency)
 		idx++
 	}
+	if updates.ReservedConcurrency != nil {
+		setClauses = append(setClauses, "reserved_concurrency = $"+itoa(idx))
+		args = append(args, *updates.ReservedConcurrency)
+		idx++
+	}
 	if updates.Priority != nil {
 		setClauses = append(setClauses, "priority = $"+itoa(idx))
 		args = append(args, *updates.Priority)
@@ -1509,6 +1516,7 @@ func accountEntityToService(m *dbent.Account) *service.Account {
 		Extra:               copyJSONMap(m.Extra),
 		ProxyID:             m.ProxyID,
 		Concurrency:         m.Concurrency,
+		ReservedConcurrency: m.ReservedConcurrency,
 		Priority:            m.Priority,
 		RateMultiplier:      &rateMultiplier,
 		Status:              m.Status,

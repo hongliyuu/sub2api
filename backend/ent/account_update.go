@@ -172,6 +172,27 @@ func (_u *AccountUpdate) AddConcurrency(v int) *AccountUpdate {
 	return _u
 }
 
+// SetReservedConcurrency sets the "reserved_concurrency" field.
+func (_u *AccountUpdate) SetReservedConcurrency(v int) *AccountUpdate {
+	_u.mutation.ResetReservedConcurrency()
+	_u.mutation.SetReservedConcurrency(v)
+	return _u
+}
+
+// SetNillableReservedConcurrency sets the "reserved_concurrency" field if the given value is not nil.
+func (_u *AccountUpdate) SetNillableReservedConcurrency(v *int) *AccountUpdate {
+	if v != nil {
+		_u.SetReservedConcurrency(*v)
+	}
+	return _u
+}
+
+// AddReservedConcurrency adds value to the "reserved_concurrency" field.
+func (_u *AccountUpdate) AddReservedConcurrency(v int) *AccountUpdate {
+	_u.mutation.AddReservedConcurrency(v)
+	return _u
+}
+
 // SetPriority sets the "priority" field.
 func (_u *AccountUpdate) SetPriority(v int) *AccountUpdate {
 	_u.mutation.ResetPriority()
@@ -644,6 +665,12 @@ func (_u *AccountUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	if value, ok := _u.mutation.AddedConcurrency(); ok {
 		_spec.AddField(account.FieldConcurrency, field.TypeInt, value)
 	}
+	if value, ok := _u.mutation.ReservedConcurrency(); ok {
+		_spec.SetField(account.FieldReservedConcurrency, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedReservedConcurrency(); ok {
+		_spec.AddField(account.FieldReservedConcurrency, field.TypeInt, value)
+	}
 	if value, ok := _u.mutation.Priority(); ok {
 		_spec.SetField(account.FieldPriority, field.TypeInt, value)
 	}
@@ -1008,6 +1035,27 @@ func (_u *AccountUpdateOne) SetNillableConcurrency(v *int) *AccountUpdateOne {
 // AddConcurrency adds value to the "concurrency" field.
 func (_u *AccountUpdateOne) AddConcurrency(v int) *AccountUpdateOne {
 	_u.mutation.AddConcurrency(v)
+	return _u
+}
+
+// SetReservedConcurrency sets the "reserved_concurrency" field.
+func (_u *AccountUpdateOne) SetReservedConcurrency(v int) *AccountUpdateOne {
+	_u.mutation.ResetReservedConcurrency()
+	_u.mutation.SetReservedConcurrency(v)
+	return _u
+}
+
+// SetNillableReservedConcurrency sets the "reserved_concurrency" field if the given value is not nil.
+func (_u *AccountUpdateOne) SetNillableReservedConcurrency(v *int) *AccountUpdateOne {
+	if v != nil {
+		_u.SetReservedConcurrency(*v)
+	}
+	return _u
+}
+
+// AddReservedConcurrency adds value to the "reserved_concurrency" field.
+func (_u *AccountUpdateOne) AddReservedConcurrency(v int) *AccountUpdateOne {
+	_u.mutation.AddReservedConcurrency(v)
 	return _u
 }
 
@@ -1512,6 +1560,12 @@ func (_u *AccountUpdateOne) sqlSave(ctx context.Context) (_node *Account, err er
 	}
 	if value, ok := _u.mutation.AddedConcurrency(); ok {
 		_spec.AddField(account.FieldConcurrency, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.ReservedConcurrency(); ok {
+		_spec.SetField(account.FieldReservedConcurrency, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedReservedConcurrency(); ok {
+		_spec.AddField(account.FieldReservedConcurrency, field.TypeInt, value)
 	}
 	if value, ok := _u.mutation.Priority(); ok {
 		_spec.SetField(account.FieldPriority, field.TypeInt, value)

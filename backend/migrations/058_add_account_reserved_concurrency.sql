@@ -1,0 +1,1 @@
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS reserved_concurrency INTEGER NOT NULL DEFAULT 0;

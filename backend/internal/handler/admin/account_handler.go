@@ -90,6 +90,7 @@ type CreateAccountRequest struct {
 	Extra                   map[string]any `json:"extra"`
 	ProxyID                 *int64         `json:"proxy_id"`
 	Concurrency             int            `json:"concurrency"`
+	ReservedConcurrency     int            `json:"reserved_concurrency"`
 	Priority                int            `json:"priority"`
 	RateMultiplier          *float64       `json:"rate_multiplier"`
 	GroupIDs                []int64        `json:"group_ids"`
@@ -108,6 +109,7 @@ type UpdateAccountRequest struct {
 	Extra                   map[string]any `json:"extra"`
 	ProxyID                 *int64         `json:"proxy_id"`
 	Concurrency             *int           `json:"concurrency"`
+	ReservedConcurrency     *int           `json:"reserved_concurrency"`
 	Priority                *int           `json:"priority"`
 	RateMultiplier          *float64       `json:"rate_multiplier"`
 	Status                  string         `json:"status" binding:"omitempty,oneof=active inactive"`
@@ -123,6 +125,7 @@ type BulkUpdateAccountsRequest struct {
 	Name                    string         `json:"name"`
 	ProxyID                 *int64         `json:"proxy_id"`
 	Concurrency             *int           `json:"concurrency"`
+	ReservedConcurrency     *int           `json:"reserved_concurrency"`
 	Priority                *int           `json:"priority"`
 	RateMultiplier          *float64       `json:"rate_multiplier"`
 	Status                  string         `json:"status" binding:"omitempty,oneof=active inactive error"`
@@ -308,6 +311,7 @@ func (h *AccountHandler) Create(c *gin.Context) {
 		Extra:                 req.Extra,
 		ProxyID:               req.ProxyID,
 		Concurrency:           req.Concurrency,
+		ReservedConcurrency:   req.ReservedConcurrency,
 		Priority:              req.Priority,
 		RateMultiplier:        req.RateMultiplier,
 		GroupIDs:              req.GroupIDs,
@@ -371,6 +375,7 @@ func (h *AccountHandler) Update(c *gin.Context) {
 		Extra:                 req.Extra,
 		ProxyID:               req.ProxyID,
 		Concurrency:           req.Concurrency, // 指针类型，nil 表示未提供
+		ReservedConcurrency:   req.ReservedConcurrency, // 指针类型，nil 表示未提供
 		Priority:              req.Priority,    // 指针类型，nil 表示未提供
 		RateMultiplier:        req.RateMultiplier,
 		Status:                req.Status,
@@ -759,6 +764,7 @@ func (h *AccountHandler) BatchCreate(c *gin.Context) {
 			Extra:                 item.Extra,
 			ProxyID:               item.ProxyID,
 			Concurrency:           item.Concurrency,
+			ReservedConcurrency:   item.ReservedConcurrency,
 			Priority:              item.Priority,
 			RateMultiplier:        item.RateMultiplier,
 			GroupIDs:              item.GroupIDs,
@@ -897,6 +903,7 @@ func (h *AccountHandler) BulkUpdate(c *gin.Context) {
 	hasUpdates := req.Name != "" ||
 		req.ProxyID != nil ||
 		req.Concurrency != nil ||
+		req.ReservedConcurrency != nil ||
 		req.Priority != nil ||
 		req.RateMultiplier != nil ||
 		req.Status != "" ||
@@ -915,6 +922,7 @@ func (h *AccountHandler) BulkUpdate(c *gin.Context) {
 		Name:                  req.Name,
 		ProxyID:               req.ProxyID,
 		Concurrency:           req.Concurrency,
+		ReservedConcurrency:   req.ReservedConcurrency,
 		Priority:              req.Priority,
 		RateMultiplier:        req.RateMultiplier,
 		Status:                req.Status,

@@ -139,6 +139,20 @@ func (_c *AccountCreate) SetNillableConcurrency(v *int) *AccountCreate {
 	return _c
 }
 
+// SetReservedConcurrency sets the "reserved_concurrency" field.
+func (_c *AccountCreate) SetReservedConcurrency(v int) *AccountCreate {
+	_c.mutation.SetReservedConcurrency(v)
+	return _c
+}
+
+// SetNillableReservedConcurrency sets the "reserved_concurrency" field if the given value is not nil.
+func (_c *AccountCreate) SetNillableReservedConcurrency(v *int) *AccountCreate {
+	if v != nil {
+		_c.SetReservedConcurrency(*v)
+	}
+	return _c
+}
+
 // SetPriority sets the "priority" field.
 func (_c *AccountCreate) SetPriority(v int) *AccountCreate {
 	_c.mutation.SetPriority(v)
@@ -439,6 +453,10 @@ func (_c *AccountCreate) defaults() error {
 		v := account.DefaultConcurrency
 		_c.mutation.SetConcurrency(v)
 	}
+	if _, ok := _c.mutation.ReservedConcurrency(); !ok {
+		v := account.DefaultReservedConcurrency
+		_c.mutation.SetReservedConcurrency(v)
+	}
 	if _, ok := _c.mutation.Priority(); !ok {
 		v := account.DefaultPriority
 		_c.mutation.SetPriority(v)
@@ -502,6 +520,9 @@ func (_c *AccountCreate) check() error {
 	}
 	if _, ok := _c.mutation.Concurrency(); !ok {
 		return &ValidationError{Name: "concurrency", err: errors.New(`ent: missing required field "Account.concurrency"`)}
+	}
+	if _, ok := _c.mutation.ReservedConcurrency(); !ok {
+		return &ValidationError{Name: "reserved_concurrency", err: errors.New(`ent: missing required field "Account.reserved_concurrency"`)}
 	}
 	if _, ok := _c.mutation.Priority(); !ok {
 		return &ValidationError{Name: "priority", err: errors.New(`ent: missing required field "Account.priority"`)}
@@ -594,6 +615,10 @@ func (_c *AccountCreate) createSpec() (*Account, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Concurrency(); ok {
 		_spec.SetField(account.FieldConcurrency, field.TypeInt, value)
 		_node.Concurrency = value
+	}
+	if value, ok := _c.mutation.ReservedConcurrency(); ok {
+		_spec.SetField(account.FieldReservedConcurrency, field.TypeInt, value)
+		_node.ReservedConcurrency = value
 	}
 	if value, ok := _c.mutation.Priority(); ok {
 		_spec.SetField(account.FieldPriority, field.TypeInt, value)

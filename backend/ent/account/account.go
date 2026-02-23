@@ -37,6 +37,8 @@ const (
 	FieldProxyID = "proxy_id"
 	// FieldConcurrency holds the string denoting the concurrency field in the database.
 	FieldConcurrency = "concurrency"
+	// FieldReservedConcurrency holds the string denoting the reserved_concurrency field in the database.
+	FieldReservedConcurrency = "reserved_concurrency"
 	// FieldPriority holds the string denoting the priority field in the database.
 	FieldPriority = "priority"
 	// FieldRateMultiplier holds the string denoting the rate_multiplier field in the database.
@@ -117,6 +119,7 @@ var Columns = []string{
 	FieldExtra,
 	FieldProxyID,
 	FieldConcurrency,
+	FieldReservedConcurrency,
 	FieldPriority,
 	FieldRateMultiplier,
 	FieldStatus,
@@ -175,6 +178,8 @@ var (
 	DefaultExtra func() map[string]interface{}
 	// DefaultConcurrency holds the default value on creation for the "concurrency" field.
 	DefaultConcurrency int
+	// DefaultReservedConcurrency holds the default value on creation for the "reserved_concurrency" field.
+	DefaultReservedConcurrency int
 	// DefaultPriority holds the default value on creation for the "priority" field.
 	DefaultPriority int
 	// DefaultRateMultiplier holds the default value on creation for the "rate_multiplier" field.
@@ -242,6 +247,11 @@ func ByProxyID(opts ...sql.OrderTermOption) OrderOption {
 // ByConcurrency orders the results by the concurrency field.
 func ByConcurrency(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldConcurrency, opts...).ToFunc()
+}
+
+// ByReservedConcurrency orders the results by the reserved_concurrency field.
+func ByReservedConcurrency(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldReservedConcurrency, opts...).ToFunc()
 }
 
 // ByPriority orders the results by the priority field.

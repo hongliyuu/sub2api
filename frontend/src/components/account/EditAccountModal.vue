@@ -673,6 +673,11 @@
           <input v-model.number="form.concurrency" type="number" min="1" class="input" />
         </div>
         <div>
+          <label class="input-label">{{ t('admin.accounts.reservedConcurrency') }}</label>
+          <input v-model.number="form.reserved_concurrency" type="number" min="0" class="input" />
+          <p class="input-hint">{{ t('admin.accounts.reservedConcurrencyHint') }}</p>
+        </div>
+        <div>
           <label class="input-label">{{ t('admin.accounts.priority') }}</label>
           <input
             v-model.number="form.priority"
@@ -1189,6 +1194,7 @@ const form = reactive({
   notes: '',
   proxy_id: null as number | null,
   concurrency: 1,
+  reserved_concurrency: 0,
   priority: 1,
   rate_multiplier: 1,
   status: 'active' as 'active' | 'inactive',
@@ -1217,6 +1223,7 @@ watch(
       form.notes = newAccount.notes || ''
       form.proxy_id = newAccount.proxy_id
       form.concurrency = newAccount.concurrency
+      form.reserved_concurrency = newAccount.reserved_concurrency ?? 0
       form.priority = newAccount.priority
       form.rate_multiplier = newAccount.rate_multiplier ?? 1
       form.status = newAccount.status as 'active' | 'inactive'

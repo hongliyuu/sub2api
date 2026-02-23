@@ -21,6 +21,9 @@ type Account struct {
 	Extra       map[string]any
 	ProxyID     *int64
 	Concurrency int
+	// ReservedConcurrency 为已绑定 sticky session 预留的并发槽位数。
+	// 新 session 只能使用 Concurrency - ReservedConcurrency 个槽位，默认 0 表示不预留。
+	ReservedConcurrency int
 	Priority    int
 	// RateMultiplier 账号计费倍率（>=0，允许 0 表示该账号计费为 0）。
 	// 使用指针用于兼容旧版本调度缓存（Redis）中缺字段的情况：nil 表示按 1.0 处理。
@@ -75,6 +78,20 @@ func (a *Account) BillingRateMultiplier() float64 {
 		return 1.0
 	}
 	return *a.RateMultiplier
+}
+
+// EffectiveConcurrency 返回请求可用的有效并发上限。
+// isBound=true（已绑定 sticky session）→ 可用全部 Concurrency 槽位。
+// isBound=false（新 session）→ 只能用 Concurrency - ReservedConcurrency 个槽位。
+func (a *Account) EffectiveConcurrency(isBound bool) int {
+	if isBound || a.ReservedConcurrency <= 0 {
+		return a.Concurrency
+	}
+	effective := a.Concurrency - a.ReservedConcurrency
+	if effective <= 0 {
+		return 0
+	}
+	return effective
 }
 
 func (a *Account) IsSchedulable() bool {

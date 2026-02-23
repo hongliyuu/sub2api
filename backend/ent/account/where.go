@@ -100,6 +100,11 @@ func Concurrency(v int) predicate.Account {
 	return predicate.Account(sql.FieldEQ(FieldConcurrency, v))
 }
 
+// ReservedConcurrency applies equality check predicate on the "reserved_concurrency" field. It's identical to ReservedConcurrencyEQ.
+func ReservedConcurrency(v int) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldReservedConcurrency, v))
+}
+
 // Priority applies equality check predicate on the "priority" field. It's identical to PriorityEQ.
 func Priority(v int) predicate.Account {
 	return predicate.Account(sql.FieldEQ(FieldPriority, v))
@@ -638,6 +643,46 @@ func ConcurrencyLT(v int) predicate.Account {
 // ConcurrencyLTE applies the LTE predicate on the "concurrency" field.
 func ConcurrencyLTE(v int) predicate.Account {
 	return predicate.Account(sql.FieldLTE(FieldConcurrency, v))
+}
+
+// ReservedConcurrencyEQ applies the EQ predicate on the "reserved_concurrency" field.
+func ReservedConcurrencyEQ(v int) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldReservedConcurrency, v))
+}
+
+// ReservedConcurrencyNEQ applies the NEQ predicate on the "reserved_concurrency" field.
+func ReservedConcurrencyNEQ(v int) predicate.Account {
+	return predicate.Account(sql.FieldNEQ(FieldReservedConcurrency, v))
+}
+
+// ReservedConcurrencyIn applies the In predicate on the "reserved_concurrency" field.
+func ReservedConcurrencyIn(vs ...int) predicate.Account {
+	return predicate.Account(sql.FieldIn(FieldReservedConcurrency, vs...))
+}
+
+// ReservedConcurrencyNotIn applies the NotIn predicate on the "reserved_concurrency" field.
+func ReservedConcurrencyNotIn(vs ...int) predicate.Account {
+	return predicate.Account(sql.FieldNotIn(FieldReservedConcurrency, vs...))
+}
+
+// ReservedConcurrencyGT applies the GT predicate on the "reserved_concurrency" field.
+func ReservedConcurrencyGT(v int) predicate.Account {
+	return predicate.Account(sql.FieldGT(FieldReservedConcurrency, v))
+}
+
+// ReservedConcurrencyGTE applies the GTE predicate on the "reserved_concurrency" field.
+func ReservedConcurrencyGTE(v int) predicate.Account {
+	return predicate.Account(sql.FieldGTE(FieldReservedConcurrency, v))
+}
+
+// ReservedConcurrencyLT applies the LT predicate on the "reserved_concurrency" field.
+func ReservedConcurrencyLT(v int) predicate.Account {
+	return predicate.Account(sql.FieldLT(FieldReservedConcurrency, v))
+}
+
+// ReservedConcurrencyLTE applies the LTE predicate on the "reserved_concurrency" field.
+func ReservedConcurrencyLTE(v int) predicate.Account {
+	return predicate.Account(sql.FieldLTE(FieldReservedConcurrency, v))
 }
 
 // PriorityEQ applies the EQ predicate on the "priority" field.

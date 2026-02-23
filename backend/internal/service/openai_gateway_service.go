@@ -443,7 +443,8 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 		if err != nil {
 			return nil, err
 		}
-		result, err := s.tryAcquireAccountSlot(ctx, account.ID, account.Concurrency)
+		isBound := stickyAccountID > 0 && stickyAccountID == account.ID
+		result, err := s.tryAcquireAccountSlot(ctx, account.ID, account.EffectiveConcurrency(isBound))
 		if err == nil && result.Acquired {
 			return &AccountSelectionResult{
 				Account:     account,
@@ -451,14 +452,14 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 				ReleaseFunc: result.ReleaseFunc,
 			}, nil
 		}
-		if stickyAccountID > 0 && stickyAccountID == account.ID && s.concurrencyService != nil {
+		if isBound && s.concurrencyService != nil {
 			waitingCount, _ := s.concurrencyService.GetAccountWaitingCount(ctx, account.ID)
 			if waitingCount < cfg.StickySessionMaxWaiting {
 				return &AccountSelectionResult{
 					Account: account,
 					WaitPlan: &AccountWaitPlan{
 						AccountID:      account.ID,
-						MaxConcurrency: account.Concurrency,
+						MaxConcurrency: account.EffectiveConcurrency(true),
 						Timeout:        cfg.StickySessionWaitTimeout,
 						MaxWaiting:     cfg.StickySessionMaxWaiting,
 					},
@@ -469,7 +470,7 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 			Account: account,
 			WaitPlan: &AccountWaitPlan{
 				AccountID:      account.ID,
-				MaxConcurrency: account.Concurrency,
+				MaxConcurrency: account.EffectiveConcurrency(isBound),
 				Timeout:        cfg.FallbackWaitTimeout,
 				MaxWaiting:     cfg.FallbackMaxWaiting,
 			},
@@ -504,7 +505,7 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 				}
 				if !clearSticky && account.IsSchedulable() && account.IsOpenAI() &&
 					(requestedModel == "" || account.IsModelSupported(requestedModel)) {
-					result, err := s.tryAcquireAccountSlot(ctx, accountID, account.Concurrency)
+					result, err := s.tryAcquireAccountSlot(ctx, accountID, account.EffectiveConcurrency(true))
 					if err == nil && result.Acquired {
 						_ = s.cache.RefreshSessionTTL(ctx, derefGroupID(groupID), "openai:"+sessionHash, openaiStickySessionTTL)
 						return &AccountSelectionResult{
@@ -520,7 +521,7 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 							Account: account,
 							WaitPlan: &AccountWaitPlan{
 								AccountID:      accountID,
-								MaxConcurrency: account.Concurrency,
+								MaxConcurrency: account.EffectiveConcurrency(true),
 								Timeout:        cfg.StickySessionWaitTimeout,
 								MaxWaiting:     cfg.StickySessionMaxWaiting,
 							},
@@ -556,9 +557,13 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 
 	accountLoads := make([]AccountWithConcurrency, 0, len(candidates))
 	for _, acc := range candidates {
+		effectiveConc := acc.EffectiveConcurrency(false)
+		if effectiveConc == 0 {
+			continue // 所有槽位已预留给粘性会话，跳过
+		}
 		accountLoads = append(accountLoads, AccountWithConcurrency{
 			ID:             acc.ID,
-			MaxConcurrency: acc.Concurrency,
+			MaxConcurrency: effectiveConc,
 		})
 	}
 
@@ -567,7 +572,7 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 		ordered := append([]*Account(nil), candidates...)
 		sortAccountsByPriorityAndLastUsed(ordered, false)
 		for _, acc := range ordered {
-			result, err := s.tryAcquireAccountSlot(ctx, acc.ID, acc.Concurrency)
+			result, err := s.tryAcquireAccountSlot(ctx, acc.ID, acc.EffectiveConcurrency(false))
 			if err == nil && result.Acquired {
 				if sessionHash != "" {
 					_ = s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), "openai:"+sessionHash, acc.ID, openaiStickySessionTTL)
@@ -617,7 +622,7 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 			shuffleWithinSortGroups(available)
 
 			for _, item := range available {
-				result, err := s.tryAcquireAccountSlot(ctx, item.account.ID, item.account.Concurrency)
+				result, err := s.tryAcquireAccountSlot(ctx, item.account.ID, item.account.EffectiveConcurrency(false))
 				if err == nil && result.Acquired {
 					if sessionHash != "" {
 						_ = s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), "openai:"+sessionHash, item.account.ID, openaiStickySessionTTL)
@@ -635,11 +640,15 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 	// ============ Layer 3: Fallback wait ============
 	sortAccountsByPriorityAndLastUsed(candidates, false)
 	for _, acc := range candidates {
+		effectiveConc := acc.EffectiveConcurrency(false)
+		if effectiveConc == 0 {
+			continue // 所有槽位已预留给粘性会话，跳过
+		}
 		return &AccountSelectionResult{
 			Account: acc,
 			WaitPlan: &AccountWaitPlan{
 				AccountID:      acc.ID,
-				MaxConcurrency: acc.Concurrency,
+				MaxConcurrency: effectiveConc,
 				Timeout:        cfg.FallbackWaitTimeout,
 				MaxWaiting:     cfg.FallbackMaxWaiting,
 			},
@@ -672,6 +681,9 @@ func (s *OpenAIGatewayService) listSchedulableAccounts(ctx context.Context, grou
 func (s *OpenAIGatewayService) tryAcquireAccountSlot(ctx context.Context, accountID int64, maxConcurrency int) (*AcquireResult, error) {
 	if s.concurrencyService == nil {
 		return &AcquireResult{Acquired: true, ReleaseFunc: func() {}}, nil
+	}
+	if maxConcurrency == 0 {
+		return &AcquireResult{Acquired: false, ReleaseFunc: nil}, nil
 	}
 	return s.concurrencyService.AcquireAccountSlot(ctx, accountID, maxConcurrency)
 }

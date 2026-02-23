@@ -1440,9 +1440,11 @@ type AccountMutation struct {
 	_type                 *string
 	credentials           *map[string]interface{}
 	extra                 *map[string]interface{}
-	concurrency           *int
-	addconcurrency        *int
-	priority              *int
+	concurrency             *int
+	addconcurrency          *int
+	reserved_concurrency    *int
+	addreserved_concurrency *int
+	priority                *int
 	addpriority           *int
 	rate_multiplier       *float64
 	addrate_multiplier    *float64
@@ -2023,6 +2025,62 @@ func (m *AccountMutation) AddedConcurrency() (r int, exists bool) {
 func (m *AccountMutation) ResetConcurrency() {
 	m.concurrency = nil
 	m.addconcurrency = nil
+}
+
+// SetReservedConcurrency sets the "reserved_concurrency" field.
+func (m *AccountMutation) SetReservedConcurrency(i int) {
+	m.reserved_concurrency = &i
+	m.addreserved_concurrency = nil
+}
+
+// ReservedConcurrency returns the value of the "reserved_concurrency" field in the mutation.
+func (m *AccountMutation) ReservedConcurrency() (r int, exists bool) {
+	v := m.reserved_concurrency
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldReservedConcurrency returns the old "reserved_concurrency" field's value of the Account entity.
+// If the Account object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountMutation) OldReservedConcurrency(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldReservedConcurrency is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldReservedConcurrency requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldReservedConcurrency: %w", err)
+	}
+	return oldValue.ReservedConcurrency, nil
+}
+
+// AddReservedConcurrency adds i to the "reserved_concurrency" field.
+func (m *AccountMutation) AddReservedConcurrency(i int) {
+	if m.addreserved_concurrency != nil {
+		*m.addreserved_concurrency += i
+	} else {
+		m.addreserved_concurrency = &i
+	}
+}
+
+// AddedReservedConcurrency returns the value that was added to the "reserved_concurrency" field in this mutation.
+func (m *AccountMutation) AddedReservedConcurrency() (r int, exists bool) {
+	v := m.addreserved_concurrency
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetReservedConcurrency resets all changes to the "reserved_concurrency" field.
+func (m *AccountMutation) ResetReservedConcurrency() {
+	m.reserved_concurrency = nil
+	m.addreserved_concurrency = nil
 }
 
 // SetPriority sets the "priority" field.
@@ -2889,6 +2947,9 @@ func (m *AccountMutation) Fields() []string {
 	if m.concurrency != nil {
 		fields = append(fields, account.FieldConcurrency)
 	}
+	if m.reserved_concurrency != nil {
+		fields = append(fields, account.FieldReservedConcurrency)
+	}
 	if m.priority != nil {
 		fields = append(fields, account.FieldPriority)
 	}
@@ -2961,6 +3022,8 @@ func (m *AccountMutation) Field(name string) (ent.Value, bool) {
 		return m.ProxyID()
 	case account.FieldConcurrency:
 		return m.Concurrency()
+	case account.FieldReservedConcurrency:
+		return m.ReservedConcurrency()
 	case account.FieldPriority:
 		return m.Priority()
 	case account.FieldRateMultiplier:
@@ -3020,6 +3083,8 @@ func (m *AccountMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldProxyID(ctx)
 	case account.FieldConcurrency:
 		return m.OldConcurrency(ctx)
+	case account.FieldReservedConcurrency:
+		return m.OldReservedConcurrency(ctx)
 	case account.FieldPriority:
 		return m.OldPriority(ctx)
 	case account.FieldRateMultiplier:
@@ -3134,6 +3199,13 @@ func (m *AccountMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetConcurrency(v)
 		return nil
+	case account.FieldReservedConcurrency:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetReservedConcurrency(v)
+		return nil
 	case account.FieldPriority:
 		v, ok := value.(int)
 		if !ok {
@@ -3243,6 +3315,9 @@ func (m *AccountMutation) AddedFields() []string {
 	if m.addconcurrency != nil {
 		fields = append(fields, account.FieldConcurrency)
 	}
+	if m.addreserved_concurrency != nil {
+		fields = append(fields, account.FieldReservedConcurrency)
+	}
 	if m.addpriority != nil {
 		fields = append(fields, account.FieldPriority)
 	}
@@ -3259,6 +3334,8 @@ func (m *AccountMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
 	case account.FieldConcurrency:
 		return m.AddedConcurrency()
+	case account.FieldReservedConcurrency:
+		return m.AddedReservedConcurrency()
 	case account.FieldPriority:
 		return m.AddedPriority()
 	case account.FieldRateMultiplier:
@@ -3278,6 +3355,13 @@ func (m *AccountMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddConcurrency(v)
+		return nil
+	case account.FieldReservedConcurrency:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddReservedConcurrency(v)
 		return nil
 	case account.FieldPriority:
 		v, ok := value.(int)
@@ -3427,6 +3511,9 @@ func (m *AccountMutation) ResetField(name string) error {
 		return nil
 	case account.FieldConcurrency:
 		m.ResetConcurrency()
+		return nil
+	case account.FieldReservedConcurrency:
+		m.ResetReservedConcurrency()
 		return nil
 	case account.FieldPriority:
 		m.ResetPriority()

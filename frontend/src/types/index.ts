@@ -572,6 +572,7 @@ export interface Account {
   } & Record<string, unknown>)
   proxy_id: number | null
   concurrency: number
+  reserved_concurrency: number
   current_concurrency?: number // Real-time concurrency count from Redis
   priority: number
   rate_multiplier?: number // Account billing multiplier (>=0, 0 means free)
@@ -693,6 +694,7 @@ export interface CreateAccountRequest {
   extra?: Record<string, unknown>
   proxy_id?: number | null
   concurrency?: number
+  reserved_concurrency?: number
   priority?: number
   rate_multiplier?: number // Account billing multiplier (>=0, 0 means free)
   group_ids?: number[]
@@ -709,6 +711,7 @@ export interface UpdateAccountRequest {
   extra?: Record<string, unknown>
   proxy_id?: number | null
   concurrency?: number
+  reserved_concurrency?: number
   priority?: number
   rate_multiplier?: number // Account billing multiplier (>=0, 0 means free)
   schedulable?: boolean

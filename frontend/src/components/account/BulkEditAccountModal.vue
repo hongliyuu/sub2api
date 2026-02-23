@@ -459,7 +459,7 @@
       </div>
 
       <!-- Concurrency & Priority -->
-      <div class="grid grid-cols-2 gap-4 border-t border-gray-200 pt-4 dark:border-dark-600 lg:grid-cols-3">
+      <div class="grid grid-cols-2 gap-4 border-t border-gray-200 pt-4 dark:border-dark-600 lg:grid-cols-4">
         <div>
           <div class="mb-3 flex items-center justify-between">
             <label
@@ -487,6 +487,35 @@
             :class="!enableConcurrency && 'cursor-not-allowed opacity-50'"
             aria-labelledby="bulk-edit-concurrency-label"
           />
+        </div>
+        <div>
+          <div class="mb-3 flex items-center justify-between">
+            <label
+              id="bulk-edit-reserved-concurrency-label"
+              class="input-label mb-0"
+              for="bulk-edit-reserved-concurrency-enabled"
+            >
+              {{ t('admin.accounts.reservedConcurrency') }}
+            </label>
+            <input
+              v-model="enableReservedConcurrency"
+              id="bulk-edit-reserved-concurrency-enabled"
+              type="checkbox"
+              aria-controls="bulk-edit-reserved-concurrency"
+              class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+            />
+          </div>
+          <input
+            v-model.number="reservedConcurrency"
+            id="bulk-edit-reserved-concurrency"
+            type="number"
+            min="0"
+            :disabled="!enableReservedConcurrency"
+            class="input"
+            :class="!enableReservedConcurrency && 'cursor-not-allowed opacity-50'"
+            aria-labelledby="bulk-edit-reserved-concurrency-label"
+          />
+          <p class="input-hint">{{ t('admin.accounts.reservedConcurrencyHint') }}</p>
         </div>
         <div>
           <div class="mb-3 flex items-center justify-between">
@@ -684,6 +713,7 @@ const enableCustomErrorCodes = ref(false)
 const enableInterceptWarmup = ref(false)
 const enableProxy = ref(false)
 const enableConcurrency = ref(false)
+const enableReservedConcurrency = ref(false)
 const enablePriority = ref(false)
 const enableRateMultiplier = ref(false)
 const enableStatus = ref(false)
@@ -700,6 +730,7 @@ const customErrorCodeInput = ref<number | null>(null)
 const interceptWarmupRequests = ref(false)
 const proxyId = ref<number | null>(null)
 const concurrency = ref(1)
+const reservedConcurrency = ref(0)
 const priority = ref(1)
 const rateMultiplier = ref(1)
 const status = ref<'active' | 'inactive'>('active')
@@ -907,6 +938,10 @@ const buildUpdatePayload = (): Record<string, unknown> | null => {
     updates.concurrency = concurrency.value
   }
 
+  if (enableReservedConcurrency.value) {
+    updates.reserved_concurrency = reservedConcurrency.value
+  }
+
   if (enablePriority.value) {
     updates.priority = priority.value
   }
@@ -988,6 +1023,7 @@ const handleSubmit = async () => {
     enableInterceptWarmup.value ||
     enableProxy.value ||
     enableConcurrency.value ||
+    enableReservedConcurrency.value ||
     enablePriority.value ||
     enableRateMultiplier.value ||
     enableStatus.value ||
@@ -1043,6 +1079,7 @@ watch(
       enableInterceptWarmup.value = false
       enableProxy.value = false
       enableConcurrency.value = false
+      enableReservedConcurrency.value = false
       enablePriority.value = false
       enableRateMultiplier.value = false
       enableStatus.value = false
@@ -1058,6 +1095,7 @@ watch(
       interceptWarmupRequests.value = false
       proxyId.value = null
       concurrency.value = 1
+      reservedConcurrency.value = 0
       priority.value = 1
       rateMultiplier.value = 1
       status.value = 'active'

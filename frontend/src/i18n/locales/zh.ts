@@ -1757,6 +1757,8 @@ export default {
       proxy: '代理',
       noProxy: '无代理',
       concurrency: '并发数',
+      reservedConcurrency: '预留并发',
+      reservedConcurrencyHint: '为已绑定会话预留的并发槽位数，新会话只能使用 并发数-预留并发 个槽位',
       priority: '优先级',
       priorityHint: '优先级越小的账号优先使用',
       billingRateMultiplier: '账号计费倍率',
