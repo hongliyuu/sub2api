@@ -2,6 +2,9 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"log"
+	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
@@ -22,13 +25,24 @@ func (f *AntigravityQuotaFetcher) CanFetch(account *Account) bool {
 	if account.Platform != PlatformAntigravity {
 		return false
 	}
-	accessToken := account.GetCredential("access_token")
-	return accessToken != ""
+	if account.Type != AccountTypeOAuth {
+		return false
+	}
+	if account.GetCredential("access_token") != "" {
+		return true
+	}
+	return account.GetCredential("refresh_token") != ""
 }
 
 // FetchQuota 获取 Antigravity 账户额度信息
 func (f *AntigravityQuotaFetcher) FetchQuota(ctx context.Context, account *Account, proxyURL string) (*QuotaResult, error) {
-	accessToken := account.GetCredential("access_token")
+	accessToken, err := f.resolveAccessToken(ctx, account, proxyURL)
+	if err != nil {
+		return nil, err
+	}
+	if accessToken == "" {
+		return nil, fmt.Errorf("no antigravity access_token available")
+	}
 	projectID := account.GetCredential("project_id")
 
 	client := antigravity.NewClient(proxyURL)
@@ -46,6 +60,38 @@ func (f *AntigravityQuotaFetcher) FetchQuota(ctx context.Context, account *Accou
 		UsageInfo: usageInfo,
 		Raw:       modelsRaw,
 	}, nil
+}
+
+func (f *AntigravityQuotaFetcher) resolveAccessToken(ctx context.Context, account *Account, proxyURL string) (string, error) {
+	accessToken := strings.TrimSpace(account.GetCredential("access_token"))
+	expiresAt := account.GetCredentialAsTime("expires_at")
+	if accessToken != "" && (expiresAt == nil || time.Until(*expiresAt) > 3*time.Minute) {
+		return accessToken, nil
+	}
+
+	refreshToken := strings.TrimSpace(account.GetCredential("refresh_token"))
+	if refreshToken == "" {
+		if accessToken != "" {
+			return accessToken, nil
+		}
+		return "", fmt.Errorf("no antigravity refresh_token available")
+	}
+
+	client := antigravity.NewClient(proxyURL)
+	refreshResp, err := client.RefreshToken(ctx, refreshToken)
+	if err != nil {
+		if accessToken != "" {
+			log.Printf("[antigravity] token refresh failed during quota fetch, fallback to existing access_token: %v", err)
+			return accessToken, nil
+		}
+		return "", fmt.Errorf("refresh access_token failed: %w", err)
+	}
+
+	if strings.TrimSpace(refreshResp.AccessToken) == "" {
+		return "", fmt.Errorf("refreshed access_token is empty")
+	}
+
+	return refreshResp.AccessToken, nil
 }
 
 // buildUsageInfo 将 API 响应转换为 UsageInfo
