@@ -1326,6 +1326,22 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		}
 	}
 
+	// 透传模式下剥离 codex 模型不支持的参数，避免上游 400。
+	for _, key := range []string{
+		"max_output_tokens",
+		"max_completion_tokens",
+		"temperature",
+		"top_p",
+		"frequency_penalty",
+		"presence_penalty",
+	} {
+		if gjson.GetBytes(body, key).Exists() {
+			if patched, err := sjson.DeleteBytes(body, key); err == nil {
+				body = patched
+			}
+		}
+	}
+
 	logger.LegacyPrintf("service.openai_gateway",
 		"[OpenAI 自动透传] 命中自动透传分支: account=%d name=%s type=%s model=%s stream=%v",
 		account.ID,
