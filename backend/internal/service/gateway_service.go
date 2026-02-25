@@ -492,6 +492,15 @@ func (e *UpstreamFailoverError) Error() string {
 	return fmt.Sprintf("upstream error: %d (failover)", e.StatusCode)
 }
 
+// UserSessionLimitError 用户级会话数超限错误
+type UserSessionLimitError struct {
+	MaxSessions int
+}
+
+func (e *UserSessionLimitError) Error() string {
+	return fmt.Sprintf("user session limit exceeded (max %d active sessions)", e.MaxSessions)
+}
+
 // TempUnscheduleRetryableError 对 RetryableOnSameAccount 类型的 failover 错误触发临时封禁。
 // 由 handler 层在同账号重试全部用尽、切换账号时调用。
 func (s *GatewayService) TempUnscheduleRetryableError(ctx context.Context, accountID int64, failoverErr *UpstreamFailoverError) {
@@ -1024,7 +1033,7 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 
 	// 用户级活跃会话检查（在账号选择之前）
 	if !s.checkAndRegisterUserSession(ctx, userID, sessionHash, userMaxSessions) {
-		return nil, fmt.Errorf("user session limit exceeded (max %d active sessions)", userMaxSessions)
+		return nil, &UserSessionLimitError{MaxSessions: userMaxSessions}
 	}
 
 	// 检查 Claude Code 客户端限制（可能会替换 groupID 为降级分组）
