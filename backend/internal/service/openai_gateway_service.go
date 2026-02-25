@@ -1275,6 +1275,40 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	reqStream bool,
 	startTime time.Time,
 ) (*OpenAIForwardResult, error) {
+	// 透传模式下，若 instructions 为空则自动注入默认指令，避免上游 400。
+	// 必须在 OAuth instructions 校验之前执行，否则 codex 模型会被拒绝。
+	// 使用 gjson/sjson 轻量操作，不做全量 Unmarshal。
+	if isPassthroughInstructionsEmptyBytes(body) {
+		if instructions := strings.TrimSpace(GetOpenCodeInstructions()); instructions != "" {
+			if patched, err := sjson.SetBytes(body, "instructions", instructions); err == nil {
+				body = patched
+				logger.LegacyPrintf("service.openai_gateway",
+					"[OpenAI passthrough] Injected default instructions: account=%d model=%s",
+					account.ID, reqModel)
+			} else {
+				logger.LegacyPrintf("service.openai_gateway",
+					"[OpenAI passthrough] Failed to inject instructions: account=%d model=%s err=%v",
+					account.ID, reqModel, err)
+			}
+		}
+	}
+
+	// 透传模式下剥离 codex 模型不支持的参数，避免上游 400。
+	for _, key := range []string{
+		"max_output_tokens",
+		"max_completion_tokens",
+		"temperature",
+		"top_p",
+		"frequency_penalty",
+		"presence_penalty",
+	} {
+		if gjson.GetBytes(body, key).Exists() {
+			if patched, err := sjson.DeleteBytes(body, key); err == nil {
+				body = patched
+			}
+		}
+	}
+
 	if account != nil && account.Type == AccountTypeOAuth {
 		if rejectReason := detectOpenAIPassthroughInstructionsRejectReason(reqModel, body); rejectReason != "" {
 			rejectMsg := "OpenAI codex passthrough requires a non-empty instructions field"
@@ -1306,39 +1340,6 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		if normalized {
 			body = normalizedBody
 			reqStream = true
-		}
-	}
-
-	// 透传模式下，若 instructions 为空则自动注入默认指令，避免上游 400。
-	// 使用 gjson/sjson 轻量操作，不做全量 Unmarshal。
-	if isPassthroughInstructionsEmptyBytes(body) {
-		if instructions := strings.TrimSpace(GetOpenCodeInstructions()); instructions != "" {
-			if patched, err := sjson.SetBytes(body, "instructions", instructions); err == nil {
-				body = patched
-				logger.LegacyPrintf("service.openai_gateway",
-					"[OpenAI passthrough] Injected default instructions: account=%d model=%s",
-					account.ID, reqModel)
-			} else {
-				logger.LegacyPrintf("service.openai_gateway",
-					"[OpenAI passthrough] Failed to inject instructions: account=%d model=%s err=%v",
-					account.ID, reqModel, err)
-			}
-		}
-	}
-
-	// 透传模式下剥离 codex 模型不支持的参数，避免上游 400。
-	for _, key := range []string{
-		"max_output_tokens",
-		"max_completion_tokens",
-		"temperature",
-		"top_p",
-		"frequency_penalty",
-		"presence_penalty",
-	} {
-		if gjson.GetBytes(body, key).Exists() {
-			if patched, err := sjson.DeleteBytes(body, key); err == nil {
-				body = patched
-			}
 		}
 	}
 
