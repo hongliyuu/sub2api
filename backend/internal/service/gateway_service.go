@@ -1135,7 +1135,7 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 		return nil, err
 	}
 	if len(accounts) == 0 {
-		return nil, errors.New("no available accounts")
+		return nil, errors.New("no available accounts: no schedulable accounts in pool")
 	}
 	ctx = s.withWindowCostPrefetch(ctx, accounts)
 
@@ -1432,35 +1432,61 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 
 	// ============ Layer 2: 负载感知选择 ============
 	candidates := make([]*Account, 0, len(accounts))
+	var filteredExcluded, filteredNotSchedulable, filteredPlatform, filteredModel, filteredModelScope, filteredWindowCost int
 	for i := range accounts {
 		acc := &accounts[i]
 		if isExcluded(acc.ID) {
+			filteredExcluded++
 			continue
 		}
 		// Scheduler snapshots can be temporarily stale (bucket rebuild is throttled);
 		// re-check schedulability here so recently rate-limited/overloaded accounts
 		// are not selected again before the bucket is rebuilt.
 		if !acc.IsSchedulable() {
+			filteredNotSchedulable++
 			continue
 		}
 		if !s.isAccountAllowedForPlatform(acc, platform, useMixed) {
+			filteredPlatform++
 			continue
 		}
 		if requestedModel != "" && !s.isModelSupportedByAccountWithContext(ctx, acc, requestedModel) {
+			filteredModel++
 			continue
 		}
 		if !acc.IsSchedulableForModelWithContext(ctx, requestedModel) {
+			filteredModelScope++
 			continue
 		}
 		// 窗口费用检查（非粘性会话路径）
 		if !s.isAccountSchedulableForWindowCost(ctx, acc, false) {
+			filteredWindowCost++
 			continue
 		}
 		candidates = append(candidates, acc)
 	}
 
 	if len(candidates) == 0 {
-		return nil, errors.New("no available accounts")
+		var reasons []string
+		if filteredExcluded > 0 {
+			reasons = append(reasons, fmt.Sprintf("%d excluded", filteredExcluded))
+		}
+		if filteredNotSchedulable > 0 {
+			reasons = append(reasons, fmt.Sprintf("%d not schedulable", filteredNotSchedulable))
+		}
+		if filteredPlatform > 0 {
+			reasons = append(reasons, fmt.Sprintf("%d platform mismatch", filteredPlatform))
+		}
+		if filteredModel > 0 {
+			reasons = append(reasons, fmt.Sprintf("%d model unsupported", filteredModel))
+		}
+		if filteredModelScope > 0 {
+			reasons = append(reasons, fmt.Sprintf("%d model rate-limited", filteredModelScope))
+		}
+		if filteredWindowCost > 0 {
+			reasons = append(reasons, fmt.Sprintf("%d window cost exceeded", filteredWindowCost))
+		}
+		return nil, fmt.Errorf("no available accounts: %d accounts filtered (%s)", len(accounts), strings.Join(reasons, ", "))
 	}
 
 	accountLoads := make([]AccountWithConcurrency, 0, len(candidates))
@@ -1549,7 +1575,7 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 			},
 		}, nil
 	}
-	return nil, errors.New("no available accounts")
+	return nil, errors.New("no available accounts: all accounts at capacity")
 }
 
 func (s *GatewayService) tryAcquireByLegacyOrder(ctx context.Context, candidates []*Account, groupID *int64, sessionHash string, preferOAuth bool) (*AccountSelectionResult, bool) {
@@ -2571,7 +2597,7 @@ func (s *GatewayService) selectAccountForModelWithPlatform(ctx context.Context, 
 		if requestedModel != "" {
 			return nil, fmt.Errorf("no available accounts supporting model: %s", requestedModel)
 		}
-		return nil, errors.New("no available accounts")
+		return nil, errors.New("no available accounts: no matching accounts in pool")
 	}
 
 	// 4. 建立粘性绑定
@@ -2782,7 +2808,7 @@ func (s *GatewayService) selectAccountWithMixedScheduling(ctx context.Context, g
 		if requestedModel != "" {
 			return nil, fmt.Errorf("no available accounts supporting model: %s", requestedModel)
 		}
-		return nil, errors.New("no available accounts")
+		return nil, errors.New("no available accounts: no matching accounts in pool")
 	}
 
 	// 4. 建立粘性绑定
