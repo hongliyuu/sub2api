@@ -41,3 +41,25 @@ golangci-lint run
 ```
 
 注意：集成测试需要 PostgreSQL + Redis。CI 里用 docker service container。
+
+## 五、E2E 测试凭证
+
+### 线上环境 (Cloud Run)
+- URL: https://sub2api-tdn6y6qz7q-de.a.run.app/
+- Admin: admin@sub2api.local / 67H6mPosrvDCuv10
+
+### 本地环境
+- 启动: `cd backend && go run cmd/server/main.go`
+- Admin: 同上（初始化时创建）
+
+### API 测试
+```bash
+# 登录获取 token
+curl -X POST https://sub2api-tdn6y6qz7q-de.a.run.app/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@sub2api.local","password":"67H6mPosrvDCuv10"}'
+
+# 用 token 调用
+curl -H "Authorization: Bearer <token>" \
+  https://sub2api-tdn6y6qz7q-de.a.run.app/v1/models
+```
