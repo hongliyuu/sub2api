@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/httpclient"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
-	"github.com/Wei-Shaw/sub2api/internal/util/soraerror"
+	"github.com/Wei-Shaw/nbapi/internal/pkg/httpclient"
+	"github.com/Wei-Shaw/nbapi/internal/pkg/logger"
+	"github.com/Wei-Shaw/nbapi/internal/pkg/pagination"
+	"github.com/Wei-Shaw/nbapi/internal/util/soraerror"
 )
 
 // AdminService interface defines admin management operations

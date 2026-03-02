@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
+	infraerrors "github.com/Wei-Shaw/nbapi/internal/pkg/errors"
+	"github.com/Wei-Shaw/nbapi/internal/pkg/openai"
 )
 
 var openAISoraSessionAuthURL = "https://sora.chatgpt.com/api/auth/session"

@@ -3,11 +3,11 @@ package repository
 import (
 	"context"
 
-	dbent "github.com/Wei-Shaw/sub2api/ent"
-	"github.com/Wei-Shaw/sub2api/ent/promocode"
-	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	dbent "github.com/Wei-Shaw/nbapi/ent"
+	"github.com/Wei-Shaw/nbapi/ent/promocode"
+	"github.com/Wei-Shaw/nbapi/ent/promocodeusage"
+	"github.com/Wei-Shaw/nbapi/internal/pkg/pagination"
+	"github.com/Wei-Shaw/nbapi/internal/service"
 )
 
 type promoCodeRepository struct {

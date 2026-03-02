@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
+	"github.com/Wei-Shaw/nbapi/internal/pkg/ctxkey"
 )
 
 const modelRateLimitsKey = "model_rate_limits"

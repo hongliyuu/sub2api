@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
+	"github.com/Wei-Shaw/nbapi/internal/pkg/ctxkey"
 )
 
 // ClaudeCodeValidator 验证请求是否来自 Claude Code 客户端

@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Wei-Shaw/nbapi/internal/pkg/response"
+	"github.com/Wei-Shaw/nbapi/internal/service"
 	"github.com/gin-gonic/gin"
 )
 

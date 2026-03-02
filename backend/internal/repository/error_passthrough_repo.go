@@ -3,10 +3,10 @@ package repository
 import (
 	"context"
 
-	"github.com/Wei-Shaw/sub2api/ent"
-	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
-	"github.com/Wei-Shaw/sub2api/internal/model"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Wei-Shaw/nbapi/ent"
+	"github.com/Wei-Shaw/nbapi/ent/errorpassthroughrule"
+	"github.com/Wei-Shaw/nbapi/internal/model"
+	"github.com/Wei-Shaw/nbapi/internal/service"
 )
 
 type errorPassthroughRepository struct {

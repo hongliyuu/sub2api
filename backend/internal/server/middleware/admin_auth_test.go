@@ -8,9 +8,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Wei-Shaw/nbapi/internal/config"
+	"github.com/Wei-Shaw/nbapi/internal/pkg/pagination"
+	"github.com/Wei-Shaw/nbapi/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
@@ -95,7 +95,7 @@ func TestAdminAuthJWTValidatesTokenVersion(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/t", nil)
 		req.Header.Set("Upgrade", "websocket")
 		req.Header.Set("Connection", "Upgrade")
-		req.Header.Set("Sec-WebSocket-Protocol", "sub2api-admin, jwt."+token)
+		req.Header.Set("Sec-WebSocket-Protocol", "nbapi-admin, jwt."+token)
 		router.ServeHTTP(w, req)
 
 		require.Equal(t, http.StatusUnauthorized, w.Code)
@@ -115,7 +115,7 @@ func TestAdminAuthJWTValidatesTokenVersion(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/t", nil)
 		req.Header.Set("Upgrade", "websocket")
 		req.Header.Set("Connection", "Upgrade")
-		req.Header.Set("Sec-WebSocket-Protocol", "sub2api-admin, jwt."+token)
+		req.Header.Set("Sec-WebSocket-Protocol", "nbapi-admin, jwt."+token)
 		router.ServeHTTP(w, req)
 
 		require.Equal(t, http.StatusOK, w.Code)

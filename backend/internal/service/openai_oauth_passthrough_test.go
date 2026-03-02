@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/nbapi/internal/config"
+	"github.com/Wei-Shaw/nbapi/internal/pkg/logger"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
@@ -131,7 +131,7 @@ func captureStructuredLog(t *testing.T) (*inMemoryLogSink, func()) {
 	err := logger.Init(logger.InitOptions{
 		Level:       "debug",
 		Format:      "json",
-		ServiceName: "sub2api",
+		ServiceName: "nbapi",
 		Environment: "test",
 		Output: logger.OutputOptions{
 			ToStdout: true,

@@ -15,13 +15,13 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/Wei-Shaw/sub2api/ent/runtime"
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/handler"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
-	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
-	"github.com/Wei-Shaw/sub2api/internal/setup"
-	"github.com/Wei-Shaw/sub2api/internal/web"
+	_ "github.com/Wei-Shaw/nbapi/ent/runtime"
+	"github.com/Wei-Shaw/nbapi/internal/config"
+	"github.com/Wei-Shaw/nbapi/internal/handler"
+	"github.com/Wei-Shaw/nbapi/internal/pkg/logger"
+	"github.com/Wei-Shaw/nbapi/internal/server/middleware"
+	"github.com/Wei-Shaw/nbapi/internal/setup"
+	"github.com/Wei-Shaw/nbapi/internal/web"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/net/http2"
@@ -64,7 +64,7 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		log.Printf("Sub2API %s (commit: %s, built: %s)\n", Version, Commit, Date)
+		log.Printf("nbAPI %s (commit: %s, built: %s)\n", Version, Commit, Date)
 		return
 	}
 
@@ -114,7 +114,7 @@ func runSetupServer() {
 	// This allows users to run setup on a different address if needed
 	addr := config.GetServerAddress()
 	log.Printf("Setup wizard available at http://%s", addr)
-	log.Println("Complete the setup wizard to configure Sub2API")
+	log.Println("Complete the setup wizard to configure nbAPI")
 
 	server := &http.Server{
 		Addr:              addr,

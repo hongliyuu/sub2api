@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/httpclient"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Wei-Shaw/nbapi/internal/pkg/httpclient"
+	"github.com/Wei-Shaw/nbapi/internal/service"
 )
 
 const defaultClaudeUsageURL = "https://api.anthropic.com/api/oauth/usage"

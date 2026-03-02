@@ -3,8 +3,8 @@ package service
 import (
 	"strings"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
+	"github.com/Wei-Shaw/nbapi/internal/config"
+	"github.com/Wei-Shaw/nbapi/internal/pkg/openai"
 )
 
 // SoraModelConfig Sora 模型配置

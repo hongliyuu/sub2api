@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/nbapi/internal/pkg/logger"
 )
 
 // codexToolNameMapping 定义 Codex 原生工具名称到 OpenCode 工具名称的映射

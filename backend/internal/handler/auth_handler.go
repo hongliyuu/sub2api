@@ -4,12 +4,12 @@ import (
 	"log/slog"
 	"strings"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
-	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Wei-Shaw/nbapi/internal/config"
+	"github.com/Wei-Shaw/nbapi/internal/handler/dto"
+	"github.com/Wei-Shaw/nbapi/internal/pkg/ip"
+	"github.com/Wei-Shaw/nbapi/internal/pkg/response"
+	middleware2 "github.com/Wei-Shaw/nbapi/internal/server/middleware"
+	"github.com/Wei-Shaw/nbapi/internal/service"
 
 	"github.com/gin-gonic/gin"
 )

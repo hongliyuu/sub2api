@@ -20,13 +20,13 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
-	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
-	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
+	"github.com/Wei-Shaw/nbapi/internal/config"
+	"github.com/Wei-Shaw/nbapi/internal/pkg/claude"
+	"github.com/Wei-Shaw/nbapi/internal/pkg/ctxkey"
+	"github.com/Wei-Shaw/nbapi/internal/pkg/logger"
+	"github.com/Wei-Shaw/nbapi/internal/pkg/usagestats"
+	"github.com/Wei-Shaw/nbapi/internal/util/responseheaders"
+	"github.com/Wei-Shaw/nbapi/internal/util/urlvalidator"
 	"github.com/cespare/xxhash/v2"
 	"github.com/google/uuid"
 	gocache "github.com/patrickmn/go-cache"
@@ -127,12 +127,12 @@ func WithForceCacheBilling(ctx context.Context) context.Context {
 }
 
 func (s *GatewayService) debugModelRoutingEnabled() bool {
-	v := strings.ToLower(strings.TrimSpace(os.Getenv("SUB2API_DEBUG_MODEL_ROUTING")))
+	v := strings.ToLower(strings.TrimSpace(os.Getenv("NBAPI_DEBUG_MODEL_ROUTING")))
 	return v == "1" || v == "true" || v == "yes" || v == "on"
 }
 
 func (s *GatewayService) debugClaudeMimicEnabled() bool {
-	v := strings.ToLower(strings.TrimSpace(os.Getenv("SUB2API_DEBUG_CLAUDE_MIMIC")))
+	v := strings.ToLower(strings.TrimSpace(os.Getenv("NBAPI_DEBUG_CLAUDE_MIMIC")))
 	return v == "1" || v == "true" || v == "yes" || v == "on"
 }
 

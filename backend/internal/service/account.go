@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/domain"
+	"github.com/Wei-Shaw/nbapi/internal/domain"
 )
 
 type Account struct {

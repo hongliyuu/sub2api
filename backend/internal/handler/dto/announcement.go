@@ -3,7 +3,7 @@ package dto
 import (
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Wei-Shaw/nbapi/internal/service"
 )
 
 type Announcement struct {

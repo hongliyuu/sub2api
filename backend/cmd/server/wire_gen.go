@@ -8,14 +8,14 @@ package main
 
 import (
 	"context"
-	"github.com/Wei-Shaw/sub2api/ent"
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/handler"
-	"github.com/Wei-Shaw/sub2api/internal/handler/admin"
-	"github.com/Wei-Shaw/sub2api/internal/repository"
-	"github.com/Wei-Shaw/sub2api/internal/server"
-	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Wei-Shaw/nbapi/ent"
+	"github.com/Wei-Shaw/nbapi/internal/config"
+	"github.com/Wei-Shaw/nbapi/internal/handler"
+	"github.com/Wei-Shaw/nbapi/internal/handler/admin"
+	"github.com/Wei-Shaw/nbapi/internal/repository"
+	"github.com/Wei-Shaw/nbapi/internal/server"
+	"github.com/Wei-Shaw/nbapi/internal/server/middleware"
+	"github.com/Wei-Shaw/nbapi/internal/service"
 	"github.com/redis/go-redis/v9"
 	"log"
 	"net/http"
@@ -24,7 +24,7 @@ import (
 
 import (
 	_ "embed"
-	_ "github.com/Wei-Shaw/sub2api/ent/runtime"
+	_ "github.com/Wei-Shaw/nbapi/ent/runtime"
 )
 
 // Injectors from wire.go:

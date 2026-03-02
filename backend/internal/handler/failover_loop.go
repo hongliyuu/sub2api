@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Wei-Shaw/nbapi/internal/service"
 )
 
 // TempUnscheduler 用于 HandleFailoverError 中同账号重试耗尽后的临时封禁。

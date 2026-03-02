@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/nbapi/internal/config"
+	infraerrors "github.com/Wei-Shaw/nbapi/internal/pkg/errors"
 )
 
 var (
@@ -104,7 +104,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		TotpEnabled:                 settings[SettingKeyTotpEnabled] == "true",
 		TurnstileEnabled:            settings[SettingKeyTurnstileEnabled] == "true",
 		TurnstileSiteKey:            settings[SettingKeyTurnstileSiteKey],
-		SiteName:                    s.getStringOrDefault(settings, SettingKeySiteName, "Sub2API"),
+		SiteName:                    s.getStringOrDefault(settings, SettingKeySiteName, "nbAPI"),
 		SiteLogo:                    settings[SettingKeySiteLogo],
 		SiteSubtitle:                s.getStringOrDefault(settings, SettingKeySiteSubtitle, "Subscription to API Conversion Platform"),
 		APIBaseURL:                  settings[SettingKeyAPIBaseURL],
@@ -333,7 +333,7 @@ func (s *SettingService) IsTotpEncryptionKeyConfigured() bool {
 func (s *SettingService) GetSiteName(ctx context.Context) string {
 	value, err := s.settingRepo.GetValue(ctx, SettingKeySiteName)
 	if err != nil || value == "" {
-		return "Sub2API"
+		return "nbAPI"
 	}
 	return value
 }
@@ -388,7 +388,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyRegistrationEnabled:         "true",
 		SettingKeyEmailVerifyEnabled:          "false",
 		SettingKeyPromoCodeEnabled:            "true", // 默认启用优惠码功能
-		SettingKeySiteName:                    "Sub2API",
+		SettingKeySiteName:                    "nbAPI",
 		SettingKeySiteLogo:                    "",
 		SettingKeyPurchaseSubscriptionEnabled: "false",
 		SettingKeyPurchaseSubscriptionURL:     "",
@@ -435,7 +435,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		TurnstileEnabled:             settings[SettingKeyTurnstileEnabled] == "true",
 		TurnstileSiteKey:             settings[SettingKeyTurnstileSiteKey],
 		TurnstileSecretKeyConfigured: settings[SettingKeyTurnstileSecretKey] != "",
-		SiteName:                     s.getStringOrDefault(settings, SettingKeySiteName, "Sub2API"),
+		SiteName:                     s.getStringOrDefault(settings, SettingKeySiteName, "nbAPI"),
 		SiteLogo:                     settings[SettingKeySiteLogo],
 		SiteSubtitle:                 s.getStringOrDefault(settings, SettingKeySiteSubtitle, "Subscription to API Conversion Platform"),
 		APIBaseURL:                   settings[SettingKeyAPIBaseURL],

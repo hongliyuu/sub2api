@@ -14,9 +14,9 @@ import (
 	"time"
 
 	"github.com/DouDOU-start/go-sora2api/sora"
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	openaioauth "github.com/Wei-Shaw/sub2api/internal/pkg/openai"
-	"github.com/Wei-Shaw/sub2api/internal/util/logredact"
+	"github.com/Wei-Shaw/nbapi/internal/config"
+	openaioauth "github.com/Wei-Shaw/nbapi/internal/pkg/openai"
+	"github.com/Wei-Shaw/nbapi/internal/util/logredact"
 	"github.com/tidwall/gjson"
 )
 

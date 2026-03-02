@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/nbapi/internal/config"
 	"github.com/gin-gonic/gin"
 )
 

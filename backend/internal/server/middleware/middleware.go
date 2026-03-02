@@ -3,7 +3,7 @@ package middleware
 import (
 	"context"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
+	"github.com/Wei-Shaw/nbapi/internal/pkg/ctxkey"
 	"github.com/gin-gonic/gin"
 )
 

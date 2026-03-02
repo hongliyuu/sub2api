@@ -5,12 +5,12 @@ package enttest
 import (
 	"context"
 
-	"github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/nbapi/ent"
 	// required by schema hooks.
-	_ "github.com/Wei-Shaw/sub2api/ent/runtime"
+	_ "github.com/Wei-Shaw/nbapi/ent/runtime"
 
 	"entgo.io/ent/dialect/sql/schema"
-	"github.com/Wei-Shaw/sub2api/ent/migrate"
+	"github.com/Wei-Shaw/nbapi/ent/migrate"
 )
 
 type (

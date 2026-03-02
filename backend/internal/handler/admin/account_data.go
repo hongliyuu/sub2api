@@ -8,14 +8,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Wei-Shaw/nbapi/internal/pkg/response"
+	"github.com/Wei-Shaw/nbapi/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
 const (
-	dataType       = "sub2api-data"
-	legacyDataType = "sub2api-bundle"
+	dataType       = "nbapi-data"
+	legacyDataType = "nbapi-bundle"
 	dataVersion    = 1
 	dataPageCap    = 1000
 )

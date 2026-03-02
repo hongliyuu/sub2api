@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/ent"
-	"github.com/Wei-Shaw/sub2api/ent/setting"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Wei-Shaw/nbapi/ent"
+	"github.com/Wei-Shaw/nbapi/ent/setting"
+	"github.com/Wei-Shaw/nbapi/internal/service"
 )
 
 type settingRepository struct {

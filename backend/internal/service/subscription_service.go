@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	dbent "github.com/Wei-Shaw/sub2api/ent"
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	dbent "github.com/Wei-Shaw/nbapi/ent"
+	"github.com/Wei-Shaw/nbapi/internal/config"
+	infraerrors "github.com/Wei-Shaw/nbapi/internal/pkg/errors"
+	"github.com/Wei-Shaw/nbapi/internal/pkg/pagination"
 	"github.com/dgraph-io/ristretto"
 	"golang.org/x/sync/singleflight"
 )
