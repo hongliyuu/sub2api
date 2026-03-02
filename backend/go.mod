@@ -1,4 +1,4 @@
-module github.com/Wei-Shaw/sub2api
+module github.com/Wei-Shaw/nbapi
 
 go 1.25.7
 

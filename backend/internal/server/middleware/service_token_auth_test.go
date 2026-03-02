@@ -1,12 +1,14 @@
 package middleware
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestServiceTokenAuth_MissingHeader(t *testing.T) {
@@ -22,6 +24,10 @@ func TestServiceTokenAuth_MissingHeader(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 	assert.True(t, c.IsAborted())
+
+	var resp ErrorResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "UNAUTHORIZED", resp.Code)
 }
 
 func TestServiceTokenAuth_InvalidToken(t *testing.T) {
@@ -38,6 +44,10 @@ func TestServiceTokenAuth_InvalidToken(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 	assert.True(t, c.IsAborted())
+
+	var resp ErrorResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "INVALID_SERVICE_TOKEN", resp.Code)
 }
 
 func TestServiceTokenAuth_NotConfigured(t *testing.T) {
@@ -54,6 +64,10 @@ func TestServiceTokenAuth_NotConfigured(t *testing.T) {
 
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 	assert.True(t, c.IsAborted())
+
+	var resp ErrorResponse
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+	assert.Equal(t, "SERVICE_UNAVAILABLE", resp.Code)
 }
 
 func TestServiceTokenAuth_ValidToken(t *testing.T) {
