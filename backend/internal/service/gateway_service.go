@@ -582,8 +582,8 @@ func NewGatewayService(
 		modelsListCacheTTL:   modelsListTTL,
 		responseHeaderFilter: compileResponseHeaderFilter(cfg),
 	}
-	svc.debugModelRouting.Store(parseDebugEnvBool(os.Getenv("SUB2API_DEBUG_MODEL_ROUTING")))
-	svc.debugClaudeMimic.Store(parseDebugEnvBool(os.Getenv("SUB2API_DEBUG_CLAUDE_MIMIC")))
+	svc.debugModelRouting.Store(parseDebugEnvBool(os.Getenv("NBAPI_DEBUG_MODEL_ROUTING")))
+	svc.debugClaudeMimic.Store(parseDebugEnvBool(os.Getenv("NBAPI_DEBUG_CLAUDE_MIMIC")))
 	return svc
 }
 

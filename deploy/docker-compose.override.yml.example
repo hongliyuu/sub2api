@@ -30,7 +30,7 @@
 # =============================================================================
 
 services:
-  sub2api:
+  nbapi:
     # Remove dependencies on containerized postgres/redis
     depends_on: []
 
@@ -45,7 +45,7 @@ services:
       DATABASE_PORT: "5678"  # Change to your PostgreSQL port
       # DATABASE_USER: postgres  # Uncomment to override
       # DATABASE_PASSWORD: your_password  # Uncomment to override
-      # DATABASE_DBNAME: sub2api  # Uncomment to override
+      # DATABASE_DBNAME: nbapi  # Uncomment to override
 
       # Redis Configuration
       REDIS_HOST: host.docker.internal
@@ -75,7 +75,7 @@ services:
 # =============================================================================
 
 # services:
-#   sub2api:
+#   nbapi:
 #     # Keep default dependencies
 #     pass
 #
@@ -101,11 +101,11 @@ services:
 # =============================================================================
 # Scenario 4: Resource Limits (Production)
 # =============================================================================
-# Uncomment to set resource limits for the sub2api container
+# Uncomment to set resource limits for the nbapi container
 # =============================================================================
 
 # services:
-#   sub2api:
+#   nbapi:
 #     deploy:
 #       resources:
 #         limits:
@@ -122,7 +122,7 @@ services:
 # =============================================================================
 
 # services:
-#   sub2api:
+#   nbapi:
 #     volumes:
 #       - ./logs:/app/logs
 #       - ./backups:/app/backups
@@ -132,13 +132,13 @@ services:
 # =============================================================================
 # 说明：
 # - datamanagementd 运行在宿主机（systemd 或手动）
-# - 主进程固定探测 /tmp/sub2api-datamanagement.sock
+# - 主进程固定探测 /tmp/nbapi-datamanagement.sock
 # - 需要把宿主机 socket 挂载到容器内同路径
 #
 # services:
-#   sub2api:
+#   nbapi:
 #     volumes:
-#       - /tmp/sub2api-datamanagement.sock:/tmp/sub2api-datamanagement.sock
+#       - /tmp/nbapi-datamanagement.sock:/tmp/nbapi-datamanagement.sock
 
 # =============================================================================
 # Additional Notes

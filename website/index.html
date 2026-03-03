@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>nbAPI — 世界最牛逼的 AI API 代理平台</title>
+<meta name="description" content="一个密钥畅用 Claude、GPT、Gemini、Antigravity。支持拼车共享，分摊成本。开源自建，永久免费。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ========== RESET & VARIABLES ========== */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --void: #0a0a0f;
+  --void-light: #0f0f18;
+  --surface: #12121e;
+  --surface-2: #1a1a2e;
+  --surface-3: #22223a;
+  --border: #2a2a45;
+  --border-glow: #3a3a5c;
+
+  --neon-green: #00ff88;
+  --neon-green-dim: #00cc6a;
+  --neon-green-glow: rgba(0, 255, 136, 0.15);
+  --neon-purple: #7b2ff7;
+  --neon-purple-dim: #6a24d6;
+  --neon-purple-glow: rgba(123, 47, 247, 0.15);
+  --neon-blue: #00d4ff;
+  --neon-blue-dim: #00b8e0;
+  --neon-blue-glow: rgba(0, 212, 255, 0.15);
+  --neon-pink: #ff006e;
+  --neon-pink-glow: rgba(255, 0, 110, 0.15);
+
+  --text-primary: #e8e8f0;
+  --text-secondary: #8888aa;
+  --text-dim: #555577;
+
+  --font-display: 'Orbitron', sans-serif;
+  --font-body: 'Space Grotesk', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font-body);
+  background: var(--void);
+  color: var(--text-primary);
+  overflow-x: hidden;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scanline overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.03) 2px,
+    rgba(0, 0, 0, 0.03) 4px
+  );
+}
+
+/* Noise texture */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9998;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 128px 128px;
+}
+
+a { color: var(--neon-green); text-decoration: none; transition: color 0.3s; }
+a:hover { color: var(--neon-blue); }
+
+.container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
+
+/* ========== SCROLL REVEAL ========== */
+.reveal {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity 0.8s var(--ease-out-expo), transform 0.8s var(--ease-out-expo);
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.reveal-delay-1 { transition-delay: 0.1s; }
+.reveal-delay-2 { transition-delay: 0.2s; }
+.reveal-delay-3 { transition-delay: 0.3s; }
+.reveal-delay-4 { transition-delay: 0.4s; }
+
+/* ========== NAV ========== */
+.nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  padding: 16px 0;
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  background: rgba(10, 10, 15, 0.8);
+  border-bottom: 1px solid var(--border);
+  transition: all 0.3s;
+}
+.nav.scrolled {
+  padding: 10px 0;
+  background: rgba(10, 10, 15, 0.95);
+}
+.nav-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.nav-logo {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 800;
+  letter-spacing: 2px;
+  background: linear-gradient(135deg, var(--neon-green), var(--neon-blue));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.nav-links {
+  display: flex;
+  gap: 32px;
+  list-style: none;
+}
+.nav-links a {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  transition: color 0.3s, text-shadow 0.3s;
+}
+.nav-links a:hover {
+  color: var(--neon-green);
+  text-shadow: 0 0 20px var(--neon-green-glow);
+}
+.nav-hamburger {
+  display: none;
+  flex-direction: column;
+  gap: 5px;
+  cursor: pointer;
+  padding: 4px;
+}
+.nav-hamburger span {
+  display: block;
+  width: 24px;
+  height: 2px;
+  background: var(--text-secondary);
+  transition: all 0.3s;
+}
+.nav-mobile {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: rgba(10, 10, 15, 0.98);
+  border-bottom: 1px solid var(--border);
+  padding: 20px 24px;
+}
+.nav-mobile.open { display: block; }
+.nav-mobile a {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  letter-spacing: 1px;
+}
+
+/* ========== HERO ========== */
+.hero {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  padding: 120px 24px 80px;
+}
+
+/* Grid background */
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(rgba(123, 47, 247, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(123, 47, 247, 0.06) 1px, transparent 1px);
+  background-size: 60px 60px;
+  mask-image: radial-gradient(ellipse at 50% 50%, black 20%, transparent 70%);
+  -webkit-mask-image: radial-gradient(ellipse at 50% 50%, black 20%, transparent 70%);
+}
+
+/* Ambient glow */
+.hero::after {
+  content: '';
+  position: absolute;
+  top: 20%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 800px;
+  height: 600px;
+  background: radial-gradient(ellipse, rgba(123, 47, 247, 0.12) 0%, rgba(0, 212, 255, 0.06) 40%, transparent 70%);
+  pointer-events: none;
+  animation: pulse-glow 8s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.6; transform: translateX(-50%) scale(1); }
+  50% { opacity: 1; transform: translateX(-50%) scale(1.1); }
+}
+
+.hero-content {
+  position: relative;
+  z-index: 1;
+  max-width: 900px;
+}
+
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 20px;
+  background: rgba(0, 255, 136, 0.08);
+  border: 1px solid rgba(0, 255, 136, 0.2);
+  border-radius: 100px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--neon-green);
+  letter-spacing: 1px;
+  margin-bottom: 32px;
+  animation: badge-flicker 4s ease-in-out infinite;
+}
+.hero-badge::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  background: var(--neon-green);
+  border-radius: 50%;
+  animation: dot-pulse 2s ease-in-out infinite;
+}
+
+@keyframes badge-flicker {
+  0%, 100% { opacity: 0.9; }
+  50% { opacity: 1; }
+  25%, 75% { opacity: 0.85; }
+}
+@keyframes dot-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px var(--neon-green); }
+  50% { opacity: 0.5; box-shadow: 0 0 2px var(--neon-green); }
+}
+
+.hero-title {
+  font-family: var(--font-display);
+  font-size: clamp(3rem, 8vw, 6rem);
+  font-weight: 900;
+  letter-spacing: 4px;
+  line-height: 1.1;
+  margin-bottom: 8px;
+  position: relative;
+}
+.hero-title-main {
+  display: block;
+  background: linear-gradient(135deg, var(--neon-green) 0%, var(--neon-blue) 50%, var(--neon-purple) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 40px rgba(0, 255, 136, 0.3));
+}
+
+/* Glitch layers */
+.hero-title-main::before,
+.hero-title-main::after {
+  content: 'nbAPI';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(135deg, var(--neon-green), var(--neon-blue), var(--neon-purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  pointer-events: none;
+}
+.hero-title-main::before {
+  animation: glitch-1 3s infinite;
+  clip-path: inset(0 0 80% 0);
+}
+.hero-title-main::after {
+  animation: glitch-2 3s infinite;
+  clip-path: inset(80% 0 0 0);
+}
+
+@keyframes glitch-1 {
+  0%, 90%, 100% { transform: translate(0); }
+  92% { transform: translate(-3px, 1px); filter: hue-rotate(90deg); }
+  94% { transform: translate(3px, -1px); }
+  96% { transform: translate(-2px, 2px); filter: hue-rotate(-90deg); }
+}
+@keyframes glitch-2 {
+  0%, 88%, 100% { transform: translate(0); }
+  90% { transform: translate(2px, -1px); filter: hue-rotate(-90deg); }
+  93% { transform: translate(-3px, 1px); }
+  95% { transform: translate(1px, -2px); filter: hue-rotate(90deg); }
+}
+
+.hero-subtitle {
+  font-family: var(--font-display);
+  font-size: clamp(0.9rem, 2vw, 1.2rem);
+  font-weight: 500;
+  color: var(--text-secondary);
+  letter-spacing: 6px;
+  text-transform: uppercase;
+  margin-bottom: 24px;
+}
+
+.hero-desc {
+  font-size: 1.15rem;
+  color: var(--text-secondary);
+  max-width: 600px;
+  margin: 0 auto 40px;
+  line-height: 1.8;
+}
+.hero-desc strong {
+  color: var(--neon-green);
+  font-weight: 600;
+}
+
+.hero-ctas {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 32px;
+  border-radius: 12px;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  cursor: pointer;
+  border: none;
+  transition: all 0.3s var(--ease-out-expo);
+  text-decoration: none;
+}
+.btn-primary {
+  background: linear-gradient(135deg, var(--neon-green), var(--neon-blue));
+  color: var(--void);
+  box-shadow: 0 0 30px var(--neon-green-glow), 0 0 60px var(--neon-green-glow);
+}
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 40px var(--neon-green-glow), 0 0 80px var(--neon-green-glow), 0 4px 20px rgba(0,0,0,0.4);
+  color: var(--void);
+}
+.btn-secondary {
+  background: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--border-glow);
+  box-shadow: inset 0 0 20px rgba(123, 47, 247, 0.05);
+}
+.btn-secondary:hover {
+  border-color: var(--neon-purple);
+  box-shadow: 0 0 30px var(--neon-purple-glow), inset 0 0 20px var(--neon-purple-glow);
+  color: var(--text-primary);
+  transform: translateY(-2px);
+}
+
+/* Models marquee under CTA */
+.hero-models {
+  margin-top: 48px;
+  display: flex;
+  justify-content: center;
+  gap: 40px;
+  flex-wrap: wrap;
+}
+.hero-model-tag {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  position: relative;
+  padding-left: 16px;
+}
+.hero-model-tag::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+.hero-model-tag.claude::before { background: var(--neon-purple); box-shadow: 0 0 8px var(--neon-purple-glow); }
+.hero-model-tag.gpt::before { background: var(--neon-green); box-shadow: 0 0 8px var(--neon-green-glow); }
+.hero-model-tag.gemini::before { background: var(--neon-blue); box-shadow: 0 0 8px var(--neon-blue-glow); }
+.hero-model-tag.antigravity::before { background: var(--neon-pink); box-shadow: 0 0 8px var(--neon-pink-glow); }
+
+/* ========== SECTION COMMON ========== */
+section {
+  padding: 100px 0;
+  position: relative;
+}
+.section-label {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--neon-purple);
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+}
+.section-title {
+  font-family: var(--font-display);
+  font-size: clamp(1.8rem, 4vw, 2.8rem);
+  font-weight: 700;
+  letter-spacing: 2px;
+  margin-bottom: 16px;
+}
+.section-desc {
+  color: var(--text-secondary);
+  font-size: 1.05rem;
+  max-width: 600px;
+  line-height: 1.7;
+}
+
+/* ========== FEATURES ========== */
+.features { background: var(--void-light); }
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+  margin-top: 56px;
+}
+.feature-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 36px;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.4s var(--ease-out-expo);
+}
+.feature-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--neon-green), transparent);
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+.feature-card:nth-child(2)::before { background: linear-gradient(90deg, transparent, var(--neon-purple), transparent); }
+.feature-card:nth-child(3)::before { background: linear-gradient(90deg, transparent, var(--neon-blue), transparent); }
+.feature-card:nth-child(4)::before { background: linear-gradient(90deg, transparent, var(--neon-pink), transparent); }
+
+.feature-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--border-glow);
+}
+.feature-card:hover::before { opacity: 1; }
+
+.feature-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  margin-bottom: 20px;
+  background: rgba(0, 255, 136, 0.1);
+  border: 1px solid rgba(0, 255, 136, 0.2);
+  color: var(--neon-green);
+}
+.feature-card:nth-child(2) .feature-icon {
+  background: rgba(123, 47, 247, 0.1);
+  border-color: rgba(123, 47, 247, 0.2);
+  color: var(--neon-purple);
+}
+.feature-card:nth-child(3) .feature-icon {
+  background: rgba(0, 212, 255, 0.1);
+  border-color: rgba(0, 212, 255, 0.2);
+  color: var(--neon-blue);
+}
+.feature-card:nth-child(4) .feature-icon {
+  background: rgba(255, 0, 110, 0.1);
+  border-color: rgba(255, 0, 110, 0.2);
+  color: var(--neon-pink);
+}
+
+.feature-title {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+.feature-desc {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  line-height: 1.7;
+}
+.feature-tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+.feature-tag {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+}
+
+/* ========== HOW IT WORKS ========== */
+.how-it-works { text-align: center; }
+.steps-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px;
+  margin-top: 56px;
+  position: relative;
+}
+
+/* Connector line */
+.steps-grid::before {
+  content: '';
+  position: absolute;
+  top: 40px;
+  left: 16%;
+  right: 16%;
+  height: 2px;
+  background: linear-gradient(90deg, var(--neon-green), var(--neon-purple), var(--neon-blue));
+  opacity: 0.3;
+  z-index: 0;
+}
+
+.step-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 40px 28px;
+  position: relative;
+  z-index: 1;
+  transition: all 0.4s var(--ease-out-expo);
+}
+.step-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--border-glow);
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
+}
+.step-number {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0 auto 20px;
+  position: relative;
+}
+.step-card:nth-child(1) .step-number {
+  background: rgba(0, 255, 136, 0.15);
+  border: 1px solid rgba(0, 255, 136, 0.3);
+  color: var(--neon-green);
+  box-shadow: 0 0 20px var(--neon-green-glow);
+}
+.step-card:nth-child(2) .step-number {
+  background: rgba(123, 47, 247, 0.15);
+  border: 1px solid rgba(123, 47, 247, 0.3);
+  color: var(--neon-purple);
+  box-shadow: 0 0 20px var(--neon-purple-glow);
+}
+.step-card:nth-child(3) .step-number {
+  background: rgba(0, 212, 255, 0.15);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  color: var(--neon-blue);
+  box-shadow: 0 0 20px var(--neon-blue-glow);
+}
+.step-title {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+.step-desc {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+.step-code {
+  margin-top: 16px;
+  background: var(--void);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--neon-green);
+  text-align: left;
+  overflow-x: auto;
+}
+
+/* ========== PRICING ========== */
+.pricing { background: var(--void-light); text-align: center; }
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-top: 56px;
+  align-items: start;
+}
+.pricing-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 40px 32px;
+  text-align: left;
+  transition: all 0.4s var(--ease-out-expo);
+  position: relative;
+}
+.pricing-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
+}
+.pricing-card.featured {
+  border-color: var(--neon-purple);
+  box-shadow: 0 0 40px var(--neon-purple-glow), 0 0 80px rgba(123, 47, 247, 0.05);
+}
+.pricing-card.featured::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--neon-green), var(--neon-purple), var(--neon-blue));
+}
+.pricing-badge {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  padding: 4px 12px;
+  background: rgba(123, 47, 247, 0.15);
+  border: 1px solid rgba(123, 47, 247, 0.3);
+  border-radius: 100px;
+  color: var(--neon-purple);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+}
+.pricing-tier {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+.pricing-price {
+  font-family: var(--font-display);
+  font-size: 2.2rem;
+  font-weight: 800;
+  margin-bottom: 4px;
+}
+.pricing-price .currency {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  vertical-align: super;
+}
+.pricing-price .period {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  font-weight: 400;
+}
+.pricing-desc {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin-bottom: 24px;
+  line-height: 1.6;
+}
+.pricing-features {
+  list-style: none;
+  margin-bottom: 32px;
+}
+.pricing-features li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+.pricing-features li::before {
+  content: '>';
+  font-family: var(--font-mono);
+  color: var(--neon-green);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.pricing-card.featured .pricing-features li::before { color: var(--neon-purple); }
+.pricing-card:last-child .pricing-features li::before { color: var(--neon-blue); }
+
+.pricing-cta {
+  width: 100%;
+  justify-content: center;
+  padding: 12px 24px;
+  font-size: 0.8rem;
+}
+
+/* ========== FAQ ========== */
+.faq { text-align: center; }
+.faq-list {
+  max-width: 760px;
+  margin: 56px auto 0;
+  text-align: left;
+}
+.faq-item {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-bottom: 12px;
+  overflow: hidden;
+  background: var(--surface);
+  transition: border-color 0.3s;
+}
+.faq-item:hover { border-color: var(--border-glow); }
+.faq-item.open { border-color: rgba(123, 47, 247, 0.3); }
+
+.faq-question {
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  font-weight: 500;
+  text-align: left;
+  padding: 20px 24px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+.faq-question:hover { color: var(--neon-green); }
+.faq-arrow {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  transition: transform 0.3s var(--ease-out-expo), color 0.3s;
+  flex-shrink: 0;
+}
+.faq-item.open .faq-arrow {
+  transform: rotate(90deg);
+  color: var(--neon-purple);
+}
+.faq-answer {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.4s var(--ease-out-expo), padding 0.4s;
+}
+.faq-item.open .faq-answer {
+  max-height: 300px;
+}
+.faq-answer-inner {
+  padding: 0 24px 20px;
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.8;
+}
+
+/* ========== FOOTER ========== */
+.footer {
+  border-top: 1px solid var(--border);
+  padding: 48px 0;
+  text-align: center;
+}
+.footer-logo {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: 2px;
+  background: linear-gradient(135deg, var(--neon-green), var(--neon-blue));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 12px;
+}
+.footer-tagline {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  margin-bottom: 24px;
+}
+.footer-links {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+.footer-links a {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  letter-spacing: 1px;
+}
+.footer-copy {
+  color: var(--text-dim);
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+}
+
+/* ========== RESPONSIVE ========== */
+@media (max-width: 968px) {
+  .features-grid { grid-template-columns: 1fr; }
+  .steps-grid {
+    grid-template-columns: 1fr;
+    max-width: 480px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .steps-grid::before { display: none; }
+  .pricing-grid { grid-template-columns: 1fr; max-width: 480px; margin-left: auto; margin-right: auto; }
+}
+
+@media (max-width: 768px) {
+  section { padding: 60px 0; }
+  .nav-links { display: none; }
+  .nav-hamburger { display: flex; }
+  .hero { padding: 100px 20px 60px; min-height: auto; }
+  .hero-models { gap: 20px; }
+  .hero-subtitle { letter-spacing: 3px; }
+}
+
+@media (max-width: 480px) {
+  .hero-ctas { flex-direction: column; align-items: center; }
+  .btn { width: 100%; max-width: 300px; justify-content: center; }
+  .feature-card { padding: 28px 20px; }
+  .pricing-card { padding: 32px 24px; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav" id="nav">
+  <div class="container nav-inner">
+    <div class="nav-logo">nbAPI</div>
+    <ul class="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#how-it-works">How</a></li>
+      <li><a href="#pricing">Pricing</a></li>
+      <li><a href="#faq">FAQ</a></li>
+      <li><a href="https://github.com/ai-yl/nbapi" target="_blank">GitHub</a></li>
+    </ul>
+    <div class="nav-hamburger" id="hamburger" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </div>
+    <div class="nav-mobile" id="mobileMenu">
+      <a href="#features">Features</a>
+      <a href="#how-it-works">How it works</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a>
+      <a href="https://github.com/ai-yl/nbapi" target="_blank">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="hero">
+  <div class="hero-content">
+    <div class="hero-badge reveal">OPEN SOURCE &bull; 开源免费</div>
+    <h1 class="hero-title reveal reveal-delay-1">
+      <span class="hero-title-main">nbAPI</span>
+    </h1>
+    <p class="hero-subtitle reveal reveal-delay-2">世界最牛逼的 AI API 代理平台</p>
+    <p class="hero-desc reveal reveal-delay-3">
+      <strong>一个密钥</strong>，畅用 Claude / GPT / Gemini / Antigravity。<br>
+      支持<strong>拼车共享</strong>，分摊订阅成本。原生支持 Codex、Claude Code、Cursor。
+    </p>
+    <div class="hero-ctas reveal reveal-delay-3">
+      <a href="https://github.com/ai-yl/nbapi" class="btn btn-primary" target="_blank">&#9733; GitHub 部署</a>
+      <a href="#how-it-works" class="btn btn-secondary">了解更多 &darr;</a>
+    </div>
+    <div class="hero-models reveal reveal-delay-4">
+      <span class="hero-model-tag claude">Claude 4</span>
+      <span class="hero-model-tag gpt">GPT-4.1</span>
+      <span class="hero-model-tag gemini">Gemini 2.5</span>
+      <span class="hero-model-tag antigravity">Antigravity</span>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="features" id="features">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-label">// Features</div>
+      <h2 class="section-title">为什么选 nbAPI</h2>
+      <p class="section-desc">不是又一个套壳项目。nbAPI 是认真做的基础设施。</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card reveal reveal-delay-1">
+        <div class="feature-icon">&#9889;</div>
+        <h3 class="feature-title">统一密钥接入</h3>
+        <p class="feature-desc">一个 API key 调用所有模型。兼容 OpenAI 协议，现有代码零改动迁移。无需管理十几个 key，nbAPI 帮你搞定路由和负载均衡。</p>
+        <div class="feature-tags">
+          <span class="feature-tag">OpenAI Compatible</span>
+          <span class="feature-tag">Auto Routing</span>
+          <span class="feature-tag">Load Balancing</span>
+        </div>
+      </div>
+      <div class="feature-card reveal reveal-delay-2">
+        <div class="feature-icon">&#128101;</div>
+        <h3 class="feature-title">拼车共享</h3>
+        <p class="feature-desc">订阅账号太贵？用 nbAPI 的分组拼车模式，多人共享同一批订阅账号，按用量分摊成本。省钱才是硬道理。</p>
+        <div class="feature-tags">
+          <span class="feature-tag">Account Pooling</span>
+          <span class="feature-tag">Usage Billing</span>
+          <span class="feature-tag">Cost Sharing</span>
+        </div>
+      </div>
+      <div class="feature-card reveal reveal-delay-3">
+        <div class="feature-icon">&#128736;</div>
+        <h3 class="feature-title">原生工具支持</h3>
+        <p class="feature-desc">Codex、Claude Code、Cursor、Windsurf —— 你用的 AI 编程工具，nbAPI 全部原生支持。配个 Base URL 就能用。</p>
+        <div class="feature-tags">
+          <span class="feature-tag">Codex</span>
+          <span class="feature-tag">Claude Code</span>
+          <span class="feature-tag">Cursor</span>
+          <span class="feature-tag">Windsurf</span>
+        </div>
+      </div>
+      <div class="feature-card reveal reveal-delay-4">
+        <div class="feature-icon">&#127760;</div>
+        <h3 class="feature-title">多模型多平台</h3>
+        <p class="feature-desc">Claude、GPT、Gemini、Antigravity —— 主流 AI 平台全覆盖。自动故障转移，账号池智能调度，永远有可用的模型。</p>
+        <div class="feature-tags">
+          <span class="feature-tag">Failover</span>
+          <span class="feature-tag">Smart Scheduling</span>
+          <span class="feature-tag">Multi-Provider</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="how-it-works" id="how-it-works">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-label">// How it works</div>
+      <h2 class="section-title">三步开干</h2>
+      <p class="section-desc" style="margin: 0 auto;">从部署到发第一个请求，五分钟。</p>
+    </div>
+    <div class="steps-grid">
+      <div class="step-card reveal reveal-delay-1">
+        <div class="step-number">1</div>
+        <h3 class="step-title">部署服务</h3>
+        <p class="step-desc">Docker 一键启动，或部署到 Cloud Run / Vercel。支持 PostgreSQL + Redis，也支持 SQLite 轻量模式。</p>
+        <div class="step-code">$ docker compose up -d</div>
+      </div>
+      <div class="step-card reveal reveal-delay-2">
+        <div class="step-number">2</div>
+        <h3 class="step-title">配置账号</h3>
+        <p class="step-desc">在管理后台添加你的 AI 订阅账号，创建分组和 API key。支持 OAuth 授权和手动 token 导入。</p>
+        <div class="step-code">admin panel &rarr; accounts &rarr; add</div>
+      </div>
+      <div class="step-card reveal reveal-delay-3">
+        <div class="step-number">3</div>
+        <h3 class="step-title">开始使用</h3>
+        <p class="step-desc">把 Base URL 和 API key 填进你的工具（Cursor / Claude Code / 自己的代码），完事。</p>
+        <div class="step-code">ANTHROPIC_BASE_URL=https://your.nb.api</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PRICING -->
+<section class="pricing" id="pricing">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-label">// Pricing</div>
+      <h2 class="section-title">定价</h2>
+      <p class="section-desc" style="margin: 0 auto;">开源项目，自建永远免费。不想折腾？用托管版。</p>
+    </div>
+    <div class="pricing-grid">
+      <div class="pricing-card reveal reveal-delay-1">
+        <div class="pricing-tier">Self-Hosted</div>
+        <div class="pricing-price">Free<span class="period"> / 永久</span></div>
+        <p class="pricing-desc">自己部署，完全掌控。适合有服务器的技术团队。</p>
+        <ul class="pricing-features">
+          <li>完整功能，无任何限制</li>
+          <li>无限用户和 API key</li>
+          <li>无限账号池</li>
+          <li>社区支持（GitHub Issues）</li>
+          <li>自主更新，自主维护</li>
+        </ul>
+        <a href="https://github.com/ai-yl/nbapi" class="btn btn-secondary pricing-cta" target="_blank">GitHub 部署</a>
+      </div>
+      <div class="pricing-card featured reveal reveal-delay-2">
+        <div class="pricing-badge">推荐</div>
+        <div class="pricing-tier">Pro 托管版</div>
+        <div class="pricing-price"><span class="currency">$</span>29<span class="period"> / 月</span></div>
+        <p class="pricing-desc">我们帮你运维。开箱即用，专注于用 AI 干活。</p>
+        <ul class="pricing-features">
+          <li>完整功能 + 自动更新</li>
+          <li>最多 50 用户</li>
+          <li>最多 200 账号</li>
+          <li>99.9% SLA 保证</li>
+          <li>优先邮件支持</li>
+        </ul>
+        <a href="#" class="btn btn-primary pricing-cta">即将上线</a>
+      </div>
+      <div class="pricing-card reveal reveal-delay-3">
+        <div class="pricing-tier">Enterprise</div>
+        <div class="pricing-price">定制</div>
+        <p class="pricing-desc">大规模部署，定制需求。专属运维团队。</p>
+        <ul class="pricing-features">
+          <li>无限用户和账号</li>
+          <li>私有化部署支持</li>
+          <li>专属技术支持群</li>
+          <li>SLA 定制</li>
+          <li>功能定制开发</li>
+        </ul>
+        <a href="mailto:contact@nbapi.dev" class="btn btn-secondary pricing-cta">联系我们</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section class="faq" id="faq">
+  <div class="container">
+    <div class="reveal">
+      <div class="section-label">// FAQ</div>
+      <h2 class="section-title">常见问题</h2>
+    </div>
+    <div class="faq-list">
+      <div class="faq-item reveal reveal-delay-1">
+        <button class="faq-question">
+          nbAPI 和直接用官方 API 有什么区别？
+          <span class="faq-arrow">&rsaquo;</span>
+        </button>
+        <div class="faq-answer">
+          <div class="faq-answer-inner">nbAPI 是一个代理层，你可以把多个订阅账号汇成一个池子，通过统一的 API key 调用。好处是：故障自动转移、负载均衡、多人共享、统一计费。如果你只用一个账号给自己用，可能不需要；但如果你有团队、有多个账号、或想分摊成本 —— nbAPI 就是为你做的。</div>
+        </div>
+      </div>
+      <div class="faq-item reveal reveal-delay-2">
+        <button class="faq-question">
+          支持哪些 AI 模型和平台？
+          <span class="faq-arrow">&rsaquo;</span>
+        </button>
+        <div class="faq-answer">
+          <div class="faq-answer-inner">目前支持 Claude（Anthropic）、GPT（OpenAI）、Gemini（Google）、Antigravity。兼容 OpenAI 协议，所有支持自定义 Base URL 的工具都能直接用。</div>
+        </div>
+      </div>
+      <div class="faq-item reveal reveal-delay-3">
+        <button class="faq-question">
+          拼车共享安全吗？我的数据会被别人看到吗？
+          <span class="faq-arrow">&rsaquo;</span>
+        </button>
+        <div class="faq-answer">
+          <div class="faq-answer-inner">拼车共享的是订阅额度，不是对话内容。每个用户有独立的 API key，请求互相隔离。nbAPI 不存储任何对话内容，只记录用量信息用于计费。你的数据直接到上游 AI 平台，中间不留存。</div>
+        </div>
+      </div>
+      <div class="faq-item reveal reveal-delay-4">
+        <button class="faq-question">
+          部署需要什么环境？
+          <span class="faq-arrow">&rsaquo;</span>
+        </button>
+        <div class="faq-answer">
+          <div class="faq-answer-inner">最低配置：1核 1G 内存的 VPS 就够了。支持 Docker 部署（推荐）、直接二进制运行、或部署到 GCP Cloud Run 等 Serverless 平台。数据库支持 PostgreSQL（生产推荐）或 SQLite（开发/轻量使用）。</div>
+        </div>
+      </div>
+      <div class="faq-item reveal">
+        <button class="faq-question">
+          "nb" 是什么意思？
+          <span class="faq-arrow">&rsaquo;</span>
+        </button>
+        <div class="faq-answer">
+          <div class="faq-answer-inner">你觉得是什么意思就是什么意思。反正挺牛逼的。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="container">
+    <div class="footer-logo">nbAPI</div>
+    <p class="footer-tagline">世界最牛逼的 AI API 代理平台</p>
+    <div class="footer-links">
+      <a href="https://github.com/ai-yl/nbapi" target="_blank">GitHub</a>
+      <a href="https://github.com/ai-yl/nbapi/issues" target="_blank">Issues</a>
+      <a href="https://github.com/ai-yl/nbapi/blob/main/README_CN.md" target="_blank">文档</a>
+    </div>
+    <p class="footer-copy">&copy; 2025 nbAPI &mdash; MIT License</p>
+  </div>
+</footer>
+
+<script>
+// ===== Nav scroll effect =====
+const nav = document.getElementById('nav');
+window.addEventListener('scroll', () => {
+  nav.classList.toggle('scrolled', window.scrollY > 50);
+}, { passive: true });
+
+// ===== Mobile menu =====
+const hamburger = document.getElementById('hamburger');
+const mobileMenu = document.getElementById('mobileMenu');
+hamburger.addEventListener('click', () => {
+  mobileMenu.classList.toggle('open');
+});
+mobileMenu.querySelectorAll('a').forEach(link => {
+  link.addEventListener('click', () => mobileMenu.classList.remove('open'));
+});
+
+// ===== Scroll reveal =====
+const revealElements = document.querySelectorAll('.reveal');
+const revealObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+      revealObserver.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+revealElements.forEach(el => revealObserver.observe(el));
+
+// ===== FAQ accordion =====
+document.querySelectorAll('.faq-question').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const item = btn.parentElement;
+    const wasOpen = item.classList.contains('open');
+    // Close all
+    document.querySelectorAll('.faq-item.open').forEach(i => i.classList.remove('open'));
+    // Toggle current
+    if (!wasOpen) item.classList.add('open');
+  });
+});
+
+// ===== Smooth scroll for anchor links =====
+document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+  anchor.addEventListener('click', (e) => {
+    const target = document.querySelector(anchor.getAttribute('href'));
+    if (target) {
+      e.preventDefault();
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
+});
+</script>
+</body>
+</html>

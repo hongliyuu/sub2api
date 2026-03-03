@@ -5,7 +5,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-docker build -t sub2api:latest \
+docker build -t nbapi:latest \
     --build-arg GOPROXY=https://goproxy.cn,direct \
     --build-arg GOSUMDB=sum.golang.google.cn \
     -f "${SCRIPT_DIR}/Dockerfile" \
