@@ -6,15 +6,15 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// RegisterProvisionRoutes registers the /api/v1/provision endpoint
+// RegisterProvisionRoutes registers the /api/provision endpoint
 func RegisterProvisionRoutes(
-	v1 *gin.RouterGroup,
+	r *gin.Engine,
 	h *handler.Handlers,
 	serviceTokenAuth middleware.ServiceTokenAuthMiddleware,
 ) {
-	provision := v1.Group("")
-	provision.Use(gin.HandlerFunc(serviceTokenAuth))
+	api := r.Group("/api")
+	api.Use(gin.HandlerFunc(serviceTokenAuth))
 	{
-		provision.POST("/provision", h.Provision.Provision)
+		api.POST("/provision", h.Provision.Provision)
 	}
 }

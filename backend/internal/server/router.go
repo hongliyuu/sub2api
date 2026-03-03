@@ -81,5 +81,5 @@ func registerRoutes(
 	routes.RegisterGatewayRoutes(r, h, apiKeyAuth, apiKeyService, subscriptionService, opsService, cfg)
 
 	// 内部服务接口（service-to-service）
-	routes.RegisterProvisionRoutes(v1, h, serviceTokenAuth)
+	routes.RegisterProvisionRoutes(r, h, serviceTokenAuth)
 }
