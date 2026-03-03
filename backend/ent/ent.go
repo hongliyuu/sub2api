@@ -19,6 +19,7 @@ import (
 	"github.com/Wei-Shaw/nbapi/ent/apikey"
 	"github.com/Wei-Shaw/nbapi/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/nbapi/ent/group"
+	"github.com/Wei-Shaw/nbapi/ent/idempotencyrecord"
 	"github.com/Wei-Shaw/nbapi/ent/promocode"
 	"github.com/Wei-Shaw/nbapi/ent/promocodeusage"
 	"github.com/Wei-Shaw/nbapi/ent/proxy"
@@ -99,6 +100,7 @@ func checkColumn(t, c string) error {
 			announcementread.Table:        announcementread.ValidColumn,
 			errorpassthroughrule.Table:    errorpassthroughrule.ValidColumn,
 			group.Table:                   group.ValidColumn,
+			idempotencyrecord.Table:       idempotencyrecord.ValidColumn,
 			promocode.Table:               promocode.ValidColumn,
 			promocodeusage.Table:          promocodeusage.ValidColumn,
 			proxy.Table:                   proxy.ValidColumn,

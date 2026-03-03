@@ -1,4 +1,4 @@
-# sub2api 测试计划
+# nbapi 测试计划
 
 ## 一、单元测试 (Go) — 已有 262 个文件
 
@@ -20,7 +20,7 @@
 ## 二、E2E / 集成测试
 
 ### 待补充
-- [ ] 端到端 API 调用链：client → sub2api → upstream provider
+- [ ] 端到端 API 调用链：client → nbapi → upstream provider
 - [ ] 订阅 key 轮换场景
 - [ ] 限流触发场景
 - [ ] Admin 后台操作流程
@@ -45,8 +45,8 @@ golangci-lint run
 ## 五、E2E 测试凭证
 
 ### 线上环境 (Cloud Run)
-- URL: https://sub2api-tdn6y6qz7q-de.a.run.app/
-- Admin: admin@sub2api.local / 67H6mPosrvDCuv10
+- URL: https://nbapi-tdn6y6qz7q-de.a.run.app/
+- Admin: admin@nbapi.local / 67H6mPosrvDCuv10
 
 ### 本地环境
 - 启动: `cd backend && go run cmd/server/main.go`
@@ -55,11 +55,11 @@ golangci-lint run
 ### API 测试
 ```bash
 # 登录获取 token
-curl -X POST https://sub2api-tdn6y6qz7q-de.a.run.app/api/auth/login \
+curl -X POST https://nbapi-tdn6y6qz7q-de.a.run.app/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@sub2api.local","password":"67H6mPosrvDCuv10"}'
+  -d '{"email":"admin@nbapi.local","password":"67H6mPosrvDCuv10"}'
 
 # 用 token 调用
 curl -H "Authorization: Bearer <token>" \
-  https://sub2api-tdn6y6qz7q-de.a.run.app/v1/models
+  https://nbapi-tdn6y6qz7q-de.a.run.app/v1/models
 ```

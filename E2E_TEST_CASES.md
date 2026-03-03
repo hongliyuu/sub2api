@@ -1,9 +1,9 @@
-# nbAPI (sub2api) E2E Test Cases
+# nbAPI (nbapi) E2E Test Cases
 
 > Maintained by: Testing Agent  
 > Last Updated: 2026-03-03  
-> Target: https://sub2api-tdn6y6qz7q-de.a.run.app/  
-> Admin Credentials: admin@sub2api.local / 67H6mPosrvDCuv10
+> Target: https://nbapi-tdn6y6qz7q-de.a.run.app/  
+> Admin Credentials: admin@nbapi.local / 67H6mPosrvDCuv10
 
 ---
 
@@ -12,7 +12,7 @@
 ### TC-P0-001: 首页加载
 - **前置条件**: 无需登录
 - **步骤**:
-  1. 打开 https://sub2api-tdn6y6qz7q-de.a.run.app/
+  1. 打开 https://nbapi-tdn6y6qz7q-de.a.run.app/
   2. 等待页面完全加载
 - **预期结果**:
   - 页面正常渲染，无白屏/报错
@@ -26,7 +26,7 @@
   1. 打开首页
   2. 检查所有品牌文案
 - **预期结果**:
-  - 标题应显示 "nbAPI"（不是 "Sub2API"）
+  - 标题应显示 "nbAPI"（不是 "nbAPI"）
   - 副标题应匹配 nbAPI 品牌定位
   - Footer 应显示 "© {year} nbAPI"
   - GitHub 链接应指向 github.com/Wei-Shaw/nbapi
@@ -50,7 +50,7 @@
   1. 打开 /login
   2. 检查标题和 footer
 - **预期结果**:
-  - 标题应显示 "nbAPI"（不是 "Sub2API"）
+  - 标题应显示 "nbAPI"（不是 "nbAPI"）
   - 副标题应显示正确品牌
   - Footer 应显示 "© {year} nbAPI"
 - **验证方法**: snapshot DOM 检查
@@ -59,7 +59,7 @@
 - **前置条件**: 无需登录
 - **步骤**:
   1. 打开 /login
-  2. 输入 admin@sub2api.local
+  2. 输入 admin@nbapi.local
   3. 输入密码 67H6mPosrvDCuv10
   4. 点击 "Sign In"
   5. 等待跳转
@@ -87,7 +87,7 @@
   1. 打开侧边栏
   2. 检查侧边栏顶部品牌名称
 - **预期结果**:
-  - 侧边栏顶部显示 "nbAPI"（不是 "Sub2API"）
+  - 侧边栏顶部显示 "nbAPI"（不是 "nbAPI"）
   - 版本号正常显示
 - **验证方法**: snapshot DOM 检查
 
@@ -129,7 +129,7 @@
   1. 登录后检查 onboarding 弹窗
   2. 检查标题和描述文案
 - **预期结果**:
-  - 弹窗标题应显示 "Welcome to nbAPI"（不是 "Welcome to Sub2API"）
+  - 弹窗标题应显示 "Welcome to nbAPI"（不是 "Welcome to nbAPI"）
   - 描述应使用 "nbAPI" 品牌名
 - **验证方法**: 截图 + snapshot DOM
 
@@ -378,5 +378,5 @@
 - [ ] 页面 title → 包含 "nbAPI"
 - [ ] GitHub 链接 → github.com/Wei-Shaw/nbapi
 
-### TC-BRAND-002: 无 "Sub2API" 残留
-搜索整个前端和 i18n 文件，确认无 "Sub2API" 字样残留。
+### TC-BRAND-002: 无 "nbAPI" 残留
+搜索整个前端和 i18n 文件，确认无 "nbAPI" 字样残留。
