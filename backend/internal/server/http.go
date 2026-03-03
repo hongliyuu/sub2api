@@ -6,8 +6,10 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
+	"github.com/Wei-Shaw/sub2api/internal/plugin"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
@@ -36,6 +38,10 @@ func ProvideRouter(
 	opsService *service.OpsService,
 	settingService *service.SettingService,
 	redisClient *redis.Client,
+	entClient *ent.Client,
+	authService *service.AuthService,
+	totpService *service.TotpService,
+	userRepo service.UserRepository,
 ) *gin.Engine {
 	if cfg.Server.Mode == "release" {
 		gin.SetMode(gin.ReleaseMode)
@@ -55,6 +61,17 @@ func ProvideRouter(
 			log.Printf("Warning: server.trusted_proxies is empty in release mode; client IP trust chain is disabled")
 		}
 	}
+
+	// 初始化插件系统
+	pluginCtx := &plugin.AppContext{
+		EntClient:      entClient,
+		Config:         cfg,
+		SettingService: settingService,
+		TotpService:    totpService,
+		AuthService:    authService,
+		UserRepo:       userRepo,
+	}
+	plugin.SetupAll(pluginCtx)
 
 	return SetupRouter(r, handlers, jwtAuth, adminAuth, apiKeyAuth, apiKeyService, subscriptionService, opsService, settingService, cfg, redisClient)
 }

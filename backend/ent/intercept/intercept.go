@@ -16,6 +16,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
+	"github.com/Wei-Shaw/sub2api/ent/ldapconfig"
+	"github.com/Wei-Shaw/sub2api/ent/ldapuser"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
@@ -302,6 +304,60 @@ func (f TraverseIdempotencyRecord) Traverse(ctx context.Context, q ent.Query) er
 		return f(ctx, q)
 	}
 	return fmt.Errorf("unexpected query type %T. expect *ent.IdempotencyRecordQuery", q)
+}
+
+// The LdapConfigFunc type is an adapter to allow the use of ordinary function as a Querier.
+type LdapConfigFunc func(context.Context, *ent.LdapConfigQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f LdapConfigFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.LdapConfigQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.LdapConfigQuery", q)
+}
+
+// The TraverseLdapConfig type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseLdapConfig func(context.Context, *ent.LdapConfigQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseLdapConfig) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseLdapConfig) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.LdapConfigQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.LdapConfigQuery", q)
+}
+
+// The LdapUserFunc type is an adapter to allow the use of ordinary function as a Querier.
+type LdapUserFunc func(context.Context, *ent.LdapUserQuery) (ent.Value, error)
+
+// Query calls f(ctx, q).
+func (f LdapUserFunc) Query(ctx context.Context, q ent.Query) (ent.Value, error) {
+	if q, ok := q.(*ent.LdapUserQuery); ok {
+		return f(ctx, q)
+	}
+	return nil, fmt.Errorf("unexpected query type %T. expect *ent.LdapUserQuery", q)
+}
+
+// The TraverseLdapUser type is an adapter to allow the use of ordinary function as Traverser.
+type TraverseLdapUser func(context.Context, *ent.LdapUserQuery) error
+
+// Intercept is a dummy implementation of Intercept that returns the next Querier in the pipeline.
+func (f TraverseLdapUser) Intercept(next ent.Querier) ent.Querier {
+	return next
+}
+
+// Traverse calls f(ctx, q).
+func (f TraverseLdapUser) Traverse(ctx context.Context, q ent.Query) error {
+	if q, ok := q.(*ent.LdapUserQuery); ok {
+		return f(ctx, q)
+	}
+	return fmt.Errorf("unexpected query type %T. expect *ent.LdapUserQuery", q)
 }
 
 // The PromoCodeFunc type is an adapter to allow the use of ordinary function as a Querier.
@@ -674,6 +730,10 @@ func NewQuery(q ent.Query) (Query, error) {
 		return &query[*ent.GroupQuery, predicate.Group, group.OrderOption]{typ: ent.TypeGroup, tq: q}, nil
 	case *ent.IdempotencyRecordQuery:
 		return &query[*ent.IdempotencyRecordQuery, predicate.IdempotencyRecord, idempotencyrecord.OrderOption]{typ: ent.TypeIdempotencyRecord, tq: q}, nil
+	case *ent.LdapConfigQuery:
+		return &query[*ent.LdapConfigQuery, predicate.LdapConfig, ldapconfig.OrderOption]{typ: ent.TypeLdapConfig, tq: q}, nil
+	case *ent.LdapUserQuery:
+		return &query[*ent.LdapUserQuery, predicate.LdapUser, ldapuser.OrderOption]{typ: ent.TypeLdapUser, tq: q}, nil
 	case *ent.PromoCodeQuery:
 		return &query[*ent.PromoCodeQuery, predicate.PromoCode, promocode.OrderOption]{typ: ent.TypePromoCode, tq: q}, nil
 	case *ent.PromoCodeUsageQuery:

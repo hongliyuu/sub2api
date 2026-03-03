@@ -20,6 +20,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
+	"github.com/Wei-Shaw/sub2api/ent/ldapconfig"
+	"github.com/Wei-Shaw/sub2api/ent/ldapuser"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
@@ -54,6 +56,8 @@ const (
 	TypeErrorPassthroughRule    = "ErrorPassthroughRule"
 	TypeGroup                   = "Group"
 	TypeIdempotencyRecord       = "IdempotencyRecord"
+	TypeLdapConfig              = "LdapConfig"
+	TypeLdapUser                = "LdapUser"
 	TypePromoCode               = "PromoCode"
 	TypePromoCodeUsage          = "PromoCodeUsage"
 	TypeProxy                   = "Proxy"
@@ -11522,6 +11526,1525 @@ func (m *IdempotencyRecordMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *IdempotencyRecordMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown IdempotencyRecord edge %s", name)
+}
+
+// LdapConfigMutation represents an operation that mutates the LdapConfig nodes in the graph.
+type LdapConfigMutation struct {
+	config
+	op                      Op
+	typ                     string
+	id                      *int64
+	created_at              *time.Time
+	updated_at              *time.Time
+	server_url              *string
+	bind_dn                 *string
+	bind_password_encrypted *string
+	base_dn                 *string
+	user_filter             *string
+	enabled                 *bool
+	tls_enabled             *bool
+	tls_skip_verify         *bool
+	config_source           *string
+	clearedFields           map[string]struct{}
+	done                    bool
+	oldValue                func(context.Context) (*LdapConfig, error)
+	predicates              []predicate.LdapConfig
+}
+
+var _ ent.Mutation = (*LdapConfigMutation)(nil)
+
+// ldapconfigOption allows management of the mutation configuration using functional options.
+type ldapconfigOption func(*LdapConfigMutation)
+
+// newLdapConfigMutation creates new mutation for the LdapConfig entity.
+func newLdapConfigMutation(c config, op Op, opts ...ldapconfigOption) *LdapConfigMutation {
+	m := &LdapConfigMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeLdapConfig,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withLdapConfigID sets the ID field of the mutation.
+func withLdapConfigID(id int64) ldapconfigOption {
+	return func(m *LdapConfigMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *LdapConfig
+		)
+		m.oldValue = func(ctx context.Context) (*LdapConfig, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().LdapConfig.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withLdapConfig sets the old LdapConfig of the mutation.
+func withLdapConfig(node *LdapConfig) ldapconfigOption {
+	return func(m *LdapConfigMutation) {
+		m.oldValue = func(context.Context) (*LdapConfig, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m LdapConfigMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m LdapConfigMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *LdapConfigMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *LdapConfigMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().LdapConfig.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *LdapConfigMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *LdapConfigMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the LdapConfig entity.
+// If the LdapConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *LdapConfigMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *LdapConfigMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *LdapConfigMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *LdapConfigMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the LdapConfig entity.
+// If the LdapConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *LdapConfigMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *LdapConfigMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetServerURL sets the "server_url" field.
+func (m *LdapConfigMutation) SetServerURL(s string) {
+	m.server_url = &s
+}
+
+// ServerURL returns the value of the "server_url" field in the mutation.
+func (m *LdapConfigMutation) ServerURL() (r string, exists bool) {
+	v := m.server_url
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldServerURL returns the old "server_url" field's value of the LdapConfig entity.
+// If the LdapConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *LdapConfigMutation) OldServerURL(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldServerURL is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldServerURL requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldServerURL: %w", err)
+	}
+	return oldValue.ServerURL, nil
+}
+
+// ResetServerURL resets all changes to the "server_url" field.
+func (m *LdapConfigMutation) ResetServerURL() {
+	m.server_url = nil
+}
+
+// SetBindDn sets the "bind_dn" field.
+func (m *LdapConfigMutation) SetBindDn(s string) {
+	m.bind_dn = &s
+}
+
+// BindDn returns the value of the "bind_dn" field in the mutation.
+func (m *LdapConfigMutation) BindDn() (r string, exists bool) {
+	v := m.bind_dn
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBindDn returns the old "bind_dn" field's value of the LdapConfig entity.
+// If the LdapConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *LdapConfigMutation) OldBindDn(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBindDn is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBindDn requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBindDn: %w", err)
+	}
+	return oldValue.BindDn, nil
+}
+
+// ResetBindDn resets all changes to the "bind_dn" field.
+func (m *LdapConfigMutation) ResetBindDn() {
+	m.bind_dn = nil
+}
+
+// SetBindPasswordEncrypted sets the "bind_password_encrypted" field.
+func (m *LdapConfigMutation) SetBindPasswordEncrypted(s string) {
+	m.bind_password_encrypted = &s
+}
+
+// BindPasswordEncrypted returns the value of the "bind_password_encrypted" field in the mutation.
+func (m *LdapConfigMutation) BindPasswordEncrypted() (r string, exists bool) {
+	v := m.bind_password_encrypted
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBindPasswordEncrypted returns the old "bind_password_encrypted" field's value of the LdapConfig entity.
+// If the LdapConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *LdapConfigMutation) OldBindPasswordEncrypted(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBindPasswordEncrypted is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBindPasswordEncrypted requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBindPasswordEncrypted: %w", err)
+	}
+	return oldValue.BindPasswordEncrypted, nil
+}
+
+// ResetBindPasswordEncrypted resets all changes to the "bind_password_encrypted" field.
+func (m *LdapConfigMutation) ResetBindPasswordEncrypted() {
+	m.bind_password_encrypted = nil
+}
+
+// SetBaseDn sets the "base_dn" field.
+func (m *LdapConfigMutation) SetBaseDn(s string) {
+	m.base_dn = &s
+}
+
+// BaseDn returns the value of the "base_dn" field in the mutation.
+func (m *LdapConfigMutation) BaseDn() (r string, exists bool) {
+	v := m.base_dn
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBaseDn returns the old "base_dn" field's value of the LdapConfig entity.
+// If the LdapConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *LdapConfigMutation) OldBaseDn(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBaseDn is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBaseDn requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBaseDn: %w", err)
+	}
+	return oldValue.BaseDn, nil
+}
+
+// ResetBaseDn resets all changes to the "base_dn" field.
+func (m *LdapConfigMutation) ResetBaseDn() {
+	m.base_dn = nil
+}
+
+// SetUserFilter sets the "user_filter" field.
+func (m *LdapConfigMutation) SetUserFilter(s string) {
+	m.user_filter = &s
+}
+
+// UserFilter returns the value of the "user_filter" field in the mutation.
+func (m *LdapConfigMutation) UserFilter() (r string, exists bool) {
+	v := m.user_filter
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserFilter returns the old "user_filter" field's value of the LdapConfig entity.
+// If the LdapConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *LdapConfigMutation) OldUserFilter(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserFilter is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserFilter requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserFilter: %w", err)
+	}
+	return oldValue.UserFilter, nil
+}
+
+// ResetUserFilter resets all changes to the "user_filter" field.
+func (m *LdapConfigMutation) ResetUserFilter() {
+	m.user_filter = nil
+}
+
+// SetEnabled sets the "enabled" field.
+func (m *LdapConfigMutation) SetEnabled(b bool) {
+	m.enabled = &b
+}
+
+// Enabled returns the value of the "enabled" field in the mutation.
+func (m *LdapConfigMutation) Enabled() (r bool, exists bool) {
+	v := m.enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnabled returns the old "enabled" field's value of the LdapConfig entity.
+// If the LdapConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *LdapConfigMutation) OldEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnabled: %w", err)
+	}
+	return oldValue.Enabled, nil
+}
+
+// ResetEnabled resets all changes to the "enabled" field.
+func (m *LdapConfigMutation) ResetEnabled() {
+	m.enabled = nil
+}
+
+// SetTLSEnabled sets the "tls_enabled" field.
+func (m *LdapConfigMutation) SetTLSEnabled(b bool) {
+	m.tls_enabled = &b
+}
+
+// TLSEnabled returns the value of the "tls_enabled" field in the mutation.
+func (m *LdapConfigMutation) TLSEnabled() (r bool, exists bool) {
+	v := m.tls_enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTLSEnabled returns the old "tls_enabled" field's value of the LdapConfig entity.
+// If the LdapConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *LdapConfigMutation) OldTLSEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTLSEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTLSEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTLSEnabled: %w", err)
+	}
+	return oldValue.TLSEnabled, nil
+}
+
+// ResetTLSEnabled resets all changes to the "tls_enabled" field.
+func (m *LdapConfigMutation) ResetTLSEnabled() {
+	m.tls_enabled = nil
+}
+
+// SetTLSSkipVerify sets the "tls_skip_verify" field.
+func (m *LdapConfigMutation) SetTLSSkipVerify(b bool) {
+	m.tls_skip_verify = &b
+}
+
+// TLSSkipVerify returns the value of the "tls_skip_verify" field in the mutation.
+func (m *LdapConfigMutation) TLSSkipVerify() (r bool, exists bool) {
+	v := m.tls_skip_verify
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTLSSkipVerify returns the old "tls_skip_verify" field's value of the LdapConfig entity.
+// If the LdapConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *LdapConfigMutation) OldTLSSkipVerify(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTLSSkipVerify is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTLSSkipVerify requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTLSSkipVerify: %w", err)
+	}
+	return oldValue.TLSSkipVerify, nil
+}
+
+// ResetTLSSkipVerify resets all changes to the "tls_skip_verify" field.
+func (m *LdapConfigMutation) ResetTLSSkipVerify() {
+	m.tls_skip_verify = nil
+}
+
+// SetConfigSource sets the "config_source" field.
+func (m *LdapConfigMutation) SetConfigSource(s string) {
+	m.config_source = &s
+}
+
+// ConfigSource returns the value of the "config_source" field in the mutation.
+func (m *LdapConfigMutation) ConfigSource() (r string, exists bool) {
+	v := m.config_source
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldConfigSource returns the old "config_source" field's value of the LdapConfig entity.
+// If the LdapConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *LdapConfigMutation) OldConfigSource(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldConfigSource is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldConfigSource requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldConfigSource: %w", err)
+	}
+	return oldValue.ConfigSource, nil
+}
+
+// ResetConfigSource resets all changes to the "config_source" field.
+func (m *LdapConfigMutation) ResetConfigSource() {
+	m.config_source = nil
+}
+
+// Where appends a list predicates to the LdapConfigMutation builder.
+func (m *LdapConfigMutation) Where(ps ...predicate.LdapConfig) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the LdapConfigMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *LdapConfigMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.LdapConfig, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *LdapConfigMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *LdapConfigMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (LdapConfig).
+func (m *LdapConfigMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *LdapConfigMutation) Fields() []string {
+	fields := make([]string, 0, 11)
+	if m.created_at != nil {
+		fields = append(fields, ldapconfig.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, ldapconfig.FieldUpdatedAt)
+	}
+	if m.server_url != nil {
+		fields = append(fields, ldapconfig.FieldServerURL)
+	}
+	if m.bind_dn != nil {
+		fields = append(fields, ldapconfig.FieldBindDn)
+	}
+	if m.bind_password_encrypted != nil {
+		fields = append(fields, ldapconfig.FieldBindPasswordEncrypted)
+	}
+	if m.base_dn != nil {
+		fields = append(fields, ldapconfig.FieldBaseDn)
+	}
+	if m.user_filter != nil {
+		fields = append(fields, ldapconfig.FieldUserFilter)
+	}
+	if m.enabled != nil {
+		fields = append(fields, ldapconfig.FieldEnabled)
+	}
+	if m.tls_enabled != nil {
+		fields = append(fields, ldapconfig.FieldTLSEnabled)
+	}
+	if m.tls_skip_verify != nil {
+		fields = append(fields, ldapconfig.FieldTLSSkipVerify)
+	}
+	if m.config_source != nil {
+		fields = append(fields, ldapconfig.FieldConfigSource)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *LdapConfigMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case ldapconfig.FieldCreatedAt:
+		return m.CreatedAt()
+	case ldapconfig.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case ldapconfig.FieldServerURL:
+		return m.ServerURL()
+	case ldapconfig.FieldBindDn:
+		return m.BindDn()
+	case ldapconfig.FieldBindPasswordEncrypted:
+		return m.BindPasswordEncrypted()
+	case ldapconfig.FieldBaseDn:
+		return m.BaseDn()
+	case ldapconfig.FieldUserFilter:
+		return m.UserFilter()
+	case ldapconfig.FieldEnabled:
+		return m.Enabled()
+	case ldapconfig.FieldTLSEnabled:
+		return m.TLSEnabled()
+	case ldapconfig.FieldTLSSkipVerify:
+		return m.TLSSkipVerify()
+	case ldapconfig.FieldConfigSource:
+		return m.ConfigSource()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *LdapConfigMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case ldapconfig.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case ldapconfig.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case ldapconfig.FieldServerURL:
+		return m.OldServerURL(ctx)
+	case ldapconfig.FieldBindDn:
+		return m.OldBindDn(ctx)
+	case ldapconfig.FieldBindPasswordEncrypted:
+		return m.OldBindPasswordEncrypted(ctx)
+	case ldapconfig.FieldBaseDn:
+		return m.OldBaseDn(ctx)
+	case ldapconfig.FieldUserFilter:
+		return m.OldUserFilter(ctx)
+	case ldapconfig.FieldEnabled:
+		return m.OldEnabled(ctx)
+	case ldapconfig.FieldTLSEnabled:
+		return m.OldTLSEnabled(ctx)
+	case ldapconfig.FieldTLSSkipVerify:
+		return m.OldTLSSkipVerify(ctx)
+	case ldapconfig.FieldConfigSource:
+		return m.OldConfigSource(ctx)
+	}
+	return nil, fmt.Errorf("unknown LdapConfig field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *LdapConfigMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case ldapconfig.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case ldapconfig.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case ldapconfig.FieldServerURL:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetServerURL(v)
+		return nil
+	case ldapconfig.FieldBindDn:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBindDn(v)
+		return nil
+	case ldapconfig.FieldBindPasswordEncrypted:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBindPasswordEncrypted(v)
+		return nil
+	case ldapconfig.FieldBaseDn:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBaseDn(v)
+		return nil
+	case ldapconfig.FieldUserFilter:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserFilter(v)
+		return nil
+	case ldapconfig.FieldEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnabled(v)
+		return nil
+	case ldapconfig.FieldTLSEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTLSEnabled(v)
+		return nil
+	case ldapconfig.FieldTLSSkipVerify:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTLSSkipVerify(v)
+		return nil
+	case ldapconfig.FieldConfigSource:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetConfigSource(v)
+		return nil
+	}
+	return fmt.Errorf("unknown LdapConfig field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *LdapConfigMutation) AddedFields() []string {
+	return nil
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *LdapConfigMutation) AddedField(name string) (ent.Value, bool) {
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *LdapConfigMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown LdapConfig numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *LdapConfigMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *LdapConfigMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *LdapConfigMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown LdapConfig nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *LdapConfigMutation) ResetField(name string) error {
+	switch name {
+	case ldapconfig.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case ldapconfig.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case ldapconfig.FieldServerURL:
+		m.ResetServerURL()
+		return nil
+	case ldapconfig.FieldBindDn:
+		m.ResetBindDn()
+		return nil
+	case ldapconfig.FieldBindPasswordEncrypted:
+		m.ResetBindPasswordEncrypted()
+		return nil
+	case ldapconfig.FieldBaseDn:
+		m.ResetBaseDn()
+		return nil
+	case ldapconfig.FieldUserFilter:
+		m.ResetUserFilter()
+		return nil
+	case ldapconfig.FieldEnabled:
+		m.ResetEnabled()
+		return nil
+	case ldapconfig.FieldTLSEnabled:
+		m.ResetTLSEnabled()
+		return nil
+	case ldapconfig.FieldTLSSkipVerify:
+		m.ResetTLSSkipVerify()
+		return nil
+	case ldapconfig.FieldConfigSource:
+		m.ResetConfigSource()
+		return nil
+	}
+	return fmt.Errorf("unknown LdapConfig field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *LdapConfigMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *LdapConfigMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *LdapConfigMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *LdapConfigMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *LdapConfigMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *LdapConfigMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *LdapConfigMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown LdapConfig unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *LdapConfigMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown LdapConfig edge %s", name)
+}
+
+// LdapUserMutation represents an operation that mutates the LdapUser nodes in the graph.
+type LdapUserMutation struct {
+	config
+	op            Op
+	typ           string
+	id            *int64
+	created_at    *time.Time
+	updated_at    *time.Time
+	ldap_username *string
+	ldap_dn       *string
+	last_sync_at  *time.Time
+	clearedFields map[string]struct{}
+	user          *int64
+	cleareduser   bool
+	done          bool
+	oldValue      func(context.Context) (*LdapUser, error)
+	predicates    []predicate.LdapUser
+}
+
+var _ ent.Mutation = (*LdapUserMutation)(nil)
+
+// ldapuserOption allows management of the mutation configuration using functional options.
+type ldapuserOption func(*LdapUserMutation)
+
+// newLdapUserMutation creates new mutation for the LdapUser entity.
+func newLdapUserMutation(c config, op Op, opts ...ldapuserOption) *LdapUserMutation {
+	m := &LdapUserMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeLdapUser,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withLdapUserID sets the ID field of the mutation.
+func withLdapUserID(id int64) ldapuserOption {
+	return func(m *LdapUserMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *LdapUser
+		)
+		m.oldValue = func(ctx context.Context) (*LdapUser, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().LdapUser.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withLdapUser sets the old LdapUser of the mutation.
+func withLdapUser(node *LdapUser) ldapuserOption {
+	return func(m *LdapUserMutation) {
+		m.oldValue = func(context.Context) (*LdapUser, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m LdapUserMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m LdapUserMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *LdapUserMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *LdapUserMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().LdapUser.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *LdapUserMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *LdapUserMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the LdapUser entity.
+// If the LdapUser object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *LdapUserMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *LdapUserMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *LdapUserMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *LdapUserMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the LdapUser entity.
+// If the LdapUser object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *LdapUserMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *LdapUserMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetUserID sets the "user_id" field.
+func (m *LdapUserMutation) SetUserID(i int64) {
+	m.user = &i
+}
+
+// UserID returns the value of the "user_id" field in the mutation.
+func (m *LdapUserMutation) UserID() (r int64, exists bool) {
+	v := m.user
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserID returns the old "user_id" field's value of the LdapUser entity.
+// If the LdapUser object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *LdapUserMutation) OldUserID(ctx context.Context) (v int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserID: %w", err)
+	}
+	return oldValue.UserID, nil
+}
+
+// ResetUserID resets all changes to the "user_id" field.
+func (m *LdapUserMutation) ResetUserID() {
+	m.user = nil
+}
+
+// SetLdapUsername sets the "ldap_username" field.
+func (m *LdapUserMutation) SetLdapUsername(s string) {
+	m.ldap_username = &s
+}
+
+// LdapUsername returns the value of the "ldap_username" field in the mutation.
+func (m *LdapUserMutation) LdapUsername() (r string, exists bool) {
+	v := m.ldap_username
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLdapUsername returns the old "ldap_username" field's value of the LdapUser entity.
+// If the LdapUser object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *LdapUserMutation) OldLdapUsername(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLdapUsername is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLdapUsername requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLdapUsername: %w", err)
+	}
+	return oldValue.LdapUsername, nil
+}
+
+// ResetLdapUsername resets all changes to the "ldap_username" field.
+func (m *LdapUserMutation) ResetLdapUsername() {
+	m.ldap_username = nil
+}
+
+// SetLdapDn sets the "ldap_dn" field.
+func (m *LdapUserMutation) SetLdapDn(s string) {
+	m.ldap_dn = &s
+}
+
+// LdapDn returns the value of the "ldap_dn" field in the mutation.
+func (m *LdapUserMutation) LdapDn() (r string, exists bool) {
+	v := m.ldap_dn
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLdapDn returns the old "ldap_dn" field's value of the LdapUser entity.
+// If the LdapUser object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *LdapUserMutation) OldLdapDn(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLdapDn is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLdapDn requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLdapDn: %w", err)
+	}
+	return oldValue.LdapDn, nil
+}
+
+// ResetLdapDn resets all changes to the "ldap_dn" field.
+func (m *LdapUserMutation) ResetLdapDn() {
+	m.ldap_dn = nil
+}
+
+// SetLastSyncAt sets the "last_sync_at" field.
+func (m *LdapUserMutation) SetLastSyncAt(t time.Time) {
+	m.last_sync_at = &t
+}
+
+// LastSyncAt returns the value of the "last_sync_at" field in the mutation.
+func (m *LdapUserMutation) LastSyncAt() (r time.Time, exists bool) {
+	v := m.last_sync_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldLastSyncAt returns the old "last_sync_at" field's value of the LdapUser entity.
+// If the LdapUser object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *LdapUserMutation) OldLastSyncAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldLastSyncAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldLastSyncAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldLastSyncAt: %w", err)
+	}
+	return oldValue.LastSyncAt, nil
+}
+
+// ResetLastSyncAt resets all changes to the "last_sync_at" field.
+func (m *LdapUserMutation) ResetLastSyncAt() {
+	m.last_sync_at = nil
+}
+
+// ClearUser clears the "user" edge to the User entity.
+func (m *LdapUserMutation) ClearUser() {
+	m.cleareduser = true
+	m.clearedFields[ldapuser.FieldUserID] = struct{}{}
+}
+
+// UserCleared reports if the "user" edge to the User entity was cleared.
+func (m *LdapUserMutation) UserCleared() bool {
+	return m.cleareduser
+}
+
+// UserIDs returns the "user" edge IDs in the mutation.
+// Note that IDs always returns len(IDs) <= 1 for unique edges, and you should use
+// UserID instead. It exists only for internal usage by the builders.
+func (m *LdapUserMutation) UserIDs() (ids []int64) {
+	if id := m.user; id != nil {
+		ids = append(ids, *id)
+	}
+	return
+}
+
+// ResetUser resets all changes to the "user" edge.
+func (m *LdapUserMutation) ResetUser() {
+	m.user = nil
+	m.cleareduser = false
+}
+
+// Where appends a list predicates to the LdapUserMutation builder.
+func (m *LdapUserMutation) Where(ps ...predicate.LdapUser) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the LdapUserMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *LdapUserMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.LdapUser, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *LdapUserMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *LdapUserMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (LdapUser).
+func (m *LdapUserMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *LdapUserMutation) Fields() []string {
+	fields := make([]string, 0, 6)
+	if m.created_at != nil {
+		fields = append(fields, ldapuser.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, ldapuser.FieldUpdatedAt)
+	}
+	if m.user != nil {
+		fields = append(fields, ldapuser.FieldUserID)
+	}
+	if m.ldap_username != nil {
+		fields = append(fields, ldapuser.FieldLdapUsername)
+	}
+	if m.ldap_dn != nil {
+		fields = append(fields, ldapuser.FieldLdapDn)
+	}
+	if m.last_sync_at != nil {
+		fields = append(fields, ldapuser.FieldLastSyncAt)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *LdapUserMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case ldapuser.FieldCreatedAt:
+		return m.CreatedAt()
+	case ldapuser.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case ldapuser.FieldUserID:
+		return m.UserID()
+	case ldapuser.FieldLdapUsername:
+		return m.LdapUsername()
+	case ldapuser.FieldLdapDn:
+		return m.LdapDn()
+	case ldapuser.FieldLastSyncAt:
+		return m.LastSyncAt()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *LdapUserMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case ldapuser.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case ldapuser.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case ldapuser.FieldUserID:
+		return m.OldUserID(ctx)
+	case ldapuser.FieldLdapUsername:
+		return m.OldLdapUsername(ctx)
+	case ldapuser.FieldLdapDn:
+		return m.OldLdapDn(ctx)
+	case ldapuser.FieldLastSyncAt:
+		return m.OldLastSyncAt(ctx)
+	}
+	return nil, fmt.Errorf("unknown LdapUser field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *LdapUserMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case ldapuser.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case ldapuser.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case ldapuser.FieldUserID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserID(v)
+		return nil
+	case ldapuser.FieldLdapUsername:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLdapUsername(v)
+		return nil
+	case ldapuser.FieldLdapDn:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLdapDn(v)
+		return nil
+	case ldapuser.FieldLastSyncAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetLastSyncAt(v)
+		return nil
+	}
+	return fmt.Errorf("unknown LdapUser field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *LdapUserMutation) AddedFields() []string {
+	var fields []string
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *LdapUserMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *LdapUserMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	}
+	return fmt.Errorf("unknown LdapUser numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *LdapUserMutation) ClearedFields() []string {
+	return nil
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *LdapUserMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *LdapUserMutation) ClearField(name string) error {
+	return fmt.Errorf("unknown LdapUser nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *LdapUserMutation) ResetField(name string) error {
+	switch name {
+	case ldapuser.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case ldapuser.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case ldapuser.FieldUserID:
+		m.ResetUserID()
+		return nil
+	case ldapuser.FieldLdapUsername:
+		m.ResetLdapUsername()
+		return nil
+	case ldapuser.FieldLdapDn:
+		m.ResetLdapDn()
+		return nil
+	case ldapuser.FieldLastSyncAt:
+		m.ResetLastSyncAt()
+		return nil
+	}
+	return fmt.Errorf("unknown LdapUser field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *LdapUserMutation) AddedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.user != nil {
+		edges = append(edges, ldapuser.EdgeUser)
+	}
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *LdapUserMutation) AddedIDs(name string) []ent.Value {
+	switch name {
+	case ldapuser.EdgeUser:
+		if id := m.user; id != nil {
+			return []ent.Value{*id}
+		}
+	}
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *LdapUserMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 1)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *LdapUserMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *LdapUserMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 1)
+	if m.cleareduser {
+		edges = append(edges, ldapuser.EdgeUser)
+	}
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *LdapUserMutation) EdgeCleared(name string) bool {
+	switch name {
+	case ldapuser.EdgeUser:
+		return m.cleareduser
+	}
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *LdapUserMutation) ClearEdge(name string) error {
+	switch name {
+	case ldapuser.EdgeUser:
+		m.ClearUser()
+		return nil
+	}
+	return fmt.Errorf("unknown LdapUser unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *LdapUserMutation) ResetEdge(name string) error {
+	switch name {
+	case ldapuser.EdgeUser:
+		m.ResetUser()
+		return nil
+	}
+	return fmt.Errorf("unknown LdapUser edge %s", name)
 }
 
 // PromoCodeMutation represents an operation that mutates the PromoCode nodes in the graph.

@@ -474,6 +474,70 @@ var (
 			},
 		},
 	}
+	// LdapConfigsColumns holds the columns for the "ldap_configs" table.
+	LdapConfigsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "server_url", Type: field.TypeString, Size: 255},
+		{Name: "bind_dn", Type: field.TypeString, Size: 255},
+		{Name: "bind_password_encrypted", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "base_dn", Type: field.TypeString, Size: 255},
+		{Name: "user_filter", Type: field.TypeString, Size: 255, Default: "(uid=%s)"},
+		{Name: "enabled", Type: field.TypeBool, Default: false},
+		{Name: "tls_enabled", Type: field.TypeBool, Default: false},
+		{Name: "tls_skip_verify", Type: field.TypeBool, Default: false},
+		{Name: "config_source", Type: field.TypeString, Size: 50, Default: "database"},
+	}
+	// LdapConfigsTable holds the schema information for the "ldap_configs" table.
+	LdapConfigsTable = &schema.Table{
+		Name:       "ldap_configs",
+		Columns:    LdapConfigsColumns,
+		PrimaryKey: []*schema.Column{LdapConfigsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "ldapconfig_enabled",
+				Unique:  false,
+				Columns: []*schema.Column{LdapConfigsColumns[8]},
+			},
+		},
+	}
+	// LdapUsersColumns holds the columns for the "ldap_users" table.
+	LdapUsersColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "ldap_username", Type: field.TypeString, Unique: true, Size: 255},
+		{Name: "ldap_dn", Type: field.TypeString, Size: 500},
+		{Name: "last_sync_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "user_id", Type: field.TypeInt64},
+	}
+	// LdapUsersTable holds the schema information for the "ldap_users" table.
+	LdapUsersTable = &schema.Table{
+		Name:       "ldap_users",
+		Columns:    LdapUsersColumns,
+		PrimaryKey: []*schema.Column{LdapUsersColumns[0]},
+		ForeignKeys: []*schema.ForeignKey{
+			{
+				Symbol:     "ldap_users_users_user",
+				Columns:    []*schema.Column{LdapUsersColumns[6]},
+				RefColumns: []*schema.Column{UsersColumns[0]},
+				OnDelete:   schema.Cascade,
+			},
+		},
+		Indexes: []*schema.Index{
+			{
+				Name:    "ldapuser_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{LdapUsersColumns[6]},
+			},
+			{
+				Name:    "ldapuser_ldap_username",
+				Unique:  false,
+				Columns: []*schema.Column{LdapUsersColumns[3]},
+			},
+		},
+	}
 	// PromoCodesColumns holds the columns for the "promo_codes" table.
 	PromoCodesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -1085,6 +1149,8 @@ var (
 		ErrorPassthroughRulesTable,
 		GroupsTable,
 		IdempotencyRecordsTable,
+		LdapConfigsTable,
+		LdapUsersTable,
 		PromoCodesTable,
 		PromoCodeUsagesTable,
 		ProxiesTable,
@@ -1132,6 +1198,13 @@ func init() {
 	}
 	IdempotencyRecordsTable.Annotation = &entsql.Annotation{
 		Table: "idempotency_records",
+	}
+	LdapConfigsTable.Annotation = &entsql.Annotation{
+		Table: "ldap_configs",
+	}
+	LdapUsersTable.ForeignKeys[0].RefTable = UsersTable
+	LdapUsersTable.Annotation = &entsql.Annotation{
+		Table: "ldap_users",
 	}
 	PromoCodesTable.Annotation = &entsql.Annotation{
 		Table: "promo_codes",

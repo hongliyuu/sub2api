@@ -13,6 +13,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
+	"github.com/Wei-Shaw/sub2api/ent/ldapconfig"
+	"github.com/Wei-Shaw/sub2api/ent/ldapuser"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
@@ -458,6 +460,158 @@ func init() {
 	idempotencyrecordDescErrorReason := idempotencyrecordFields[6].Descriptor()
 	// idempotencyrecord.ErrorReasonValidator is a validator for the "error_reason" field. It is called by the builders before save.
 	idempotencyrecord.ErrorReasonValidator = idempotencyrecordDescErrorReason.Validators[0].(func(string) error)
+	ldapconfigMixin := schema.LdapConfig{}.Mixin()
+	ldapconfigMixinFields0 := ldapconfigMixin[0].Fields()
+	_ = ldapconfigMixinFields0
+	ldapconfigFields := schema.LdapConfig{}.Fields()
+	_ = ldapconfigFields
+	// ldapconfigDescCreatedAt is the schema descriptor for created_at field.
+	ldapconfigDescCreatedAt := ldapconfigMixinFields0[0].Descriptor()
+	// ldapconfig.DefaultCreatedAt holds the default value on creation for the created_at field.
+	ldapconfig.DefaultCreatedAt = ldapconfigDescCreatedAt.Default.(func() time.Time)
+	// ldapconfigDescUpdatedAt is the schema descriptor for updated_at field.
+	ldapconfigDescUpdatedAt := ldapconfigMixinFields0[1].Descriptor()
+	// ldapconfig.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	ldapconfig.DefaultUpdatedAt = ldapconfigDescUpdatedAt.Default.(func() time.Time)
+	// ldapconfig.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	ldapconfig.UpdateDefaultUpdatedAt = ldapconfigDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// ldapconfigDescServerURL is the schema descriptor for server_url field.
+	ldapconfigDescServerURL := ldapconfigFields[0].Descriptor()
+	// ldapconfig.ServerURLValidator is a validator for the "server_url" field. It is called by the builders before save.
+	ldapconfig.ServerURLValidator = func() func(string) error {
+		validators := ldapconfigDescServerURL.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(server_url string) error {
+			for _, fn := range fns {
+				if err := fn(server_url); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// ldapconfigDescBindDn is the schema descriptor for bind_dn field.
+	ldapconfigDescBindDn := ldapconfigFields[1].Descriptor()
+	// ldapconfig.BindDnValidator is a validator for the "bind_dn" field. It is called by the builders before save.
+	ldapconfig.BindDnValidator = func() func(string) error {
+		validators := ldapconfigDescBindDn.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(bind_dn string) error {
+			for _, fn := range fns {
+				if err := fn(bind_dn); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// ldapconfigDescBindPasswordEncrypted is the schema descriptor for bind_password_encrypted field.
+	ldapconfigDescBindPasswordEncrypted := ldapconfigFields[2].Descriptor()
+	// ldapconfig.BindPasswordEncryptedValidator is a validator for the "bind_password_encrypted" field. It is called by the builders before save.
+	ldapconfig.BindPasswordEncryptedValidator = ldapconfigDescBindPasswordEncrypted.Validators[0].(func(string) error)
+	// ldapconfigDescBaseDn is the schema descriptor for base_dn field.
+	ldapconfigDescBaseDn := ldapconfigFields[3].Descriptor()
+	// ldapconfig.BaseDnValidator is a validator for the "base_dn" field. It is called by the builders before save.
+	ldapconfig.BaseDnValidator = func() func(string) error {
+		validators := ldapconfigDescBaseDn.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(base_dn string) error {
+			for _, fn := range fns {
+				if err := fn(base_dn); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// ldapconfigDescUserFilter is the schema descriptor for user_filter field.
+	ldapconfigDescUserFilter := ldapconfigFields[4].Descriptor()
+	// ldapconfig.DefaultUserFilter holds the default value on creation for the user_filter field.
+	ldapconfig.DefaultUserFilter = ldapconfigDescUserFilter.Default.(string)
+	// ldapconfig.UserFilterValidator is a validator for the "user_filter" field. It is called by the builders before save.
+	ldapconfig.UserFilterValidator = ldapconfigDescUserFilter.Validators[0].(func(string) error)
+	// ldapconfigDescEnabled is the schema descriptor for enabled field.
+	ldapconfigDescEnabled := ldapconfigFields[5].Descriptor()
+	// ldapconfig.DefaultEnabled holds the default value on creation for the enabled field.
+	ldapconfig.DefaultEnabled = ldapconfigDescEnabled.Default.(bool)
+	// ldapconfigDescTLSEnabled is the schema descriptor for tls_enabled field.
+	ldapconfigDescTLSEnabled := ldapconfigFields[6].Descriptor()
+	// ldapconfig.DefaultTLSEnabled holds the default value on creation for the tls_enabled field.
+	ldapconfig.DefaultTLSEnabled = ldapconfigDescTLSEnabled.Default.(bool)
+	// ldapconfigDescTLSSkipVerify is the schema descriptor for tls_skip_verify field.
+	ldapconfigDescTLSSkipVerify := ldapconfigFields[7].Descriptor()
+	// ldapconfig.DefaultTLSSkipVerify holds the default value on creation for the tls_skip_verify field.
+	ldapconfig.DefaultTLSSkipVerify = ldapconfigDescTLSSkipVerify.Default.(bool)
+	// ldapconfigDescConfigSource is the schema descriptor for config_source field.
+	ldapconfigDescConfigSource := ldapconfigFields[8].Descriptor()
+	// ldapconfig.DefaultConfigSource holds the default value on creation for the config_source field.
+	ldapconfig.DefaultConfigSource = ldapconfigDescConfigSource.Default.(string)
+	// ldapconfig.ConfigSourceValidator is a validator for the "config_source" field. It is called by the builders before save.
+	ldapconfig.ConfigSourceValidator = ldapconfigDescConfigSource.Validators[0].(func(string) error)
+	ldapuserMixin := schema.LdapUser{}.Mixin()
+	ldapuserMixinFields0 := ldapuserMixin[0].Fields()
+	_ = ldapuserMixinFields0
+	ldapuserFields := schema.LdapUser{}.Fields()
+	_ = ldapuserFields
+	// ldapuserDescCreatedAt is the schema descriptor for created_at field.
+	ldapuserDescCreatedAt := ldapuserMixinFields0[0].Descriptor()
+	// ldapuser.DefaultCreatedAt holds the default value on creation for the created_at field.
+	ldapuser.DefaultCreatedAt = ldapuserDescCreatedAt.Default.(func() time.Time)
+	// ldapuserDescUpdatedAt is the schema descriptor for updated_at field.
+	ldapuserDescUpdatedAt := ldapuserMixinFields0[1].Descriptor()
+	// ldapuser.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	ldapuser.DefaultUpdatedAt = ldapuserDescUpdatedAt.Default.(func() time.Time)
+	// ldapuser.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	ldapuser.UpdateDefaultUpdatedAt = ldapuserDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// ldapuserDescLdapUsername is the schema descriptor for ldap_username field.
+	ldapuserDescLdapUsername := ldapuserFields[1].Descriptor()
+	// ldapuser.LdapUsernameValidator is a validator for the "ldap_username" field. It is called by the builders before save.
+	ldapuser.LdapUsernameValidator = func() func(string) error {
+		validators := ldapuserDescLdapUsername.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(ldap_username string) error {
+			for _, fn := range fns {
+				if err := fn(ldap_username); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// ldapuserDescLdapDn is the schema descriptor for ldap_dn field.
+	ldapuserDescLdapDn := ldapuserFields[2].Descriptor()
+	// ldapuser.LdapDnValidator is a validator for the "ldap_dn" field. It is called by the builders before save.
+	ldapuser.LdapDnValidator = func() func(string) error {
+		validators := ldapuserDescLdapDn.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(ldap_dn string) error {
+			for _, fn := range fns {
+				if err := fn(ldap_dn); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// ldapuserDescLastSyncAt is the schema descriptor for last_sync_at field.
+	ldapuserDescLastSyncAt := ldapuserFields[3].Descriptor()
+	// ldapuser.DefaultLastSyncAt holds the default value on creation for the last_sync_at field.
+	ldapuser.DefaultLastSyncAt = ldapuserDescLastSyncAt.Default.(func() time.Time)
 	promocodeFields := schema.PromoCode{}.Fields()
 	_ = promocodeFields
 	// promocodeDescCode is the schema descriptor for code field.

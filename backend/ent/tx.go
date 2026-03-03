@@ -30,6 +30,10 @@ type Tx struct {
 	Group *GroupClient
 	// IdempotencyRecord is the client for interacting with the IdempotencyRecord builders.
 	IdempotencyRecord *IdempotencyRecordClient
+	// LdapConfig is the client for interacting with the LdapConfig builders.
+	LdapConfig *LdapConfigClient
+	// LdapUser is the client for interacting with the LdapUser builders.
+	LdapUser *LdapUserClient
 	// PromoCode is the client for interacting with the PromoCode builders.
 	PromoCode *PromoCodeClient
 	// PromoCodeUsage is the client for interacting with the PromoCodeUsage builders.
@@ -195,6 +199,8 @@ func (tx *Tx) init() {
 	tx.ErrorPassthroughRule = NewErrorPassthroughRuleClient(tx.config)
 	tx.Group = NewGroupClient(tx.config)
 	tx.IdempotencyRecord = NewIdempotencyRecordClient(tx.config)
+	tx.LdapConfig = NewLdapConfigClient(tx.config)
+	tx.LdapUser = NewLdapUserClient(tx.config)
 	tx.PromoCode = NewPromoCodeClient(tx.config)
 	tx.PromoCodeUsage = NewPromoCodeUsageClient(tx.config)
 	tx.Proxy = NewProxyClient(tx.config)

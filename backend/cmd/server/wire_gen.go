@@ -26,6 +26,7 @@ import (
 import (
 	_ "embed"
 	_ "github.com/Wei-Shaw/sub2api/ent/runtime"
+	_ "github.com/Wei-Shaw/sub2api/internal/plugins/ldap"
 )
 
 // Injectors from wire.go:
@@ -168,10 +169,6 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	opsSystemLogSink := service.ProvideOpsSystemLogSink(opsRepository)
 	opsService := service.NewOpsService(opsRepository, settingRepository, configConfig, accountRepository, userRepository, concurrencyService, gatewayService, openAIGatewayService, geminiMessagesCompatService, antigravityGatewayService, opsSystemLogSink)
 	soraS3Storage := service.NewSoraS3Storage(settingService)
-	settingService.SetOnS3UpdateCallback(soraS3Storage.RefreshClient)
-	soraGenerationRepository := repository.NewSoraGenerationRepository(db)
-	soraQuotaService := service.NewSoraQuotaService(userRepository, groupRepository, settingService)
-	soraGenerationService := service.NewSoraGenerationService(soraGenerationRepository, soraS3Storage, soraQuotaService)
 	settingHandler := admin.NewSettingHandler(settingService, emailService, turnstileService, opsService, soraS3Storage)
 	opsHandler := admin.NewOpsHandler(opsService)
 	updateCache := repository.NewUpdateCache(redisClient)
@@ -201,10 +198,13 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	gatewayHandler := handler.NewGatewayHandler(gatewayService, geminiMessagesCompatService, antigravityGatewayService, userService, concurrencyService, billingCacheService, usageService, apiKeyService, usageRecordWorkerPool, errorPassthroughService, userMessageQueueService, configConfig, settingService)
 	openAIGatewayHandler := handler.NewOpenAIGatewayHandler(openAIGatewayService, concurrencyService, billingCacheService, apiKeyService, usageRecordWorkerPool, errorPassthroughService, configConfig)
 	soraSDKClient := service.ProvideSoraSDKClient(configConfig, httpUpstream, openAITokenProvider, accountRepository, soraAccountRepository)
-	soraMediaStorage := service.ProvideSoraMediaStorage(configConfig)
 	soraGatewayService := service.NewSoraGatewayService(soraSDKClient, rateLimitService, httpUpstream, configConfig)
-	soraClientHandler := handler.NewSoraClientHandler(soraGenerationService, soraQuotaService, soraS3Storage, soraGatewayService, gatewayService, soraMediaStorage, apiKeyService)
 	soraGatewayHandler := handler.NewSoraGatewayHandler(gatewayService, soraGatewayService, concurrencyService, billingCacheService, usageRecordWorkerPool, configConfig)
+	soraGenerationRepository := repository.NewSoraGenerationRepository(db)
+	soraQuotaService := service.NewSoraQuotaService(userRepository, groupRepository, settingService)
+	soraGenerationService := service.NewSoraGenerationService(soraGenerationRepository, soraS3Storage, soraQuotaService)
+	soraMediaStorage := service.ProvideSoraMediaStorage(configConfig)
+	soraClientHandler := handler.NewSoraClientHandler(soraGenerationService, soraQuotaService, soraS3Storage, soraGatewayService, gatewayService, soraMediaStorage, apiKeyService)
 	handlerSettingHandler := handler.ProvideSettingHandler(settingService, buildInfo)
 	totpHandler := handler.NewTotpHandler(totpService)
 	idempotencyCoordinator := service.ProvideIdempotencyCoordinator(idempotencyRepository, configConfig)
@@ -213,7 +213,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	jwtAuthMiddleware := middleware.NewJWTAuthMiddleware(authService, userService)
 	adminAuthMiddleware := middleware.NewAdminAuthMiddleware(authService, userService, settingService)
 	apiKeyAuthMiddleware := middleware.NewAPIKeyAuthMiddleware(apiKeyService, subscriptionService, configConfig)
-	engine := server.ProvideRouter(configConfig, handlers, jwtAuthMiddleware, adminAuthMiddleware, apiKeyAuthMiddleware, apiKeyService, subscriptionService, opsService, settingService, redisClient)
+	engine := server.ProvideRouter(configConfig, handlers, jwtAuthMiddleware, adminAuthMiddleware, apiKeyAuthMiddleware, apiKeyService, subscriptionService, opsService, settingService, redisClient, client, authService, totpService, userRepository)
 	httpServer := server.ProvideHTTPServer(configConfig, engine)
 	opsMetricsCollector := service.ProvideOpsMetricsCollector(opsRepository, settingRepository, accountRepository, concurrencyService, db, redisClient, configConfig)
 	opsAggregationService := service.ProvideOpsAggregationService(opsRepository, settingRepository, db, redisClient, configConfig)

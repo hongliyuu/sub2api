@@ -31,6 +31,10 @@ func RegisterAuthRoutes(
 		auth.POST("/login", rateLimiter.LimitWithOptions("auth-login", 20, time.Minute, middleware.RateLimitOptions{
 			FailureMode: middleware.RateLimitFailClose,
 		}), h.Auth.Login)
+		// LDAP 登录路由（插件懒绑定，未启用时返回 404）
+		auth.POST("/ldap/login", rateLimiter.LimitWithOptions("auth-ldap-login", 20, time.Minute, middleware.RateLimitOptions{
+			FailureMode: middleware.RateLimitFailClose,
+		}), getLdapLoginHandler())
 		auth.POST("/login/2fa", rateLimiter.LimitWithOptions("auth-login-2fa", 20, time.Minute, middleware.RateLimitOptions{
 			FailureMode: middleware.RateLimitFailClose,
 		}), h.Auth.Login2FA)

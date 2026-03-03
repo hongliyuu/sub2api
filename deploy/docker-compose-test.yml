@@ -114,6 +114,43 @@ services:
       # =======================================================================
       # Allow private IP addresses for CRS sync (for internal deployments)
       - SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS=${SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS:-true}
+      # LDAP Authentication Configuration (LDAP 认证配置)
+      # Enable LDAP authentication for enterprise users
+#      # 为企业用户启用 LDAP 认证
+#      - LDAP_ENABLED=true
+#      # LDAP server hostname or IP address
+#      # LDAP 服务器主机名或 IP 地址
+#      - LDAP_HOST=10.5.0.4
+#      # LDAP server port
+#      # LDAP 服务器端口
+#      # Standard ports: 389 (LDAP), 636 (LDAPS)
+#      - LDAP_PORT=389
+#      # - LDAP_USE_TLS: Use LDAPS (LDAP over SSL/TLS, usually port 636)
+#      # - LDAP_USE_START_TLS: Use StartTLS to upgrade connection (usually port 389)
+#      - LDAP_USE_TLS=false
+#      - LDAP_USE_START_TLS=false
+#      - LDAP_SKIP_TLS_VERIFY=false
+#      - LDAP_BIND_DN=cn=root,dc=newlink,dc=com
+#      - LDAP_BIND_PASSWORD=rEJndg8oj5NmUszAnyKD1qOmMW5nkHf5jlG1PZ68
+#      - LDAP_BASE_DN=ou=People,dc=newlink,dc=com
+#      - LDAP_USER_FILTER=(&(objectClass=inetOrgPerson)(uid=%s))
+#      # Map LDAP attributes to application fields
+#      - LDAP_ATTRIBUTES_USERNAME=uid
+#      - LDAP_ATTRIBUTES_EMAIL=mail
+#      - LDAP_ATTRIBUTES_DISPLAY_NAME=cn
+      # LDAP 认证配置
+      - LDAP_ENABLED=true
+      # 注意：必须是完整的 URL 格式（ldap://host:port 或 ldaps://host:port）
+      - LDAP_SERVER_URL=ldap://10.5.0.4:389
+      - LDAP_BIND_DN=cn=root,dc=newlink,dc=com
+      - LDAP_BIND_PASSWORD=rEJndg8oj5NmUszAnyKD1qOmMW5nkHf5jlG1PZ68
+      - LDAP_BASE_DN=ou=People,dc=newlink,dc=com
+      - LDAP_USER_FILTER=(&(objectClass=inetOrgPerson)(uid=%s))
+      # TLS 配置（可选）
+      - LDAP_TLS_ENABLED=false
+      - LDAP_TLS_SKIP_VERIFY=false
+      # 加密密钥（必需！32字节的十六进制字符串，64个字符）
+      - LDAP_ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
     depends_on:
       postgres:
         condition: service_healthy
@@ -139,13 +176,13 @@ services:
       nofile:
         soft: 100000
         hard: 100000
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+    # volumes:
+    #   - postgres_data:/var/lib/postgresql/data
     environment:
       # postgres:18-alpine 默认 PGDATA=/var/lib/postgresql/18/docker（位于镜像声明的匿名卷 /var/lib/postgresql 内）。
       # 若不显式设置 PGDATA，则即使挂载了 postgres_data 到 /var/lib/postgresql/data，数据也不会落盘到该命名卷，
       # docker compose down/up 后会触发 initdb 重新初始化，导致用户/密码等数据丢失。
-      - PGDATA=/var/lib/postgresql/data
+    #   - PGDATA=/var/lib/postgresql/data
       - POSTGRES_USER=${POSTGRES_USER:-sub2api}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       - POSTGRES_DB=${POSTGRES_DB:-sub2api}

@@ -105,6 +105,30 @@ func (f IdempotencyRecordFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.IdempotencyRecordMutation", m)
 }
 
+// The LdapConfigFunc type is an adapter to allow the use of ordinary
+// function as LdapConfig mutator.
+type LdapConfigFunc func(context.Context, *ent.LdapConfigMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f LdapConfigFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.LdapConfigMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.LdapConfigMutation", m)
+}
+
+// The LdapUserFunc type is an adapter to allow the use of ordinary
+// function as LdapUser mutator.
+type LdapUserFunc func(context.Context, *ent.LdapUserMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f LdapUserFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.LdapUserMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.LdapUserMutation", m)
+}
+
 // The PromoCodeFunc type is an adapter to allow the use of ordinary
 // function as PromoCode mutator.
 type PromoCodeFunc func(context.Context, *ent.PromoCodeMutation) (ent.Value, error)

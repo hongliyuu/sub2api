@@ -30,6 +30,12 @@ type Group func(*sql.Selector)
 // IdempotencyRecord is the predicate function for idempotencyrecord builders.
 type IdempotencyRecord func(*sql.Selector)
 
+// LdapConfig is the predicate function for ldapconfig builders.
+type LdapConfig func(*sql.Selector)
+
+// LdapUser is the predicate function for ldapuser builders.
+type LdapUser func(*sql.Selector)
+
 // PromoCode is the predicate function for promocode builders.
 type PromoCode func(*sql.Selector)
 

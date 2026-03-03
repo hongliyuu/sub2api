@@ -23,6 +23,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
+	"github.com/Wei-Shaw/sub2api/ent/ldapconfig"
+	"github.com/Wei-Shaw/sub2api/ent/ldapuser"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
@@ -61,6 +63,10 @@ type Client struct {
 	Group *GroupClient
 	// IdempotencyRecord is the client for interacting with the IdempotencyRecord builders.
 	IdempotencyRecord *IdempotencyRecordClient
+	// LdapConfig is the client for interacting with the LdapConfig builders.
+	LdapConfig *LdapConfigClient
+	// LdapUser is the client for interacting with the LdapUser builders.
+	LdapUser *LdapUserClient
 	// PromoCode is the client for interacting with the PromoCode builders.
 	PromoCode *PromoCodeClient
 	// PromoCodeUsage is the client for interacting with the PromoCodeUsage builders.
@@ -106,6 +112,8 @@ func (c *Client) init() {
 	c.ErrorPassthroughRule = NewErrorPassthroughRuleClient(c.config)
 	c.Group = NewGroupClient(c.config)
 	c.IdempotencyRecord = NewIdempotencyRecordClient(c.config)
+	c.LdapConfig = NewLdapConfigClient(c.config)
+	c.LdapUser = NewLdapUserClient(c.config)
 	c.PromoCode = NewPromoCodeClient(c.config)
 	c.PromoCodeUsage = NewPromoCodeUsageClient(c.config)
 	c.Proxy = NewProxyClient(c.config)
@@ -219,6 +227,8 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		ErrorPassthroughRule:    NewErrorPassthroughRuleClient(cfg),
 		Group:                   NewGroupClient(cfg),
 		IdempotencyRecord:       NewIdempotencyRecordClient(cfg),
+		LdapConfig:              NewLdapConfigClient(cfg),
+		LdapUser:                NewLdapUserClient(cfg),
 		PromoCode:               NewPromoCodeClient(cfg),
 		PromoCodeUsage:          NewPromoCodeUsageClient(cfg),
 		Proxy:                   NewProxyClient(cfg),
@@ -259,6 +269,8 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		ErrorPassthroughRule:    NewErrorPassthroughRuleClient(cfg),
 		Group:                   NewGroupClient(cfg),
 		IdempotencyRecord:       NewIdempotencyRecordClient(cfg),
+		LdapConfig:              NewLdapConfigClient(cfg),
+		LdapUser:                NewLdapUserClient(cfg),
 		PromoCode:               NewPromoCodeClient(cfg),
 		PromoCodeUsage:          NewPromoCodeUsageClient(cfg),
 		Proxy:                   NewProxyClient(cfg),
@@ -302,9 +314,9 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
-		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord, c.PromoCode,
-		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
-		c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
+		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord, c.LdapConfig, c.LdapUser,
+		c.PromoCode, c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret,
+		c.Setting, c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
 		c.UserAttributeDefinition, c.UserAttributeValue, c.UserSubscription,
 	} {
 		n.Use(hooks...)
@@ -316,9 +328,9 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
-		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord, c.PromoCode,
-		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
-		c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
+		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord, c.LdapConfig, c.LdapUser,
+		c.PromoCode, c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret,
+		c.Setting, c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
 		c.UserAttributeDefinition, c.UserAttributeValue, c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
@@ -344,6 +356,10 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Group.mutate(ctx, m)
 	case *IdempotencyRecordMutation:
 		return c.IdempotencyRecord.mutate(ctx, m)
+	case *LdapConfigMutation:
+		return c.LdapConfig.mutate(ctx, m)
+	case *LdapUserMutation:
+		return c.LdapUser.mutate(ctx, m)
 	case *PromoCodeMutation:
 		return c.PromoCode.mutate(ctx, m)
 	case *PromoCodeUsageMutation:
@@ -1713,6 +1729,288 @@ func (c *IdempotencyRecordClient) mutate(ctx context.Context, m *IdempotencyReco
 		return (&IdempotencyRecordDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown IdempotencyRecord mutation op: %q", m.Op())
+	}
+}
+
+// LdapConfigClient is a client for the LdapConfig schema.
+type LdapConfigClient struct {
+	config
+}
+
+// NewLdapConfigClient returns a client for the LdapConfig from the given config.
+func NewLdapConfigClient(c config) *LdapConfigClient {
+	return &LdapConfigClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `ldapconfig.Hooks(f(g(h())))`.
+func (c *LdapConfigClient) Use(hooks ...Hook) {
+	c.hooks.LdapConfig = append(c.hooks.LdapConfig, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `ldapconfig.Intercept(f(g(h())))`.
+func (c *LdapConfigClient) Intercept(interceptors ...Interceptor) {
+	c.inters.LdapConfig = append(c.inters.LdapConfig, interceptors...)
+}
+
+// Create returns a builder for creating a LdapConfig entity.
+func (c *LdapConfigClient) Create() *LdapConfigCreate {
+	mutation := newLdapConfigMutation(c.config, OpCreate)
+	return &LdapConfigCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of LdapConfig entities.
+func (c *LdapConfigClient) CreateBulk(builders ...*LdapConfigCreate) *LdapConfigCreateBulk {
+	return &LdapConfigCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *LdapConfigClient) MapCreateBulk(slice any, setFunc func(*LdapConfigCreate, int)) *LdapConfigCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &LdapConfigCreateBulk{err: fmt.Errorf("calling to LdapConfigClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*LdapConfigCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &LdapConfigCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for LdapConfig.
+func (c *LdapConfigClient) Update() *LdapConfigUpdate {
+	mutation := newLdapConfigMutation(c.config, OpUpdate)
+	return &LdapConfigUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *LdapConfigClient) UpdateOne(_m *LdapConfig) *LdapConfigUpdateOne {
+	mutation := newLdapConfigMutation(c.config, OpUpdateOne, withLdapConfig(_m))
+	return &LdapConfigUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *LdapConfigClient) UpdateOneID(id int64) *LdapConfigUpdateOne {
+	mutation := newLdapConfigMutation(c.config, OpUpdateOne, withLdapConfigID(id))
+	return &LdapConfigUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for LdapConfig.
+func (c *LdapConfigClient) Delete() *LdapConfigDelete {
+	mutation := newLdapConfigMutation(c.config, OpDelete)
+	return &LdapConfigDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *LdapConfigClient) DeleteOne(_m *LdapConfig) *LdapConfigDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *LdapConfigClient) DeleteOneID(id int64) *LdapConfigDeleteOne {
+	builder := c.Delete().Where(ldapconfig.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &LdapConfigDeleteOne{builder}
+}
+
+// Query returns a query builder for LdapConfig.
+func (c *LdapConfigClient) Query() *LdapConfigQuery {
+	return &LdapConfigQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeLdapConfig},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a LdapConfig entity by its id.
+func (c *LdapConfigClient) Get(ctx context.Context, id int64) (*LdapConfig, error) {
+	return c.Query().Where(ldapconfig.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *LdapConfigClient) GetX(ctx context.Context, id int64) *LdapConfig {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *LdapConfigClient) Hooks() []Hook {
+	return c.hooks.LdapConfig
+}
+
+// Interceptors returns the client interceptors.
+func (c *LdapConfigClient) Interceptors() []Interceptor {
+	return c.inters.LdapConfig
+}
+
+func (c *LdapConfigClient) mutate(ctx context.Context, m *LdapConfigMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&LdapConfigCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&LdapConfigUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&LdapConfigUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&LdapConfigDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown LdapConfig mutation op: %q", m.Op())
+	}
+}
+
+// LdapUserClient is a client for the LdapUser schema.
+type LdapUserClient struct {
+	config
+}
+
+// NewLdapUserClient returns a client for the LdapUser from the given config.
+func NewLdapUserClient(c config) *LdapUserClient {
+	return &LdapUserClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `ldapuser.Hooks(f(g(h())))`.
+func (c *LdapUserClient) Use(hooks ...Hook) {
+	c.hooks.LdapUser = append(c.hooks.LdapUser, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `ldapuser.Intercept(f(g(h())))`.
+func (c *LdapUserClient) Intercept(interceptors ...Interceptor) {
+	c.inters.LdapUser = append(c.inters.LdapUser, interceptors...)
+}
+
+// Create returns a builder for creating a LdapUser entity.
+func (c *LdapUserClient) Create() *LdapUserCreate {
+	mutation := newLdapUserMutation(c.config, OpCreate)
+	return &LdapUserCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of LdapUser entities.
+func (c *LdapUserClient) CreateBulk(builders ...*LdapUserCreate) *LdapUserCreateBulk {
+	return &LdapUserCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *LdapUserClient) MapCreateBulk(slice any, setFunc func(*LdapUserCreate, int)) *LdapUserCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &LdapUserCreateBulk{err: fmt.Errorf("calling to LdapUserClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*LdapUserCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &LdapUserCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for LdapUser.
+func (c *LdapUserClient) Update() *LdapUserUpdate {
+	mutation := newLdapUserMutation(c.config, OpUpdate)
+	return &LdapUserUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *LdapUserClient) UpdateOne(_m *LdapUser) *LdapUserUpdateOne {
+	mutation := newLdapUserMutation(c.config, OpUpdateOne, withLdapUser(_m))
+	return &LdapUserUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *LdapUserClient) UpdateOneID(id int64) *LdapUserUpdateOne {
+	mutation := newLdapUserMutation(c.config, OpUpdateOne, withLdapUserID(id))
+	return &LdapUserUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for LdapUser.
+func (c *LdapUserClient) Delete() *LdapUserDelete {
+	mutation := newLdapUserMutation(c.config, OpDelete)
+	return &LdapUserDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *LdapUserClient) DeleteOne(_m *LdapUser) *LdapUserDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *LdapUserClient) DeleteOneID(id int64) *LdapUserDeleteOne {
+	builder := c.Delete().Where(ldapuser.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &LdapUserDeleteOne{builder}
+}
+
+// Query returns a query builder for LdapUser.
+func (c *LdapUserClient) Query() *LdapUserQuery {
+	return &LdapUserQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeLdapUser},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a LdapUser entity by its id.
+func (c *LdapUserClient) Get(ctx context.Context, id int64) (*LdapUser, error) {
+	return c.Query().Where(ldapuser.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *LdapUserClient) GetX(ctx context.Context, id int64) *LdapUser {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// QueryUser queries the user edge of a LdapUser.
+func (c *LdapUserClient) QueryUser(_m *LdapUser) *UserQuery {
+	query := (&UserClient{config: c.config}).Query()
+	query.path = func(context.Context) (fromV *sql.Selector, _ error) {
+		id := _m.ID
+		step := sqlgraph.NewStep(
+			sqlgraph.From(ldapuser.Table, ldapuser.FieldID, id),
+			sqlgraph.To(user.Table, user.FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, false, ldapuser.UserTable, ldapuser.UserColumn),
+		)
+		fromV = sqlgraph.Neighbors(_m.driver.Dialect(), step)
+		return fromV, nil
+	}
+	return query
+}
+
+// Hooks returns the client hooks.
+func (c *LdapUserClient) Hooks() []Hook {
+	return c.hooks.LdapUser
+}
+
+// Interceptors returns the client interceptors.
+func (c *LdapUserClient) Interceptors() []Interceptor {
+	return c.inters.LdapUser
+}
+
+func (c *LdapUserClient) mutate(ctx context.Context, m *LdapUserMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&LdapUserCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&LdapUserUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&LdapUserUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&LdapUserDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown LdapUser mutation op: %q", m.Op())
 	}
 }
 
@@ -3888,17 +4186,17 @@ func (c *UserSubscriptionClient) mutate(ctx context.Context, m *UserSubscription
 type (
 	hooks struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead,
-		ErrorPassthroughRule, Group, IdempotencyRecord, PromoCode, PromoCodeUsage,
-		Proxy, RedeemCode, SecuritySecret, Setting, UsageCleanupTask, UsageLog, User,
-		UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
-		UserSubscription []ent.Hook
+		ErrorPassthroughRule, Group, IdempotencyRecord, LdapConfig, LdapUser,
+		PromoCode, PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting,
+		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
+		UserAttributeValue, UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead,
-		ErrorPassthroughRule, Group, IdempotencyRecord, PromoCode, PromoCodeUsage,
-		Proxy, RedeemCode, SecuritySecret, Setting, UsageCleanupTask, UsageLog, User,
-		UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
-		UserSubscription []ent.Interceptor
+		ErrorPassthroughRule, Group, IdempotencyRecord, LdapConfig, LdapUser,
+		PromoCode, PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting,
+		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
+		UserAttributeValue, UserSubscription []ent.Interceptor
 	}
 )
 

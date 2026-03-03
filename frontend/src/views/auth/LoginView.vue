@@ -147,6 +147,16 @@
           <Icon v-else name="login" size="md" class="mr-2" />
           {{ isLoading ? t('auth.signingIn') : t('auth.signIn') }}
         </button>
+
+        <!-- LDAP Login Link -->
+        <div class="text-center">
+          <router-link
+            to="/auth/ldap"
+            class="text-sm font-medium text-gray-600 transition-colors hover:text-primary-600 dark:text-dark-400 dark:hover:text-primary-400"
+          >
+            使用 LDAP 登录
+          </router-link>
+        </div>
       </form>
     </div>
 
