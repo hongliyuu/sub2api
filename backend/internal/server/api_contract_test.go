@@ -581,6 +581,88 @@ func TestAPIContracts(t *testing.T) {
 				}
 			}`,
 		},
+		{
+			name: "GET /api/v1/referral",
+			setup: func(t *testing.T, deps *contractDeps) {
+				t.Helper()
+				deps.referralRepo.profileByUserID[1] = &service.UserReferralProfile{
+					ID:           10,
+					UserID:       1,
+					ReferralCode: "CODE1234",
+				}
+				deps.referralRepo.countByInviter[1] = 3
+				deps.referralRepo.sumByInviter[1] = 15.0
+			},
+			method:     http.MethodGet,
+			path:       "/api/v1/referral",
+			wantStatus: http.StatusOK,
+			wantJSON: `{
+				"code": 0,
+				"message": "success",
+				"data": {
+					"referral_code": "CODE1234",
+					"referral_link": "?ref=CODE1234",
+					"total_invitees": 3,
+					"total_reward_earned": 15.0
+				}
+			}`,
+		},
+		{
+			name: "GET /api/v1/referral/invitees",
+			setup: func(t *testing.T, deps *contractDeps) {
+				t.Helper()
+				deps.referralRepo.invitees[1] = []service.ReferralRelation{
+					{
+						InviteeEmail:  "alice@example.com",
+						InviterReward: 5.0,
+						CreatedAt:     deps.now,
+					},
+				}
+			},
+			method:     http.MethodGet,
+			path:       "/api/v1/referral/invitees?page=1&page_size=10",
+			wantStatus: http.StatusOK,
+			wantJSON: `{
+				"code": 0,
+				"message": "success",
+				"data": {
+					"items": [
+						{
+							"email_masked": "ali***@example.com",
+							"registered_at": "2025-01-02T03:04:05Z",
+							"reward_earned": 5.0
+						}
+					],
+					"total": 1,
+					"page": 1,
+					"page_size": 10,
+					"pages": 1
+				}
+			}`,
+		},
+		{
+			name: "GET /api/v1/admin/referral/stats",
+			setup: func(t *testing.T, deps *contractDeps) {
+				t.Helper()
+				deps.referralRepo.platformStats = &service.ReferralStats{
+					TotalRelations:          100,
+					TotalInviterRewardGiven: 50.0,
+					TotalInviteeRewardGiven: 30.0,
+				}
+			},
+			method:     http.MethodGet,
+			path:       "/api/v1/admin/referral/stats",
+			wantStatus: http.StatusOK,
+			wantJSON: `{
+				"code": 0,
+				"message": "success",
+				"data": {
+					"total_relations": 100,
+					"total_inviter_reward_granted": 50.0,
+					"total_invitee_reward_granted": 30.0
+				}
+			}`,
+		},
 	}
 
 	for _, tt := range tests {
@@ -598,14 +680,15 @@ func TestAPIContracts(t *testing.T) {
 }
 
 type contractDeps struct {
-	now         time.Time
-	router      http.Handler
-	apiKeyRepo  *stubApiKeyRepo
-	groupRepo   *stubGroupRepo
-	userSubRepo *stubUserSubscriptionRepo
-	usageRepo   *stubUsageLogRepo
-	settingRepo *stubSettingRepo
-	redeemRepo  *stubRedeemCodeRepo
+	now          time.Time
+	router       http.Handler
+	apiKeyRepo   *stubApiKeyRepo
+	groupRepo    *stubGroupRepo
+	userSubRepo  *stubUserSubscriptionRepo
+	usageRepo    *stubUsageLogRepo
+	settingRepo  *stubSettingRepo
+	redeemRepo   *stubRedeemCodeRepo
+	referralRepo *stubReferralRepoForContract
 }
 
 func newContractDeps(t *testing.T) *contractDeps {
@@ -661,12 +744,18 @@ func newContractDeps(t *testing.T) *contractDeps {
 	settingRepo := newStubSettingRepo()
 	settingService := service.NewSettingService(settingRepo, cfg)
 
+	referralRepo := newStubReferralRepoForContract()
+
 	adminService := service.NewAdminService(userRepo, groupRepo, &accountRepo, nil, proxyRepo, apiKeyRepo, redeemRepo, nil, nil, nil, nil, nil, nil, nil, nil)
 	authHandler := handler.NewAuthHandler(cfg, nil, userService, settingService, nil, redeemService, nil)
 	apiKeyHandler := handler.NewAPIKeyHandler(apiKeyService)
 	usageHandler := handler.NewUsageHandler(usageService, apiKeyService)
 	adminSettingHandler := adminhandler.NewSettingHandler(settingService, nil, nil, nil, nil)
 	adminAccountHandler := adminhandler.NewAccountHandler(adminService, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
+
+	referralService := service.NewReferralService(referralRepo, userRepo, nil, nil, nil)
+	referralHandler := handler.NewReferralHandler(referralService)
+	adminReferralHandler := adminhandler.NewReferralHandler(referralService)
 
 	jwtAuth := func(c *gin.Context) {
 		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{
@@ -716,16 +805,23 @@ func newContractDeps(t *testing.T) *contractDeps {
 	v1Admin.Use(adminAuth)
 	v1Admin.GET("/settings", adminSettingHandler.GetSettings)
 	v1Admin.POST("/accounts/bulk-update", adminAccountHandler.BulkUpdate)
+	v1Admin.GET("/referral/stats", adminReferralHandler.GetPlatformStats)
+
+	v1Referral := v1.Group("")
+	v1Referral.Use(jwtAuth)
+	v1Referral.GET("/referral", referralHandler.GetMyReferralInfo)
+	v1Referral.GET("/referral/invitees", referralHandler.ListMyInvitees)
 
 	return &contractDeps{
-		now:         now,
-		router:      r,
-		apiKeyRepo:  apiKeyRepo,
-		groupRepo:   groupRepo,
-		userSubRepo: userSubRepo,
-		usageRepo:   usageRepo,
-		settingRepo: settingRepo,
-		redeemRepo:  redeemRepo,
+		now:          now,
+		router:       r,
+		apiKeyRepo:   apiKeyRepo,
+		groupRepo:    groupRepo,
+		userSubRepo:  userSubRepo,
+		usageRepo:    usageRepo,
+		settingRepo:  settingRepo,
+		redeemRepo:   redeemRepo,
+		referralRepo: referralRepo,
 	}
 }
 
@@ -1869,6 +1965,91 @@ func paginationResult(total int64, params pagination.PaginationParams) *paginati
 	}
 }
 
+type stubReferralRepoForContract struct {
+	profileByUserID map[int64]*service.UserReferralProfile
+	inviterRelation map[int64]*service.ReferralRelation
+	countByInviter  map[int64]int64
+	sumByInviter    map[int64]float64
+	invitees        map[int64][]service.ReferralRelation
+	platformStats   *service.ReferralStats
+}
+
+func newStubReferralRepoForContract() *stubReferralRepoForContract {
+	return &stubReferralRepoForContract{
+		profileByUserID: make(map[int64]*service.UserReferralProfile),
+		inviterRelation: make(map[int64]*service.ReferralRelation),
+		countByInviter:  make(map[int64]int64),
+		sumByInviter:    make(map[int64]float64),
+		invitees:        make(map[int64][]service.ReferralRelation),
+	}
+}
+
+func (r *stubReferralRepoForContract) CreateProfile(ctx context.Context, userID int64, code string) (*service.UserReferralProfile, error) {
+	p := &service.UserReferralProfile{UserID: userID, ReferralCode: code}
+	r.profileByUserID[userID] = p
+	return p, nil
+}
+
+func (r *stubReferralRepoForContract) GetProfileByUserID(ctx context.Context, userID int64) (*service.UserReferralProfile, error) {
+	p := r.profileByUserID[userID]
+	return p, nil
+}
+
+func (r *stubReferralRepoForContract) GetProfileByCode(ctx context.Context, code string) (*service.UserReferralProfile, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (r *stubReferralRepoForContract) CreateRelation(ctx context.Context, relation *service.ReferralRelation) error {
+	return errors.New("not implemented")
+}
+
+func (r *stubReferralRepoForContract) GetRelationByInviteeID(ctx context.Context, inviteeID int64) (*service.ReferralRelation, error) {
+	return r.inviterRelation[inviteeID], nil
+}
+
+func (r *stubReferralRepoForContract) MarkRewardGranted(ctx context.Context, id int64) error {
+	return errors.New("not implemented")
+}
+
+func (r *stubReferralRepoForContract) ListByInviterID(ctx context.Context, inviterID int64, params pagination.PaginationParams) ([]service.ReferralRelation, *pagination.PaginationResult, error) {
+	all := r.invitees[inviterID]
+	total := int64(len(all))
+	pageSize := params.Limit()
+	pages := 1
+	if total > 0 && pageSize > 0 {
+		pages = int((total + int64(pageSize) - 1) / int64(pageSize))
+	}
+	start := params.Offset()
+	if start > int(total) {
+		start = int(total)
+	}
+	end := start + pageSize
+	if end > int(total) {
+		end = int(total)
+	}
+	return all[start:end], &pagination.PaginationResult{
+		Total:    total,
+		Page:     params.Page,
+		PageSize: pageSize,
+		Pages:    pages,
+	}, nil
+}
+
+func (r *stubReferralRepoForContract) CountByInviterID(ctx context.Context, inviterID int64) (int64, error) {
+	return r.countByInviter[inviterID], nil
+}
+
+func (r *stubReferralRepoForContract) SumRewardsByInviterID(ctx context.Context, inviterID int64) (float64, error) {
+	return r.sumByInviter[inviterID], nil
+}
+
+func (r *stubReferralRepoForContract) GetPlatformStats(ctx context.Context) (*service.ReferralStats, error) {
+	if r.platformStats == nil {
+		return &service.ReferralStats{}, nil
+	}
+	return r.platformStats, nil
+}
+
 // Ensure compile-time interface compliance.
 var (
 	_ service.UserRepository             = (*stubUserRepo)(nil)
@@ -1878,4 +2059,5 @@ var (
 	_ service.UserSubscriptionRepository = (*stubUserSubscriptionRepo)(nil)
 	_ service.UsageLogRepository         = (*stubUsageLogRepo)(nil)
 	_ service.SettingRepository          = (*stubSettingRepo)(nil)
+	_ service.ReferralRepository         = (*stubReferralRepoForContract)(nil)
 )
