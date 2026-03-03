@@ -99,15 +99,12 @@ func (m *mockBillingCache) InvalidateSubscriptionCache(context.Context, int64, i
 func (m *mockBillingCache) GetAPIKeyRateLimit(context.Context, int64) (*APIKeyRateLimitCacheData, error) {
 	return nil, nil
 }
-
 func (m *mockBillingCache) SetAPIKeyRateLimit(context.Context, int64, *APIKeyRateLimitCacheData) error {
 	return nil
 }
-
 func (m *mockBillingCache) UpdateAPIKeyRateLimitUsage(context.Context, int64, float64) error {
 	return nil
 }
-
 func (m *mockBillingCache) InvalidateAPIKeyRateLimit(context.Context, int64) error {
 	return nil
 }

@@ -588,14 +588,14 @@ func (r *stubApiKeyRepo) UpdateLastUsed(ctx context.Context, id int64, usedAt ti
 	return nil
 }
 
-func (r *stubApiKeyRepo) GetRateLimitData(ctx context.Context, id int64) (*service.APIKeyRateLimitData, error) {
-	return nil, errors.New("not implemented")
-}
 func (r *stubApiKeyRepo) IncrementRateLimitUsage(ctx context.Context, id int64, cost float64) error {
-	return errors.New("not implemented")
+	return nil
 }
 func (r *stubApiKeyRepo) ResetRateLimitWindows(ctx context.Context, id int64) error {
-	return errors.New("not implemented")
+	return nil
+}
+func (r *stubApiKeyRepo) GetRateLimitData(ctx context.Context, id int64) (*service.APIKeyRateLimitData, error) {
+	return nil, nil
 }
 
 type stubUserSubscriptionRepo struct {

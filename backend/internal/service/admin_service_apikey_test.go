@@ -127,13 +127,13 @@ func (s *apiKeyRepoStubForGroupUpdate) IncrementQuotaUsed(context.Context, int64
 func (s *apiKeyRepoStubForGroupUpdate) UpdateLastUsed(context.Context, int64, time.Time) error {
 	panic("unexpected")
 }
-func (s *apiKeyRepoStubForGroupUpdate) GetRateLimitData(context.Context, int64) (*APIKeyRateLimitData, error) {
-	panic("unexpected")
-}
 func (s *apiKeyRepoStubForGroupUpdate) IncrementRateLimitUsage(context.Context, int64, float64) error {
 	panic("unexpected")
 }
 func (s *apiKeyRepoStubForGroupUpdate) ResetRateLimitWindows(context.Context, int64) error {
+	panic("unexpected")
+}
+func (s *apiKeyRepoStubForGroupUpdate) GetRateLimitData(context.Context, int64) (*APIKeyRateLimitData, error) {
 	panic("unexpected")
 }
 

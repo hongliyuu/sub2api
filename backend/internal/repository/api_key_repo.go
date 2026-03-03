@@ -21,7 +21,11 @@ type apiKeyRepository struct {
 }
 
 func NewAPIKeyRepository(client *dbent.Client, sqlDB *sql.DB) service.APIKeyRepository {
-	return &apiKeyRepository{client: client, sql: sqlDB}
+	return newAPIKeyRepositoryWithSQL(client, sqlDB)
+}
+
+func newAPIKeyRepositoryWithSQL(client *dbent.Client, sqlq sqlExecutor) *apiKeyRepository {
+	return &apiKeyRepository{client: client, sql: sqlq}
 }
 
 func (r *apiKeyRepository) activeQuery() *dbent.APIKeyQuery {
@@ -477,7 +481,7 @@ func (r *apiKeyRepository) ResetRateLimitWindows(ctx context.Context, id int64) 
 }
 
 // GetRateLimitData returns the current rate limit usage and window start times for an API key.
-func (r *apiKeyRepository) GetRateLimitData(ctx context.Context, id int64) (*service.APIKeyRateLimitData, error) {
+func (r *apiKeyRepository) GetRateLimitData(ctx context.Context, id int64) (result *service.APIKeyRateLimitData, err error) {
 	rows, err := r.sql.QueryContext(ctx, `
 		SELECT usage_5h, usage_1d, usage_7d, window_5h_start, window_1d_start, window_7d_start
 		FROM api_keys
@@ -486,7 +490,11 @@ func (r *apiKeyRepository) GetRateLimitData(ctx context.Context, id int64) (*ser
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
 	if !rows.Next() {
 		return nil, service.ErrAPIKeyNotFound
 	}
