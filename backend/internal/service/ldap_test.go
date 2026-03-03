@@ -7,6 +7,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/ent"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -71,6 +72,19 @@ func (s *userRepoStubWithUpdate) Update(ctx context.Context, user *User) error {
 		return s.updateFunc(ctx, user)
 	}
 	panic("unexpected Update call")
+}
+
+// userRepoStubWithGetByEmail 扩展 userRepoStub 以支持 GetByEmail 方法
+type userRepoStubWithGetByEmail struct {
+	*userRepoStub
+	getByEmailFunc func(ctx context.Context, email string) (*User, error)
+}
+
+func (s *userRepoStubWithGetByEmail) GetByEmail(ctx context.Context, email string) (*User, error) {
+	if s.getByEmailFunc != nil {
+		return s.getByEmailFunc(ctx, email)
+	}
+	panic("unexpected GetByEmail call")
 }
 
 
@@ -289,8 +303,8 @@ func TestFindOrCreateUser_ConcurrentConflict(t *testing.T) {
 			createFunc: func(ctx context.Context, ldapUser *LdapUser) error {
 				createCallCount++
 				if createCallCount == 1 {
-					// 第一次创建遇到唯一约束冲突
-					return errors.New("duplicate key value violates unique constraint")
+					// 第一次创建遇到唯一约束冲突，返回 ent.ConstraintError
+					return &ent.ConstraintError{}
 				}
 				// 第二次创建成功
 				ldapUser.ID = 10
@@ -298,9 +312,15 @@ func TestFindOrCreateUser_ConcurrentConflict(t *testing.T) {
 			},
 		}
 
-		// 创建本地的 userRepo stub
-		userRepo := &userRepoStub{
-			user: existingUser,
+		// 创建本地的 userRepo stub，支持 GetByEmail
+		userRepo := &userRepoStubWithGetByEmail{
+			userRepoStub: &userRepoStub{
+				user: existingUser,
+			},
+			getByEmailFunc: func(ctx context.Context, email string) (*User, error) {
+				// 返回已存在的用户
+				return existingUser, nil
+			},
 		}
 
 		// 创建 service
