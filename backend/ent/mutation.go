@@ -2269,6 +2269,7 @@ type AccountMutation struct {
 	last_used_at              *time.Time
 	expires_at                *time.Time
 	auto_pause_on_expired     *bool
+	user_agent                *string
 	schedulable               *bool
 	rate_limited_at           *time.Time
 	rate_limit_reset_at       *time.Time
@@ -3176,6 +3177,55 @@ func (m *AccountMutation) ResetAutoPauseOnExpired() {
 	m.auto_pause_on_expired = nil
 }
 
+// SetUserAgent sets the "user_agent" field.
+func (m *AccountMutation) SetUserAgent(s string) {
+	m.user_agent = &s
+}
+
+// UserAgent returns the value of the "user_agent" field in the mutation.
+func (m *AccountMutation) UserAgent() (r string, exists bool) {
+	v := m.user_agent
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUserAgent returns the old "user_agent" field's value of the Account entity.
+// If the Account object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountMutation) OldUserAgent(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUserAgent is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUserAgent requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUserAgent: %w", err)
+	}
+	return oldValue.UserAgent, nil
+}
+
+// ClearUserAgent clears the value of the "user_agent" field.
+func (m *AccountMutation) ClearUserAgent() {
+	m.user_agent = nil
+	m.clearedFields[account.FieldUserAgent] = struct{}{}
+}
+
+// UserAgentCleared returns if the "user_agent" field was cleared in this mutation.
+func (m *AccountMutation) UserAgentCleared() bool {
+	_, ok := m.clearedFields[account.FieldUserAgent]
+	return ok
+}
+
+// ResetUserAgent resets all changes to the "user_agent" field.
+func (m *AccountMutation) ResetUserAgent() {
+	m.user_agent = nil
+	delete(m.clearedFields, account.FieldUserAgent)
+}
+
 // SetSchedulable sets the "schedulable" field.
 func (m *AccountMutation) SetSchedulable(b bool) {
 	m.schedulable = &b
@@ -3773,7 +3823,7 @@ func (m *AccountMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AccountMutation) Fields() []string {
-	fields := make([]string, 0, 27)
+	fields := make([]string, 0, 28)
 	if m.created_at != nil {
 		fields = append(fields, account.FieldCreatedAt)
 	}
@@ -3827,6 +3877,9 @@ func (m *AccountMutation) Fields() []string {
 	}
 	if m.auto_pause_on_expired != nil {
 		fields = append(fields, account.FieldAutoPauseOnExpired)
+	}
+	if m.user_agent != nil {
+		fields = append(fields, account.FieldUserAgent)
 	}
 	if m.schedulable != nil {
 		fields = append(fields, account.FieldSchedulable)
@@ -3899,6 +3952,8 @@ func (m *AccountMutation) Field(name string) (ent.Value, bool) {
 		return m.ExpiresAt()
 	case account.FieldAutoPauseOnExpired:
 		return m.AutoPauseOnExpired()
+	case account.FieldUserAgent:
+		return m.UserAgent()
 	case account.FieldSchedulable:
 		return m.Schedulable()
 	case account.FieldRateLimitedAt:
@@ -3962,6 +4017,8 @@ func (m *AccountMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldExpiresAt(ctx)
 	case account.FieldAutoPauseOnExpired:
 		return m.OldAutoPauseOnExpired(ctx)
+	case account.FieldUserAgent:
+		return m.OldUserAgent(ctx)
 	case account.FieldSchedulable:
 		return m.OldSchedulable(ctx)
 	case account.FieldRateLimitedAt:
@@ -4115,6 +4172,13 @@ func (m *AccountMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetAutoPauseOnExpired(v)
 		return nil
+	case account.FieldUserAgent:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUserAgent(v)
+		return nil
 	case account.FieldSchedulable:
 		v, ok := value.(bool)
 		if !ok {
@@ -4265,6 +4329,9 @@ func (m *AccountMutation) ClearedFields() []string {
 	if m.FieldCleared(account.FieldExpiresAt) {
 		fields = append(fields, account.FieldExpiresAt)
 	}
+	if m.FieldCleared(account.FieldUserAgent) {
+		fields = append(fields, account.FieldUserAgent)
+	}
 	if m.FieldCleared(account.FieldRateLimitedAt) {
 		fields = append(fields, account.FieldRateLimitedAt)
 	}
@@ -4320,6 +4387,9 @@ func (m *AccountMutation) ClearField(name string) error {
 		return nil
 	case account.FieldExpiresAt:
 		m.ClearExpiresAt()
+		return nil
+	case account.FieldUserAgent:
+		m.ClearUserAgent()
 		return nil
 	case account.FieldRateLimitedAt:
 		m.ClearRateLimitedAt()
@@ -4406,6 +4476,9 @@ func (m *AccountMutation) ResetField(name string) error {
 		return nil
 	case account.FieldAutoPauseOnExpired:
 		m.ResetAutoPauseOnExpired()
+		return nil
+	case account.FieldUserAgent:
+		m.ResetUserAgent()
 		return nil
 	case account.FieldSchedulable:
 		m.ResetSchedulable()

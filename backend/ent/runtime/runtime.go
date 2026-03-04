@@ -229,12 +229,16 @@ func init() {
 	accountDescAutoPauseOnExpired := accountFields[14].Descriptor()
 	// account.DefaultAutoPauseOnExpired holds the default value on creation for the auto_pause_on_expired field.
 	account.DefaultAutoPauseOnExpired = accountDescAutoPauseOnExpired.Default.(bool)
+	// accountDescUserAgent is the schema descriptor for user_agent field.
+	accountDescUserAgent := accountFields[15].Descriptor()
+	// account.UserAgentValidator is a validator for the "user_agent" field. It is called by the builders before save.
+	account.UserAgentValidator = accountDescUserAgent.Validators[0].(func(string) error)
 	// accountDescSchedulable is the schema descriptor for schedulable field.
-	accountDescSchedulable := accountFields[15].Descriptor()
+	accountDescSchedulable := accountFields[16].Descriptor()
 	// account.DefaultSchedulable holds the default value on creation for the schedulable field.
 	account.DefaultSchedulable = accountDescSchedulable.Default.(bool)
 	// accountDescSessionWindowStatus is the schema descriptor for session_window_status field.
-	accountDescSessionWindowStatus := accountFields[23].Descriptor()
+	accountDescSessionWindowStatus := accountFields[24].Descriptor()
 	// account.SessionWindowStatusValidator is a validator for the "session_window_status" field. It is called by the builders before save.
 	account.SessionWindowStatusValidator = accountDescSessionWindowStatus.Validators[0].(func(string) error)
 	accountgroupFields := schema.AccountGroup{}.Fields()

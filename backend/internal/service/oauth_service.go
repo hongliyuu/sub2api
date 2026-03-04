@@ -12,17 +12,17 @@ import (
 
 // OpenAIOAuthClient interface for OpenAI OAuth operations
 type OpenAIOAuthClient interface {
-	ExchangeCode(ctx context.Context, code, codeVerifier, redirectURI, proxyURL, clientID string) (*openai.TokenResponse, error)
-	RefreshToken(ctx context.Context, refreshToken, proxyURL string) (*openai.TokenResponse, error)
-	RefreshTokenWithClientID(ctx context.Context, refreshToken, proxyURL string, clientID string) (*openai.TokenResponse, error)
+	ExchangeCode(ctx context.Context, code, codeVerifier, redirectURI, proxyURL, clientID string, userAgent string) (*openai.TokenResponse, error)
+	RefreshToken(ctx context.Context, refreshToken, proxyURL string, userAgent string) (*openai.TokenResponse, error)
+	RefreshTokenWithClientID(ctx context.Context, refreshToken, proxyURL string, clientID string, userAgent string) (*openai.TokenResponse, error)
 }
 
 // ClaudeOAuthClient handles HTTP requests for Claude OAuth flows
 type ClaudeOAuthClient interface {
 	GetOrganizationUUID(ctx context.Context, sessionKey, proxyURL string) (string, error)
 	GetAuthorizationCode(ctx context.Context, sessionKey, orgUUID, scope, codeChallenge, state, proxyURL string) (string, error)
-	ExchangeCodeForToken(ctx context.Context, code, codeVerifier, state, proxyURL string, isSetupToken bool) (*oauth.TokenResponse, error)
-	RefreshToken(ctx context.Context, refreshToken, proxyURL string) (*oauth.TokenResponse, error)
+	ExchangeCodeForToken(ctx context.Context, code, codeVerifier, state, proxyURL string, isSetupToken bool, userAgent string) (*oauth.TokenResponse, error)
+	RefreshToken(ctx context.Context, refreshToken, proxyURL string, userAgent string) (*oauth.TokenResponse, error)
 }
 
 // OAuthService handles OAuth authentication flows
@@ -236,7 +236,7 @@ func (s *OAuthService) getAuthorizationCode(ctx context.Context, sessionKey, org
 
 // exchangeCodeForToken exchanges authorization code for tokens
 func (s *OAuthService) exchangeCodeForToken(ctx context.Context, code, codeVerifier, state, proxyURL string, isSetupToken bool) (*TokenInfo, error) {
-	tokenResp, err := s.oauthClient.ExchangeCodeForToken(ctx, code, codeVerifier, state, proxyURL, isSetupToken)
+	tokenResp, err := s.oauthClient.ExchangeCodeForToken(ctx, code, codeVerifier, state, proxyURL, isSetupToken, "")
 	if err != nil {
 		return nil, err
 	}
@@ -270,7 +270,7 @@ func (s *OAuthService) exchangeCodeForToken(ctx context.Context, code, codeVerif
 
 // RefreshToken refreshes an OAuth token
 func (s *OAuthService) RefreshToken(ctx context.Context, refreshToken string, proxyURL string) (*TokenInfo, error) {
-	tokenResp, err := s.oauthClient.RefreshToken(ctx, refreshToken, proxyURL)
+	tokenResp, err := s.oauthClient.RefreshToken(ctx, refreshToken, proxyURL, "")
 	if err != nil {
 		return nil, err
 	}
@@ -300,7 +300,19 @@ func (s *OAuthService) RefreshAccountToken(ctx context.Context, account *Account
 		}
 	}
 
-	return s.RefreshToken(ctx, refreshToken, proxyURL)
+	tokenResp, err := s.oauthClient.RefreshToken(ctx, refreshToken, proxyURL, account.GetUserAgent(""))
+	if err != nil {
+		return nil, err
+	}
+
+	return &TokenInfo{
+		AccessToken:  tokenResp.AccessToken,
+		TokenType:    tokenResp.TokenType,
+		ExpiresIn:    tokenResp.ExpiresIn,
+		ExpiresAt:    time.Now().Unix() + tokenResp.ExpiresIn,
+		RefreshToken: tokenResp.RefreshToken,
+		Scope:        tokenResp.Scope,
+	}, nil
 }
 
 // Stop stops the session store cleanup goroutine

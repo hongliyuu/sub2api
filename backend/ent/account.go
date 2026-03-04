@@ -55,6 +55,8 @@ type Account struct {
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 	// Auto pause scheduling when account expires.
 	AutoPauseOnExpired bool `json:"auto_pause_on_expired,omitempty"`
+	// Custom User-Agent for upstream requests
+	UserAgent *string `json:"user_agent,omitempty"`
 	// Schedulable holds the value of the "schedulable" field.
 	Schedulable bool `json:"schedulable,omitempty"`
 	// RateLimitedAt holds the value of the "rate_limited_at" field.
@@ -145,7 +147,7 @@ func (*Account) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullFloat64)
 		case account.FieldID, account.FieldProxyID, account.FieldConcurrency, account.FieldPriority:
 			values[i] = new(sql.NullInt64)
-		case account.FieldName, account.FieldNotes, account.FieldPlatform, account.FieldType, account.FieldStatus, account.FieldErrorMessage, account.FieldTempUnschedulableReason, account.FieldSessionWindowStatus:
+		case account.FieldName, account.FieldNotes, account.FieldPlatform, account.FieldType, account.FieldStatus, account.FieldErrorMessage, account.FieldUserAgent, account.FieldTempUnschedulableReason, account.FieldSessionWindowStatus:
 			values[i] = new(sql.NullString)
 		case account.FieldCreatedAt, account.FieldUpdatedAt, account.FieldDeletedAt, account.FieldLastUsedAt, account.FieldExpiresAt, account.FieldRateLimitedAt, account.FieldRateLimitResetAt, account.FieldOverloadUntil, account.FieldTempUnschedulableUntil, account.FieldSessionWindowStart, account.FieldSessionWindowEnd:
 			values[i] = new(sql.NullTime)
@@ -287,6 +289,13 @@ func (_m *Account) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field auto_pause_on_expired", values[i])
 			} else if value.Valid {
 				_m.AutoPauseOnExpired = value.Bool
+			}
+		case account.FieldUserAgent:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field user_agent", values[i])
+			} else if value.Valid {
+				_m.UserAgent = new(string)
+				*_m.UserAgent = value.String
 			}
 		case account.FieldSchedulable:
 			if value, ok := values[i].(*sql.NullBool); !ok {
@@ -471,6 +480,11 @@ func (_m *Account) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("auto_pause_on_expired=")
 	builder.WriteString(fmt.Sprintf("%v", _m.AutoPauseOnExpired))
+	builder.WriteString(", ")
+	if v := _m.UserAgent; v != nil {
+		builder.WriteString("user_agent=")
+		builder.WriteString(*v)
+	}
 	builder.WriteString(", ")
 	builder.WriteString("schedulable=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Schedulable))

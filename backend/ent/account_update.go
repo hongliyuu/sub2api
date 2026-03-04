@@ -302,6 +302,26 @@ func (_u *AccountUpdate) SetNillableAutoPauseOnExpired(v *bool) *AccountUpdate {
 	return _u
 }
 
+// SetUserAgent sets the "user_agent" field.
+func (_u *AccountUpdate) SetUserAgent(v string) *AccountUpdate {
+	_u.mutation.SetUserAgent(v)
+	return _u
+}
+
+// SetNillableUserAgent sets the "user_agent" field if the given value is not nil.
+func (_u *AccountUpdate) SetNillableUserAgent(v *string) *AccountUpdate {
+	if v != nil {
+		_u.SetUserAgent(*v)
+	}
+	return _u
+}
+
+// ClearUserAgent clears the value of the "user_agent" field.
+func (_u *AccountUpdate) ClearUserAgent() *AccountUpdate {
+	_u.mutation.ClearUserAgent()
+	return _u
+}
+
 // SetSchedulable sets the "schedulable" field.
 func (_u *AccountUpdate) SetSchedulable(v bool) *AccountUpdate {
 	_u.mutation.SetSchedulable(v)
@@ -628,6 +648,11 @@ func (_u *AccountUpdate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Account.status": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.UserAgent(); ok {
+		if err := account.UserAgentValidator(v); err != nil {
+			return &ValidationError{Name: "user_agent", err: fmt.Errorf(`ent: validator failed for field "Account.user_agent": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.SessionWindowStatus(); ok {
 		if err := account.SessionWindowStatusValidator(v); err != nil {
 			return &ValidationError{Name: "session_window_status", err: fmt.Errorf(`ent: validator failed for field "Account.session_window_status": %w`, err)}
@@ -719,6 +744,12 @@ func (_u *AccountUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AutoPauseOnExpired(); ok {
 		_spec.SetField(account.FieldAutoPauseOnExpired, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.UserAgent(); ok {
+		_spec.SetField(account.FieldUserAgent, field.TypeString, value)
+	}
+	if _u.mutation.UserAgentCleared() {
+		_spec.ClearField(account.FieldUserAgent, field.TypeString)
 	}
 	if value, ok := _u.mutation.Schedulable(); ok {
 		_spec.SetField(account.FieldSchedulable, field.TypeBool, value)
@@ -1193,6 +1224,26 @@ func (_u *AccountUpdateOne) SetNillableAutoPauseOnExpired(v *bool) *AccountUpdat
 	return _u
 }
 
+// SetUserAgent sets the "user_agent" field.
+func (_u *AccountUpdateOne) SetUserAgent(v string) *AccountUpdateOne {
+	_u.mutation.SetUserAgent(v)
+	return _u
+}
+
+// SetNillableUserAgent sets the "user_agent" field if the given value is not nil.
+func (_u *AccountUpdateOne) SetNillableUserAgent(v *string) *AccountUpdateOne {
+	if v != nil {
+		_u.SetUserAgent(*v)
+	}
+	return _u
+}
+
+// ClearUserAgent clears the value of the "user_agent" field.
+func (_u *AccountUpdateOne) ClearUserAgent() *AccountUpdateOne {
+	_u.mutation.ClearUserAgent()
+	return _u
+}
+
 // SetSchedulable sets the "schedulable" field.
 func (_u *AccountUpdateOne) SetSchedulable(v bool) *AccountUpdateOne {
 	_u.mutation.SetSchedulable(v)
@@ -1532,6 +1583,11 @@ func (_u *AccountUpdateOne) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Account.status": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.UserAgent(); ok {
+		if err := account.UserAgentValidator(v); err != nil {
+			return &ValidationError{Name: "user_agent", err: fmt.Errorf(`ent: validator failed for field "Account.user_agent": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.SessionWindowStatus(); ok {
 		if err := account.SessionWindowStatusValidator(v); err != nil {
 			return &ValidationError{Name: "session_window_status", err: fmt.Errorf(`ent: validator failed for field "Account.session_window_status": %w`, err)}
@@ -1640,6 +1696,12 @@ func (_u *AccountUpdateOne) sqlSave(ctx context.Context) (_node *Account, err er
 	}
 	if value, ok := _u.mutation.AutoPauseOnExpired(); ok {
 		_spec.SetField(account.FieldAutoPauseOnExpired, field.TypeBool, value)
+	}
+	if value, ok := _u.mutation.UserAgent(); ok {
+		_spec.SetField(account.FieldUserAgent, field.TypeString, value)
+	}
+	if _u.mutation.UserAgentCleared() {
+		_spec.ClearField(account.FieldUserAgent, field.TypeString)
 	}
 	if value, ok := _u.mutation.Schedulable(); ok {
 		_spec.SetField(account.FieldSchedulable, field.TypeBool, value)

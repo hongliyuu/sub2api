@@ -42,6 +42,8 @@ type Account struct {
 	RateLimitResetAt *time.Time
 	OverloadUntil    *time.Time
 
+	UserAgent *string
+
 	TempUnschedulableUntil  *time.Time
 	TempUnschedulableReason string
 
@@ -736,6 +738,14 @@ func (a *Account) GetOpenAIApiKey() string {
 		return ""
 	}
 	return a.GetCredential("api_key")
+}
+
+// GetUserAgent returns the account-level User-Agent, or defaultUA if not set.
+func (a *Account) GetUserAgent(defaultUA string) string {
+	if a.UserAgent != nil && strings.TrimSpace(*a.UserAgent) != "" {
+		return strings.TrimSpace(*a.UserAgent)
+	}
+	return defaultUA
 }
 
 func (a *Account) GetOpenAIUserAgent() string {

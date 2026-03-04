@@ -79,7 +79,8 @@ func (r *accountRepository) Create(ctx context.Context, account *service.Account
 		SetStatus(account.Status).
 		SetErrorMessage(account.ErrorMessage).
 		SetSchedulable(account.Schedulable).
-		SetAutoPauseOnExpired(account.AutoPauseOnExpired)
+		SetAutoPauseOnExpired(account.AutoPauseOnExpired).
+		SetNillableUserAgent(account.UserAgent)
 
 	if account.RateMultiplier != nil {
 		builder.SetRateMultiplier(*account.RateMultiplier)
@@ -363,6 +364,11 @@ func (r *accountRepository) Update(ctx context.Context, account *service.Account
 		builder.SetSessionWindowStatus(account.SessionWindowStatus)
 	} else {
 		builder.ClearSessionWindowStatus()
+	}
+	if account.UserAgent != nil {
+		builder.SetUserAgent(*account.UserAgent)
+	} else {
+		builder.ClearUserAgent()
 	}
 	if account.Notes == nil {
 		builder.ClearNotes()
@@ -1538,6 +1544,7 @@ func accountEntityToService(m *dbent.Account) *service.Account {
 		RateLimitedAt:           m.RateLimitedAt,
 		RateLimitResetAt:        m.RateLimitResetAt,
 		OverloadUntil:           m.OverloadUntil,
+		UserAgent:               m.UserAgent,
 		TempUnschedulableUntil:  m.TempUnschedulableUntil,
 		TempUnschedulableReason: derefString(m.TempUnschedulableReason),
 		SessionWindowStart:      m.SessionWindowStart,

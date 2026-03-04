@@ -237,6 +237,20 @@ func (_c *AccountCreate) SetNillableAutoPauseOnExpired(v *bool) *AccountCreate {
 	return _c
 }
 
+// SetUserAgent sets the "user_agent" field.
+func (_c *AccountCreate) SetUserAgent(v string) *AccountCreate {
+	_c.mutation.SetUserAgent(v)
+	return _c
+}
+
+// SetNillableUserAgent sets the "user_agent" field if the given value is not nil.
+func (_c *AccountCreate) SetNillableUserAgent(v *string) *AccountCreate {
+	if v != nil {
+		_c.SetUserAgent(*v)
+	}
+	return _c
+}
+
 // SetSchedulable sets the "schedulable" field.
 func (_c *AccountCreate) SetSchedulable(v bool) *AccountCreate {
 	_c.mutation.SetSchedulable(v)
@@ -548,6 +562,11 @@ func (_c *AccountCreate) check() error {
 	if _, ok := _c.mutation.AutoPauseOnExpired(); !ok {
 		return &ValidationError{Name: "auto_pause_on_expired", err: errors.New(`ent: missing required field "Account.auto_pause_on_expired"`)}
 	}
+	if v, ok := _c.mutation.UserAgent(); ok {
+		if err := account.UserAgentValidator(v); err != nil {
+			return &ValidationError{Name: "user_agent", err: fmt.Errorf(`ent: validator failed for field "Account.user_agent": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.Schedulable(); !ok {
 		return &ValidationError{Name: "schedulable", err: errors.New(`ent: missing required field "Account.schedulable"`)}
 	}
@@ -650,6 +669,10 @@ func (_c *AccountCreate) createSpec() (*Account, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.AutoPauseOnExpired(); ok {
 		_spec.SetField(account.FieldAutoPauseOnExpired, field.TypeBool, value)
 		_node.AutoPauseOnExpired = value
+	}
+	if value, ok := _c.mutation.UserAgent(); ok {
+		_spec.SetField(account.FieldUserAgent, field.TypeString, value)
+		_node.UserAgent = &value
 	}
 	if value, ok := _c.mutation.Schedulable(); ok {
 		_spec.SetField(account.FieldSchedulable, field.TypeBool, value)
@@ -1047,6 +1070,24 @@ func (u *AccountUpsert) SetAutoPauseOnExpired(v bool) *AccountUpsert {
 // UpdateAutoPauseOnExpired sets the "auto_pause_on_expired" field to the value that was provided on create.
 func (u *AccountUpsert) UpdateAutoPauseOnExpired() *AccountUpsert {
 	u.SetExcluded(account.FieldAutoPauseOnExpired)
+	return u
+}
+
+// SetUserAgent sets the "user_agent" field.
+func (u *AccountUpsert) SetUserAgent(v string) *AccountUpsert {
+	u.Set(account.FieldUserAgent, v)
+	return u
+}
+
+// UpdateUserAgent sets the "user_agent" field to the value that was provided on create.
+func (u *AccountUpsert) UpdateUserAgent() *AccountUpsert {
+	u.SetExcluded(account.FieldUserAgent)
+	return u
+}
+
+// ClearUserAgent clears the value of the "user_agent" field.
+func (u *AccountUpsert) ClearUserAgent() *AccountUpsert {
+	u.SetNull(account.FieldUserAgent)
 	return u
 }
 
@@ -1549,6 +1590,27 @@ func (u *AccountUpsertOne) SetAutoPauseOnExpired(v bool) *AccountUpsertOne {
 func (u *AccountUpsertOne) UpdateAutoPauseOnExpired() *AccountUpsertOne {
 	return u.Update(func(s *AccountUpsert) {
 		s.UpdateAutoPauseOnExpired()
+	})
+}
+
+// SetUserAgent sets the "user_agent" field.
+func (u *AccountUpsertOne) SetUserAgent(v string) *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetUserAgent(v)
+	})
+}
+
+// UpdateUserAgent sets the "user_agent" field to the value that was provided on create.
+func (u *AccountUpsertOne) UpdateUserAgent() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateUserAgent()
+	})
+}
+
+// ClearUserAgent clears the value of the "user_agent" field.
+func (u *AccountUpsertOne) ClearUserAgent() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearUserAgent()
 	})
 }
 
@@ -2243,6 +2305,27 @@ func (u *AccountUpsertBulk) SetAutoPauseOnExpired(v bool) *AccountUpsertBulk {
 func (u *AccountUpsertBulk) UpdateAutoPauseOnExpired() *AccountUpsertBulk {
 	return u.Update(func(s *AccountUpsert) {
 		s.UpdateAutoPauseOnExpired()
+	})
+}
+
+// SetUserAgent sets the "user_agent" field.
+func (u *AccountUpsertBulk) SetUserAgent(v string) *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetUserAgent(v)
+	})
+}
+
+// UpdateUserAgent sets the "user_agent" field to the value that was provided on create.
+func (u *AccountUpsertBulk) UpdateUserAgent() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateUserAgent()
+	})
+}
+
+// ClearUserAgent clears the value of the "user_agent" field.
+func (u *AccountUpsertBulk) ClearUserAgent() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearUserAgent()
 	})
 }
 

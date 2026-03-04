@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -98,6 +99,7 @@ type CreateAccountRequest struct {
 	GroupIDs           []int64        `json:"group_ids"`
 	ExpiresAt          *time.Time     `json:"expires_at"`
 	AutoPauseOnExpired *bool          `json:"auto_pause_on_expired"`
+	UserAgent          *string        `json:"user_agent"`
 }
 
 // UpdateAccountRequest 更新账号请求
@@ -113,6 +115,7 @@ type UpdateAccountRequest struct {
 	GroupIDs           *[]int64        `json:"group_ids"`
 	ExpiresAt          *time.Time      `json:"expires_at"`
 	AutoPauseOnExpired *bool           `json:"auto_pause_on_expired"`
+	UserAgent          **string        `json:"user_agent"`
 }
 
 // AccountService 账号管理服务
@@ -155,6 +158,7 @@ func (s *AccountService) Create(ctx context.Context, req CreateAccountRequest) (
 		Priority:    req.Priority,
 		Status:      StatusActive,
 		ExpiresAt:   req.ExpiresAt,
+		UserAgent:   normalizeUserAgent(req.UserAgent),
 	}
 	if req.AutoPauseOnExpired != nil {
 		account.AutoPauseOnExpired = *req.AutoPauseOnExpired
@@ -255,6 +259,9 @@ func (s *AccountService) Update(ctx context.Context, id int64, req UpdateAccount
 	}
 	if req.AutoPauseOnExpired != nil {
 		account.AutoPauseOnExpired = *req.AutoPauseOnExpired
+	}
+	if req.UserAgent != nil {
+		account.UserAgent = normalizeUserAgent(*req.UserAgent)
 	}
 
 	// 先验证分组是否存在（在任何写操作之前）
@@ -389,4 +396,16 @@ func (s *AccountService) TestCredentials(ctx context.Context, id int64) error {
 	default:
 		return fmt.Errorf("unsupported platform: %s", account.Platform)
 	}
+}
+
+// normalizeUserAgent 规范化 User-Agent 值：空字符串或仅含空白时返回 nil。
+func normalizeUserAgent(ua *string) *string {
+	if ua == nil {
+		return nil
+	}
+	trimmed := strings.TrimSpace(*ua)
+	if trimmed == "" {
+		return nil
+	}
+	return &trimmed
 }

@@ -135,6 +135,11 @@ func AutoPauseOnExpired(v bool) predicate.Account {
 	return predicate.Account(sql.FieldEQ(FieldAutoPauseOnExpired, v))
 }
 
+// UserAgent applies equality check predicate on the "user_agent" field. It's identical to UserAgentEQ.
+func UserAgent(v string) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldUserAgent, v))
+}
+
 // Schedulable applies equality check predicate on the "schedulable" field. It's identical to SchedulableEQ.
 func Schedulable(v bool) predicate.Account {
 	return predicate.Account(sql.FieldEQ(FieldSchedulable, v))
@@ -978,6 +983,81 @@ func AutoPauseOnExpiredEQ(v bool) predicate.Account {
 // AutoPauseOnExpiredNEQ applies the NEQ predicate on the "auto_pause_on_expired" field.
 func AutoPauseOnExpiredNEQ(v bool) predicate.Account {
 	return predicate.Account(sql.FieldNEQ(FieldAutoPauseOnExpired, v))
+}
+
+// UserAgentEQ applies the EQ predicate on the "user_agent" field.
+func UserAgentEQ(v string) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldUserAgent, v))
+}
+
+// UserAgentNEQ applies the NEQ predicate on the "user_agent" field.
+func UserAgentNEQ(v string) predicate.Account {
+	return predicate.Account(sql.FieldNEQ(FieldUserAgent, v))
+}
+
+// UserAgentIn applies the In predicate on the "user_agent" field.
+func UserAgentIn(vs ...string) predicate.Account {
+	return predicate.Account(sql.FieldIn(FieldUserAgent, vs...))
+}
+
+// UserAgentNotIn applies the NotIn predicate on the "user_agent" field.
+func UserAgentNotIn(vs ...string) predicate.Account {
+	return predicate.Account(sql.FieldNotIn(FieldUserAgent, vs...))
+}
+
+// UserAgentGT applies the GT predicate on the "user_agent" field.
+func UserAgentGT(v string) predicate.Account {
+	return predicate.Account(sql.FieldGT(FieldUserAgent, v))
+}
+
+// UserAgentGTE applies the GTE predicate on the "user_agent" field.
+func UserAgentGTE(v string) predicate.Account {
+	return predicate.Account(sql.FieldGTE(FieldUserAgent, v))
+}
+
+// UserAgentLT applies the LT predicate on the "user_agent" field.
+func UserAgentLT(v string) predicate.Account {
+	return predicate.Account(sql.FieldLT(FieldUserAgent, v))
+}
+
+// UserAgentLTE applies the LTE predicate on the "user_agent" field.
+func UserAgentLTE(v string) predicate.Account {
+	return predicate.Account(sql.FieldLTE(FieldUserAgent, v))
+}
+
+// UserAgentContains applies the Contains predicate on the "user_agent" field.
+func UserAgentContains(v string) predicate.Account {
+	return predicate.Account(sql.FieldContains(FieldUserAgent, v))
+}
+
+// UserAgentHasPrefix applies the HasPrefix predicate on the "user_agent" field.
+func UserAgentHasPrefix(v string) predicate.Account {
+	return predicate.Account(sql.FieldHasPrefix(FieldUserAgent, v))
+}
+
+// UserAgentHasSuffix applies the HasSuffix predicate on the "user_agent" field.
+func UserAgentHasSuffix(v string) predicate.Account {
+	return predicate.Account(sql.FieldHasSuffix(FieldUserAgent, v))
+}
+
+// UserAgentIsNil applies the IsNil predicate on the "user_agent" field.
+func UserAgentIsNil() predicate.Account {
+	return predicate.Account(sql.FieldIsNull(FieldUserAgent))
+}
+
+// UserAgentNotNil applies the NotNil predicate on the "user_agent" field.
+func UserAgentNotNil() predicate.Account {
+	return predicate.Account(sql.FieldNotNull(FieldUserAgent))
+}
+
+// UserAgentEqualFold applies the EqualFold predicate on the "user_agent" field.
+func UserAgentEqualFold(v string) predicate.Account {
+	return predicate.Account(sql.FieldEqualFold(FieldUserAgent, v))
+}
+
+// UserAgentContainsFold applies the ContainsFold predicate on the "user_agent" field.
+func UserAgentContainsFold(v string) predicate.Account {
+	return predicate.Account(sql.FieldContainsFold(FieldUserAgent, v))
 }
 
 // SchedulableEQ applies the EQ predicate on the "schedulable" field.

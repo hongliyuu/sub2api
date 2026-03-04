@@ -51,6 +51,8 @@ const (
 	FieldExpiresAt = "expires_at"
 	// FieldAutoPauseOnExpired holds the string denoting the auto_pause_on_expired field in the database.
 	FieldAutoPauseOnExpired = "auto_pause_on_expired"
+	// FieldUserAgent holds the string denoting the user_agent field in the database.
+	FieldUserAgent = "user_agent"
 	// FieldSchedulable holds the string denoting the schedulable field in the database.
 	FieldSchedulable = "schedulable"
 	// FieldRateLimitedAt holds the string denoting the rate_limited_at field in the database.
@@ -128,6 +130,7 @@ var Columns = []string{
 	FieldLastUsedAt,
 	FieldExpiresAt,
 	FieldAutoPauseOnExpired,
+	FieldUserAgent,
 	FieldSchedulable,
 	FieldRateLimitedAt,
 	FieldRateLimitResetAt,
@@ -191,6 +194,8 @@ var (
 	StatusValidator func(string) error
 	// DefaultAutoPauseOnExpired holds the default value on creation for the "auto_pause_on_expired" field.
 	DefaultAutoPauseOnExpired bool
+	// UserAgentValidator is a validator for the "user_agent" field. It is called by the builders before save.
+	UserAgentValidator func(string) error
 	// DefaultSchedulable holds the default value on creation for the "schedulable" field.
 	DefaultSchedulable bool
 	// SessionWindowStatusValidator is a validator for the "session_window_status" field. It is called by the builders before save.
@@ -283,6 +288,11 @@ func ByExpiresAt(opts ...sql.OrderTermOption) OrderOption {
 // ByAutoPauseOnExpired orders the results by the auto_pause_on_expired field.
 func ByAutoPauseOnExpired(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAutoPauseOnExpired, opts...).ToFunc()
+}
+
+// ByUserAgent orders the results by the user_agent field.
+func ByUserAgent(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldUserAgent, opts...).ToFunc()
 }
 
 // BySchedulable orders the results by the schedulable field.
