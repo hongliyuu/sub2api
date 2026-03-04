@@ -380,4 +380,9 @@ var ProviderSet = wire.NewSet(
 	ProvideIdempotencyCoordinator,
 	ProvideSystemOperationLockService,
 	ProvideIdempotencyCleanupService,
+
+	// Copilot (GitHub Copilot) services
+	NewCopilotTokenProvider,
+	NewCopilotGatewayService,
+	NewCopilotOAuthService,
 )

@@ -19,6 +19,7 @@ func ProvideAdminHandlers(
 	openaiOAuthHandler *admin.OpenAIOAuthHandler,
 	geminiOAuthHandler *admin.GeminiOAuthHandler,
 	antigravityOAuthHandler *admin.AntigravityOAuthHandler,
+	copilotOAuthHandler *admin.CopilotOAuthHandler,
 	proxyHandler *admin.ProxyHandler,
 	redeemHandler *admin.RedeemHandler,
 	promoHandler *admin.PromoHandler,
@@ -42,6 +43,7 @@ func ProvideAdminHandlers(
 		OpenAIOAuth:      openaiOAuthHandler,
 		GeminiOAuth:      geminiOAuthHandler,
 		AntigravityOAuth: antigravityOAuthHandler,
+		CopilotOAuth:     copilotOAuthHandler,
 		Proxy:            proxyHandler,
 		Redeem:           redeemHandler,
 		Promo:            promoHandler,
@@ -82,6 +84,7 @@ func ProvideHandlers(
 	soraClientHandler *SoraClientHandler,
 	settingHandler *SettingHandler,
 	totpHandler *TotpHandler,
+	copilotGatewayHandler *CopilotGatewayHandler,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
 ) *Handlers {
@@ -98,8 +101,9 @@ func ProvideHandlers(
 		OpenAIGateway: openaiGatewayHandler,
 		SoraGateway:   soraGatewayHandler,
 		SoraClient:    soraClientHandler,
-		Setting:       settingHandler,
-		Totp:          totpHandler,
+		Setting:        settingHandler,
+		Totp:           totpHandler,
+		CopilotGateway: copilotGatewayHandler,
 	}
 }
 
@@ -116,6 +120,7 @@ var ProviderSet = wire.NewSet(
 	NewGatewayHandler,
 	NewOpenAIGatewayHandler,
 	NewSoraGatewayHandler,
+	NewCopilotGatewayHandler,
 	NewTotpHandler,
 	ProvideSettingHandler,
 
@@ -130,6 +135,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewOpenAIOAuthHandler,
 	admin.NewGeminiOAuthHandler,
 	admin.NewAntigravityOAuthHandler,
+	admin.NewCopilotOAuthHandler,
 	admin.NewProxyHandler,
 	admin.NewRedeemHandler,
 	admin.NewPromoHandler,
