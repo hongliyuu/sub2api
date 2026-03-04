@@ -39,6 +39,24 @@ Sub2API is an AI API gateway platform designed to distribute and manage API quot
 - **Concurrency Control** - Per-user and per-account concurrency limits
 - **Rate Limiting** - Configurable request and token rate limits
 - **Admin Dashboard** - Web interface for monitoring and management
+- **Custom User-Agent per Account** - Set per-account User-Agent for upstream API requests
+
+### Account-Level Custom User-Agent
+
+Each account can have an independent User-Agent string for requests to upstream APIs (Claude/OpenAI/Gemini).
+
+**Usage:**
+1. Go to the account management page and edit an account
+2. Fill in the "User-Agent" field (optional)
+3. Leave blank to use platform defaults:
+   - Claude OAuth: `axios/1.8.4`
+   - OpenAI OAuth: `codex-cli/0.91.0`
+   - Gemini CLI: `geminicli.GeminiCLIUserAgent`
+
+**API fields:**
+- Create account: `POST /api/accounts` — include `user_agent` in request body
+- Update account: `PUT /api/accounts/:id` — include `user_agent` in request body
+- Database field: `accounts.user_agent` (nullable VARCHAR(200))
 
 ## Tech Stack
 
