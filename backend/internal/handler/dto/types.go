@@ -138,6 +138,7 @@ type Account struct {
 	LastUsedAt         *time.Time     `json:"last_used_at"`
 	ExpiresAt          *int64         `json:"expires_at"`
 	AutoPauseOnExpired bool           `json:"auto_pause_on_expired"`
+	UserAgent          *string        `json:"user_agent,omitempty"`
 	CreatedAt          time.Time      `json:"created_at"`
 	UpdatedAt          time.Time      `json:"updated_at"`
 
