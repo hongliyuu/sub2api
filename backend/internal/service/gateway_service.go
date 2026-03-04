@@ -4608,6 +4608,11 @@ func (s *GatewayService) buildUpstreamRequestAnthropicAPIKeyPassthrough(
 		req.Header.Set("anthropic-version", "2023-06-01")
 	}
 
+	// 账号级 User-Agent 覆盖（优先级高于客户端透传）
+	if ua := account.GetUserAgent(""); ua != "" {
+		req.Header.Set("User-Agent", ua)
+	}
+
 	return req, nil
 }
 
@@ -5010,6 +5015,13 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 	// OAuth账号：应用缓存的指纹到请求头（覆盖白名单透传的头）
 	if fingerprint != nil {
 		s.identityService.ApplyFingerprint(req, fingerprint)
+	}
+
+	// 账号级 User-Agent 覆盖（仅对非 OAuth 账号或无指纹时生效）
+	if fingerprint == nil {
+		if ua := account.GetUserAgent(""); ua != "" {
+			req.Header.Set("User-Agent", ua)
+		}
 	}
 
 	// 确保必要的headers存在
