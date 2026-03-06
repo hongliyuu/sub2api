@@ -69,7 +69,7 @@ type AccountRepository interface {
 	UpdateExtra(ctx context.Context, id int64, updates map[string]any) error
 	BulkUpdate(ctx context.Context, ids []int64, updates AccountBulkUpdate) (int64, error)
 	// IncrementQuotaUsed 原子递增 API Key 账号的配额用量
-	IncrementQuotaUsed(ctx context.Context, id int64, amount float64) error
+	IncrementQuotaUsed(ctx context.Context, id int64, amount float64, period string) error
 	// ResetQuotaUsed 重置 API Key 账号的配额用量为 0
 	ResetQuotaUsed(ctx context.Context, id int64) error
 }

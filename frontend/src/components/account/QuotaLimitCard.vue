@@ -6,10 +6,12 @@ const { t } = useI18n()
 
 const props = defineProps<{
   modelValue: number | null
+  period: string
 }>()
 
 const emit = defineEmits<{
   'update:modelValue': [value: number | null]
+  'update:period': [value: string]
 }>()
 
 const enabled = ref(props.modelValue != null && props.modelValue > 0)
@@ -26,6 +28,7 @@ watch(
 watch(enabled, (val) => {
   if (!val) {
     emit('update:modelValue', null)
+    emit('update:period', '')
   }
 })
 
@@ -85,6 +88,20 @@ const onInput = (e: Event) => {
             />
           </div>
           <p class="input-hint">{{ t('admin.accounts.quotaLimitAmountHint') }}</p>
+        </div>
+
+        <div>
+          <label class="input-label">{{ t('admin.accounts.quotaPeriod') }}</label>
+          <select
+            :value="period"
+            @change="$emit('update:period', ($event.target as HTMLSelectElement).value)"
+            class="input"
+          >
+            <option value="">{{ t('admin.accounts.quotaPeriodNone') }}</option>
+            <option value="daily">{{ t('admin.accounts.quotaPeriodDaily') }}</option>
+            <option value="weekly">{{ t('admin.accounts.quotaPeriodWeekly') }}</option>
+          </select>
+          <p class="input-hint">{{ t('admin.accounts.quotaPeriodHint') }}</p>
         </div>
       </div>
     </div>

@@ -1172,10 +1172,66 @@ func (a *Account) GetQuotaUsed() float64 {
 	return 0
 }
 
+// GetQuotaPeriod 获取配额周期类型（"daily"/"weekly"，空字符串表示累计制）
+func (a *Account) GetQuotaPeriod() string {
+	if a.Extra == nil {
+		return ""
+	}
+	if v, ok := a.Extra["quota_period"]; ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
+// GetQuotaPeriodStart 获取当前周期的起始时间
+func (a *Account) GetQuotaPeriodStart() time.Time {
+	if a.Extra == nil {
+		return time.Time{}
+	}
+	if v, ok := a.Extra["quota_period_start"]; ok {
+		if s, ok := v.(string); ok {
+			if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
+				return t
+			}
+			if t, err := time.Parse(time.RFC3339, s); err == nil {
+				return t
+			}
+		}
+	}
+	return time.Time{}
+}
+
+// quotaPeriodDuration 返回周期长度
+func quotaPeriodDuration(period string) time.Duration {
+	switch period {
+	case "daily":
+		return 24 * time.Hour
+	case "weekly":
+		return 7 * 24 * time.Hour
+	default:
+		return 0
+	}
+}
+
+// isQuotaPeriodExpired 检查配额周期是否已过期
+func isQuotaPeriodExpired(period string, periodStart time.Time) bool {
+	dur := quotaPeriodDuration(period)
+	if dur == 0 || periodStart.IsZero() {
+		return false
+	}
+	return time.Since(periodStart) >= dur
+}
+
 // IsQuotaExceeded 检查 API Key 账号配额是否已超限
 func (a *Account) IsQuotaExceeded() bool {
 	limit := a.GetQuotaLimit()
 	if limit <= 0 {
+		return false
+	}
+	// 周期性配额：如果当前周期已过期，视为未超限（下次 increment 时会自动重置）
+	if isQuotaPeriodExpired(a.GetQuotaPeriod(), a.GetQuotaPeriodStart()) {
 		return false
 	}
 	return a.GetQuotaUsed() >= limit

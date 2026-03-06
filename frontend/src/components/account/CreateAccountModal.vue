@@ -1228,7 +1228,7 @@
       </div>
 
       <!-- API Key 账号配额限制 -->
-      <QuotaLimitCard v-if="form.type === 'apikey'" v-model="editQuotaLimit" />
+      <QuotaLimitCard v-if="form.type === 'apikey'" v-model="editQuotaLimit" :period="editQuotaPeriod" @update:period="editQuotaPeriod = $event" />
 
       <!-- Temp Unschedulable Rules -->
       <div class="border-t border-gray-200 pt-4 dark:border-dark-600 space-y-4">
@@ -2473,6 +2473,7 @@ const addMethod = ref<AddMethod>('oauth') // For oauth-based: 'oauth' or 'setup-
 const apiKeyBaseUrl = ref('https://api.anthropic.com')
 const apiKeyValue = ref('')
 const editQuotaLimit = ref<number | null>(null)
+const editQuotaPeriod = ref<string>('')
 const modelMappings = ref<ModelMapping[]>([])
 const modelRestrictionMode = ref<'whitelist' | 'mapping'>('whitelist')
 const allowedModels = ref<string[]>([])
@@ -3136,6 +3137,7 @@ const resetForm = () => {
   apiKeyBaseUrl.value = 'https://api.anthropic.com'
   apiKeyValue.value = ''
   editQuotaLimit.value = null
+  editQuotaPeriod.value = ''
   modelMappings.value = []
   modelRestrictionMode.value = 'whitelist'
   allowedModels.value = [...claudeModels] // Default fill related models
@@ -3554,6 +3556,9 @@ const createAccountAndFinish = async (
   let finalExtra = extra
   if (type === 'apikey' && editQuotaLimit.value != null && editQuotaLimit.value > 0) {
     finalExtra = { ...(extra || {}), quota_limit: editQuotaLimit.value }
+    if (editQuotaPeriod.value) {
+      finalExtra.quota_period = editQuotaPeriod.value
+    }
   }
   await doCreateAccount({
     name: form.name,

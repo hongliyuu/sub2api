@@ -1677,18 +1677,57 @@ func (r *accountRepository) FindByExtraField(ctx context.Context, key string, va
 }
 
 // IncrementQuotaUsed 原子递增账号的 extra.quota_used 字段
-func (r *accountRepository) IncrementQuotaUsed(ctx context.Context, id int64, amount float64) error {
-	rows, err := r.sql.QueryContext(ctx,
-		`UPDATE accounts SET extra = jsonb_set(
-			COALESCE(extra, '{}'::jsonb),
-			'{quota_used}',
-			to_jsonb(COALESCE((extra->>'quota_used')::numeric, 0) + $1)
-		), updated_at = NOW()
-		WHERE id = $2 AND deleted_at IS NULL
-		RETURNING
-			COALESCE((extra->>'quota_used')::numeric, 0),
-			COALESCE((extra->>'quota_limit')::numeric, 0)`,
-		amount, id)
+// period 为 "daily"/"weekly" 时，使用 CTE 原子重置+递增；为空时保持累计制。
+func (r *accountRepository) IncrementQuotaUsed(ctx context.Context, id int64, amount float64, period string) error {
+	var rows *sql.Rows
+	var err error
+
+	interval := periodToInterval(period)
+	if interval == "" {
+		// 累计制：保持原有逻辑
+		rows, err = r.sql.QueryContext(ctx,
+			`UPDATE accounts SET extra = jsonb_set(
+				COALESCE(extra, '{}'::jsonb),
+				'{quota_used}',
+				to_jsonb(COALESCE((extra->>'quota_used')::numeric, 0) + $1)
+			), updated_at = NOW()
+			WHERE id = $2 AND deleted_at IS NULL
+			RETURNING
+				COALESCE((extra->>'quota_used')::numeric, 0),
+				COALESCE((extra->>'quota_limit')::numeric, 0)`,
+			amount, id)
+	} else {
+		// 周期制：CTE 原子检查过期 → 重置 → 递增
+		rows, err = r.sql.QueryContext(ctx,
+			`WITH reset_check AS (
+				SELECT id, extra,
+					CASE WHEN COALESCE((extra->>'quota_period_start')::timestamptz, '1970-01-01'::timestamptz)
+						+ $3::interval <= NOW()
+					THEN true ELSE false END AS needs_reset
+				FROM accounts WHERE id = $2 AND deleted_at IS NULL
+			)
+			UPDATE accounts SET extra = jsonb_set(
+				jsonb_set(
+					COALESCE(extra, '{}'::jsonb),
+					'{quota_used}',
+					to_jsonb(
+						CASE WHEN (SELECT needs_reset FROM reset_check) THEN $1
+						ELSE COALESCE((extra->>'quota_used')::numeric, 0) + $1 END
+					)
+				),
+				'{quota_period_start}',
+				to_jsonb(
+					CASE WHEN (SELECT needs_reset FROM reset_check)
+					THEN to_char(NOW(), 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')
+					ELSE COALESCE(extra->>'quota_period_start', to_char(NOW(), 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')) END
+				)
+			), updated_at = NOW()
+			WHERE id = $2 AND deleted_at IS NULL
+			RETURNING
+				COALESCE((extra->>'quota_used')::numeric, 0),
+				COALESCE((extra->>'quota_limit')::numeric, 0)`,
+			amount, id, interval)
+	}
 	if err != nil {
 		return err
 	}
@@ -1711,6 +1750,18 @@ func (r *accountRepository) IncrementQuotaUsed(ctx context.Context, id int64, am
 		}
 	}
 	return nil
+}
+
+// periodToInterval 将周期类型转为 PostgreSQL interval 字符串
+func periodToInterval(period string) string {
+	switch period {
+	case "daily":
+		return "24 hours"
+	case "weekly":
+		return "168 hours"
+	default:
+		return ""
+	}
 }
 
 // ResetQuotaUsed 重置账号的 extra.quota_used 为 0

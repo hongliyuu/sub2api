@@ -798,7 +798,7 @@
       </div>
 
       <!-- API Key 账号配额限制 -->
-      <QuotaLimitCard v-if="account?.type === 'apikey'" v-model="editQuotaLimit" />
+      <QuotaLimitCard v-if="account?.type === 'apikey'" v-model="editQuotaLimit" :period="editQuotaPeriod" @update:period="editQuotaPeriod = $event" />
 
       <!-- OpenAI OAuth Codex 官方客户端限制开关 -->
       <div
@@ -1430,6 +1430,7 @@ const openaiAPIKeyResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OF
 const codexCLIOnlyEnabled = ref(false)
 const anthropicPassthroughEnabled = ref(false)
 const editQuotaLimit = ref<number | null>(null)
+const editQuotaPeriod = ref<string>('')
 const openAIWSModeOptions = computed(() => [
   { value: OPENAI_WS_MODE_OFF, label: t('admin.accounts.openai.wsModeOff') },
   // TODO: ctx_pool 选项暂时隐藏，待测试完成后恢复
@@ -1593,8 +1594,10 @@ watch(
       if (newAccount.type === 'apikey') {
         const quotaVal = extra?.quota_limit as number | undefined
         editQuotaLimit.value = (quotaVal && quotaVal > 0) ? quotaVal : null
+        editQuotaPeriod.value = (extra?.quota_period as string) || ''
       } else {
         editQuotaLimit.value = null
+        editQuotaPeriod.value = ''
       }
 
       // Load antigravity model mapping (Antigravity 只支持映射模式)
@@ -2394,8 +2397,15 @@ const handleSubmit = async () => {
       const newExtra: Record<string, unknown> = { ...currentExtra }
       if (editQuotaLimit.value != null && editQuotaLimit.value > 0) {
         newExtra.quota_limit = editQuotaLimit.value
+        if (editQuotaPeriod.value) {
+          newExtra.quota_period = editQuotaPeriod.value
+        } else {
+          delete newExtra.quota_period
+        }
       } else {
         delete newExtra.quota_limit
+        delete newExtra.quota_period
+        delete newExtra.quota_period_start
       }
       updatePayload.extra = newExtra
     }
