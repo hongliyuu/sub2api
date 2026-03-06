@@ -1799,6 +1799,11 @@ export default {
       quotaLimitToggleHint: 'When enabled, account will be paused when usage reaches the set limit',
       quotaLimitAmount: 'Limit Amount',
       quotaLimitAmountHint: 'Maximum spending limit (USD). Account will be auto-paused when reached. Changing limit won\'t reset usage.',
+      quotaPeriod: 'Reset Period',
+      quotaPeriodNone: 'Never (cumulative)',
+      quotaPeriodDaily: 'Daily (every 24 hours)',
+      quotaPeriodWeekly: 'Weekly (every 7 days)',
+      quotaPeriodHint: 'Choose how often the usage counter resets. Period starts from first usage.',
       testConnection: 'Test Connection',
       reAuthorize: 'Re-Authorize',
       refreshToken: 'Refresh Token',
@@ -2005,6 +2010,10 @@ export default {
           hint: 'Force all cache creation tokens to be billed as the selected TTL tier (5m or 1h)',
           target: 'Target TTL',
           targetHint: 'Select the TTL tier for billing'
+        },
+        clientAffinity: {
+          label: 'Client Affinity Scheduling',
+          hint: 'When enabled, new sessions prefer accounts previously used by this client to reduce account switching'
         }
       },
       expired: 'Expired',
@@ -2012,7 +2021,7 @@ export default {
       noProxy: 'No Proxy',
       concurrency: 'Concurrency',
       loadFactor: 'Load Factor',
-      loadFactorHint: 'Defaults to concurrency',
+      loadFactorHint: 'Higher load factor increases scheduling frequency',
       priority: 'Priority',
       priorityHint: 'Lower value accounts are used first',
       billingRateMultiplier: 'Billing Rate Multiplier',
@@ -2032,6 +2041,7 @@ export default {
       accountUpdated: 'Account updated successfully',
       failedToCreate: 'Failed to create account',
       failedToUpdate: 'Failed to update account',
+      pleaseSelectStatus: 'Please select a valid account status',
       mixedChannelWarningTitle: 'Mixed Channel Warning',
       mixedChannelWarning: 'Warning: Group "{groupName}" contains both {currentPlatform} and {otherPlatform} accounts. Mixing different channels may cause thinking block signature validation issues, which will fallback to non-thinking mode. Are you sure you want to continue?',
       pleaseEnterAccountName: 'Please enter account name',

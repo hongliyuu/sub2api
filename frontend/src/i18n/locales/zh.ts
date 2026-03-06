@@ -1798,6 +1798,11 @@ export default {
       quotaLimitToggleHint: '开启后，当账号用量达到设定额度时自动暂停调度',
       quotaLimitAmount: '限额金额',
       quotaLimitAmountHint: '账号最大可用额度（美元），达到后自动暂停。修改限额不会重置已用额度。',
+      quotaPeriod: '重置周期',
+      quotaPeriodNone: '不重置（累计）',
+      quotaPeriodDaily: '每日（24小时周期）',
+      quotaPeriodWeekly: '每周（7天周期）',
+      quotaPeriodHint: '选择用量计数器自动重置的频率。周期从首次使用时开始计算。',
       testConnection: '测试连接',
       reAuthorize: '重新授权',
       refreshToken: '刷新令牌',
@@ -2139,6 +2144,10 @@ export default {
           hint: '将所有缓存创建 token 强制按指定的 TTL 类型（5分钟或1小时）计费',
           target: '目标 TTL',
           targetHint: '选择计费使用的 TTL 类型'
+        },
+        clientAffinity: {
+          label: '客户端亲和调度',
+          hint: '启用后，新会话会优先调度到该客户端之前使用过的账号，避免频繁切换账号'
         }
       },
       expired: '已过期',
@@ -2146,7 +2155,7 @@ export default {
       noProxy: '无代理',
       concurrency: '并发数',
       loadFactor: '负载因子',
-      loadFactorHint: '不填则等于并发数',
+      loadFactorHint: '提高负载因子可以提高对账号的调度频率',
       priority: '优先级',
       priorityHint: '优先级越小的账号优先使用',
       billingRateMultiplier: '账号计费倍率',
@@ -2166,6 +2175,7 @@ export default {
       accountUpdated: '账号更新成功',
       failedToCreate: '创建账号失败',
       failedToUpdate: '更新账号失败',
+      pleaseSelectStatus: '请选择有效的账号状态',
       mixedChannelWarningTitle: '混合渠道警告',
       mixedChannelWarning: '警告：分组 "{groupName}" 中同时包含 {currentPlatform} 和 {otherPlatform} 账号。混合使用不同渠道可能导致 thinking block 签名验证问题，会自动回退到非 thinking 模式。确定要继续吗？',
       pleaseEnterAccountName: '请输入账号名称',

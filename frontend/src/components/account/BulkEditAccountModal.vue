@@ -496,6 +496,7 @@
             class="input"
             :class="!enableConcurrency && 'cursor-not-allowed opacity-50'"
             aria-labelledby="bulk-edit-concurrency-label"
+            @input="concurrency = Math.max(1, concurrency || 1)"
           />
         </div>
         <div>
@@ -524,6 +525,7 @@
             class="input"
             :class="!enableLoadFactor && 'cursor-not-allowed opacity-50'"
             aria-labelledby="bulk-edit-load-factor-label"
+            @input="loadFactor = (loadFactor &amp;&amp; loadFactor >= 1) ? loadFactor : null"
           />
           <p class="input-hint">{{ t('admin.accounts.loadFactorHint') }}</p>
         </div>
@@ -949,6 +951,7 @@ const allModels = [
   { value: 'claude-3-haiku-20240307', label: 'Claude 3 Haiku' },
   { value: 'gpt-5.3-codex', label: 'GPT-5.3 Codex' },
   { value: 'gpt-5.3-codex-spark', label: 'GPT-5.3 Codex Spark' },
+  { value: 'gpt-5.4', label: 'GPT-5.4' },
   { value: 'gpt-5.2-2025-12-11', label: 'GPT-5.2' },
   { value: 'gpt-5.2-codex', label: 'GPT-5.2 Codex' },
   { value: 'gpt-5.1-codex-max', label: 'GPT-5.1 Codex Max' },
@@ -1062,6 +1065,12 @@ const presetMappings = [
     from: 'gpt-5.3-codex-spark',
     to: 'gpt-5.3-codex-spark',
     color: 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400'
+  },
+  {
+    label: 'GPT-5.4',
+    from: 'gpt-5.4',
+    to: 'gpt-5.4',
+    color: 'bg-rose-100 text-rose-700 hover:bg-rose-200 dark:bg-rose-900/30 dark:text-rose-400'
   },
   {
     label: '5.2→5.3',
@@ -1227,7 +1236,9 @@ const buildUpdatePayload = (): Record<string, unknown> | null => {
   }
 
   if (enableLoadFactor.value) {
-    updates.load_factor = loadFactor.value
+    // 空值/NaN/0 时发送 0（后端约定 <= 0 表示清除）
+    const lf = loadFactor.value
+    updates.load_factor = (lf != null && !Number.isNaN(lf) && lf > 0) ? lf : 0
   }
 
   if (enablePriority.value) {

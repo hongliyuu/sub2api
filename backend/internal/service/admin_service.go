@@ -1437,6 +1437,9 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 		account.RateMultiplier = input.RateMultiplier
 	}
 	if input.LoadFactor != nil && *input.LoadFactor > 0 {
+		if *input.LoadFactor > 10000 {
+			return nil, errors.New("load_factor must be <= 10000")
+		}
 		account.LoadFactor = input.LoadFactor
 	}
 	if err := s.accountRepo.Create(ctx, account); err != nil {
@@ -1516,6 +1519,8 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	if input.LoadFactor != nil {
 		if *input.LoadFactor <= 0 {
 			account.LoadFactor = nil // 0 或负数表示清除
+		} else if *input.LoadFactor > 10000 {
+			return nil, errors.New("load_factor must be <= 10000")
 		} else {
 			account.LoadFactor = input.LoadFactor
 		}
@@ -1654,7 +1659,13 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 		repoUpdates.RateMultiplier = input.RateMultiplier
 	}
 	if input.LoadFactor != nil {
-		repoUpdates.LoadFactor = input.LoadFactor
+		if *input.LoadFactor <= 0 {
+			repoUpdates.LoadFactor = nil // 0 或负数表示清除
+		} else if *input.LoadFactor > 10000 {
+			return nil, errors.New("load_factor must be <= 10000")
+		} else {
+			repoUpdates.LoadFactor = input.LoadFactor
+		}
 	}
 	if input.Status != "" {
 		repoUpdates.Status = &input.Status
