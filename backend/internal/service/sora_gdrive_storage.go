@@ -188,6 +188,66 @@ func (s *SoraGDriveStorage) TestConnection(ctx context.Context) error {
 	return nil
 }
 
+// TestFullCycle 执行完整的上传→获取链接→删除测试。
+func (s *SoraGDriveStorage) TestFullCycle(ctx context.Context) (map[string]any, error) {
+	srv, cfg, err := s.getService(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("init client: %w", err)
+	}
+
+	result := map[string]any{}
+
+	// 1. 测试 API 连接
+	about, err := srv.About.Get().Fields("storageQuota").Context(ctx).Do()
+	if err != nil {
+		return nil, fmt.Errorf("API connection failed: %w", err)
+	}
+	if about.StorageQuota != nil {
+		result["quota_limit_bytes"] = about.StorageQuota.Limit
+		result["quota_used_bytes"] = about.StorageQuota.Usage
+	}
+
+	// 2. 上传测试文件
+	testContent := "sub2api GDrive test file - " + time.Now().Format(time.RFC3339)
+	fileMeta := &drive.File{
+		Name:     "sub2api_test_" + uuid.NewString()[:8] + ".txt",
+		MimeType: "text/plain",
+	}
+	if cfg.FolderID != "" {
+		fileMeta.Parents = []string{cfg.FolderID}
+	}
+	uploaded, err := srv.Files.Create(fileMeta).
+		Media(strings.NewReader(testContent)).
+		Fields("id,name,size,webViewLink").
+		Context(ctx).Do()
+	if err != nil {
+		return nil, fmt.Errorf("upload test file failed: %w", err)
+	}
+	result["uploaded_file_id"] = uploaded.Id
+	result["uploaded_file_name"] = uploaded.Name
+	result["uploaded_file_size"] = uploaded.Size
+	result["web_view_link"] = uploaded.WebViewLink
+
+	// 3. 获取访问链接
+	accessURL, err := s.GetAccessURL(ctx, uploaded.Id)
+	if err != nil {
+		// 即使获取链接失败，仍尝试清理
+		_ = srv.Files.Delete(uploaded.Id).Context(ctx).Do()
+		return nil, fmt.Errorf("get access URL failed: %w", err)
+	}
+	result["access_url"] = accessURL
+
+	// 4. 删除测试文件
+	if err := srv.Files.Delete(uploaded.Id).Context(ctx).Do(); err != nil {
+		result["delete_warning"] = fmt.Sprintf("delete failed (manual cleanup needed): %v", err)
+	} else {
+		result["deleted"] = true
+	}
+
+	result["status"] = "ok"
+	return result, nil
+}
+
 // IsHealthy 返回 Google Drive 健康状态（带短缓存）。
 func (s *SoraGDriveStorage) IsHealthy(ctx context.Context) bool {
 	if s == nil {

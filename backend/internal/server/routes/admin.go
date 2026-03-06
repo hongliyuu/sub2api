@@ -413,6 +413,7 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		// Google Drive OAuth
 		adminSettings.POST("/sora-storage/gdrive-oauth/start", h.Admin.GDriveOAuth.StartOAuth)
 		adminSettings.POST("/sora-storage/gdrive-oauth/callback", h.Admin.GDriveOAuth.OAuthCallback)
+		adminSettings.POST("/sora-storage/gdrive-test", h.Admin.GDriveOAuth.TestGDriveStorage)
 	}
 }
 

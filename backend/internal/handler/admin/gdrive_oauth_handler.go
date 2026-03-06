@@ -13,13 +13,15 @@ import (
 type GDriveOAuthHandler struct {
 	settingService *service.SettingService
 	gdriveOAuth    *service.SoraGDriveOAuthService
+	gdriveStorage  *service.SoraGDriveStorage
 }
 
 // NewGDriveOAuthHandler 创建 GDrive OAuth Handler。
-func NewGDriveOAuthHandler(settingService *service.SettingService, gdriveOAuth *service.SoraGDriveOAuthService) *GDriveOAuthHandler {
+func NewGDriveOAuthHandler(settingService *service.SettingService, gdriveOAuth *service.SoraGDriveOAuthService, gdriveStorage *service.SoraGDriveStorage) *GDriveOAuthHandler {
 	return &GDriveOAuthHandler{
 		settingService: settingService,
 		gdriveOAuth:    gdriveOAuth,
+		gdriveStorage:  gdriveStorage,
 	}
 }
 
@@ -126,4 +128,21 @@ func (h *GDriveOAuthHandler) OAuthCallback(c *gin.Context) {
 		"refresh_token": refreshToken,
 		"message":       "OAuth 授权成功",
 	})
+}
+
+// TestGDriveStorage 测试 GDrive 存储的完整上传→下载→删除流程。
+// POST /api/v1/admin/settings/sora-storage/gdrive-test
+func (h *GDriveOAuthHandler) TestGDriveStorage(c *gin.Context) {
+	if h.gdriveStorage == nil {
+		response.Error(c, http.StatusInternalServerError, "GDrive storage not initialized")
+		return
+	}
+
+	result, err := h.gdriveStorage.TestFullCycle(c.Request.Context())
+	if err != nil {
+		response.Error(c, http.StatusBadRequest, "GDrive 测试失败: "+err.Error())
+		return
+	}
+
+	response.Success(c, result)
 }
