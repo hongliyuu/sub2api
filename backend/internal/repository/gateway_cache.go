@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"strconv"
 	"time"
@@ -11,8 +12,25 @@ import (
 )
 
 const (
-	stickySessionPrefix  = "sticky_session:"
-	clientAffinityPrefix = "client_affinity:"
+	stickySessionPrefix         = "sticky_session:"
+	clientAffinityPrefix        = "client_affinity:"
+	clientAffinityReversePrefix = "client_affinity_rev:"
+)
+
+var (
+	//go:embed lua/get_affinity.lua
+	getAffinityLua string
+	//go:embed lua/update_affinity.lua
+	updateAffinityLua string
+	//go:embed lua/remove_affinity.lua
+	removeAffinityLua string
+	//go:embed lua/get_affinity_count.lua
+	getAffinityCountLua string
+
+	getAffinityScript      = redis.NewScript(getAffinityLua)
+	updateAffinityScript   = redis.NewScript(updateAffinityLua)
+	removeAffinityScript   = redis.NewScript(removeAffinityLua)
+	getAffinityCountScript = redis.NewScript(getAffinityCountLua)
 )
 
 type gatewayCache struct {
@@ -45,43 +63,22 @@ func (c *gatewayCache) RefreshSessionTTL(ctx context.Context, groupID int64, ses
 }
 
 // DeleteSessionAccountID 删除粘性会话与账号的绑定关系。
-// 当检测到绑定的账号不可用（如状态错误、禁用、不可调度等）时调用，
-// 以便下次请求能够重新选择可用账号。
-//
-// DeleteSessionAccountID removes the sticky session binding for the given session.
-// Called when the bound account becomes unavailable (e.g., error status, disabled,
-// or unschedulable), allowing subsequent requests to select a new available account.
 func (c *gatewayCache) DeleteSessionAccountID(ctx context.Context, groupID int64, sessionHash string) error {
 	key := buildSessionKey(groupID, sessionHash)
 	return c.rdb.Del(ctx, key).Err()
 }
 
-// buildAffinityKey 构建客户端亲和 key
+// buildAffinityKey 构建正向亲和 key（client → accounts）
 // 格式: client_affinity:{groupID}:{clientID}
 func buildAffinityKey(groupID int64, clientID string) string {
 	return fmt.Sprintf("%s%d:%s", clientAffinityPrefix, groupID, clientID)
 }
 
-// getAffinityScript: 清理过期成员后返回亲和账号列表（按最近使用降序）
-// KEYS[1] = client_affinity:{groupID}:{clientID}
-// ARGV[1] = 过期阈值时间戳 (now - ttl)
-var getAffinityScript = redis.NewScript(`
-redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', ARGV[1])
-return redis.call('ZREVRANGE', KEYS[1], 0, -1)
-`)
-
-// updateAffinityScript: 清理过期成员、添加/更新亲和关系、刷新 TTL
-// KEYS[1] = client_affinity:{groupID}:{clientID}
-// ARGV[1] = 当前时间戳
-// ARGV[2] = TTL 秒数
-// ARGV[3] = accountID
-// ARGV[4] = 过期阈值时间戳 (now - ttl)
-var updateAffinityScript = redis.NewScript(`
-redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', ARGV[4])
-redis.call('ZADD', KEYS[1], ARGV[1], ARGV[3])
-redis.call('EXPIRE', KEYS[1], ARGV[2])
-return 1
-`)
+// buildAffinityReverseKey 构建反向亲和 key（account → clients）
+// 格式: client_affinity_rev:{groupID}:{accountID}
+func buildAffinityReverseKey(groupID int64, accountID int64) string {
+	return fmt.Sprintf("%s%d:%d", clientAffinityReversePrefix, groupID, accountID)
+}
 
 func (c *gatewayCache) GetClientAffinityAccounts(ctx context.Context, groupID int64, clientID string, ttl time.Duration) ([]int64, error) {
 	key := buildAffinityKey(groupID, clientID)
@@ -108,17 +105,50 @@ func (c *gatewayCache) GetClientAffinityAccounts(ctx context.Context, groupID in
 }
 
 func (c *gatewayCache) UpdateClientAffinity(ctx context.Context, groupID int64, clientID string, accountID int64, ttl time.Duration) error {
-	key := buildAffinityKey(groupID, clientID)
+	fwdKey := buildAffinityKey(groupID, clientID)
+	revKey := buildAffinityReverseKey(groupID, accountID)
 	now := time.Now().Unix()
 	ttlSeconds := int64(ttl.Seconds())
 	expireThreshold := now - ttlSeconds
 
-	return updateAffinityScript.Run(ctx, c.rdb, []string{key},
-		now, ttlSeconds, accountID, expireThreshold,
+	return updateAffinityScript.Run(ctx, c.rdb, []string{fwdKey, revKey},
+		now, ttlSeconds, accountID, expireThreshold, clientID,
 	).Err()
 }
 
 func (c *gatewayCache) RemoveClientAffinity(ctx context.Context, groupID int64, clientID string, accountID int64) error {
-	key := buildAffinityKey(groupID, clientID)
-	return c.rdb.ZRem(ctx, key, accountID).Err()
+	fwdKey := buildAffinityKey(groupID, clientID)
+	revKey := buildAffinityReverseKey(groupID, accountID)
+
+	return removeAffinityScript.Run(ctx, c.rdb, []string{fwdKey, revKey},
+		accountID, clientID,
+	).Err()
+}
+
+// GetAccountAffinityCountBatch 批量获取账号的亲和客户端数量（惰性清理过期成员）
+func (c *gatewayCache) GetAccountAffinityCountBatch(ctx context.Context, groupID int64, accountIDs []int64, ttl time.Duration) (map[int64]int64, error) {
+	if len(accountIDs) == 0 {
+		return map[int64]int64{}, nil
+	}
+
+	now := time.Now().Unix()
+	expireThreshold := now - int64(ttl.Seconds())
+
+	pipe := c.rdb.Pipeline()
+	cmds := make([]*redis.Cmd, len(accountIDs))
+	for i, accID := range accountIDs {
+		key := buildAffinityReverseKey(groupID, accID)
+		cmds[i] = getAffinityCountScript.Run(ctx, pipe, []string{key}, expireThreshold)
+	}
+	_, err := pipe.Exec(ctx)
+	if err != nil && err != redis.Nil {
+		return nil, err
+	}
+
+	result := make(map[int64]int64, len(accountIDs))
+	for i, accID := range accountIDs {
+		count, _ := cmds[i].Int64()
+		result[accID] = count
+	}
+	return result, nil
 }

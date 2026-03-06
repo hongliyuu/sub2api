@@ -40,7 +40,8 @@ import (
 const (
 	claudeAPIURL            = "https://api.anthropic.com/v1/messages?beta=true"
 	claudeAPICountTokensURL = "https://api.anthropic.com/v1/messages/count_tokens?beta=true"
-	stickySessionTTL        = time.Hour // 粘性会话TTL
+	stickySessionTTL        = time.Hour      // 粘性会话TTL
+	clientAffinityTTL       = 24 * time.Hour // 客户端亲和TTL
 	defaultMaxLineSize      = 40 * 1024 * 1024
 	// Canonical Claude Code banner. Keep it EXACT (no trailing whitespace/newlines)
 	// to match real Claude CLI traffic as closely as possible. When we need a visual
@@ -68,8 +69,9 @@ type forceCacheBillingKeyType struct{}
 
 // accountWithLoad 账号与负载信息的组合，用于负载感知调度
 type accountWithLoad struct {
-	account  *Account
-	loadInfo *AccountLoadInfo
+	account       *Account
+	loadInfo      *AccountLoadInfo
+	affinityCount int64 // 亲和客户端数量（反向索引），越少越优先
 }
 
 var ForceCacheBillingContextKey = forceCacheBillingKeyType{}
@@ -373,8 +375,10 @@ type GatewayCache interface {
 	GetClientAffinityAccounts(ctx context.Context, groupID int64, clientID string, ttl time.Duration) ([]int64, error)
 	// UpdateClientAffinity 添加/更新客户端亲和关系（更新 score 为当前时间戳，刷新 key TTL）
 	UpdateClientAffinity(ctx context.Context, groupID int64, clientID string, accountID int64, ttl time.Duration) error
-	// RemoveClientAffinity 删除单个客户端亲和关系
+	// RemoveClientAffinity 删除单个客户端亲和关系（原子双删正向+反向索引）
 	RemoveClientAffinity(ctx context.Context, groupID int64, clientID string, accountID int64) error
+	// GetAccountAffinityCountBatch 批量获取账号的亲和客户端数量（惰性清理过期成员）
+	GetAccountAffinityCountBatch(ctx context.Context, groupID int64, accountIDs []int64, ttl time.Duration) (map[int64]int64, error)
 }
 
 // derefGroupID safely dereferences *int64 to int64, returning 0 if nil
@@ -1368,7 +1372,10 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 			}
 
 			if len(routingAvailable) > 0 {
-				// 排序：优先级 > 负载率 > 最后使用时间
+				// 批量获取亲和客户端数量
+				s.populateAffinityCounts(ctx, routingAvailable, derefGroupID(groupID))
+
+				// 排序：优先级 > 负载率 > 亲和客户端数 > 最后使用时间
 				sort.SliceStable(routingAvailable, func(i, j int) bool {
 					a, b := routingAvailable[i], routingAvailable[j]
 					if a.account.Priority != b.account.Priority {
@@ -1376,6 +1383,9 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 					}
 					if a.loadInfo.LoadRate != b.loadInfo.LoadRate {
 						return a.loadInfo.LoadRate < b.loadInfo.LoadRate
+					}
+					if a.affinityCount != b.affinityCount {
+						return a.affinityCount < b.affinityCount
 					}
 					switch {
 					case a.account.LastUsedAt == nil && b.account.LastUsedAt != nil:
@@ -1403,7 +1413,7 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 							_ = s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), sessionHash, item.account.ID, stickySessionTTL)
 						}
 						if affinityClientID != "" && s.cache != nil && item.account.IsClientAffinityEnabled() {
-							_ = s.cache.UpdateClientAffinity(ctx, derefGroupID(groupID), affinityClientID, item.account.ID, stickySessionTTL)
+							_ = s.cache.UpdateClientAffinity(ctx, derefGroupID(groupID), affinityClientID, item.account.ID, clientAffinityTTL)
 						}
 						if s.debugModelRoutingEnabled() {
 							logger.LegacyPrintf("service.gateway", "[ModelRoutingDebug] routed select: group_id=%v model=%s session=%s account=%d", derefGroupID(groupID), requestedModel, shortSessionHash(sessionHash), item.account.ID)
@@ -1503,7 +1513,7 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 
 	// ============ Layer 1.6: 客户端亲和（仅在粘性会话未命中时生效） ============
 	if affinityClientID != "" && s.cache != nil && stickyAccountID <= 0 {
-		affinityAccountIDs, err := s.cache.GetClientAffinityAccounts(ctx, derefGroupID(groupID), affinityClientID, stickySessionTTL)
+		affinityAccountIDs, err := s.cache.GetClientAffinityAccounts(ctx, derefGroupID(groupID), affinityClientID, clientAffinityTTL)
 		if err == nil && len(affinityAccountIDs) > 0 {
 			for _, affinityAccID := range affinityAccountIDs {
 				if isExcluded(affinityAccID) {
@@ -1542,7 +1552,7 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 						continue
 					}
 					// 亲和命中：更新亲和 score + 绑定粘性会话
-					_ = s.cache.UpdateClientAffinity(ctx, derefGroupID(groupID), affinityClientID, affinityAccID, stickySessionTTL)
+					_ = s.cache.UpdateClientAffinity(ctx, derefGroupID(groupID), affinityClientID, affinityAccID, clientAffinityTTL)
 					if sessionHash != "" {
 						_ = s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), sessionHash, affinityAccID, stickySessionTTL)
 					}
@@ -1614,7 +1624,7 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 	if err != nil {
 		if result, ok := s.tryAcquireByLegacyOrder(ctx, candidates, groupID, sessionHash, preferOAuth); ok {
 			if affinityClientID != "" && s.cache != nil && result.Account != nil && result.Account.IsClientAffinityEnabled() {
-				_ = s.cache.UpdateClientAffinity(ctx, derefGroupID(groupID), affinityClientID, result.Account.ID, stickySessionTTL)
+				_ = s.cache.UpdateClientAffinity(ctx, derefGroupID(groupID), affinityClientID, result.Account.ID, clientAffinityTTL)
 			}
 			return result, nil
 		}
@@ -1633,13 +1643,18 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 			}
 		}
 
-		// 分层过滤选择：优先级 → 负载率 → LRU
+		// 批量获取亲和客户端数量（用于均衡分配新客户端）
+		s.populateAffinityCounts(ctx, available, derefGroupID(groupID))
+
+		// 分层过滤选择：优先级 → 负载率 → 亲和客户端数 → LRU
 		for len(available) > 0 {
 			// 1. 取优先级最小的集合
 			candidates := filterByMinPriority(available)
 			// 2. 取负载率最低的集合
 			candidates = filterByMinLoadRate(candidates)
-			// 3. LRU 选择最久未用的账号
+			// 3. 取亲和客户端数最少的集合
+			candidates = filterByMinAffinityCount(candidates)
+			// 4. LRU 选择最久未用的账号
 			selected := selectByLRU(candidates, preferOAuth)
 			if selected == nil {
 				break
@@ -1656,7 +1671,7 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 					}
 					// 更新客户端亲和关系
 					if affinityClientID != "" && s.cache != nil && selected.account.IsClientAffinityEnabled() {
-						_ = s.cache.UpdateClientAffinity(ctx, derefGroupID(groupID), affinityClientID, selected.account.ID, stickySessionTTL)
+						_ = s.cache.UpdateClientAffinity(ctx, derefGroupID(groupID), affinityClientID, selected.account.ID, clientAffinityTTL)
 					}
 					return &AccountSelectionResult{
 						Account:     selected.account,
@@ -2415,6 +2430,36 @@ func (s *GatewayService) getSchedulableAccount(ctx context.Context, accountID in
 	return s.accountRepo.GetByID(ctx, accountID)
 }
 
+// populateAffinityCounts 批量获取账号的亲和客户端数量并填入 accountWithLoad 切片。
+// 仅当存在开启了客户端亲和的账号时才查询 Redis，否则跳过。
+func (s *GatewayService) populateAffinityCounts(ctx context.Context, accounts []accountWithLoad, groupID int64) {
+	if s.cache == nil || len(accounts) == 0 {
+		return
+	}
+	// 快速检查：是否有任何账号开启了亲和
+	hasAffinity := false
+	for _, acc := range accounts {
+		if acc.account.IsClientAffinityEnabled() {
+			hasAffinity = true
+			break
+		}
+	}
+	if !hasAffinity {
+		return
+	}
+	accountIDs := make([]int64, len(accounts))
+	for i, acc := range accounts {
+		accountIDs[i] = acc.account.ID
+	}
+	countMap, err := s.cache.GetAccountAffinityCountBatch(ctx, groupID, accountIDs, clientAffinityTTL)
+	if err != nil {
+		return // 查询失败不影响调度，affinityCount 保持 0
+	}
+	for i := range accounts {
+		accounts[i].affinityCount = countMap[accounts[i].account.ID]
+	}
+}
+
 // filterByMinPriority 过滤出优先级最小的账号集合
 func filterByMinPriority(accounts []accountWithLoad) []accountWithLoad {
 	if len(accounts) == 0 {
@@ -2449,6 +2494,26 @@ func filterByMinLoadRate(accounts []accountWithLoad) []accountWithLoad {
 	result := make([]accountWithLoad, 0, len(accounts))
 	for _, acc := range accounts {
 		if acc.loadInfo.LoadRate == minLoadRate {
+			result = append(result, acc)
+		}
+	}
+	return result
+}
+
+// filterByMinAffinityCount 过滤出亲和客户端数最少的账号集合
+func filterByMinAffinityCount(accounts []accountWithLoad) []accountWithLoad {
+	if len(accounts) == 0 {
+		return accounts
+	}
+	minCount := accounts[0].affinityCount
+	for _, acc := range accounts[1:] {
+		if acc.affinityCount < minCount {
+			minCount = acc.affinityCount
+		}
+	}
+	result := make([]accountWithLoad, 0, len(accounts))
+	for _, acc := range accounts {
+		if acc.affinityCount == minCount {
 			result = append(result, acc)
 		}
 	}
