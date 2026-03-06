@@ -446,9 +446,10 @@ func TestAPIContracts(t *testing.T) {
 			setup: func(t *testing.T, deps *contractDeps) {
 				t.Helper()
 				deps.settingRepo.SetAll(map[string]string{
-					service.SettingKeyRegistrationEnabled: "true",
-					service.SettingKeyEmailVerifyEnabled:  "false",
-					service.SettingKeyPromoCodeEnabled:    "true",
+					service.SettingKeyRegistrationEnabled:              "true",
+					service.SettingKeyEmailVerifyEnabled:               "false",
+					service.SettingKeyRegistrationEmailSuffixWhitelist: "[]",
+					service.SettingKeyPromoCodeEnabled:                 "true",
 
 					service.SettingKeySMTPHost:     "smtp.example.com",
 					service.SettingKeySMTPPort:     "587",
@@ -487,6 +488,7 @@ func TestAPIContracts(t *testing.T) {
 				"data": {
 					"registration_enabled": true,
 					"email_verify_enabled": false,
+					"registration_email_suffix_whitelist": [],
 					"promo_code_enabled": true,
 					"password_reset_enabled": false,
 					"totp_enabled": false,
@@ -1091,6 +1093,14 @@ func (s *stubAccountRepo) UpdateSessionWindow(ctx context.Context, id int64, sta
 }
 
 func (s *stubAccountRepo) UpdateExtra(ctx context.Context, id int64, updates map[string]any) error {
+	return errors.New("not implemented")
+}
+
+func (s *stubAccountRepo) IncrementQuotaUsed(ctx context.Context, id int64, amount float64) error {
+	return errors.New("not implemented")
+}
+
+func (s *stubAccountRepo) ResetQuotaUsed(ctx context.Context, id int64) error {
 	return errors.New("not implemented")
 }
 
