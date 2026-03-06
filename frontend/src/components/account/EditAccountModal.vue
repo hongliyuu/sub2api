@@ -2243,7 +2243,7 @@ const handleSubmit = async () => {
 
     // For all Anthropic accounts, handle client_affinity in extra
     if (props.account.platform === 'anthropic') {
-      const currentExtra = (updatePayload.extra as Record<string, unknown>) || (props.account.extra as Record<string, unknown>) || {}
+      const currentExtra = (props.account.extra as Record<string, unknown>) || {}
       const newExtra: Record<string, unknown> = { ...currentExtra }
       if (clientAffinityEnabled.value) {
         newExtra.client_affinity_enabled = true
