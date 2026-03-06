@@ -56,6 +56,12 @@ const (
 	claudeMimicDebugInfoKey = "claude_mimic_debug_info"
 )
 
+const (
+	claudeMaxMessageOverheadTokens = 3
+	claudeMaxBlockOverheadTokens   = 1
+	claudeMaxUnknownContentTokens  = 4
+)
+
 // ForceCacheBillingContextKey 强制缓存计费上下文键
 // 用于粘性会话切换时，将 input_tokens 转为 cache_read_input_tokens 计费
 type forceCacheBillingKeyType struct{}
@@ -298,6 +304,10 @@ var (
 	sessionIDRegex       = regexp.MustCompile(`session_([a-f0-9-]{36})`)
 	claudeCliUserAgentRe = regexp.MustCompile(`^claude-cli/\d+\.\d+\.\d+`)
 
+	// clientIDFromMetadataRegex 从 metadata.user_id 中提取客户端 ID（64位 hex）
+	// 格式: user_{64位hex}_account_...
+	clientIDFromMetadataRegex = regexp.MustCompile(`^user_([a-f0-9]{64})_account_`)
+
 	// claudeCodePromptPrefixes 用于检测 Claude Code 系统提示词的前缀列表
 	// 支持多种变体：标准版、Agent SDK 版、Explore Agent 版、Compact 版等
 	// 注意：前缀之间不应存在包含关系，否则会导致冗余匹配
@@ -358,6 +368,13 @@ type GatewayCache interface {
 	// DeleteSessionAccountID 删除粘性会话绑定，用于账号不可用时主动清理
 	// Delete sticky session binding, used to proactively clean up when account becomes unavailable
 	DeleteSessionAccountID(ctx context.Context, groupID int64, sessionHash string) error
+
+	// GetClientAffinityAccounts 获取客户端亲和账号列表（按最近使用降序），同时清理过期成员
+	GetClientAffinityAccounts(ctx context.Context, groupID int64, clientID string, ttl time.Duration) ([]int64, error)
+	// UpdateClientAffinity 添加/更新客户端亲和关系（更新 score 为当前时间戳，刷新 key TTL）
+	UpdateClientAffinity(ctx context.Context, groupID int64, clientID string, accountID int64, ttl time.Duration) error
+	// RemoveClientAffinity 删除单个客户端亲和关系
+	RemoveClientAffinity(ctx context.Context, groupID int64, clientID string, accountID int64) error
 }
 
 // derefGroupID safely dereferences *int64 to int64, returning 0 if nil
@@ -426,6 +443,20 @@ func shouldClearStickySession(account *Account, requestedModel string) bool {
 		return true
 	}
 	return false
+}
+
+// extractClientIDFromMetadata 从 metadata.user_id 中提取客户端 ID（64位 hex）。
+// 格式: user_{64位hex}_account_..._session_...
+// 返回空字符串表示无法提取（非 Claude Code/Console 客户端）。
+func extractClientIDFromMetadata(metadataUserID string) string {
+	if metadataUserID == "" {
+		return ""
+	}
+	matches := clientIDFromMetadataRegex.FindStringSubmatch(metadataUserID)
+	if matches == nil {
+		return ""
+	}
+	return matches[1]
 }
 
 type AccountWaitPlan struct {
@@ -1040,7 +1071,7 @@ func (s *GatewayService) SelectAccountForModelWithExclusions(ctx context.Context
 }
 
 // SelectAccountWithLoadAwareness selects account with load-awareness and wait plan.
-// metadataUserID: 已废弃参数，会话限制现在统一使用 sessionHash
+// metadataUserID: 用于客户端亲和调度，从中提取客户端 ID
 func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, groupID *int64, sessionHash string, requestedModel string, excludedIDs map[int64]struct{}, metadataUserID string) (*AccountSelectionResult, error) {
 	// 调试日志：记录调度入口参数
 	excludedIDsList := make([]int64, 0, len(excludedIDs))
@@ -1070,6 +1101,9 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 			stickyAccountID = accountID
 		}
 	}
+
+	// 提取客户端 ID（用于客户端亲和调度）
+	affinityClientID := extractClientIDFromMetadata(metadataUserID)
 
 	if s.debugModelRoutingEnabled() && requestedModel != "" {
 		groupPlatform := ""
@@ -1368,6 +1402,9 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 						if sessionHash != "" && s.cache != nil {
 							_ = s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), sessionHash, item.account.ID, stickySessionTTL)
 						}
+						if affinityClientID != "" && s.cache != nil && item.account.IsClientAffinityEnabled() {
+							_ = s.cache.UpdateClientAffinity(ctx, derefGroupID(groupID), affinityClientID, item.account.ID, stickySessionTTL)
+						}
 						if s.debugModelRoutingEnabled() {
 							logger.LegacyPrintf("service.gateway", "[ModelRoutingDebug] routed select: group_id=%v model=%s session=%s account=%d", derefGroupID(groupID), requestedModel, shortSessionHash(sessionHash), item.account.ID)
 						}
@@ -1464,6 +1501,66 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 		}
 	}
 
+	// ============ Layer 1.6: 客户端亲和（仅在粘性会话未命中时生效） ============
+	if affinityClientID != "" && s.cache != nil && stickyAccountID <= 0 {
+		affinityAccountIDs, err := s.cache.GetClientAffinityAccounts(ctx, derefGroupID(groupID), affinityClientID, stickySessionTTL)
+		if err == nil && len(affinityAccountIDs) > 0 {
+			for _, affinityAccID := range affinityAccountIDs {
+				if isExcluded(affinityAccID) {
+					continue
+				}
+				account, ok := accountByID[affinityAccID]
+				if !ok || !s.isAccountSchedulableForSelection(account) {
+					continue
+				}
+				if !account.IsClientAffinityEnabled() {
+					continue
+				}
+				if !s.isAccountAllowedForPlatform(account, platform, useMixed) {
+					continue
+				}
+				if requestedModel != "" && !s.isModelSupportedByAccountWithContext(ctx, account, requestedModel) {
+					continue
+				}
+				if !s.isAccountSchedulableForModelSelection(ctx, account, requestedModel) {
+					continue
+				}
+				if !s.isAccountSchedulableForQuota(account) {
+					continue
+				}
+				if !s.isAccountSchedulableForWindowCost(ctx, account, false) {
+					continue
+				}
+				if !s.isAccountSchedulableForRPM(ctx, account, false) {
+					continue
+				}
+
+				result, err := s.tryAcquireAccountSlot(ctx, affinityAccID, account.Concurrency)
+				if err == nil && result.Acquired {
+					if !s.checkAndRegisterSession(ctx, account, sessionHash) {
+						result.ReleaseFunc()
+						continue
+					}
+					// 亲和命中：更新亲和 score + 绑定粘性会话
+					_ = s.cache.UpdateClientAffinity(ctx, derefGroupID(groupID), affinityClientID, affinityAccID, stickySessionTTL)
+					if sessionHash != "" {
+						_ = s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), sessionHash, affinityAccID, stickySessionTTL)
+					}
+					slog.Debug("client_affinity_hit",
+						"group_id", derefGroupID(groupID),
+						"client_id", affinityClientID[:8]+"...",
+						"account_id", affinityAccID)
+					return &AccountSelectionResult{
+						Account:     account,
+						Acquired:    true,
+						ReleaseFunc: result.ReleaseFunc,
+					}, nil
+				}
+			}
+			// 所有亲和账号不可用，继续到 Layer 2
+		}
+	}
+
 	// ============ Layer 2: 负载感知选择 ============
 	candidates := make([]*Account, 0, len(accounts))
 	for i := range accounts {
@@ -1516,6 +1613,9 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 	loadMap, err := s.concurrencyService.GetAccountsLoadBatch(ctx, accountLoads)
 	if err != nil {
 		if result, ok := s.tryAcquireByLegacyOrder(ctx, candidates, groupID, sessionHash, preferOAuth); ok {
+			if affinityClientID != "" && s.cache != nil && result.Account != nil && result.Account.IsClientAffinityEnabled() {
+				_ = s.cache.UpdateClientAffinity(ctx, derefGroupID(groupID), affinityClientID, result.Account.ID, stickySessionTTL)
+			}
 			return result, nil
 		}
 	} else {
@@ -1553,6 +1653,10 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 				} else {
 					if sessionHash != "" && s.cache != nil {
 						_ = s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), sessionHash, selected.account.ID, stickySessionTTL)
+					}
+					// 更新客户端亲和关系
+					if affinityClientID != "" && s.cache != nil && selected.account.IsClientAffinityEnabled() {
+						_ = s.cache.UpdateClientAffinity(ctx, derefGroupID(groupID), affinityClientID, selected.account.ID, stickySessionTTL)
 					}
 					return &AccountSelectionResult{
 						Account:     selected.account,
@@ -4348,6 +4452,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	}
 
 	// 处理正常响应
+	ctx = withClaudeMaxResponseRewriteContext(ctx, c, parsed)
 
 	// 触发上游接受回调（提前释放串行锁，不等流完成）
 	if parsed.OnUpstreamAccepted != nil {
@@ -5804,6 +5909,7 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 
 	needModelReplace := originalModel != mappedModel
 	clientDisconnected := false // 客户端断开标志，断开后继续读取上游以获取完整usage
+	skipAccountTTLOverride := false
 
 	pendingEventLines := make([]string, 0, 4)
 
@@ -5864,17 +5970,25 @@ func (s *GatewayService) handleStreamingResponse(ctx context.Context, resp *http
 			if msg, ok := event["message"].(map[string]any); ok {
 				if u, ok := msg["usage"].(map[string]any); ok {
 					eventChanged = reconcileCachedTokens(u) || eventChanged
+					claudeMaxOutcome := applyClaudeMaxSimulationToUsageJSONMap(ctx, u, originalModel, account.ID)
+					if claudeMaxOutcome.Simulated {
+						skipAccountTTLOverride = true
+					}
 				}
 			}
 		}
 		if eventType == "message_delta" {
 			if u, ok := event["usage"].(map[string]any); ok {
 				eventChanged = reconcileCachedTokens(u) || eventChanged
+				claudeMaxOutcome := applyClaudeMaxSimulationToUsageJSONMap(ctx, u, originalModel, account.ID)
+				if claudeMaxOutcome.Simulated {
+					skipAccountTTLOverride = true
+				}
 			}
 		}
 
 		// Cache TTL Override: 重写 SSE 事件中的 cache_creation 分类
-		if account.IsCacheTTLOverrideEnabled() {
+		if account.IsCacheTTLOverrideEnabled() && !skipAccountTTLOverride {
 			overrideTarget := account.GetCacheTTLOverrideTarget()
 			if eventType == "message_start" {
 				if msg, ok := event["message"].(map[string]any); ok {
@@ -6284,8 +6398,13 @@ func (s *GatewayService) handleNonStreamingResponse(ctx context.Context, resp *h
 		}
 	}
 
+	claudeMaxOutcome := applyClaudeMaxSimulationToUsage(ctx, &response.Usage, originalModel, account.ID)
+	if claudeMaxOutcome.Simulated {
+		body = rewriteClaudeUsageJSONBytes(body, response.Usage)
+	}
+
 	// Cache TTL Override: 重写 non-streaming 响应中的 cache_creation 分类
-	if account.IsCacheTTLOverrideEnabled() {
+	if account.IsCacheTTLOverrideEnabled() && !claudeMaxOutcome.Simulated {
 		overrideTarget := account.GetCacheTTLOverrideTarget()
 		if applyCacheTTLOverride(&response.Usage, overrideTarget) {
 			// 同步更新 body JSON 中的嵌套 cache_creation 对象
@@ -6394,6 +6513,7 @@ func (s *GatewayService) getUserGroupRateMultiplier(ctx context.Context, userID,
 // RecordUsageInput 记录使用量的输入参数
 type RecordUsageInput struct {
 	Result            *ForwardResult
+	ParsedRequest     *ParsedRequest
 	APIKey            *APIKey
 	User              *User
 	Account           *Account
@@ -6510,9 +6630,19 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 		result.Usage.InputTokens = 0
 	}
 
+	// Claude Max cache billing policy (group-level):
+	// - GatewayService 路径: Forward 已改写 usage（含 cache tokens）→ apply 见到 cache tokens 跳过 → simulatedClaudeMax=true（通过第二条件）
+	// - Antigravity 路径: Forward 中 hook 改写了客户端 SSE，但 ForwardResult.Usage 是原始值 → apply 实际执行模拟 → simulatedClaudeMax=true
+	var apiKeyGroup *Group
+	if apiKey != nil {
+		apiKeyGroup = apiKey.Group
+	}
+	claudeMaxOutcome := applyClaudeMaxCacheBillingPolicyToUsage(&result.Usage, input.ParsedRequest, apiKeyGroup, result.Model, account.ID)
+	simulatedClaudeMax := claudeMaxOutcome.Simulated ||
+		(shouldApplyClaudeMaxBillingRulesForUsage(apiKeyGroup, result.Model, input.ParsedRequest) && hasCacheCreationTokens(result.Usage))
 	// Cache TTL Override: 确保计费时 token 分类与账号设置一致
 	cacheTTLOverridden := false
-	if account.IsCacheTTLOverrideEnabled() {
+	if account.IsCacheTTLOverrideEnabled() && !simulatedClaudeMax {
 		applyCacheTTLOverride(&result.Usage, account.GetCacheTTLOverrideTarget())
 		cacheTTLOverridden = (result.Usage.CacheCreation5mTokens + result.Usage.CacheCreation1hTokens) > 0
 	}

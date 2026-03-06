@@ -447,6 +447,10 @@ func init() {
 	groupDescSortOrder := groupFields[26].Descriptor()
 	// group.DefaultSortOrder holds the default value on creation for the sort_order field.
 	group.DefaultSortOrder = groupDescSortOrder.Default.(int)
+	// groupDescSimulateClaudeMaxEnabled is the schema descriptor for simulate_claude_max_enabled field.
+	groupDescSimulateClaudeMaxEnabled := groupFields[27].Descriptor()
+	// group.DefaultSimulateClaudeMaxEnabled holds the default value on creation for the simulate_claude_max_enabled field.
+	group.DefaultSimulateClaudeMaxEnabled = groupDescSimulateClaudeMaxEnabled.Default.(bool)
 	idempotencyrecordMixin := schema.IdempotencyRecord{}.Mixin()
 	idempotencyrecordMixinFields0 := idempotencyrecordMixin[0].Fields()
 	_ = idempotencyrecordMixinFields0
