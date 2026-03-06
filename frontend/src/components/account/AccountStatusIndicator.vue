@@ -2,7 +2,7 @@
   <div class="flex items-center gap-2">
     <!-- Affinity Client Count Badge -->
     <div
-      v-if="affinityClientCount > 0"
+      v-if="account.client_affinity_enabled"
       class="group/affinity relative"
       @mouseenter="loadAffinityClients"
     >

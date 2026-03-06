@@ -188,9 +188,7 @@ func (c *gatewayCache) GetAccountAffinityCountBatch(ctx context.Context, account
 		if err != nil && err != redis.Nil {
 			continue
 		}
-		if count > 0 {
-			result[id] = count
-		}
+		result[id] = count
 	}
 	return result, nil
 }
