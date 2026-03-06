@@ -4134,7 +4134,9 @@ export default {
           authorizeHint: '通过 OAuth2 获取 Refresh Token',
           oauthFieldsRequired: '请先填写 Client ID 和 Client Secret',
           oauthSuccess: 'Google Drive 授权成功',
-          oauthFailed: 'Google Drive 授权失败'
+          oauthFailed: 'Google Drive 授权失败',
+          closeWindow: '此窗口将自动关闭',
+          processing: '正在处理授权...'
         }
       },
       streamTimeout: {

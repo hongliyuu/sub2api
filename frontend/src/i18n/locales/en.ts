@@ -3974,7 +3974,9 @@ export default {
           authorizeHint: 'Get Refresh Token via OAuth2',
           oauthFieldsRequired: 'Please fill in Client ID and Client Secret first',
           oauthSuccess: 'Google Drive authorization successful',
-          oauthFailed: 'Google Drive authorization failed'
+          oauthFailed: 'Google Drive authorization failed',
+          closeWindow: 'This window will close automatically',
+          processing: 'Processing authorization...'
         }
       },
       streamTimeout: {
