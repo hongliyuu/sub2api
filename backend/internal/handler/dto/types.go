@@ -193,7 +193,7 @@ type Account struct {
 	ClientAffinityEnabled *bool `json:"client_affinity_enabled,omitempty"`
 
 	// 亲和客户端数据（仅 admin 列表端点注入，不由 mapper 填充）
-	AffinityClientCount *int64    `json:"affinity_client_count,omitempty"`
+	AffinityClientCount *int64   `json:"affinity_client_count,omitempty"`
 	AffinityClients     []string `json:"affinity_clients,omitempty"`
 
 	// API Key 账号配额限制

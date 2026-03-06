@@ -47,9 +47,9 @@ func NewSoraGenerationService(
 	quotaService *SoraQuotaService,
 ) *SoraGenerationService {
 	return &SoraGenerationService{
-		genRepo:        genRepo,
-		objectStorage:  objectStorage,
-		quotaService:   quotaService,
+		genRepo:       genRepo,
+		objectStorage: objectStorage,
+		quotaService:  quotaService,
 	}
 }
 

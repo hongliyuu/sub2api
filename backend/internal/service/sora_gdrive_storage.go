@@ -153,13 +153,7 @@ func (s *SoraGDriveStorage) buildOAuth2Service(ctx context.Context, profile *Sor
 }
 
 func (s *SoraGDriveStorage) buildServiceAccountService(ctx context.Context, profile *SoraS3Profile) (*drive.Service, error) {
-	creds, err := google.CredentialsFromJSONWithParams(ctx, []byte(profile.ServiceAccountJSON), google.CredentialsParams{
-		Scopes: []string{drive.DriveFileScope},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("parse service account json: %w", err)
-	}
-	srv, err := drive.NewService(ctx, option.WithCredentials(creds))
+	srv, err := drive.NewService(ctx, option.WithCredentialsJSON([]byte(profile.ServiceAccountJSON)))
 	if err != nil {
 		return nil, fmt.Errorf("create gdrive service account service: %w", err)
 	}
