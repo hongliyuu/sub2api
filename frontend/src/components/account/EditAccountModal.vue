@@ -645,9 +645,9 @@
         </div>
       </div>
 
-      <!-- Client Affinity (Anthropic & Antigravity accounts) -->
+      <!-- Client Affinity (Anthropic accounts only) -->
       <div
-        v-if="account?.platform === 'anthropic' || account?.platform === 'antigravity'"
+        v-if="account?.platform === 'anthropic'"
         class="border-t border-gray-200 pt-4 dark:border-dark-600"
       >
         <div class="flex items-center justify-between">
@@ -1905,13 +1905,18 @@ function loadQuotaControlSettings(account: Account) {
   cacheTTLOverrideTarget.value = '5m'
   clientAffinityEnabled.value = false
 
-  // Client affinity (Anthropic & Antigravity accounts)
+  // Remaining quota control settings only apply to Anthropic accounts
+  if (account.platform !== 'anthropic') {
+    return
+  }
+
+  // Client affinity (all Anthropic accounts)
   if (account.client_affinity_enabled === true) {
     clientAffinityEnabled.value = true
   }
 
-  // Remaining quota control settings only apply to Anthropic OAuth/SetupToken accounts
-  if (account.platform !== 'anthropic' || (account.type !== 'oauth' && account.type !== 'setup-token')) {
+  // Window cost / session limit only apply to Anthropic OAuth/SetupToken accounts
+  if (account.type !== 'oauth' && account.type !== 'setup-token') {
     return
   }
 
@@ -2224,7 +2229,7 @@ const handleSubmit = async () => {
       updatePayload.credentials = newCredentials
     }
 
-    // For antigravity accounts, handle mixed_scheduling and client_affinity in extra
+    // For antigravity accounts, handle mixed_scheduling in extra
     if (props.account.platform === 'antigravity') {
       const currentExtra = (props.account.extra as Record<string, unknown>) || {}
       const newExtra: Record<string, unknown> = { ...currentExtra }
@@ -2233,6 +2238,13 @@ const handleSubmit = async () => {
       } else {
         delete newExtra.mixed_scheduling
       }
+      updatePayload.extra = newExtra
+    }
+
+    // For all Anthropic accounts, handle client_affinity in extra
+    if (props.account.platform === 'anthropic') {
+      const currentExtra = (updatePayload.extra as Record<string, unknown>) || (props.account.extra as Record<string, unknown>) || {}
+      const newExtra: Record<string, unknown> = { ...currentExtra }
       if (clientAffinityEnabled.value) {
         newExtra.client_affinity_enabled = true
       } else {
@@ -2243,7 +2255,7 @@ const handleSubmit = async () => {
 
     // For Anthropic OAuth/SetupToken accounts, handle quota control settings in extra
     if (props.account.platform === 'anthropic' && (props.account.type === 'oauth' || props.account.type === 'setup-token')) {
-      const currentExtra = (props.account.extra as Record<string, unknown>) || {}
+      const currentExtra = (updatePayload.extra as Record<string, unknown>) || (props.account.extra as Record<string, unknown>) || {}
       const newExtra: Record<string, unknown> = { ...currentExtra }
 
       // Window cost limit settings

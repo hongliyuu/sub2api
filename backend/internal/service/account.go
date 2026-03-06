@@ -1100,10 +1100,10 @@ func (a *Account) IsSessionIDMaskingEnabled() bool {
 }
 
 // IsClientAffinityEnabled 检查是否启用客户端亲和调度
-// 适用于 Anthropic 和 Antigravity 账号
+// 仅适用于 Anthropic 账号（OAuth/SetupToken/APIKey）
 // 启用后，新会话会优先调度到之前使用过的账号
 func (a *Account) IsClientAffinityEnabled() bool {
-	if a.Platform != PlatformAnthropic && a.Platform != PlatformAntigravity {
+	if a.Platform != PlatformAnthropic {
 		return false
 	}
 	if a.Extra == nil {
