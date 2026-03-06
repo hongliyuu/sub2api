@@ -1697,27 +1697,23 @@ func (r *accountRepository) IncrementQuotaUsed(ctx context.Context, id int64, am
 				COALESCE((extra->>'quota_limit')::numeric, 0)`,
 			amount, id)
 	} else {
-		// 周期制：CTE 原子检查过期 → 重置 → 递增
+		// 周期制：单条 UPDATE 内联过期判断，避免 CTE snapshot 在 READ COMMITTED 下的 lost update
 		rows, err = r.sql.QueryContext(ctx,
-			`WITH reset_check AS (
-				SELECT id, extra,
-					CASE WHEN COALESCE((extra->>'quota_period_start')::timestamptz, '1970-01-01'::timestamptz)
-						+ $3::interval <= NOW()
-					THEN true ELSE false END AS needs_reset
-				FROM accounts WHERE id = $2 AND deleted_at IS NULL
-			)
-			UPDATE accounts SET extra = jsonb_set(
+			`UPDATE accounts SET extra = jsonb_set(
 				jsonb_set(
 					COALESCE(extra, '{}'::jsonb),
 					'{quota_used}',
 					to_jsonb(
-						CASE WHEN (SELECT needs_reset FROM reset_check) THEN $1
+						CASE WHEN COALESCE((extra->>'quota_period_start')::timestamptz, '1970-01-01'::timestamptz)
+							+ $3::interval <= NOW()
+						THEN $1
 						ELSE COALESCE((extra->>'quota_used')::numeric, 0) + $1 END
 					)
 				),
 				'{quota_period_start}',
 				to_jsonb(
-					CASE WHEN (SELECT needs_reset FROM reset_check)
+					CASE WHEN COALESCE((extra->>'quota_period_start')::timestamptz, '1970-01-01'::timestamptz)
+						+ $3::interval <= NOW()
 					THEN to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')
 					ELSE COALESCE(extra->>'quota_period_start', to_char(NOW() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')) END
 				)
