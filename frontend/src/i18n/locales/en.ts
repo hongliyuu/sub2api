@@ -3976,7 +3976,10 @@ export default {
           oauthSuccess: 'Google Drive authorization successful',
           oauthFailed: 'Google Drive authorization failed',
           closeWindow: 'This window will close automatically',
-          processing: 'Processing authorization...'
+          processing: 'Processing authorization...',
+          testStorage: 'Test Storage',
+          testSuccess: 'Google Drive storage test passed (upload, access, delete all OK)',
+          testFailed: 'Google Drive storage test failed'
         }
       },
       streamTimeout: {

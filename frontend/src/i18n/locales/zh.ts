@@ -4136,7 +4136,10 @@ export default {
           oauthSuccess: 'Google Drive 授权成功',
           oauthFailed: 'Google Drive 授权失败',
           closeWindow: '此窗口将自动关闭',
-          processing: '正在处理授权...'
+          processing: '正在处理授权...',
+          testStorage: '测试存储',
+          testSuccess: 'Google Drive 存储测试成功（上传、访问、删除均正常）',
+          testFailed: 'Google Drive 存储测试失败'
         }
       },
       streamTimeout: {

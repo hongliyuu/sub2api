@@ -307,6 +307,15 @@
             >
               {{ testingSoraProfile ? t('common.loading') : t('admin.settings.soraS3.testConnection') }}
             </button>
+            <button
+              v-if="soraProfileForm.provider === 'gdrive' && !creatingSoraProfile"
+              type="button"
+              class="btn btn-secondary btn-sm"
+              :disabled="testingSoraProfile || !soraProfileForm.enabled"
+              @click="testGDriveStorageConnection"
+            >
+              {{ testingSoraProfile ? t('common.loading') : t('admin.settings.soraS3.gdrive.testStorage') }}
+            </button>
             <button type="button" class="btn btn-primary btn-sm" :disabled="savingSoraProfile" @click="saveSoraProfile">
               {{ savingSoraProfile ? t('common.loading') : t('admin.settings.soraS3.saveProfile') }}
             </button>
@@ -558,6 +567,21 @@ async function testSoraProfileConnection() {
     appStore.showSuccess(result.message || t('admin.settings.soraS3.testSuccess'))
   } catch (error) {
     appStore.showError((error as { message?: string })?.message || t('errors.networkError'))
+  } finally {
+    testingSoraProfile.value = false
+  }
+}
+
+async function testGDriveStorageConnection() {
+  testingSoraProfile.value = true
+  try {
+    const result = await adminAPI.settings.testGDriveStorage()
+    const msg = result.status === 'ok'
+      ? t('admin.settings.soraS3.gdrive.testSuccess')
+      : t('admin.settings.soraS3.gdrive.testFailed')
+    appStore.showSuccess(msg)
+  } catch (error) {
+    appStore.showError((error as { message?: string })?.message || t('admin.settings.soraS3.gdrive.testFailed'))
   } finally {
     testingSoraProfile.value = false
   }

@@ -469,6 +469,24 @@ export async function exchangeGDriveOAuthCode(request: ExchangeGDriveOAuthCodeRe
   return data
 }
 
+export interface TestGDriveStorageResponse {
+  status: string
+  quota_limit_bytes?: number
+  quota_used_bytes?: number
+  uploaded_file_id?: string
+  uploaded_file_name?: string
+  uploaded_file_size?: number
+  access_url?: string
+  web_view_link?: string
+  deleted?: boolean
+  delete_warning?: string
+}
+
+export async function testGDriveStorage(): Promise<TestGDriveStorageResponse> {
+  const { data } = await apiClient.post<TestGDriveStorageResponse>('/admin/settings/sora-storage/gdrive-test')
+  return data
+}
+
 export const settingsAPI = {
   getSettings,
   updateSettings,
@@ -488,7 +506,8 @@ export const settingsAPI = {
   deleteSoraS3Profile,
   setActiveSoraS3Profile,
   startGDriveOAuth,
-  exchangeGDriveOAuthCode
+  exchangeGDriveOAuthCode,
+  testGDriveStorage
 }
 
 export default settingsAPI
