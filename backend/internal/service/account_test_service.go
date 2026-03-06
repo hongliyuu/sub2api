@@ -12,6 +12,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"regexp"
 	"strings"
@@ -33,7 +34,7 @@ import (
 var sseDataPrefix = regexp.MustCompile(`^data:\s*`)
 
 const (
-	testClaudeAPIURL   = "https://api.anthropic.com/v1/messages"
+	testClaudeAPIURL   = "https://api.anthropic.com/v1/messages?beta=true"
 	chatgptCodexAPIURL = "https://chatgpt.com/backend-api/codex/responses"
 	soraMeAPIURL       = "https://sora.chatgpt.com/backend/me" // Sora 用户信息接口，用于测试连接
 	soraBillingAPIURL  = "https://sora.chatgpt.com/backend/billing/subscriptions"
@@ -179,7 +180,7 @@ func (s *AccountTestService) TestAccountConnection(c *gin.Context, accountID int
 	}
 
 	if account.Platform == PlatformAntigravity {
-		return s.testAntigravityAccountConnection(c, account, modelID)
+		return s.routeAntigravityTest(c, account, modelID)
 	}
 
 	if account.Platform == PlatformSora {
@@ -238,7 +239,7 @@ func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account
 		if err != nil {
 			return s.sendErrorAndEnd(c, fmt.Sprintf("Invalid base URL: %s", err.Error()))
 		}
-		apiURL = strings.TrimSuffix(normalizedBaseURL, "/") + "/v1/messages"
+		apiURL = strings.TrimSuffix(normalizedBaseURL, "/") + "/v1/messages?beta=true"
 	} else {
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Unsupported account type: %s", account.Type))
 	}
@@ -598,9 +599,102 @@ func ceilSeconds(d time.Duration) int {
 	return sec
 }
 
+// testSoraAPIKeyAccountConnection 测试 Sora apikey 类型账号的连通性。
+// 向上游 base_url 发送轻量级 prompt-enhance 请求验证连通性和 API Key 有效性。
+func (s *AccountTestService) testSoraAPIKeyAccountConnection(c *gin.Context, account *Account) error {
+	ctx := c.Request.Context()
+
+	apiKey := account.GetCredential("api_key")
+	if apiKey == "" {
+		return s.sendErrorAndEnd(c, "Sora apikey 账号缺少 api_key 凭证")
+	}
+
+	baseURL := account.GetBaseURL()
+	if baseURL == "" {
+		return s.sendErrorAndEnd(c, "Sora apikey 账号缺少 base_url")
+	}
+
+	// 验证 base_url 格式
+	normalizedBaseURL, err := s.validateUpstreamBaseURL(baseURL)
+	if err != nil {
+		return s.sendErrorAndEnd(c, fmt.Sprintf("base_url 无效: %s", err.Error()))
+	}
+	upstreamURL := strings.TrimSuffix(normalizedBaseURL, "/") + "/sora/v1/chat/completions"
+
+	// 设置 SSE 头
+	c.Writer.Header().Set("Content-Type", "text/event-stream")
+	c.Writer.Header().Set("Cache-Control", "no-cache")
+	c.Writer.Header().Set("Connection", "keep-alive")
+	c.Writer.Header().Set("X-Accel-Buffering", "no")
+	c.Writer.Flush()
+
+	if wait, ok := s.acquireSoraTestPermit(account.ID); !ok {
+		msg := fmt.Sprintf("Sora 账号测试过于频繁，请 %d 秒后重试", ceilSeconds(wait))
+		return s.sendErrorAndEnd(c, msg)
+	}
+
+	s.sendEvent(c, TestEvent{Type: "test_start", Model: "sora-upstream"})
+
+	// 构建轻量级 prompt-enhance 请求作为连通性测试
+	testPayload := map[string]any{
+		"model":    "prompt-enhance-short-10s",
+		"messages": []map[string]string{{"role": "user", "content": "test"}},
+		"stream":   false,
+	}
+	payloadBytes, _ := json.Marshal(testPayload)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, upstreamURL, bytes.NewReader(payloadBytes))
+	if err != nil {
+		return s.sendErrorAndEnd(c, "构建测试请求失败")
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+
+	// 获取代理 URL
+	proxyURL := ""
+	if account.ProxyID != nil && account.Proxy != nil {
+		proxyURL = account.Proxy.URL()
+	}
+
+	resp, err := s.httpUpstream.Do(req, proxyURL, account.ID, account.Concurrency)
+	if err != nil {
+		return s.sendErrorAndEnd(c, fmt.Sprintf("上游连接失败: %s", err.Error()))
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
+
+	if resp.StatusCode == http.StatusOK {
+		s.sendEvent(c, TestEvent{Type: "content", Text: fmt.Sprintf("上游连接成功 (%s)", upstreamURL)})
+		s.sendEvent(c, TestEvent{Type: "content", Text: fmt.Sprintf("API Key 有效 (HTTP %d)", resp.StatusCode)})
+		s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
+		return nil
+	}
+
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		return s.sendErrorAndEnd(c, fmt.Sprintf("上游认证失败 (HTTP %d)，请检查 API Key 是否正确", resp.StatusCode))
+	}
+
+	// 其他错误但能连通（如 400 参数错误）也算连通性测试通过
+	if resp.StatusCode == http.StatusBadRequest {
+		s.sendEvent(c, TestEvent{Type: "content", Text: fmt.Sprintf("上游连接成功 (%s)", upstreamURL)})
+		s.sendEvent(c, TestEvent{Type: "content", Text: fmt.Sprintf("API Key 有效（上游返回 %d，参数校验错误属正常）", resp.StatusCode)})
+		s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
+		return nil
+	}
+
+	return s.sendErrorAndEnd(c, fmt.Sprintf("上游返回异常 HTTP %d: %s", resp.StatusCode, truncateSoraErrorBody(respBody, 256)))
+}
+
 // testSoraAccountConnection 测试 Sora 账号的连接
-// 调用 /backend/me 接口验证 access_token 有效性（不需要 Sentinel Token）
+// OAuth 类型：调用 /backend/me 接口验证 access_token 有效性
+// APIKey 类型：向上游 base_url 发送轻量级 prompt-enhance 请求验证连通性
 func (s *AccountTestService) testSoraAccountConnection(c *gin.Context, account *Account) error {
+	// apikey 类型走独立测试流程
+	if account.Type == AccountTypeAPIKey {
+		return s.testSoraAPIKeyAccountConnection(c, account)
+	}
+
 	ctx := c.Request.Context()
 	recorder := &soraProbeRecorder{}
 
@@ -1083,6 +1177,18 @@ func truncateSoraErrorBody(body []byte, max int) string {
 	return soraerror.TruncateBody(body, max)
 }
 
+// routeAntigravityTest 路由 Antigravity 账号的测试请求。
+// APIKey 类型走原生协议（与 gateway_handler 路由一致），OAuth/Upstream 走 CRS 中转。
+func (s *AccountTestService) routeAntigravityTest(c *gin.Context, account *Account, modelID string) error {
+	if account.Type == AccountTypeAPIKey {
+		if strings.HasPrefix(modelID, "gemini-") {
+			return s.testGeminiAccountConnection(c, account, modelID)
+		}
+		return s.testClaudeAccountConnection(c, account, modelID)
+	}
+	return s.testAntigravityAccountConnection(c, account, modelID)
+}
+
 // testAntigravityAccountConnection tests an Antigravity account's connection
 // 支持 Claude 和 Gemini 两种协议，使用非流式请求
 func (s *AccountTestService) testAntigravityAccountConnection(c *gin.Context, account *Account, modelID string) error {
@@ -1466,4 +1572,63 @@ func (s *AccountTestService) sendErrorAndEnd(c *gin.Context, errorMsg string) er
 	log.Printf("Account test error: %s", errorMsg)
 	s.sendEvent(c, TestEvent{Type: "error", Error: errorMsg})
 	return fmt.Errorf("%s", errorMsg)
+}
+
+// RunTestBackground executes an account test in-memory (no real HTTP client),
+// capturing SSE output via httptest.NewRecorder, then parses the result.
+func (s *AccountTestService) RunTestBackground(ctx context.Context, accountID int64, modelID string) (*ScheduledTestResult, error) {
+	startedAt := time.Now()
+
+	w := httptest.NewRecorder()
+	ginCtx, _ := gin.CreateTestContext(w)
+	ginCtx.Request = (&http.Request{}).WithContext(ctx)
+
+	testErr := s.TestAccountConnection(ginCtx, accountID, modelID)
+
+	finishedAt := time.Now()
+	body := w.Body.String()
+	responseText, errMsg := parseTestSSEOutput(body)
+
+	status := "success"
+	if testErr != nil || errMsg != "" {
+		status = "failed"
+		if errMsg == "" && testErr != nil {
+			errMsg = testErr.Error()
+		}
+	}
+
+	return &ScheduledTestResult{
+		Status:       status,
+		ResponseText: responseText,
+		ErrorMessage: errMsg,
+		LatencyMs:    finishedAt.Sub(startedAt).Milliseconds(),
+		StartedAt:    startedAt,
+		FinishedAt:   finishedAt,
+	}, nil
+}
+
+// parseTestSSEOutput extracts response text and error message from captured SSE output.
+func parseTestSSEOutput(body string) (responseText, errMsg string) {
+	var texts []string
+	for _, line := range strings.Split(body, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		jsonStr := strings.TrimPrefix(line, "data: ")
+		var event TestEvent
+		if err := json.Unmarshal([]byte(jsonStr), &event); err != nil {
+			continue
+		}
+		switch event.Type {
+		case "content":
+			if event.Text != "" {
+				texts = append(texts, event.Text)
+			}
+		case "error":
+			errMsg = event.Error
+		}
+	}
+	responseText = strings.Join(texts, "")
+	return
 }

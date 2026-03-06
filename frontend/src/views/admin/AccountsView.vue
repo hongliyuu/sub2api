@@ -184,7 +184,11 @@
             </button>
           </template>
           <template #cell-today_stats="{ row }">
-            <AccountTodayStatsCell :account="row" />
+            <AccountTodayStatsCell
+              :stats="todayStatsByAccountId[String(row.id)] ?? null"
+              :loading="todayStatsLoading"
+              :error="todayStatsError"
+            />
           </template>
           <template #cell-groups="{ row }">
             <AccountGroupsCell :groups="row.groups" :max-display="4" />
@@ -256,10 +260,11 @@
     <ReAuthAccountModal :show="showReAuth" :account="reAuthAcc" @close="closeReAuthModal" @reauthorized="handleAccountUpdated" />
     <AccountTestModal :show="showTest" :account="testingAcc" @close="closeTestModal" />
     <AccountStatsModal :show="showStats" :account="statsAcc" @close="closeStatsModal" />
-    <AccountActionMenu :show="menu.show" :account="menu.acc" :position="menu.pos" @close="menu.show = false" @test="handleTest" @stats="handleViewStats" @reauth="handleReAuth" @refresh-token="handleRefresh" @reset-status="handleResetStatus" @clear-rate-limit="handleClearRateLimit" />
+    <ScheduledTestsPanel :show="showSchedulePanel" :account-id="scheduleAcc?.id ?? null" :model-options="scheduleModelOptions" @close="closeSchedulePanel" />
+    <AccountActionMenu :show="menu.show" :account="menu.acc" :position="menu.pos" @close="menu.show = false" @test="handleTest" @stats="handleViewStats" @schedule="handleSchedule" @reauth="handleReAuth" @refresh-token="handleRefresh" @reset-status="handleResetStatus" @clear-rate-limit="handleClearRateLimit" @reset-quota="handleResetQuota" />
     <SyncFromCrsModal :show="showSync" @close="showSync = false" @synced="reload" />
     <ImportDataModal :show="showImportData" @close="showImportData = false" @imported="handleDataImported" />
-    <BulkEditAccountModal :show="showBulkEdit" :account-ids="selIds" :proxies="proxies" :groups="groups" @close="showBulkEdit = false" @updated="handleBulkUpdated" />
+    <BulkEditAccountModal :show="showBulkEdit" :account-ids="selIds" :selected-platforms="selPlatforms" :selected-types="selTypes" :proxies="proxies" :groups="groups" @close="showBulkEdit = false" @updated="handleBulkUpdated" />
     <TempUnschedStatusModal :show="showTempUnsched" :account="tempUnschedAcc" @close="showTempUnsched = false" @reset="handleTempUnschedReset" />
     <ConfirmDialog :show="showDeleteDialog" :title="t('admin.accounts.deleteAccount')" :message="t('admin.accounts.deleteConfirm', { name: deletingAcc?.name })" :confirm-text="t('common.delete')" :cancel-text="t('common.cancel')" :danger="true" @confirm="confirmDelete" @cancel="showDeleteDialog = false" />
     <ConfirmDialog :show="showExportDataDialog" :title="t('admin.accounts.dataExport')" :message="t('admin.accounts.dataExportConfirmMessage')" :confirm-text="t('admin.accounts.dataExportConfirm')" :cancel-text="t('common.cancel')" @confirm="handleExportData" @cancel="showExportDataDialog = false">
@@ -273,7 +278,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted, toRaw } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, toRaw, watch } from 'vue'
 import { useIntervalFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -294,6 +299,8 @@ import ImportDataModal from '@/components/admin/account/ImportDataModal.vue'
 import ReAuthAccountModal from '@/components/admin/account/ReAuthAccountModal.vue'
 import AccountTestModal from '@/components/admin/account/AccountTestModal.vue'
 import AccountStatsModal from '@/components/admin/account/AccountStatsModal.vue'
+import ScheduledTestsPanel from '@/components/admin/account/ScheduledTestsPanel.vue'
+import type { SelectOption } from '@/components/common/Select.vue'
 import AccountStatusIndicator from '@/components/account/AccountStatusIndicator.vue'
 import AccountUsageCell from '@/components/account/AccountUsageCell.vue'
 import AccountTodayStatsCell from '@/components/account/AccountTodayStatsCell.vue'
@@ -303,7 +310,7 @@ import PlatformTypeBadge from '@/components/common/PlatformTypeBadge.vue'
 import Icon from '@/components/icons/Icon.vue'
 import ErrorPassthroughRulesModal from '@/components/admin/ErrorPassthroughRulesModal.vue'
 import { formatDateTime, formatRelativeTime } from '@/utils/format'
-import type { Account, Proxy, AdminGroup } from '@/types'
+import type { Account, AccountPlatform, AccountType, Proxy, AdminGroup, WindowStats, ClaudeModel } from '@/types'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -312,6 +319,22 @@ const authStore = useAuthStore()
 const proxies = ref<Proxy[]>([])
 const groups = ref<AdminGroup[]>([])
 const selIds = ref<number[]>([])
+const selPlatforms = computed<AccountPlatform[]>(() => {
+  const platforms = new Set(
+    accounts.value
+      .filter(a => selIds.value.includes(a.id))
+      .map(a => a.platform)
+  )
+  return [...platforms]
+})
+const selTypes = computed<AccountType[]>(() => {
+  const types = new Set(
+    accounts.value
+      .filter(a => selIds.value.includes(a.id))
+      .map(a => a.type)
+  )
+  return [...types]
+})
 const showCreate = ref(false)
 const showEdit = ref(false)
 const showSync = ref(false)
@@ -331,6 +354,9 @@ const deletingAcc = ref<Account | null>(null)
 const reAuthAcc = ref<Account | null>(null)
 const testingAcc = ref<Account | null>(null)
 const statsAcc = ref<Account | null>(null)
+const showSchedulePanel = ref(false)
+const scheduleAcc = ref<Account | null>(null)
+const scheduleModelOptions = ref<SelectOption[]>([])
 const togglingSchedulable = ref<number | null>(null)
 const menu = reactive<{show:boolean, acc:Account|null, pos:{top:number, left:number}|null}>({ show: false, acc: null, pos: null })
 const exportingData = ref(false)
@@ -339,7 +365,7 @@ const exportingData = ref(false)
 const showColumnDropdown = ref(false)
 const columnDropdownRef = ref<HTMLElement | null>(null)
 const hiddenColumns = reactive<Set<string>>(new Set())
-const DEFAULT_HIDDEN_COLUMNS = ['proxy', 'notes', 'priority', 'rate_multiplier']
+const DEFAULT_HIDDEN_COLUMNS = ['today_stats', 'proxy', 'notes', 'priority', 'rate_multiplier']
 const HIDDEN_COLUMNS_KEY = 'account-hidden-columns'
 
 // Sorting settings
@@ -358,6 +384,59 @@ const autoRefreshFetching = ref(false)
 const AUTO_REFRESH_SILENT_WINDOW_MS = 15000
 const autoRefreshSilentUntil = ref(0)
 const hasPendingListSync = ref(false)
+const todayStatsByAccountId = ref<Record<string, WindowStats>>({})
+const todayStatsLoading = ref(false)
+const todayStatsError = ref<string | null>(null)
+const todayStatsReqSeq = ref(0)
+const pendingTodayStatsRefresh = ref(false)
+
+const buildDefaultTodayStats = (): WindowStats => ({
+  requests: 0,
+  tokens: 0,
+  cost: 0,
+  standard_cost: 0,
+  user_cost: 0
+})
+
+const refreshTodayStatsBatch = async () => {
+  if (hiddenColumns.has('today_stats')) {
+    todayStatsLoading.value = false
+    todayStatsError.value = null
+    return
+  }
+
+  const accountIDs = accounts.value.map(account => account.id)
+  const reqSeq = ++todayStatsReqSeq.value
+  if (accountIDs.length === 0) {
+    todayStatsByAccountId.value = {}
+    todayStatsError.value = null
+    todayStatsLoading.value = false
+    return
+  }
+
+  todayStatsLoading.value = true
+  todayStatsError.value = null
+
+  try {
+    const result = await adminAPI.accounts.getBatchTodayStats(accountIDs)
+    if (reqSeq !== todayStatsReqSeq.value) return
+    const serverStats = result.stats ?? {}
+    const nextStats: Record<string, WindowStats> = {}
+    for (const accountID of accountIDs) {
+      const key = String(accountID)
+      nextStats[key] = serverStats[key] ?? buildDefaultTodayStats()
+    }
+    todayStatsByAccountId.value = nextStats
+  } catch (error) {
+    if (reqSeq !== todayStatsReqSeq.value) return
+    todayStatsError.value = 'Failed'
+    console.error('Failed to load account today stats:', error)
+  } finally {
+    if (reqSeq === todayStatsReqSeq.value) {
+      todayStatsLoading.value = false
+    }
+  }
+}
 
 const autoRefreshIntervalLabel = (sec: number) => {
   if (sec === 5) return t('admin.accounts.refreshInterval5s')
@@ -445,12 +524,18 @@ const setAutoRefreshInterval = (seconds: (typeof autoRefreshIntervals)[number]) 
 }
 
 const toggleColumn = (key: string) => {
+  const wasHidden = hiddenColumns.has(key)
   if (hiddenColumns.has(key)) {
     hiddenColumns.delete(key)
   } else {
     hiddenColumns.add(key)
   }
   saveColumnsToStorage()
+  if (key === 'today_stats' && wasHidden) {
+    refreshTodayStatsBatch().catch((error) => {
+      console.error('Failed to load account today stats after showing column:', error)
+    })
+  }
 }
 
 const isColumnVisible = (key: string) => !hiddenColumns.has(key)
@@ -474,35 +559,60 @@ const resetAutoRefreshCache = () => {
   autoRefreshETag.value = null
 }
 
+const isFirstLoad = ref(true)
+
 const load = async () => {
   hasPendingListSync.value = false
   resetAutoRefreshCache()
+  pendingTodayStatsRefresh.value = false
+  if (isFirstLoad.value) {
+    ;(params as any).lite = '1'
+  }
   await baseLoad()
+  if (isFirstLoad.value) {
+    isFirstLoad.value = false
+    delete (params as any).lite
+  }
+  await refreshTodayStatsBatch()
 }
 
 const reload = async () => {
   hasPendingListSync.value = false
   resetAutoRefreshCache()
+  pendingTodayStatsRefresh.value = false
   await baseReload()
+  await refreshTodayStatsBatch()
 }
 
 const debouncedReload = () => {
   hasPendingListSync.value = false
   resetAutoRefreshCache()
+  pendingTodayStatsRefresh.value = true
   baseDebouncedReload()
 }
 
 const handlePageChange = (page: number) => {
   hasPendingListSync.value = false
   resetAutoRefreshCache()
+  pendingTodayStatsRefresh.value = true
   baseHandlePageChange(page)
 }
 
 const handlePageSizeChange = (size: number) => {
   hasPendingListSync.value = false
   resetAutoRefreshCache()
+  pendingTodayStatsRefresh.value = true
   baseHandlePageSizeChange(size)
 }
+
+watch(loading, (isLoading, wasLoading) => {
+  if (wasLoading && !isLoading && pendingTodayStatsRefresh.value) {
+    pendingTodayStatsRefresh.value = false
+    refreshTodayStatsBatch().catch((error) => {
+      console.error('Failed to refresh account today stats after table load:', error)
+    })
+  }
+})
 
 const isAnyModalOpen = computed(() => {
   return (
@@ -517,6 +627,7 @@ const isAnyModalOpen = computed(() => {
     showReAuth.value ||
     showTest.value ||
     showStats.value ||
+    showSchedulePanel.value ||
     showErrorPassthrough.value
   )
 })
@@ -594,6 +705,7 @@ const refreshAccountsIncrementally = async () => {
         type?: string
         status?: string
         search?: string
+
       },
       { etag: autoRefreshETag.value }
     )
@@ -601,14 +713,14 @@ const refreshAccountsIncrementally = async () => {
     if (result.etag) {
       autoRefreshETag.value = result.etag
     }
-    if (result.notModified || !result.data) {
-      return
+    if (!result.notModified && result.data) {
+      pagination.total = result.data.total || 0
+      pagination.pages = result.data.pages || 0
+      mergeAccountsIncrementally(result.data.items || [])
+      hasPendingListSync.value = false
     }
 
-    pagination.total = result.data.total || 0
-    pagination.pages = result.data.pages || 0
-    mergeAccountsIncrementally(result.data.items || [])
-    hasPendingListSync.value = false
+    await refreshTodayStatsBatch()
   } catch (error) {
     console.error('Auto refresh failed:', error)
   } finally {
@@ -971,6 +1083,18 @@ const closeStatsModal = () => { showStats.value = false; statsAcc.value = null }
 const closeReAuthModal = () => { showReAuth.value = false; reAuthAcc.value = null }
 const handleTest = (a: Account) => { testingAcc.value = a; showTest.value = true }
 const handleViewStats = (a: Account) => { statsAcc.value = a; showStats.value = true }
+const handleSchedule = async (a: Account) => {
+  scheduleAcc.value = a
+  scheduleModelOptions.value = []
+  showSchedulePanel.value = true
+  try {
+    const models = await adminAPI.accounts.getAvailableModels(a.id)
+    scheduleModelOptions.value = models.map((m: ClaudeModel) => ({ value: m.id, label: m.display_name || m.id }))
+  } catch {
+    scheduleModelOptions.value = []
+  }
+}
+const closeSchedulePanel = () => { showSchedulePanel.value = false; scheduleAcc.value = null; scheduleModelOptions.value = [] }
 const handleReAuth = (a: Account) => { reAuthAcc.value = a; showReAuth.value = true }
 const handleRefresh = async (a: Account) => {
   try {
@@ -999,6 +1123,16 @@ const handleClearRateLimit = async (a: Account) => {
     appStore.showSuccess(t('common.success'))
   } catch (error) {
     console.error('Failed to clear rate limit:', error)
+  }
+}
+const handleResetQuota = async (a: Account) => {
+  try {
+    const updated = await adminAPI.accounts.resetAccountQuota(a.id)
+    patchAccountInList(updated)
+    enterAutoRefreshSilentWindow()
+    appStore.showSuccess(t('common.success'))
+  } catch (error) {
+    console.error('Failed to reset quota:', error)
   }
 }
 const handleDelete = (a: Account) => { deletingAcc.value = a; showDeleteDialog.value = true }
