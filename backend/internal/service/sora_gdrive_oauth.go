@@ -12,15 +12,11 @@ import (
 )
 
 // SoraGDriveOAuthService 处理 Google Drive OAuth2 授权流程。
-type SoraGDriveOAuthService struct {
-	settingService *SettingService
-}
+type SoraGDriveOAuthService struct{}
 
 // NewSoraGDriveOAuthService 创建 GDrive OAuth 服务。
-func NewSoraGDriveOAuthService(settingService *SettingService) *SoraGDriveOAuthService {
-	return &SoraGDriveOAuthService{
-		settingService: settingService,
-	}
+func NewSoraGDriveOAuthService(_ *SettingService) *SoraGDriveOAuthService {
+	return &SoraGDriveOAuthService{}
 }
 
 // GenerateAuthURL 生成 Google OAuth 授权 URL。

@@ -140,7 +140,7 @@ type SoraS3Profile struct {
 	UpdatedAt                 string `json:"updated_at"`
 
 	// --- Google Drive 专属 ---
-	AuthType                 string `json:"auth_type,omitempty"`    // "oauth2" / "service_account"
+	AuthType                 string `json:"auth_type,omitempty"` // "oauth2" / "service_account"
 	ClientID                 string `json:"client_id,omitempty"`
 	ClientSecret             string `json:"-"`
 	ClientSecretConfigured   bool   `json:"client_secret_configured"`

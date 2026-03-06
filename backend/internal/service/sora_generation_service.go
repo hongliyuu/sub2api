@@ -35,9 +35,9 @@ type soraGenerationRepoConditionalUpdater interface {
 
 // SoraGenerationService 管理 Sora 客户端的生成记录 CRUD。
 type SoraGenerationService struct {
-	genRepo        SoraGenerationRepository
-	objectStorage  SoraObjectStorage
-	quotaService   *SoraQuotaService
+	genRepo       SoraGenerationRepository
+	objectStorage SoraObjectStorage
+	quotaService  *SoraQuotaService
 }
 
 // NewSoraGenerationService 创建生成记录服务。

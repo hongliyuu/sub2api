@@ -213,8 +213,8 @@ func (h *AccountHandler) buildAccountResponseWithRuntime(ctx context.Context, ac
 		if clients, err := h.gatewayCache.GetAccountAffinityClientsBatch(ctx, accountGroups, service.ClientAffinityTTL); err == nil {
 			if cl, ok := clients[account.ID]; ok {
 				count := int64(len(cl))
-				item.Account.AffinityClientCount = &count
-				item.Account.AffinityClients = cl
+				item.AffinityClientCount = &count
+				item.AffinityClients = cl
 			}
 		}
 	}
@@ -396,8 +396,8 @@ func (h *AccountHandler) List(c *gin.Context) {
 		if affinityClients != nil {
 			if clients, ok := affinityClients[acc.ID]; ok {
 				count := int64(len(clients))
-				item.Account.AffinityClientCount = &count
-				item.Account.AffinityClients = clients
+				item.AffinityClientCount = &count
+				item.AffinityClients = clients
 			}
 		}
 
