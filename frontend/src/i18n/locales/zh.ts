@@ -2151,6 +2151,8 @@ export default {
           hint: '启用后，新会话会优先调度到该客户端之前使用过的账号，避免频繁切换账号'
         }
       },
+      affinityNoClients: '无亲和客户端',
+      affinityClients: '{count} 个亲和客户端：',
       expired: '已过期',
       proxy: '代理',
       noProxy: '无代理',

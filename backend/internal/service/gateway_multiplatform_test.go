@@ -244,6 +244,9 @@ func (m *mockGatewayCacheForPlatform) UpdateClientAffinity(_ context.Context, _ 
 func (m *mockGatewayCacheForPlatform) GetAccountAffinityCountBatch(_ context.Context, _ int64, _ []int64, _ time.Duration) (map[int64]int64, error) {
 	return map[int64]int64{}, nil
 }
+func (m *mockGatewayCacheForPlatform) GetAccountAffinityClientsBatch(_ context.Context, _ map[int64][]int64, _ time.Duration) (map[int64][]string, error) {
+	return map[int64][]string{}, nil
+}
 
 type mockGroupRepoForGateway struct {
 	groups           map[int64]*Group

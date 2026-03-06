@@ -24,10 +24,13 @@ var (
 	updateAffinityLua string
 	//go:embed lua/get_affinity_count.lua
 	getAffinityCountLua string
+	//go:embed lua/get_affinity_clients.lua
+	getAffinityClientsLua string
 
-	getAffinityScript      = redis.NewScript(getAffinityLua)
-	updateAffinityScript   = redis.NewScript(updateAffinityLua)
-	getAffinityCountScript = redis.NewScript(getAffinityCountLua)
+	getAffinityScript        = redis.NewScript(getAffinityLua)
+	updateAffinityScript     = redis.NewScript(updateAffinityLua)
+	getAffinityCountScript   = redis.NewScript(getAffinityCountLua)
+	getAffinityClientsScript = redis.NewScript(getAffinityClientsLua)
 )
 
 type gatewayCache struct {
@@ -137,6 +140,60 @@ func (c *gatewayCache) GetAccountAffinityCountBatch(ctx context.Context, groupID
 	for i, accID := range accountIDs {
 		count, _ := cmds[i].Int64()
 		result[accID] = count
+	}
+	return result, nil
+}
+
+// GetAccountAffinityClientsBatch 批量获取每个账号跨所有分组的亲和客户端列表（去重）。
+// accountGroups: map[accountID][]groupID，对每个 (groupID, accountID) 组合查询反向索引。
+func (c *gatewayCache) GetAccountAffinityClientsBatch(ctx context.Context, accountGroups map[int64][]int64, ttl time.Duration) (map[int64][]string, error) {
+	if len(accountGroups) == 0 {
+		return map[int64][]string{}, nil
+	}
+
+	now := time.Now().Unix()
+	expireThreshold := now - int64(ttl.Seconds())
+
+	// 构建所有 (accountID, groupID) 组合的查询
+	type queryItem struct {
+		accountID int64
+		groupID   int64
+	}
+	var queries []queryItem
+	for accID, groupIDs := range accountGroups {
+		for _, gID := range groupIDs {
+			queries = append(queries, queryItem{accountID: accID, groupID: gID})
+		}
+	}
+
+	pipe := c.rdb.Pipeline()
+	cmds := make([]*redis.Cmd, len(queries))
+	for i, q := range queries {
+		key := buildAffinityReverseKey(q.groupID, q.accountID)
+		cmds[i] = getAffinityClientsScript.Run(ctx, pipe, []string{key}, expireThreshold)
+	}
+	_, err := pipe.Exec(ctx)
+	if err != nil && err != redis.Nil {
+		return nil, err
+	}
+
+	// 合并结果：同一个 accountID 跨多个 group 的 clientID 去重
+	result := make(map[int64][]string, len(accountGroups))
+	seen := make(map[int64]map[string]struct{}, len(accountGroups))
+	for i, q := range queries {
+		clients, _ := cmds[i].StringSlice()
+		if len(clients) == 0 {
+			continue
+		}
+		if seen[q.accountID] == nil {
+			seen[q.accountID] = make(map[string]struct{})
+		}
+		for _, clientID := range clients {
+			if _, exists := seen[q.accountID][clientID]; !exists {
+				seen[q.accountID][clientID] = struct{}{}
+				result[q.accountID] = append(result[q.accountID], clientID)
+			}
+		}
 	}
 	return result, nil
 }

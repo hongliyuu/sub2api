@@ -713,6 +713,8 @@ export interface Account {
   // 客户端亲和调度（仅 Anthropic/Antigravity 平台有效）
   // 启用后新会话会优先调度到客户端之前使用过的账号
   client_affinity_enabled?: boolean | null
+  affinity_client_count?: number | null
+  affinity_clients?: string[] | null
 
   // API Key 账号配额限制
   quota_limit?: number | null

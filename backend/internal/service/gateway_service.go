@@ -41,7 +41,7 @@ const (
 	claudeAPIURL            = "https://api.anthropic.com/v1/messages?beta=true"
 	claudeAPICountTokensURL = "https://api.anthropic.com/v1/messages/count_tokens?beta=true"
 	stickySessionTTL        = time.Hour      // 粘性会话TTL
-	clientAffinityTTL       = 24 * time.Hour // 客户端亲和TTL
+	ClientAffinityTTL       = 24 * time.Hour // 客户端亲和TTL
 	defaultMaxLineSize      = 40 * 1024 * 1024
 	// Canonical Claude Code banner. Keep it EXACT (no trailing whitespace/newlines)
 	// to match real Claude CLI traffic as closely as possible. When we need a visual
@@ -377,6 +377,9 @@ type GatewayCache interface {
 	UpdateClientAffinity(ctx context.Context, groupID int64, clientID string, accountID int64, ttl time.Duration) error
 	// GetAccountAffinityCountBatch 批量获取账号的亲和客户端数量（惰性清理过期成员）
 	GetAccountAffinityCountBatch(ctx context.Context, groupID int64, accountIDs []int64, ttl time.Duration) (map[int64]int64, error)
+	// GetAccountAffinityClientsBatch 批量获取每个账号跨所有分组的亲和客户端列表（去重）
+	// accountGroups: map[accountID][]groupID
+	GetAccountAffinityClientsBatch(ctx context.Context, accountGroups map[int64][]int64, ttl time.Duration) (map[int64][]string, error)
 }
 
 // derefGroupID safely dereferences *int64 to int64, returning 0 if nil
@@ -1411,7 +1414,7 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 							_ = s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), sessionHash, item.account.ID, stickySessionTTL)
 						}
 						if affinityClientID != "" && s.cache != nil && item.account.IsClientAffinityEnabled() {
-							_ = s.cache.UpdateClientAffinity(ctx, derefGroupID(groupID), affinityClientID, item.account.ID, clientAffinityTTL)
+							_ = s.cache.UpdateClientAffinity(ctx, derefGroupID(groupID), affinityClientID, item.account.ID, ClientAffinityTTL)
 						}
 						if s.debugModelRoutingEnabled() {
 							logger.LegacyPrintf("service.gateway", "[ModelRoutingDebug] routed select: group_id=%v model=%s session=%s account=%d", derefGroupID(groupID), requestedModel, shortSessionHash(sessionHash), item.account.ID)
@@ -1511,7 +1514,7 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 
 	// ============ Layer 1.6: 客户端亲和（仅在粘性会话未命中时生效） ============
 	if affinityClientID != "" && s.cache != nil && stickyAccountID <= 0 {
-		affinityAccountIDs, err := s.cache.GetClientAffinityAccounts(ctx, derefGroupID(groupID), affinityClientID, clientAffinityTTL)
+		affinityAccountIDs, err := s.cache.GetClientAffinityAccounts(ctx, derefGroupID(groupID), affinityClientID, ClientAffinityTTL)
 		if err == nil && len(affinityAccountIDs) > 0 {
 			for _, affinityAccID := range affinityAccountIDs {
 				if isExcluded(affinityAccID) {
@@ -1550,7 +1553,7 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 						continue
 					}
 					// 亲和命中：更新亲和 score + 绑定粘性会话
-					_ = s.cache.UpdateClientAffinity(ctx, derefGroupID(groupID), affinityClientID, affinityAccID, clientAffinityTTL)
+					_ = s.cache.UpdateClientAffinity(ctx, derefGroupID(groupID), affinityClientID, affinityAccID, ClientAffinityTTL)
 					if sessionHash != "" {
 						_ = s.cache.SetSessionAccountID(ctx, derefGroupID(groupID), sessionHash, affinityAccID, stickySessionTTL)
 					}
@@ -1622,7 +1625,7 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 	if err != nil {
 		if result, ok := s.tryAcquireByLegacyOrder(ctx, candidates, groupID, sessionHash, preferOAuth); ok {
 			if affinityClientID != "" && s.cache != nil && result.Account != nil && result.Account.IsClientAffinityEnabled() {
-				_ = s.cache.UpdateClientAffinity(ctx, derefGroupID(groupID), affinityClientID, result.Account.ID, clientAffinityTTL)
+				_ = s.cache.UpdateClientAffinity(ctx, derefGroupID(groupID), affinityClientID, result.Account.ID, ClientAffinityTTL)
 			}
 			return result, nil
 		}
@@ -1669,7 +1672,7 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 					}
 					// 更新客户端亲和关系
 					if affinityClientID != "" && s.cache != nil && selected.account.IsClientAffinityEnabled() {
-						_ = s.cache.UpdateClientAffinity(ctx, derefGroupID(groupID), affinityClientID, selected.account.ID, clientAffinityTTL)
+						_ = s.cache.UpdateClientAffinity(ctx, derefGroupID(groupID), affinityClientID, selected.account.ID, ClientAffinityTTL)
 					}
 					return &AccountSelectionResult{
 						Account:     selected.account,
@@ -2449,7 +2452,7 @@ func (s *GatewayService) populateAffinityCounts(ctx context.Context, accounts []
 	for i, acc := range accounts {
 		accountIDs[i] = acc.account.ID
 	}
-	countMap, err := s.cache.GetAccountAffinityCountBatch(ctx, groupID, accountIDs, clientAffinityTTL)
+	countMap, err := s.cache.GetAccountAffinityCountBatch(ctx, groupID, accountIDs, ClientAffinityTTL)
 	if err != nil {
 		return // 查询失败不影响调度，affinityCount 保持 0
 	}

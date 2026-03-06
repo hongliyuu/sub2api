@@ -2017,6 +2017,8 @@ export default {
           hint: 'When enabled, new sessions prefer accounts previously used by this client to reduce account switching'
         }
       },
+      affinityNoClients: 'No affinity clients',
+      affinityClients: '{count} affinity clients:',
       expired: 'Expired',
       proxy: 'Proxy',
       noProxy: 'No Proxy',

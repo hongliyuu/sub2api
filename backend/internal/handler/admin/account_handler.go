@@ -55,6 +55,7 @@ type AccountHandler struct {
 	sessionLimitCache       service.SessionLimitCache
 	rpmCache                service.RPMCache
 	tokenCacheInvalidator   service.TokenCacheInvalidator
+	gatewayCache            service.GatewayCache
 }
 
 // NewAccountHandler creates a new admin account handler
@@ -72,6 +73,7 @@ func NewAccountHandler(
 	sessionLimitCache service.SessionLimitCache,
 	rpmCache service.RPMCache,
 	tokenCacheInvalidator service.TokenCacheInvalidator,
+	gatewayCache service.GatewayCache,
 ) *AccountHandler {
 	return &AccountHandler{
 		adminService:            adminService,
@@ -87,6 +89,7 @@ func NewAccountHandler(
 		sessionLimitCache:       sessionLimitCache,
 		rpmCache:                rpmCache,
 		tokenCacheInvalidator:   tokenCacheInvalidator,
+		gatewayCache:            gatewayCache,
 	}
 }
 
@@ -200,6 +203,18 @@ func (h *AccountHandler) buildAccountResponseWithRuntime(ctx context.Context, ac
 		if h.rpmCache != nil && account.GetBaseRPM() > 0 {
 			if rpm, err := h.rpmCache.GetRPM(ctx, account.ID); err == nil {
 				item.CurrentRPM = &rpm
+			}
+		}
+	}
+
+	// 亲和客户端数据
+	if h.gatewayCache != nil && account.IsClientAffinityEnabled() && len(account.GroupIDs) > 0 {
+		accountGroups := map[int64][]int64{account.ID: account.GroupIDs}
+		if clients, err := h.gatewayCache.GetAccountAffinityClientsBatch(ctx, accountGroups, service.ClientAffinityTTL); err == nil {
+			if cl, ok := clients[account.ID]; ok {
+				count := int64(len(cl))
+				item.Account.AffinityClientCount = &count
+				item.Account.AffinityClients = cl
 			}
 		}
 	}
@@ -332,6 +347,21 @@ func (h *AccountHandler) List(c *gin.Context) {
 		}
 	}
 
+	// 获取亲和客户端数据（Redis Pipeline，低开销）
+	var affinityClients map[int64][]string
+	if h.gatewayCache != nil {
+		accountGroups := make(map[int64][]int64)
+		for i := range accounts {
+			acc := &accounts[i]
+			if acc.IsClientAffinityEnabled() && len(acc.GroupIDs) > 0 {
+				accountGroups[acc.ID] = acc.GroupIDs
+			}
+		}
+		if len(accountGroups) > 0 {
+			affinityClients, _ = h.gatewayCache.GetAccountAffinityClientsBatch(c.Request.Context(), accountGroups, service.ClientAffinityTTL)
+		}
+	}
+
 	// Build response with concurrency info
 	result := make([]AccountWithConcurrency, len(accounts))
 	for i := range accounts {
@@ -359,6 +389,15 @@ func (h *AccountHandler) List(c *gin.Context) {
 		if rpmCounts != nil {
 			if rpm, ok := rpmCounts[acc.ID]; ok {
 				item.CurrentRPM = &rpm
+			}
+		}
+
+		// 注入亲和客户端数据到 DTO
+		if affinityClients != nil {
+			if clients, ok := affinityClients[acc.ID]; ok {
+				count := int64(len(clients))
+				item.Account.AffinityClientCount = &count
+				item.Account.AffinityClients = clients
 			}
 		}
 

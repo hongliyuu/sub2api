@@ -176,7 +176,15 @@
             <AccountCapacityCell :account="row" />
           </template>
           <template #cell-status="{ row }">
-            <AccountStatusIndicator :account="row" @show-temp-unsched="handleShowTempUnsched" />
+            <div class="flex items-center gap-1.5">
+              <span v-if="row.client_affinity_enabled && row.affinity_client_count != null"
+                    :class="affinityBadgeClass(row.affinity_client_count)"
+                    :title="affinityTooltip(row)"
+                    class="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold shrink-0">
+                {{ row.affinity_client_count }}
+              </span>
+              <AccountStatusIndicator :account="row" @show-temp-unsched="handleShowTempUnsched" />
+            </div>
           </template>
           <template #cell-schedulable="{ row }">
             <button @click="handleToggleSchedulable(row)" :disabled="togglingSchedulable === row.id" class="relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:focus:ring-offset-dark-800" :class="[row.schedulable ? 'bg-primary-500 hover:bg-primary-600' : 'bg-gray-200 hover:bg-gray-300 dark:bg-dark-600 dark:hover:bg-dark-500']" :title="row.schedulable ? t('admin.accounts.schedulableEnabled') : t('admin.accounts.schedulableDisabled')">
@@ -397,6 +405,19 @@ const buildDefaultTodayStats = (): WindowStats => ({
   standard_cost: 0,
   user_cost: 0
 })
+
+function affinityBadgeClass(count: number): string {
+  if (count >= 16) return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+  if (count >= 6) return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+  if (count > 0) return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+  return 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+}
+
+function affinityTooltip(row: Account): string {
+  const clients = row.affinity_clients
+  if (!clients || clients.length === 0) return t('admin.accounts.affinityNoClients')
+  return t('admin.accounts.affinityClients', { count: clients.length }) + '\n' + clients.join('\n')
+}
 
 const refreshTodayStatsBatch = async () => {
   if (hiddenColumns.has('today_stats')) {
