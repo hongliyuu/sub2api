@@ -101,7 +101,7 @@
                 <td class="py-3 pr-4 text-xs">{{ formatStorageQuotaGB(profile.default_storage_quota_bytes) }}</td>
                 <td class="py-3 pr-4 text-xs">{{ formatDate(profile.updated_at) }}</td>
                 <td class="py-3 text-xs">
-                  <div class="flex flex-wrap gap-2">
+                  <div class="flex items-center gap-1">
                     <button
                       type="button"
                       class="btn btn-secondary btn-xs"
