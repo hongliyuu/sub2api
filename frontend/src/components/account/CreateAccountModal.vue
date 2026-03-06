@@ -1410,6 +1410,36 @@
         </div>
       </div>
 
+      <!-- Client Affinity (Anthropic accounts only) -->
+      <div
+        v-if="form.platform === 'anthropic'"
+        class="border-t border-gray-200 pt-4 dark:border-dark-600"
+      >
+        <div class="flex items-center justify-between">
+          <div>
+            <label class="input-label mb-0">{{ t('admin.accounts.quotaControl.clientAffinity.label') }}</label>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.accounts.quotaControl.clientAffinity.hint') }}
+            </p>
+          </div>
+          <button
+            type="button"
+            @click="clientAffinityEnabled = !clientAffinityEnabled"
+            :class="[
+              'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
+              clientAffinityEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+            ]"
+          >
+            <span
+              :class="[
+                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                clientAffinityEnabled ? 'translate-x-5' : 'translate-x-0'
+              ]"
+            />
+          </button>
+        </div>
+      </div>
+
       <!-- Quota Control Section (Anthropic OAuth/SetupToken only) -->
       <div
         v-if="form.platform === 'anthropic' && accountCategory === 'oauth-based'"
@@ -2515,6 +2545,9 @@ const antigravityMixedChannelConfirmed = ref(false)
 const showAdvancedOAuth = ref(false)
 const showGeminiHelpDialog = ref(false)
 
+// Client affinity (all Anthropic accounts)
+const clientAffinityEnabled = ref(false)
+
 // Quota control state (Anthropic OAuth/SetupToken only)
 const windowCostEnabled = ref(false)
 const windowCostLimit = ref<number | null>(null)
@@ -3140,6 +3173,7 @@ const resetForm = () => {
   editQuotaLimit.value = null
   editQuotaDailyLimit.value = null
   editQuotaWeeklyLimit.value = null
+  clientAffinityEnabled.value = false
   modelMappings.value = []
   modelRestrictionMode.value = 'whitelist'
   allowedModels.value = [...claudeModels] // Default fill related models
@@ -3243,8 +3277,18 @@ const buildAnthropicExtra = (base?: Record<string, unknown>): Record<string, unk
   } else {
     delete extra.anthropic_passthrough
   }
+  applyClientAffinity(extra)
 
   return Object.keys(extra).length > 0 ? extra : undefined
+}
+
+/** 将客户端亲和设置写入 extra（Anthropic 全类型通用） */
+const applyClientAffinity = (extra: Record<string, unknown>) => {
+  if (clientAffinityEnabled.value) {
+    extra.client_affinity_enabled = true
+  } else {
+    delete extra.client_affinity_enabled
+  }
 }
 
 const buildSoraExtra = (
@@ -4142,6 +4186,9 @@ const handleAnthropicExchange = async (authCode: string) => {
       extra.cache_ttl_override_enabled = true
       extra.cache_ttl_override_target = cacheTTLOverrideTarget.value
     }
+
+    // Add client affinity setting
+    applyClientAffinity(extra)
 
     const credentials: Record<string, unknown> = { ...tokenInfo }
     applyInterceptWarmup(credentials, interceptWarmupRequests.value, 'create')
