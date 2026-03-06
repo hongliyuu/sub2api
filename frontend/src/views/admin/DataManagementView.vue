@@ -22,7 +22,7 @@
         </div>
 
         <div class="overflow-x-auto">
-          <table class="w-full min-w-[1400px] text-sm">
+          <table class="w-full min-w-[1300px] text-sm">
             <thead>
               <tr class="border-b border-gray-200 text-left text-xs uppercase tracking-wide text-gray-500 dark:border-dark-700 dark:text-gray-400">
                 <th class="py-2 pr-4">{{ t('admin.settings.soraS3.columns.profileId') }}</th>
@@ -32,7 +32,6 @@
                 <th class="py-2 pr-4">{{ t('admin.settings.soraS3.columns.storagePath') }}</th>
                 <th class="py-2 pr-4">{{ t('admin.settings.soraS3.columns.capacityUsage') }}</th>
                 <th class="py-2 pr-4">{{ t('admin.settings.soraS3.columns.videoCount') }}</th>
-                <th class="py-2 pr-4">{{ t('admin.settings.soraS3.columns.quota') }}</th>
                 <th class="py-2 pr-4">{{ t('admin.settings.soraS3.columns.updatedAt') }}</th>
                 <th class="py-2">{{ t('admin.settings.soraS3.columns.actions') }}</th>
               </tr>
@@ -98,7 +97,6 @@
                     <div class="text-gray-400">-</div>
                   </template>
                 </td>
-                <td class="py-3 pr-4 text-xs">{{ formatStorageQuotaGB(profile.default_storage_quota_bytes) }}</td>
                 <td class="py-3 pr-4 text-xs">{{ formatDate(profile.updated_at) }}</td>
                 <td class="py-3 text-xs">
                   <div class="flex items-center gap-1">
@@ -135,7 +133,7 @@
                 </td>
               </tr>
               <tr v-if="soraS3Profiles.length === 0">
-                <td colspan="10" class="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+                <td colspan="9" class="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
                   {{ t('admin.settings.soraS3.empty') }}
                 </td>
               </tr>
@@ -144,52 +142,6 @@
         </div>
       </div>
     </div>
-
-    <!-- Provider selection modal (when creating new profile) -->
-    <Teleport to="body">
-      <Transition name="dm-drawer-mask">
-        <div
-          v-if="providerSelectOpen"
-          class="fixed inset-0 z-[54] bg-black/40 backdrop-blur-sm"
-          @click="providerSelectOpen = false"
-        ></div>
-      </Transition>
-      <Transition name="dm-drawer-panel">
-        <div
-          v-if="providerSelectOpen"
-          class="fixed inset-0 z-[55] flex items-center justify-center"
-        >
-          <div class="w-full max-w-md rounded-lg border border-gray-200 bg-white p-6 shadow-2xl dark:border-dark-700 dark:bg-dark-900">
-            <h4 class="mb-4 text-sm font-semibold text-gray-900 dark:text-white">
-              {{ t('admin.settings.soraS3.selectProvider') }}
-            </h4>
-            <div class="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                class="flex flex-col items-center gap-2 rounded-lg border-2 border-gray-200 p-4 transition hover:border-blue-400 hover:bg-blue-50 dark:border-dark-600 dark:hover:border-blue-500 dark:hover:bg-dark-800"
-                @click="confirmProviderSelect('s3')"
-              >
-                <span class="text-2xl">S3</span>
-                <span class="text-xs text-gray-600 dark:text-gray-400">{{ t('admin.settings.soraS3.providerS3Desc') }}</span>
-              </button>
-              <button
-                type="button"
-                class="flex flex-col items-center gap-2 rounded-lg border-2 border-gray-200 p-4 transition hover:border-blue-400 hover:bg-blue-50 dark:border-dark-600 dark:hover:border-blue-500 dark:hover:bg-dark-800"
-                @click="confirmProviderSelect('gdrive')"
-              >
-                <span class="text-2xl">GDrive</span>
-                <span class="text-xs text-gray-600 dark:text-gray-400">{{ t('admin.settings.soraS3.providerGDriveDesc') }}</span>
-              </button>
-            </div>
-            <div class="mt-4 flex justify-end">
-              <button type="button" class="btn btn-secondary btn-sm" @click="providerSelectOpen = false">
-                {{ t('common.cancel') }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </Transition>
-    </Teleport>
 
     <!-- Profile drawer -->
     <Teleport to="body">
@@ -209,7 +161,7 @@
           <div class="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-dark-700">
             <h4 class="text-sm font-semibold text-gray-900 dark:text-white">
               {{ creatingSoraProfile ? t('admin.settings.soraS3.createTitle') : t('admin.settings.soraS3.editTitle') }}
-              <span class="ml-2 rounded bg-gray-100 px-2 py-0.5 text-xs font-normal text-gray-600 dark:bg-dark-800 dark:text-gray-400">
+              <span v-if="soraProfileForm.provider" class="ml-2 rounded bg-gray-100 px-2 py-0.5 text-xs font-normal text-gray-600 dark:bg-dark-800 dark:text-gray-400">
                 {{ getProviderLabel(soraProfileForm.provider) }}
               </span>
             </h4>
@@ -223,7 +175,33 @@
           </div>
 
           <div class="flex-1 overflow-y-auto p-4">
-            <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <!-- Provider selection (only when creating and not yet chosen) -->
+            <div v-if="creatingSoraProfile && !soraProfileForm.provider" class="flex flex-col items-center justify-center gap-4 py-12">
+              <h4 class="text-sm font-semibold text-gray-900 dark:text-white">
+                {{ t('admin.settings.soraS3.selectProvider') }}
+              </h4>
+              <div class="grid w-full max-w-sm grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  class="flex flex-col items-center gap-2 rounded-lg border-2 border-gray-200 p-4 transition hover:border-blue-400 hover:bg-blue-50 dark:border-dark-600 dark:hover:border-blue-500 dark:hover:bg-dark-800"
+                  @click="selectProvider('s3')"
+                >
+                  <span class="text-2xl">S3</span>
+                  <span class="text-xs text-gray-600 dark:text-gray-400">{{ t('admin.settings.soraS3.providerS3Desc') }}</span>
+                </button>
+                <button
+                  type="button"
+                  class="flex flex-col items-center gap-2 rounded-lg border-2 border-gray-200 p-4 transition hover:border-blue-400 hover:bg-blue-50 dark:border-dark-600 dark:hover:border-blue-500 dark:hover:bg-dark-800"
+                  @click="selectProvider('gdrive')"
+                >
+                  <span class="text-2xl">GDrive</span>
+                  <span class="text-xs text-gray-600 dark:text-gray-400">{{ t('admin.settings.soraS3.providerGDriveDesc') }}</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Profile form (shown after provider is selected) -->
+            <div v-else class="grid grid-cols-1 gap-3 md:grid-cols-2">
               <!-- Common fields -->
               <input
                 v-model="soraProfileForm.profile_id"
@@ -317,17 +295,6 @@
 
               <!-- Common bottom fields -->
               <input v-model="soraProfileForm.cdn_url" class="input w-full" :placeholder="t('admin.settings.soraS3.cdnUrl')" />
-              <div>
-                <input
-                  v-model.number="soraProfileForm.default_storage_quota_gb"
-                  type="number"
-                  min="0"
-                  step="0.1"
-                  class="input w-full"
-                  :placeholder="t('admin.settings.soraS3.defaultQuota')"
-                />
-                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.settings.soraS3.defaultQuotaHint') }}</p>
-              </div>
               <label v-if="creatingSoraProfile" class="inline-flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 md:col-span-2">
                 <input v-model="soraProfileForm.set_active" type="checkbox" />
                 <span>{{ t('admin.settings.soraS3.setActive') }}</span>
@@ -335,7 +302,7 @@
             </div>
           </div>
 
-          <div class="flex flex-wrap justify-end gap-2 border-t border-gray-200 p-4 dark:border-dark-700">
+          <div v-if="soraProfileForm.provider" class="flex flex-wrap justify-end gap-2 border-t border-gray-200 p-4 dark:border-dark-700">
             <button type="button" class="btn btn-secondary btn-sm" @click="closeSoraProfileDrawer">
               {{ t('common.cancel') }}
             </button>
@@ -385,7 +352,6 @@ const activatingSoraProfile = ref(false)
 const deletingSoraProfile = ref(false)
 const creatingSoraProfile = ref(false)
 const soraProfileDrawerOpen = ref(false)
-const providerSelectOpen = ref(false)
 const startingOAuth = ref(false)
 const loadingGDriveQuota = ref(false)
 const loadingVideoStats = ref(false)
@@ -423,7 +389,6 @@ type SoraStorageProfileForm = {
   folder_id: string
   // Common
   cdn_url: string
-  default_storage_quota_gb: number
 }
 
 const soraProfileForm = ref<SoraStorageProfileForm>(newDefaultProfileForm('s3'))
@@ -536,15 +501,14 @@ async function loadVideoStats() {
 }
 
 function startCreateSoraProfile() {
-  providerSelectOpen.value = true
-}
-
-function confirmProviderSelect(provider: string) {
-  providerSelectOpen.value = false
   creatingSoraProfile.value = true
   selectedSoraProfileID.value = ''
-  soraProfileForm.value = newDefaultProfileForm(provider)
+  soraProfileForm.value = newDefaultProfileForm('')
   soraProfileDrawerOpen.value = true
+}
+
+function selectProvider(provider: string) {
+  soraProfileForm.value = newDefaultProfileForm(provider)
 }
 
 function editSoraProfile(profileID: string) {
@@ -595,7 +559,6 @@ async function saveSoraProfile() {
 
   savingSoraProfile.value = true
   try {
-    const quotaBytes = Math.round((form.default_storage_quota_gb || 0) * 1024 * 1024 * 1024)
     if (creatingSoraProfile.value) {
       const request: Record<string, unknown> = {
         profile_id: form.profile_id.trim(),
@@ -603,8 +566,7 @@ async function saveSoraProfile() {
         set_active: form.set_active,
         provider: form.provider,
         enabled: form.enabled,
-        cdn_url: form.cdn_url,
-        default_storage_quota_bytes: quotaBytes
+        cdn_url: form.cdn_url
       }
       if (form.provider === 's3') {
         Object.assign(request, {
@@ -635,8 +597,7 @@ async function saveSoraProfile() {
       const request: Record<string, unknown> = {
         name: form.name.trim(),
         enabled: form.enabled,
-        cdn_url: form.cdn_url,
-        default_storage_quota_bytes: quotaBytes
+        cdn_url: form.cdn_url
       }
       if (form.provider === 's3') {
         Object.assign(request, {
@@ -683,8 +644,7 @@ async function testSoraProfileConnection() {
       secret_access_key: soraProfileForm.value.secret_access_key || undefined,
       prefix: soraProfileForm.value.prefix,
       force_path_style: soraProfileForm.value.force_path_style,
-      cdn_url: soraProfileForm.value.cdn_url,
-      default_storage_quota_bytes: Math.round((soraProfileForm.value.default_storage_quota_gb || 0) * 1024 * 1024 * 1024)
+      cdn_url: soraProfileForm.value.cdn_url
     })
     appStore.showSuccess(result.message || t('admin.settings.soraS3.testSuccess'))
   } catch (error) {
@@ -809,12 +769,6 @@ function formatDate(value?: string): string {
   return date.toLocaleString()
 }
 
-function formatStorageQuotaGB(bytes: number): string {
-  if (!bytes || bytes <= 0) return '0 GB'
-  const gb = bytes / (1024 * 1024 * 1024)
-  return `${gb.toFixed(gb >= 10 ? 0 : 1)} GB`
-}
-
 function formatBytes(bytes: number): string {
   if (!bytes || bytes <= 0) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
@@ -863,12 +817,10 @@ function newDefaultProfileForm(provider: string, profile?: SoraS3Profile): SoraS
       service_account_json: '',
       service_account_configured: false,
       folder_id: '',
-      cdn_url: '',
-      default_storage_quota_gb: 0
+      cdn_url: ''
     }
   }
 
-  const quotaBytes = profile.default_storage_quota_bytes || 0
   return {
     profile_id: profile.profile_id,
     name: profile.name,
@@ -892,8 +844,7 @@ function newDefaultProfileForm(provider: string, profile?: SoraS3Profile): SoraS
     service_account_json: '',
     service_account_configured: Boolean(profile.service_account_configured),
     folder_id: profile.folder_id || '',
-    cdn_url: profile.cdn_url || '',
-    default_storage_quota_gb: Number((quotaBytes / (1024 * 1024 * 1024)).toFixed(2))
+    cdn_url: profile.cdn_url || ''
   }
 }
 
