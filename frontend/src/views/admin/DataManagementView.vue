@@ -38,7 +38,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="profile in soraS3Profiles" :key="profile.profile_id" class="border-b border-gray-100 align-top dark:border-dark-800">
+              <tr v-for="profile in soraS3Profiles" :key="profile.profile_id" class="border-b border-gray-100 align-middle dark:border-dark-800">
                 <td class="py-3 pr-4">
                   <div class="font-mono text-xs">{{ profile.profile_id }}</div>
                 </td>
