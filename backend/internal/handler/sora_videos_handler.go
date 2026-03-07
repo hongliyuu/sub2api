@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"unicode/utf8"
@@ -64,8 +65,7 @@ func (h *SoraVideosHandler) CreateVideo(c *gin.Context) {
 
 	task, err := h.taskService.CreateVideoTask(c.Request.Context(), apiKey.ID, account, &req, body)
 	if err != nil {
-		logger.LegacyPrintf("handler.sora_videos", "[CreateVideo] error: %v", err)
-		soraErrorResponse(c, http.StatusInternalServerError, "server_error", "Failed to create video task")
+		handleTaskCreateError(c, "CreateVideo", err)
 		return
 	}
 
@@ -146,8 +146,7 @@ func (h *SoraVideosHandler) RemixVideo(c *gin.Context) {
 
 	task, err := h.taskService.CreateVideoTask(c.Request.Context(), apiKey.ID, account, videoReq, reqBody)
 	if err != nil {
-		logger.LegacyPrintf("handler.sora_videos", "[RemixVideo] error: %v", err)
-		soraErrorResponse(c, http.StatusInternalServerError, "server_error", "Failed to create remix task")
+		handleTaskCreateError(c, "RemixVideo", err)
 		return
 	}
 
@@ -250,8 +249,7 @@ func (h *SoraVideosHandler) CreateImage(c *gin.Context) {
 
 	task, err := h.taskService.CreateImageGeneration(c.Request.Context(), apiKey.ID, account, &req, body)
 	if err != nil {
-		logger.LegacyPrintf("handler.sora_videos", "[CreateImage] error: %v", err)
-		soraErrorResponse(c, http.StatusInternalServerError, "server_error", "Failed to create image task")
+		handleTaskCreateError(c, "CreateImage", err)
 		return
 	}
 
@@ -296,8 +294,7 @@ func (h *SoraVideosHandler) EditImage(c *gin.Context) {
 
 	task, err := h.taskService.CreateImageGeneration(c.Request.Context(), apiKey.ID, account, imageReq, body)
 	if err != nil {
-		logger.LegacyPrintf("handler.sora_videos", "[EditImage] error: %v", err)
-		soraErrorResponse(c, http.StatusInternalServerError, "server_error", "Failed to create image edit task")
+		handleTaskCreateError(c, "EditImage", err)
 		return
 	}
 
@@ -334,17 +331,8 @@ func (h *SoraVideosHandler) selectAccount(c *gin.Context, model string) (*servic
 	return apiKey, selection.Account, true
 }
 
-func (h *SoraVideosHandler) selectAccountByID(c *gin.Context, _ int64) (*service.Account, error) {
-	selection, err := h.gatewayService.SelectAccountWithLoadAwareness(
-		c.Request.Context(), nil, "", "", nil, "",
-	)
-	if err != nil {
-		return nil, err
-	}
-	if selection.ReleaseFunc != nil {
-		selection.ReleaseFunc()
-	}
-	return selection.Account, nil
+func (h *SoraVideosHandler) selectAccountByID(c *gin.Context, accountID int64) (*service.Account, error) {
+	return h.taskService.GetAccountByID(c.Request.Context(), accountID)
 }
 
 func readBody(c *gin.Context) ([]byte, error) {
@@ -371,6 +359,18 @@ func soraErrorResponse(c *gin.Context, status int, errType, message string) {
 			"type":    errType,
 		},
 	})
+}
+
+// handleTaskCreateError writes the appropriate error response, transparently
+// forwarding upstream HTTP status codes when available.
+func handleTaskCreateError(c *gin.Context, logTag string, err error) {
+	logger.LegacyPrintf("handler.sora_videos", "[%s] error: %v", logTag, err)
+	var ue *service.SoraUpstreamError
+	if errors.As(err, &ue) {
+		c.Data(ue.StatusCode, "application/json", ue.Body)
+		return
+	}
+	soraErrorResponse(c, http.StatusInternalServerError, "server_error", "Failed to create task")
 }
 
 func inferImageModel(size string) string {

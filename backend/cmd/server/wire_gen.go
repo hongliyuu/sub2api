@@ -214,7 +214,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	soraGatewayService := service.NewSoraGatewayService(soraSDKClient, rateLimitService, httpUpstream, configConfig)
 	soraClientHandler := handler.NewSoraClientHandler(soraGenerationService, soraQuotaService, soraStorageRouter, soraGatewayService, gatewayService, soraMediaStorage, apiKeyService)
 	soraTaskRepository := repository.NewSoraTaskRepository(db)
-	soraTaskService := service.NewSoraTaskService(soraTaskRepository, soraSDKClient, httpUpstream)
+	soraTaskService := service.NewSoraTaskService(soraTaskRepository, accountRepository, soraSDKClient, httpUpstream)
 	soraTaskWorker := service.NewSoraTaskWorker(soraTaskService, accountRepository, soraStorageRouter, soraMediaStorage, 60*time.Second)
 	soraTaskWorker.Start()
 	soraVideosHandler := handler.NewSoraVideosHandler(soraTaskService, gatewayService, soraStorageRouter, soraMediaStorage, soraGatewayService)

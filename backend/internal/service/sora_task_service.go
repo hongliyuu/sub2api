@@ -18,17 +18,20 @@ import (
 // SoraTaskService manages Sora async task creation and status queries.
 type SoraTaskService struct {
 	repo         SoraTaskRepository
+	accountRepo  AccountRepository
 	soraClient   SoraClient
 	httpUpstream HTTPUpstream
 }
 
 func NewSoraTaskService(
 	repo SoraTaskRepository,
+	accountRepo AccountRepository,
 	soraClient SoraClient,
 	httpUpstream HTTPUpstream,
 ) *SoraTaskService {
 	return &SoraTaskService{
 		repo:         repo,
+		accountRepo:  accountRepo,
 		soraClient:   soraClient,
 		httpUpstream: httpUpstream,
 	}
@@ -259,6 +262,10 @@ func (s *SoraTaskService) GetTaskByID(ctx context.Context, taskID string) (*Sora
 	return s.repo.GetByID(ctx, taskID)
 }
 
+func (s *SoraTaskService) GetAccountByID(ctx context.Context, accountID int64) (*Account, error) {
+	return s.accountRepo.GetByID(ctx, accountID)
+}
+
 // ── Internal methods ──
 
 func (s *SoraTaskService) createViaSdk(
@@ -324,7 +331,7 @@ func (s *SoraTaskService) forwardCreateToUpstream(
 		return nil, fmt.Errorf("read upstream response: %w", err)
 	}
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("upstream error %d: %s", resp.StatusCode, string(respBody))
+		return nil, &SoraUpstreamError{StatusCode: resp.StatusCode, Body: respBody}
 	}
 
 	var result map[string]any
