@@ -137,6 +137,7 @@
           :columns="cols"
           :data="accounts"
           :loading="loading"
+          :selected-row-ids="selIds"
           row-key="id"
           default-sort-key="name"
           default-sort-order="asc"
