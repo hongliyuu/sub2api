@@ -5,7 +5,7 @@ import { ref, onMounted, onUnmounted, type Ref } from 'vue'
  * with a semi-transparent marquee overlay showing the selection area.
  *
  * Features:
- *  - Start dragging only inside the table container
+ *  - Start dragging inside the current table-page layout's non-text area
  *  - Mouse wheel scrolling continues selecting new rows
  *  - Auto-scroll when dragging near viewport edges
  *  - 5px drag threshold to avoid accidental selection on click
@@ -47,6 +47,12 @@ export function useSwipeSelect(
   const DRAG_THRESHOLD = 5
   const SCROLL_ZONE = 60
   const SCROLL_SPEED = 8
+
+  function getActivationRoot(): HTMLElement | null {
+    const container = containerRef.value
+    if (!container) return null
+    return container.closest('.table-page-layout') as HTMLElement | null || container
+  }
 
   function getDataRows(): HTMLElement[] {
     const container = containerRef.value
@@ -195,6 +201,21 @@ export function useSwipeSelect(
     return target !== cell && !target.closest('[data-swipe-select-handle]')
   }
 
+  function hasDirectTextContent(target: HTMLElement): boolean {
+    return Array.from(target.childNodes).some(
+      (node) => node.nodeType === Node.TEXT_NODE && (node.textContent?.trim().length ?? 0) > 0
+    )
+  }
+
+  function shouldPreferNativeSelectionOutsideRows(target: HTMLElement): boolean {
+    const activationRoot = getActivationRoot()
+    if (!activationRoot) return false
+    if (!activationRoot.contains(target)) return false
+    if (target.closest('tbody tr[data-row-id]')) return false
+
+    return hasDirectTextContent(target)
+  }
+
   // =============================================
   // Phase 1: detect drag threshold (5px movement)
   // =============================================
@@ -203,13 +224,15 @@ export function useSwipeSelect(
     if (!containerRef.value) return
 
     const target = e.target as HTMLElement
-    if (!containerRef.value.contains(target)) return
+    const activationRoot = getActivationRoot()
+    if (!activationRoot || !activationRoot.contains(target)) return
 
     // Skip clicks on any scrollbar (inner containers + document)
     if (isOnScrollbar(e)) return
 
     if (target.closest('button, a, input, select, textarea, [role="button"], [role="menuitem"], [role="combobox"], [role="dialog"]')) return
     if (shouldPreferNativeTextSelection(target)) return
+    if (shouldPreferNativeSelectionOutsideRows(target)) return
 
     cachedRows = getDataRows()
     if (cachedRows.length === 0) return
