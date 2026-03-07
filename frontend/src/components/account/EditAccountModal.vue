@@ -904,19 +904,41 @@
         </div>
       </div>
 
-      <!-- API Key 账号配额限制 -->
-      <QuotaLimitCard v-if="account?.type === 'apikey'" :totalLimit="editQuotaLimit" :dailyLimit="editQuotaDailyLimit" :weeklyLimit="editQuotaWeeklyLimit" @update:totalLimit="editQuotaLimit = $event" @update:dailyLimit="editQuotaDailyLimit = $event" @update:weeklyLimit="editQuotaWeeklyLimit = $event" />
-
-      <!-- 客户端亲和限制 (all Anthropic account types) -->
-      <AffinityConfigCard
+      <!-- 配额限制 (Anthropic 平台: 配额 + 亲和) -->
+      <div
         v-if="account?.platform === 'anthropic'"
-        :enabled="clientAffinityEnabled"
-        :base="affinityBase"
-        :buffer="affinityBuffer"
-        @update:enabled="clientAffinityEnabled = $event"
-        @update:base="affinityBase = $event"
-        @update:buffer="affinityBuffer = $event"
-      />
+        class="border-t border-gray-200 pt-4 dark:border-dark-600 space-y-4"
+      >
+        <div class="mb-3">
+          <h3 class="input-label mb-0 text-base font-semibold">{{ t('admin.accounts.quotaLimit') }}</h3>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            {{ t('admin.accounts.quotaLimitHint') }}
+          </p>
+        </div>
+        <QuotaLimitCard v-if="account?.type === 'apikey'" :totalLimit="editQuotaLimit" :dailyLimit="editQuotaDailyLimit" :weeklyLimit="editQuotaWeeklyLimit" @update:totalLimit="editQuotaLimit = $event" @update:dailyLimit="editQuotaDailyLimit = $event" @update:weeklyLimit="editQuotaWeeklyLimit = $event" />
+        <AffinityConfigCard
+          :enabled="clientAffinityEnabled"
+          :base="affinityBase"
+          :buffer="affinityBuffer"
+          @update:enabled="clientAffinityEnabled = $event"
+          @update:base="affinityBase = $event"
+          @update:buffer="affinityBuffer = $event"
+        />
+      </div>
+
+      <!-- 配额限制 (非 Anthropic apikey) -->
+      <div
+        v-else-if="account?.type === 'apikey'"
+        class="border-t border-gray-200 pt-4 dark:border-dark-600 space-y-4"
+      >
+        <div class="mb-3">
+          <h3 class="input-label mb-0 text-base font-semibold">{{ t('admin.accounts.quotaLimit') }}</h3>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            {{ t('admin.accounts.quotaLimitHint') }}
+          </p>
+        </div>
+        <QuotaLimitCard :totalLimit="editQuotaLimit" :dailyLimit="editQuotaDailyLimit" :weeklyLimit="editQuotaWeeklyLimit" @update:totalLimit="editQuotaLimit = $event" @update:dailyLimit="editQuotaDailyLimit = $event" @update:weeklyLimit="editQuotaWeeklyLimit = $event" />
+      </div>
 
       <!-- OpenAI OAuth Codex 官方客户端限制开关 -->
       <div

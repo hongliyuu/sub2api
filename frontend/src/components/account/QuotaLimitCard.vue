@@ -53,15 +53,7 @@ const onWeeklyInput = (e: Event) => {
 </script>
 
 <template>
-  <div class="border-t border-gray-200 pt-4 dark:border-dark-600 space-y-4">
-    <div class="mb-3">
-      <h3 class="input-label mb-0 text-base font-semibold">{{ t('admin.accounts.quotaLimit') }}</h3>
-      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-        {{ t('admin.accounts.quotaLimitHint') }}
-      </p>
-    </div>
-
-    <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-600">
+  <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-600">
       <div class="mb-3 flex items-center justify-between">
         <div>
           <label class="input-label mb-0">{{ t('admin.accounts.quotaLimitToggle') }}</label>
@@ -141,6 +133,5 @@ const onWeeklyInput = (e: Event) => {
           <p class="input-hint">{{ t('admin.accounts.quotaTotalLimitHint') }}</p>
         </div>
       </div>
-    </div>
   </div>
 </template>
