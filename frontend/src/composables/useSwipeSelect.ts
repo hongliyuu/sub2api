@@ -42,6 +42,7 @@ export function useSwipeSelect(
   let initialSelectedSnapshot = new Map<number, boolean>()
   let cachedRows: HTMLElement[] = []
   let marqueeEl: HTMLDivElement | null = null
+  let cachedScrollParent: HTMLElement | null = null
 
   const DRAG_THRESHOLD = 5
   const SCROLL_ZONE = 60
@@ -60,29 +61,32 @@ export function useSwipeSelect(
     return Number.isFinite(id) ? id : null
   }
 
-  /** Find the row index closest to a viewport Y coordinate. */
+  /** Find the row index closest to a viewport Y coordinate (binary search). */
   function findRowIndexAtY(clientY: number): number {
-    if (cachedRows.length === 0) return -1
-    // Direct hit
-    for (let i = 0; i < cachedRows.length; i++) {
-      const rect = cachedRows[i].getBoundingClientRect()
-      if (clientY >= rect.top && clientY <= rect.bottom) return i
+    const len = cachedRows.length
+    if (len === 0) return -1
+
+    // Boundary checks
+    const firstRect = cachedRows[0].getBoundingClientRect()
+    if (clientY < firstRect.top) return 0
+    const lastRect = cachedRows[len - 1].getBoundingClientRect()
+    if (clientY > lastRect.bottom) return len - 1
+
+    // Binary search — rows are vertically ordered
+    let lo = 0, hi = len - 1
+    while (lo <= hi) {
+      const mid = (lo + hi) >>> 1
+      const rect = cachedRows[mid].getBoundingClientRect()
+      if (clientY < rect.top) hi = mid - 1
+      else if (clientY > rect.bottom) lo = mid + 1
+      else return mid
     }
-    // Above all rows
-    if (clientY < cachedRows[0].getBoundingClientRect().top) return 0
-    // Below all rows
-    if (clientY > cachedRows[cachedRows.length - 1].getBoundingClientRect().bottom) {
-      return cachedRows.length - 1
-    }
-    // In a gap — find nearest
-    let bestIdx = 0
-    let bestDist = Infinity
-    for (let i = 0; i < cachedRows.length; i++) {
-      const rect = cachedRows[i].getBoundingClientRect()
-      const dist = Math.abs(clientY - (rect.top + rect.bottom) / 2)
-      if (dist < bestDist) { bestDist = dist; bestIdx = i }
-    }
-    return bestIdx
+    // In a gap between rows — pick the closer one
+    if (hi < 0) return 0
+    if (lo >= len) return len - 1
+    const rHi = cachedRows[hi].getBoundingClientRect()
+    const rLo = cachedRows[lo].getBoundingClientRect()
+    return (clientY - rHi.bottom < rLo.top - clientY) ? hi : lo
   }
 
   // --- Prevent text selection via selectstart (no body style mutation) ---
@@ -155,6 +159,27 @@ export function useSwipeSelect(
     return document.documentElement
   }
 
+  // --- Scrollbar click detection ---
+  /** Check if click lands on a scrollbar of the target element or any ancestor. */
+  function isOnScrollbar(e: MouseEvent): boolean {
+    let el = e.target as HTMLElement | null
+    while (el && el !== document.documentElement) {
+      const hasVScroll = el.scrollHeight > el.clientHeight
+      const hasHScroll = el.scrollWidth > el.clientWidth
+      if (hasVScroll || hasHScroll) {
+        const rect = el.getBoundingClientRect()
+        // clientWidth/clientHeight exclude scrollbar; offsetWidth/offsetHeight include it
+        if (hasVScroll && e.clientX > rect.left + el.clientWidth) return true
+        if (hasHScroll && e.clientY > rect.top + el.clientHeight) return true
+      }
+      el = el.parentElement
+    }
+    // Document-level scrollbar
+    const docEl = document.documentElement
+    if (e.clientX >= docEl.clientWidth || e.clientY >= docEl.clientHeight) return true
+    return false
+  }
+
   // =============================================
   // Phase 1: detect drag threshold (5px movement)
   // =============================================
@@ -162,9 +187,8 @@ export function useSwipeSelect(
     if (e.button !== 0) return
     if (!containerRef.value) return
 
-    // Skip clicks on scrollbar area (clientWidth excludes scrollbar)
-    const docEl = document.documentElement
-    if (e.clientX >= docEl.clientWidth || e.clientY >= docEl.clientHeight) return
+    // Skip clicks on any scrollbar (inner containers + document)
+    if (isOnScrollbar(e)) return
 
     const target = e.target as HTMLElement
     if (target.closest('button, a, input, select, textarea, [role="button"], [role="menuitem"], [role="combobox"], [role="dialog"]')) return
@@ -221,6 +245,7 @@ export function useSwipeSelect(
     startY = clientY
     lastMouseY = clientY
     lastEndIndex = -1
+    cachedScrollParent = containerRef.value ? getScrollParent(containerRef.value) : null
 
     createMarquee()
     updateMarquee(clientY)
@@ -234,7 +259,7 @@ export function useSwipeSelect(
     lastMouseY = e.clientY
     updateMarquee(e.clientY)
     const rowIdx = findRowIndexAtY(e.clientY)
-    if (rowIdx >= 0) applyRange(rowIdx)
+    if (rowIdx >= 0 && rowIdx !== lastEndIndex) applyRange(rowIdx)
     autoScroll(e)
   }
 
@@ -253,6 +278,7 @@ export function useSwipeSelect(
     lastEndIndex = -1
     cachedRows = []
     initialSelectedSnapshot.clear()
+    cachedScrollParent = null
     stopAutoScroll()
     removeMarquee()
     document.removeEventListener('selectstart', onSelectStart)
@@ -270,9 +296,8 @@ export function useSwipeSelect(
 
   function autoScroll(e: MouseEvent) {
     cancelAnimationFrame(scrollRAF)
-    const container = containerRef.value
-    if (!container) return
-    const scrollEl = getScrollParent(container)
+    const scrollEl = cachedScrollParent
+    if (!scrollEl) return
 
     let dy = 0
     if (scrollEl === document.documentElement) {
@@ -286,10 +311,13 @@ export function useSwipeSelect(
 
     if (dy !== 0) {
       const step = () => {
+        const prevScrollTop = scrollEl.scrollTop
         scrollEl.scrollTop += dy
-        // After each scroll frame, re-check which rows are in range
-        const rowIdx = findRowIndexAtY(lastMouseY)
-        if (rowIdx >= 0) applyRange(rowIdx)
+        // Only re-check selection if scroll actually moved
+        if (scrollEl.scrollTop !== prevScrollTop) {
+          const rowIdx = findRowIndexAtY(lastMouseY)
+          if (rowIdx >= 0 && rowIdx !== lastEndIndex) applyRange(rowIdx)
+        }
         scrollRAF = requestAnimationFrame(step)
       }
       scrollRAF = requestAnimationFrame(step)
