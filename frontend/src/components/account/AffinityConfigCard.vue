@@ -35,6 +35,8 @@ const onBaseInput = (e: Event) => {
   emit('update:base', Number.isNaN(raw) ? null : Math.max(1, Math.floor(raw)))
 }
 
+const hasBaseLimit = computed(() => props.base != null && props.base > 0)
+
 // buffer: empty = null (infinite yellow), 0 = no yellow, >0 = yellow range
 const bufferIsInfinite = ref(props.buffer === null || props.buffer === undefined)
 
@@ -78,85 +80,94 @@ const zonePreview = computed(() => {
 </script>
 
 <template>
-  <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-600">
-    <div class="mb-3 flex items-center justify-between">
-      <div>
-        <label class="input-label mb-0">{{ t('admin.accounts.affinityToggle') }}</label>
-        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-          {{ t('admin.accounts.affinityToggleHint') }}
-        </p>
-      </div>
-      <button
-        type="button"
-        @click="localEnabled = !localEnabled"
-        :class="[
-          'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-          localEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
-        ]"
-      >
-        <span
-          :class="[
-            'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-            localEnabled ? 'translate-x-5' : 'translate-x-0'
-          ]"
-        />
-      </button>
+  <div class="border-t border-gray-200 pt-4 dark:border-dark-600 space-y-4">
+    <div class="mb-3">
+      <h3 class="input-label mb-0 text-base font-semibold">{{ t('admin.accounts.affinitySection') }}</h3>
+      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+        {{ t('admin.accounts.affinitySectionHint') }}
+      </p>
     </div>
 
-    <div v-if="localEnabled" class="space-y-3">
-      <!-- Base limit (green zone) -->
-      <div>
-        <label class="input-label">{{ t('admin.accounts.affinityBase') }}</label>
-        <input
-          :value="base"
-          @input="onBaseInput"
-          type="number"
-          min="1"
-          step="1"
-          class="input"
-          :placeholder="t('admin.accounts.affinityBasePlaceholder')"
-        />
-        <p class="input-hint">{{ t('admin.accounts.affinityBaseHint') }}</p>
-      </div>
-
-      <!-- Buffer (yellow zone) -->
-      <div>
-        <div class="flex items-center justify-between mb-1">
-          <label class="input-label mb-0">{{ t('admin.accounts.affinityBuffer') }}</label>
-          <label class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 cursor-pointer">
-            <input
-              type="checkbox"
-              :checked="bufferIsInfinite"
-              @change="toggleBufferInfinite"
-              class="h-3.5 w-3.5 rounded border-gray-300 text-primary-600"
-            />
-            {{ t('admin.accounts.affinityBufferInfinite') }}
-          </label>
+    <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-600">
+      <div class="mb-3 flex items-center justify-between">
+        <div>
+          <label class="input-label mb-0">{{ t('admin.accounts.affinityToggle') }}</label>
+          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            {{ t('admin.accounts.affinityToggleHint') }}
+          </p>
         </div>
-        <input
-          v-if="!bufferIsInfinite"
-          :value="buffer"
-          @input="onBufferInput"
-          type="number"
-          min="0"
-          step="1"
-          class="input"
-          :placeholder="t('admin.accounts.affinityBufferPlaceholder')"
-        />
-        <p class="input-hint">{{ t('admin.accounts.affinityBufferHint') }}</p>
+        <button
+          type="button"
+          @click="localEnabled = !localEnabled"
+          :class="[
+            'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
+            localEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+          ]"
+        >
+          <span
+            :class="[
+              'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+              localEnabled ? 'translate-x-5' : 'translate-x-0'
+            ]"
+          />
+        </button>
       </div>
 
-      <!-- Zone preview -->
-      <div v-if="zonePreview && base && base > 0" class="flex items-center gap-2 text-xs">
-        <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-          {{ zonePreview.green }}
-        </span>
-        <span v-if="zonePreview.yellow" class="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
-          {{ zonePreview.yellow }}
-        </span>
-        <span v-if="zonePreview.red" class="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-red-700 dark:bg-red-900/30 dark:text-red-400">
-          {{ zonePreview.red }}
-        </span>
+      <div v-if="localEnabled" class="space-y-3">
+        <!-- Base limit (green zone) -->
+        <div>
+          <label class="input-label">{{ t('admin.accounts.affinityBase') }}</label>
+          <input
+            :value="base"
+            @input="onBaseInput"
+            type="number"
+            min="1"
+            step="1"
+            class="input"
+            :placeholder="t('admin.accounts.affinityBasePlaceholder')"
+          />
+          <p class="input-hint">{{ t('admin.accounts.affinityBaseHint') }}</p>
+        </div>
+
+        <!-- Buffer (yellow zone) - only shown when base is set -->
+        <div v-if="hasBaseLimit">
+          <div class="flex items-center justify-between mb-1">
+            <label class="input-label mb-0">{{ t('admin.accounts.affinityBuffer') }}</label>
+            <label class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 cursor-pointer">
+              <input
+                type="checkbox"
+                :checked="bufferIsInfinite"
+                @change="toggleBufferInfinite"
+                class="h-3.5 w-3.5 rounded border-gray-300 text-primary-600"
+              />
+              {{ t('admin.accounts.affinityBufferInfinite') }}
+            </label>
+          </div>
+          <input
+            v-if="!bufferIsInfinite"
+            :value="buffer"
+            @input="onBufferInput"
+            type="number"
+            min="0"
+            step="1"
+            class="input"
+            :placeholder="t('admin.accounts.affinityBufferPlaceholder')"
+          />
+          <p class="input-hint">{{ t('admin.accounts.affinityBufferHint') }}</p>
+        </div>
+
+        <!-- Zone preview -->
+        <div v-if="zonePreview && base && base > 0" class="flex items-center gap-2 text-xs">
+          <span class="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+            {{ zonePreview.green }}
+          </span>
+          <span v-if="zonePreview.yellow" class="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
+            {{ zonePreview.yellow }}
+          </span>
+          <span v-if="zonePreview.red" class="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+            {{ zonePreview.red }}
+          </span>
+        </div>
       </div>
     </div>
   </div>

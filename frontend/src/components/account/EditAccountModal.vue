@@ -782,26 +782,6 @@
       </div>
 
       <!-- Client Affinity (Anthropic accounts only) -->
-      <div
-        v-if="account?.platform === 'anthropic'"
-        class="border-t border-gray-200 pt-4 dark:border-dark-600 space-y-4"
-      >
-        <div class="mb-3">
-          <h3 class="input-label mb-0 text-base font-semibold">{{ t('admin.accounts.affinitySection') }}</h3>
-          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-            {{ t('admin.accounts.affinitySectionHint') }}
-          </p>
-        </div>
-        <AffinityConfigCard
-          :enabled="clientAffinityEnabled"
-          :base="affinityBase"
-          :buffer="affinityBuffer"
-          @update:enabled="clientAffinityEnabled = $event"
-          @update:base="affinityBase = $event"
-          @update:buffer="affinityBuffer = $event"
-        />
-      </div>
-
       <div>
         <label class="input-label">{{ t('admin.accounts.proxy') }}</label>
         <ProxySelector v-model="form.proxy_id" :proxies="proxies" />
@@ -926,6 +906,17 @@
 
       <!-- API Key 账号配额限制 -->
       <QuotaLimitCard v-if="account?.type === 'apikey'" :totalLimit="editQuotaLimit" :dailyLimit="editQuotaDailyLimit" :weeklyLimit="editQuotaWeeklyLimit" @update:totalLimit="editQuotaLimit = $event" @update:dailyLimit="editQuotaDailyLimit = $event" @update:weeklyLimit="editQuotaWeeklyLimit = $event" />
+
+      <!-- 客户端亲和限制 (all Anthropic account types) -->
+      <AffinityConfigCard
+        v-if="account?.platform === 'anthropic'"
+        :enabled="clientAffinityEnabled"
+        :base="affinityBase"
+        :buffer="affinityBuffer"
+        @update:enabled="clientAffinityEnabled = $event"
+        @update:base="affinityBase = $event"
+        @update:buffer="affinityBuffer = $event"
+      />
 
       <!-- OpenAI OAuth Codex 官方客户端限制开关 -->
       <div
@@ -2539,53 +2530,17 @@ const handleSubmit = async () => {
         delete newExtra.cache_ttl_override_target
       }
 
-      // Client affinity setting
-      if (clientAffinityEnabled.value) {
-        newExtra.client_affinity_enabled = true
-        if (affinityBase.value != null && affinityBase.value > 0) {
-          newExtra.affinity_base = affinityBase.value
-        } else {
-          delete newExtra.affinity_base
-        }
-        if (affinityBase.value != null && affinityBase.value > 0 && affinityBuffer.value != null) {
-          newExtra.affinity_buffer = affinityBuffer.value
-        } else {
-          delete newExtra.affinity_buffer
-        }
-      } else {
-        delete newExtra.client_affinity_enabled
-        delete newExtra.affinity_base
-        delete newExtra.affinity_buffer
-      }
-
       updatePayload.extra = newExtra
     }
 
-    // For Anthropic API Key accounts, handle passthrough mode and client affinity in extra
+    // For Anthropic API Key accounts, handle passthrough mode in extra
     if (props.account.platform === 'anthropic' && props.account.type === 'apikey') {
-      const currentExtra = (props.account.extra as Record<string, unknown>) || {}
+      const currentExtra = (updatePayload.extra as Record<string, unknown>) || (props.account.extra as Record<string, unknown>) || {}
       const newExtra: Record<string, unknown> = { ...currentExtra }
       if (anthropicPassthroughEnabled.value) {
         newExtra.anthropic_passthrough = true
       } else {
         delete newExtra.anthropic_passthrough
-      }
-      if (clientAffinityEnabled.value) {
-        newExtra.client_affinity_enabled = true
-        if (affinityBase.value != null && affinityBase.value > 0) {
-          newExtra.affinity_base = affinityBase.value
-        } else {
-          delete newExtra.affinity_base
-        }
-        if (affinityBase.value != null && affinityBase.value > 0 && affinityBuffer.value != null) {
-          newExtra.affinity_buffer = affinityBuffer.value
-        } else {
-          delete newExtra.affinity_buffer
-        }
-      } else {
-        delete newExtra.client_affinity_enabled
-        delete newExtra.affinity_base
-        delete newExtra.affinity_buffer
       }
       updatePayload.extra = newExtra
     }
