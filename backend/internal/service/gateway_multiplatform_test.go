@@ -250,6 +250,9 @@ func (m *mockGatewayCacheForPlatform) GetAccountAffinityClientsBatch(_ context.C
 func (m *mockGatewayCacheForPlatform) GetAccountAffinityClientsWithScores(_ context.Context, _ int64, _ []int64, _ time.Duration) ([]AffinityClient, error) {
 	return nil, nil
 }
+func (m *mockGatewayCacheForPlatform) ClearAccountAffinity(_ context.Context, _ int64, _ []int64) error {
+	return nil
+}
 
 type mockGroupRepoForGateway struct {
 	groups           map[int64]*Group
