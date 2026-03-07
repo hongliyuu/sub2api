@@ -9,7 +9,7 @@
  */
 
 const GROUP_DELAY_MIN_MS = 1000
-const GROUP_DELAY_MAX_MS = 1500
+const GROUP_DELAY_MAX_MS = 2000
 
 type Task<T> = {
   fn: () => Promise<T>
@@ -37,7 +37,7 @@ async function drain(groupKey: string) {
     } catch (err) {
       task.reject(err)
     }
-    // Wait a random 1–1.5s before next request in the same group
+    // Wait a random 1–2s before next request in the same group
     if (queue.length > 0) {
       const jitter = GROUP_DELAY_MIN_MS + Math.random() * (GROUP_DELAY_MAX_MS - GROUP_DELAY_MIN_MS)
       await new Promise((r) => setTimeout(r, jitter))

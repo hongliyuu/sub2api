@@ -20,11 +20,11 @@ describe('usageLoadQueue', () => {
     await Promise.all([p1, p2, p3])
 
     expect(timestamps).toHaveLength(3)
-    // 随机 1-1.5s 间隔，至少 950ms（留一点误差）
+    // 随机 1-2s 间隔，至少 950ms（留一点误差）
     expect(timestamps[1] - timestamps[0]).toBeGreaterThanOrEqual(950)
-    expect(timestamps[1] - timestamps[0]).toBeLessThan(1600)
+    expect(timestamps[1] - timestamps[0]).toBeLessThan(2100)
     expect(timestamps[2] - timestamps[1]).toBeGreaterThanOrEqual(950)
-    expect(timestamps[2] - timestamps[1]).toBeLessThan(1600)
+    expect(timestamps[2] - timestamps[1]).toBeLessThan(2100)
   })
 
   it('不同组请求并行执行', async () => {
