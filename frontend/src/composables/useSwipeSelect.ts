@@ -94,6 +94,7 @@ export function useSwipeSelect(
 
   // --- Marquee overlay ---
   function createMarquee() {
+    removeMarquee() // defensive: remove any stale marquee
     marqueeEl = document.createElement('div')
     const isDark = document.documentElement.classList.contains('dark')
     Object.assign(marqueeEl.style, {
@@ -197,6 +198,11 @@ export function useSwipeSelect(
     if (cachedRows.length === 0) return
 
     pendingStartY = e.clientY
+    // Prevent text selection as soon as the mouse is down,
+    // before the drag threshold is reached (Phase 1).
+    // Without this, the browser starts selecting text during
+    // the 0–5px threshold movement window.
+    document.addEventListener('selectstart', onSelectStart)
     document.addEventListener('mousemove', onThresholdMove)
     document.addEventListener('mouseup', onThresholdUp)
   }
@@ -224,6 +230,8 @@ export function useSwipeSelect(
   function onThresholdUp() {
     document.removeEventListener('mousemove', onThresholdMove)
     document.removeEventListener('mouseup', onThresholdUp)
+    // Phase 1 ended without crossing threshold — remove selectstart blocker
+    document.removeEventListener('selectstart', onSelectStart)
     cachedRows = []
   }
 
@@ -250,8 +258,10 @@ export function useSwipeSelect(
     createMarquee()
     updateMarquee(clientY)
     applyRange(startRowIndex)
-    // Prevent text selection during drag (no body style mutation)
-    document.addEventListener('selectstart', onSelectStart)
+    // selectstart is already blocked since Phase 1 (onMouseDown).
+    // Clear any text selection that the browser may have started
+    // before our selectstart handler took effect.
+    window.getSelection()?.removeAllRanges()
   }
 
   function onMouseMove(e: MouseEvent) {
@@ -267,6 +277,7 @@ export function useSwipeSelect(
     if (!isDragging.value) return
     // After wheel scroll, rows shift in viewport — re-check selection
     requestAnimationFrame(() => {
+      if (!isDragging.value) return // guard: drag may have ended before this frame
       const rowIdx = findRowIndexAtY(lastMouseY)
       if (rowIdx >= 0) applyRange(rowIdx)
     })
@@ -289,6 +300,15 @@ export function useSwipeSelect(
 
   function onMouseUp() {
     cleanupDrag()
+  }
+
+  // Guard: clean up if mouse leaves window or window loses focus during drag
+  function onWindowBlur() {
+    if (isDragging.value) cleanupDrag()
+    // Also clean up threshold phase (Phase 1)
+    document.removeEventListener('mousemove', onThresholdMove)
+    document.removeEventListener('mouseup', onThresholdUp)
+    document.removeEventListener('selectstart', onSelectStart)
   }
 
   // --- Auto-scroll logic ---
@@ -332,13 +352,16 @@ export function useSwipeSelect(
   onMounted(() => {
     // Listen on document so drag can start from anywhere on the page
     document.addEventListener('mousedown', onMouseDown)
+    window.addEventListener('blur', onWindowBlur)
   })
 
   onUnmounted(() => {
     document.removeEventListener('mousedown', onMouseDown)
+    window.removeEventListener('blur', onWindowBlur)
     // Clean up any in-progress drag state
     document.removeEventListener('mousemove', onThresholdMove)
     document.removeEventListener('mouseup', onThresholdUp)
+    document.removeEventListener('selectstart', onSelectStart)
     cleanupDrag()
   })
 
