@@ -1680,14 +1680,30 @@ func (s *GatewayService) SelectAccountWithLoadAwareness(ctx context.Context, gro
 		// 批量获取亲和客户端数量（用于均衡分配新客户端）
 		s.populateAffinityCounts(ctx, available, derefGroupID(groupID))
 
-		// 按亲和三区过滤：绿区优先 → 黄区降级 → 红区移除
-		available = classifyByAffinityZone(available)
-
-		// 分层过滤选择：优先级 → 负载率 → 亲和客户端数 → LRU
+		// 分层过滤选择：优先级 → 亲和三区 → 负载率 → 亲和客户端数 → LRU
 		for len(available) > 0 {
 			// 1. 取优先级最小的集合
 			candidates := filterByMinPriority(available)
-			// 2. 取负载率最低的集合
+			// 2. 按亲和三区过滤：绿区优先 → 黄区降级 → 红区移除（在同优先级内）
+			candidates = classifyByAffinityZone(candidates)
+			if len(candidates) == 0 {
+				// 当前优先级组全部在红区，移除后回退到下一优先级组
+				minPri := available[0].account.Priority
+				for _, a := range available[1:] {
+					if a.account.Priority < minPri {
+						minPri = a.account.Priority
+					}
+				}
+				newAvailable := make([]accountWithLoad, 0, len(available))
+				for _, a := range available {
+					if a.account.Priority != minPri {
+						newAvailable = append(newAvailable, a)
+					}
+				}
+				available = newAvailable
+				continue
+			}
+			// 3. 取负载率最低的集合
 			candidates = filterByMinLoadRate(candidates)
 			// 3. 取亲和客户端数最少的集合
 			candidates = filterByMinAffinityCount(candidates)
