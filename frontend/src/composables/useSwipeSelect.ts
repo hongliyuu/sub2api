@@ -4,6 +4,12 @@ import { ref, onMounted, onUnmounted, type Ref } from 'vue'
  * WeChat-style swipe/drag to select rows in a DataTable,
  * with a semi-transparent marquee overlay showing the selection area.
  *
+ * Features:
+ *  - Start dragging from anywhere on the page (not just inside the table)
+ *  - Mouse wheel scrolling continues selecting new rows
+ *  - Auto-scroll when dragging near viewport edges
+ *  - 5px drag threshold to avoid accidental selection on click
+ *
  * Usage:
  *   const containerRef = ref<HTMLElement | null>(null)
  *   useSwipeSelect(containerRef, {
@@ -31,12 +37,15 @@ export function useSwipeSelect(
   let startRowIndex = -1
   let lastEndIndex = -1
   let startY = 0
-  // Snapshot of which row IDs were selected when drag started
+  let lastMouseY = 0
+  let pendingStartY = 0
   let initialSelectedSnapshot = new Map<number, boolean>()
-  // Cache of row elements for the current drag operation
   let cachedRows: HTMLElement[] = []
-  // Marquee overlay element
   let marqueeEl: HTMLDivElement | null = null
+
+  const DRAG_THRESHOLD = 5
+  const SCROLL_ZONE = 60
+  const SCROLL_SPEED = 8
 
   function getDataRows(): HTMLElement[] {
     const container = containerRef.value
@@ -49,6 +58,31 @@ export function useSwipeSelect(
     if (raw === null) return null
     const id = Number(raw)
     return Number.isFinite(id) ? id : null
+  }
+
+  /** Find the row index closest to a viewport Y coordinate. */
+  function findRowIndexAtY(clientY: number): number {
+    if (cachedRows.length === 0) return -1
+    // Direct hit
+    for (let i = 0; i < cachedRows.length; i++) {
+      const rect = cachedRows[i].getBoundingClientRect()
+      if (clientY >= rect.top && clientY <= rect.bottom) return i
+    }
+    // Above all rows
+    if (clientY < cachedRows[0].getBoundingClientRect().top) return 0
+    // Below all rows
+    if (clientY > cachedRows[cachedRows.length - 1].getBoundingClientRect().bottom) {
+      return cachedRows.length - 1
+    }
+    // In a gap — find nearest
+    let bestIdx = 0
+    let bestDist = Infinity
+    for (let i = 0; i < cachedRows.length; i++) {
+      const rect = cachedRows[i].getBoundingClientRect()
+      const dist = Math.abs(clientY - (rect.top + rect.bottom) / 2)
+      if (dist < bestDist) { bestDist = dist; bestIdx = i }
+    }
+    return bestIdx
   }
 
   // --- Marquee overlay ---
@@ -79,109 +113,129 @@ export function useSwipeSelect(
   }
 
   function removeMarquee() {
-    if (marqueeEl) {
-      marqueeEl.remove()
-      marqueeEl = null
-    }
+    if (marqueeEl) { marqueeEl.remove(); marqueeEl = null }
   }
 
   // --- Row selection logic ---
   function applyRange(endIndex: number) {
+    if (startRowIndex < 0 || endIndex < 0) return
     const rangeMin = Math.min(startRowIndex, endIndex)
     const rangeMax = Math.max(startRowIndex, endIndex)
     const prevMin = lastEndIndex >= 0 ? Math.min(startRowIndex, lastEndIndex) : rangeMin
     const prevMax = lastEndIndex >= 0 ? Math.max(startRowIndex, lastEndIndex) : rangeMax
-
-    // Determine the full affected region (union of old and new range)
     const lo = Math.min(rangeMin, prevMin)
     const hi = Math.max(rangeMax, prevMax)
 
     for (let i = lo; i <= hi && i < cachedRows.length; i++) {
       const id = getRowId(cachedRows[i])
       if (id === null) continue
-
       if (i >= rangeMin && i <= rangeMax) {
-        // In current range -> apply drag mode
-        if (dragMode === 'select') {
-          adapter.select(id)
-        } else {
-          adapter.deselect(id)
-        }
+        if (dragMode === 'select') adapter.select(id)
+        else adapter.deselect(id)
       } else {
-        // Outside current range -> restore to initial state
         const wasSelected = initialSelectedSnapshot.get(id) ?? false
-        if (wasSelected) {
-          adapter.select(id)
-        } else {
-          adapter.deselect(id)
-        }
+        if (wasSelected) adapter.select(id)
+        else adapter.deselect(id)
       }
     }
-
     lastEndIndex = endIndex
   }
 
+  // --- Scrollable parent ---
+  function getScrollParent(el: HTMLElement): HTMLElement {
+    let parent = el.parentElement
+    while (parent && parent !== document.documentElement) {
+      const { overflow, overflowY } = getComputedStyle(parent)
+      if (/(auto|scroll)/.test(overflow + overflowY)) return parent
+      parent = parent.parentElement
+    }
+    return document.documentElement
+  }
+
+  // =============================================
+  // Phase 1: detect drag threshold (5px movement)
+  // =============================================
   function onMouseDown(e: MouseEvent) {
     if (e.button !== 0) return
-
+    if (!containerRef.value) return
     const target = e.target as HTMLElement
-    // Don't interfere with interactive elements
-    if (target.closest('button, a, input, select, textarea, [role="button"], [role="menuitem"]')) return
-
-    // Must be inside tbody
-    if (!target.closest('tbody')) return
+    if (target.closest('button, a, input, select, textarea, [role="button"], [role="menuitem"], [role="combobox"], [role="dialog"]')) return
 
     cachedRows = getDataRows()
-    const tr = target.closest('tr[data-row-id]') as HTMLElement | null
-    if (!tr) return
-    const rowIndex = cachedRows.indexOf(tr)
-    if (rowIndex < 0) return
+    if (cachedRows.length === 0) return
 
-    const rowId = getRowId(tr)
-    if (rowId === null) return
+    pendingStartY = e.clientY
+    document.addEventListener('mousemove', onThresholdMove)
+    document.addEventListener('mouseup', onThresholdUp)
+  }
 
-    // Snapshot current selection state for all visible rows
+  function onThresholdMove(e: MouseEvent) {
+    if (Math.abs(e.clientY - pendingStartY) < DRAG_THRESHOLD) return
+    // Threshold exceeded — begin actual drag
+    document.removeEventListener('mousemove', onThresholdMove)
+    document.removeEventListener('mouseup', onThresholdUp)
+
+    beginDrag(pendingStartY)
+
+    // Process the move that crossed the threshold
+    lastMouseY = e.clientY
+    updateMarquee(e.clientY)
+    const rowIdx = findRowIndexAtY(e.clientY)
+    if (rowIdx >= 0) applyRange(rowIdx)
+    autoScroll(e)
+
+    document.addEventListener('mousemove', onMouseMove)
+    document.addEventListener('mouseup', onMouseUp)
+    document.addEventListener('wheel', onWheel, { passive: true })
+  }
+
+  function onThresholdUp() {
+    document.removeEventListener('mousemove', onThresholdMove)
+    document.removeEventListener('mouseup', onThresholdUp)
+    cachedRows = []
+  }
+
+  // ============================
+  // Phase 2: actual drag session
+  // ============================
+  function beginDrag(clientY: number) {
+    startRowIndex = findRowIndexAtY(clientY)
+    const startRowId = startRowIndex >= 0 ? getRowId(cachedRows[startRowIndex]) : null
+    dragMode = (startRowId !== null && adapter.isSelected(startRowId)) ? 'deselect' : 'select'
+
     initialSelectedSnapshot = new Map()
     for (const row of cachedRows) {
       const id = getRowId(row)
-      if (id !== null) {
-        initialSelectedSnapshot.set(id, adapter.isSelected(id))
-      }
+      if (id !== null) initialSelectedSnapshot.set(id, adapter.isSelected(id))
     }
 
     isDragging.value = true
-    startRowIndex = rowIndex
+    startY = clientY
+    lastMouseY = clientY
     lastEndIndex = -1
-    startY = e.clientY
-    dragMode = adapter.isSelected(rowId) ? 'deselect' : 'select'
 
-    applyRange(rowIndex)
     createMarquee()
-    updateMarquee(e.clientY)
-
-    e.preventDefault()
+    updateMarquee(clientY)
+    applyRange(startRowIndex)
     document.body.style.userSelect = 'none'
-    document.addEventListener('mousemove', onMouseMove)
-    document.addEventListener('mouseup', onMouseUp)
   }
 
   function onMouseMove(e: MouseEvent) {
     if (!isDragging.value) return
-
+    lastMouseY = e.clientY
     updateMarquee(e.clientY)
-
-    const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null
-    if (!el) return
-
-    const tr = el.closest('tr[data-row-id]') as HTMLElement | null
-    if (!tr) return
-    const rowIndex = cachedRows.indexOf(tr)
-    if (rowIndex < 0) return
-
-    applyRange(rowIndex)
-
-    // Auto-scroll when near container edges
+    const rowIdx = findRowIndexAtY(e.clientY)
+    if (rowIdx >= 0) applyRange(rowIdx)
     autoScroll(e)
+  }
+
+  function onWheel() {
+    if (!isDragging.value) return
+    // After wheel scroll, rows shift in viewport — re-check selection
+    requestAnimationFrame(() => {
+      const rowIdx = findRowIndexAtY(lastMouseY)
+      if (rowIdx >= 0) applyRange(rowIdx)
+    })
   }
 
   function onMouseUp() {
@@ -193,32 +247,36 @@ export function useSwipeSelect(
     stopAutoScroll()
     removeMarquee()
     document.body.style.userSelect = ''
-
     document.removeEventListener('mousemove', onMouseMove)
     document.removeEventListener('mouseup', onMouseUp)
+    document.removeEventListener('wheel', onWheel)
   }
 
   // --- Auto-scroll logic ---
   let scrollRAF = 0
-  const SCROLL_ZONE = 40 // px from edge
-  const SCROLL_SPEED = 8 // px per frame
 
   function autoScroll(e: MouseEvent) {
     cancelAnimationFrame(scrollRAF)
     const container = containerRef.value
     if (!container) return
+    const scrollEl = getScrollParent(container)
 
-    const rect = container.getBoundingClientRect()
     let dy = 0
-    if (e.clientY < rect.top + SCROLL_ZONE) {
-      dy = -SCROLL_SPEED
-    } else if (e.clientY > rect.bottom - SCROLL_ZONE) {
-      dy = SCROLL_SPEED
+    if (scrollEl === document.documentElement) {
+      if (e.clientY < SCROLL_ZONE) dy = -SCROLL_SPEED
+      else if (e.clientY > window.innerHeight - SCROLL_ZONE) dy = SCROLL_SPEED
+    } else {
+      const rect = scrollEl.getBoundingClientRect()
+      if (e.clientY < rect.top + SCROLL_ZONE) dy = -SCROLL_SPEED
+      else if (e.clientY > rect.bottom - SCROLL_ZONE) dy = SCROLL_SPEED
     }
 
     if (dy !== 0) {
       const step = () => {
-        container.scrollTop += dy
+        scrollEl.scrollTop += dy
+        // After each scroll frame, re-check which rows are in range
+        const rowIdx = findRowIndexAtY(lastMouseY)
+        if (rowIdx >= 0) applyRange(rowIdx)
         scrollRAF = requestAnimationFrame(step)
       }
       scrollRAF = requestAnimationFrame(step)
@@ -229,14 +287,19 @@ export function useSwipeSelect(
     cancelAnimationFrame(scrollRAF)
   }
 
+  // --- Lifecycle ---
   onMounted(() => {
-    containerRef.value?.addEventListener('mousedown', onMouseDown)
+    // Listen on document so drag can start from anywhere on the page
+    document.addEventListener('mousedown', onMouseDown)
   })
 
   onUnmounted(() => {
-    containerRef.value?.removeEventListener('mousedown', onMouseDown)
+    document.removeEventListener('mousedown', onMouseDown)
+    document.removeEventListener('mousemove', onThresholdMove)
+    document.removeEventListener('mouseup', onThresholdUp)
     document.removeEventListener('mousemove', onMouseMove)
     document.removeEventListener('mouseup', onMouseUp)
+    document.removeEventListener('wheel', onWheel)
     stopAutoScroll()
     removeMarquee()
   })
