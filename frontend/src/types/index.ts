@@ -769,6 +769,16 @@ export interface AccountUsageInfo {
   gemini_pro_minute?: UsageProgress | null
   gemini_flash_minute?: UsageProgress | null
   antigravity_quota?: Record<string, AntigravityModelQuota> | null
+  script_windows?: ScriptUsageWindow[] | null
+}
+
+export interface ScriptUsageWindow {
+  name: string
+  utilization: number // 0.0~1.0+
+  resets_at?: number | null // unix timestamp
+  used?: number | null
+  limit?: number | null
+  unit?: string // tokens/requests/credits
 }
 
 // OpenAI Codex usage snapshot (from response headers)
