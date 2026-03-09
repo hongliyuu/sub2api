@@ -273,7 +273,7 @@
     <AccountTestModal :show="showTest" :account="testingAcc" @close="closeTestModal" />
     <AccountStatsModal :show="showStats" :account="statsAcc" @close="closeStatsModal" />
     <ScheduledTestsPanel :show="showSchedulePanel" :account-id="scheduleAcc?.id ?? null" :model-options="scheduleModelOptions" @close="closeSchedulePanel" />
-    <AccountActionMenu :show="menu.show" :account="menu.acc" :position="menu.pos" @close="menu.show = false" @test="handleTest" @stats="handleViewStats" @schedule="handleSchedule" @reauth="handleReAuth" @refresh-token="handleRefresh" @reset-status="handleResetStatus" @clear-rate-limit="handleClearRateLimit" @reset-quota="handleResetQuota" />
+    <AccountActionMenu :show="menu.show" :account="menu.acc" :position="menu.pos" @close="menu.show = false" @test="handleTest" @stats="handleViewStats" @schedule="handleSchedule" @reauth="handleReAuth" @refresh-token="handleRefresh" @recover-state="handleRecoverState" @reset-quota="handleResetQuota" />
     <SyncFromCrsModal :show="showSync" @close="showSync = false" @synced="reload" />
     <ImportDataModal :show="showImportData" @close="showImportData = false" @imported="handleDataImported" />
     <BulkEditAccountModal :show="showBulkEdit" :account-ids="selIds" :selected-platforms="selPlatforms" :selected-types="selTypes" :proxies="proxies" :groups="groups" @close="showBulkEdit = false" @updated="handleBulkUpdated" />
@@ -323,6 +323,7 @@ import AccountCapacityCell from '@/components/account/AccountCapacityCell.vue'
 import PlatformTypeBadge from '@/components/common/PlatformTypeBadge.vue'
 import Icon from '@/components/icons/Icon.vue'
 import ErrorPassthroughRulesModal from '@/components/admin/ErrorPassthroughRulesModal.vue'
+import { buildOpenAIUsageRefreshKey } from '@/utils/accountUsageRefresh'
 import { formatDateTime, formatRelativeTime } from '@/utils/format'
 import type { Account, AccountPlatform, AccountType, Proxy, AdminGroup, WindowStats, ClaudeModel } from '@/types'
 
@@ -599,16 +600,17 @@ const resetAutoRefreshCache = () => {
 const isFirstLoad = ref(true)
 
 const load = async () => {
+  const requestParams = params as any
   hasPendingListSync.value = false
   resetAutoRefreshCache()
   pendingTodayStatsRefresh.value = false
   if (isFirstLoad.value) {
-    ;(params as any).lite = '1'
+    requestParams.lite = '1'
   }
   await baseLoad()
   if (isFirstLoad.value) {
     isFirstLoad.value = false
-    delete (params as any).lite
+    delete requestParams.lite
   }
   await refreshTodayStatsBatch()
 }
@@ -688,7 +690,8 @@ const shouldReplaceAutoRefreshRow = (current: Account, next: Account) => {
     current.status !== next.status ||
     current.rate_limit_reset_at !== next.rate_limit_reset_at ||
     current.overload_until !== next.overload_until ||
-    current.temp_unschedulable_until !== next.temp_unschedulable_until
+    current.temp_unschedulable_until !== next.temp_unschedulable_until ||
+    buildOpenAIUsageRefreshKey(current) !== buildOpenAIUsageRefreshKey(next)
   )
 }
 
@@ -1164,24 +1167,15 @@ const handleRefresh = async (a: Account) => {
     console.error('Failed to refresh credentials:', error)
   }
 }
-const handleResetStatus = async (a: Account) => {
+const handleRecoverState = async (a: Account) => {
   try {
-    const updated = await adminAPI.accounts.clearError(a.id)
+    const updated = await adminAPI.accounts.recoverState(a.id)
     patchAccountInList(updated)
     enterAutoRefreshSilentWindow()
-    appStore.showSuccess(t('common.success'))
-  } catch (error) {
-    console.error('Failed to reset status:', error)
-  }
-}
-const handleClearRateLimit = async (a: Account) => {
-  try {
-    const updated = await adminAPI.accounts.clearRateLimit(a.id)
-    patchAccountInList(updated)
-    enterAutoRefreshSilentWindow()
-    appStore.showSuccess(t('common.success'))
-  } catch (error) {
-    console.error('Failed to clear rate limit:', error)
+    appStore.showSuccess(t('admin.accounts.recoverStateSuccess'))
+  } catch (error: any) {
+    console.error('Failed to recover account state:', error)
+    appStore.showError(error?.message || t('admin.accounts.recoverStateFailed'))
   }
 }
 const handleResetQuota = async (a: Account) => {
@@ -1211,17 +1205,11 @@ const handleToggleSchedulable = async (a: Account) => {
   }
 }
 const handleShowTempUnsched = (a: Account) => { tempUnschedAcc.value = a; showTempUnsched.value = true }
-const handleTempUnschedReset = async () => {
-  if(!tempUnschedAcc.value) return
-  try {
-    const updated = await adminAPI.accounts.clearError(tempUnschedAcc.value.id)
-    showTempUnsched.value = false
-    tempUnschedAcc.value = null
-    patchAccountInList(updated)
-    enterAutoRefreshSilentWindow()
-  } catch (error) {
-    console.error('Failed to reset temp unscheduled:', error)
-  }
+const handleTempUnschedReset = async (updated: Account) => {
+  showTempUnsched.value = false
+  tempUnschedAcc.value = null
+  patchAccountInList(updated)
+  enterAutoRefreshSilentWindow()
 }
 const formatExpiresAt = (value: number | null) => {
   if (!value) return '-'

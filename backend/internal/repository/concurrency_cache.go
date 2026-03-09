@@ -147,18 +147,76 @@ var (
 			return 1
 		`)
 
-	// cleanupExpiredSlotsScript - remove expired slots
-	// KEYS[1] = concurrency:account:{accountID}
-	// ARGV[1] = TTL (seconds)
+
+	// cleanupExpiredSlotsScript 清理单个账号/用户有序集合中过期槽位
+	// KEYS[1] = 有序集合键
+	// ARGV[1] = TTL（秒）
 	cleanupExpiredSlotsScript = redis.NewScript(`
-			local key = KEYS[1]
-			local ttl = tonumber(ARGV[1])
-			local timeResult = redis.call('TIME')
-			local now = tonumber(timeResult[1])
-			local expireBefore = now - ttl
-			return redis.call('ZREMRANGEBYSCORE', key, '-inf', expireBefore)
-		`)
-)
+		local key = KEYS[1]
+		local ttl = tonumber(ARGV[1])
+		local timeResult = redis.call('TIME')
+		local now = tonumber(timeResult[1])
+		local expireBefore = now - ttl
+		redis.call('ZREMRANGEBYSCORE', key, '-inf', expireBefore)
+		if redis.call('ZCARD', key) == 0 then
+			redis.call('DEL', key)
+		else
+			redis.call('EXPIRE', key, ttl)
+		end
+		return 1
+	`)
+
+	// startupCleanupScript 清理非当前进程前缀的槽位成员，并清空等待队列计数。
+	// 这样在服务重启后，旧进程残留不会继续占用并发；同一前缀（当前进程）数据保持不变。
+	startupCleanupScript = redis.NewScript(`
+		local activePrefix = ARGV[1]
+		local scanCount = tonumber(ARGV[2])
+		local slotTTL = tonumber(ARGV[3])
+		local removed = 0
+
+		local function cleanupZSetPattern(pattern)
+			local cursor = '0'
+			repeat
+				local scanResult = redis.call('SCAN', cursor, 'MATCH', pattern, 'COUNT', scanCount)
+				cursor = scanResult[1]
+				local keys = scanResult[2]
+				for _, key in ipairs(keys) do
+					local members = redis.call('ZRANGE', key, 0, -1)
+					for _, member in ipairs(members) do
+						if string.sub(member, 1, string.len(activePrefix)) ~= activePrefix then
+							removed = removed + redis.call('ZREM', key, member)
+						end
+					end
+					if redis.call('ZCARD', key) == 0 then
+						redis.call('DEL', key)
+					else
+						redis.call('EXPIRE', key, slotTTL)
+					end
+				end
+			until cursor == '0'
+		end
+
+		local function deleteKeyPattern(pattern)
+			local cursor = '0'
+			repeat
+				local scanResult = redis.call('SCAN', cursor, 'MATCH', pattern, 'COUNT', scanCount)
+				cursor = scanResult[1]
+				local keys = scanResult[2]
+				for _, key in ipairs(keys) do
+					removed = removed + redis.call('DEL', key)
+				end
+			until cursor == '0'
+		end
+
+		cleanupZSetPattern('concurrency:account:*')
+		cleanupZSetPattern('concurrency:user:*')
+		deleteKeyPattern('wait:account:*')
+		deleteKeyPattern('concurrency:wait:*')
+
+		return removed
+	`)
+ )
+
 
 type concurrencyCache struct {
 	rdb                 *redis.Client
@@ -458,8 +516,18 @@ func (c *concurrencyCache) GetUsersLoadBatch(ctx context.Context, users []servic
 	return loadMap, nil
 }
 
+
 func (c *concurrencyCache) CleanupExpiredAccountSlots(ctx context.Context, accountID int64) error {
 	key := accountSlotKey(accountID)
 	_, err := cleanupExpiredSlotsScript.Run(ctx, c.rdb, []string{key}, c.slotTTLSeconds).Result()
+	return err
+}
+
+func (c *concurrencyCache) CleanupStaleProcessSlots(ctx context.Context, activeRequestPrefix string) error {
+	if activeRequestPrefix == "" {
+		return nil
+	}
+	const startupCleanupScanCount = 200
+	_, err := startupCleanupScript.Run(ctx, c.rdb, nil, activeRequestPrefix, startupCleanupScanCount, c.slotTTLSeconds).Result()
 	return err
 }

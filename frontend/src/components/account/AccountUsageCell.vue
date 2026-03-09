@@ -69,9 +69,39 @@
       <div v-else class="text-xs text-gray-400">-</div>
     </template>
 
-    <!-- OpenAI OAuth accounts: show Codex usage from extra field -->
+    <!-- OpenAI OAuth accounts: prefer fresh usage query for active rate-limited rows -->
     <template v-else-if="account.platform === 'openai' && account.type === 'oauth'">
-      <div v-if="hasCodexUsage" class="space-y-1">
+      <div v-if="preferFetchedOpenAIUsage" class="space-y-1">
+        <UsageProgressBar
+          v-if="usageInfo?.five_hour"
+          label="5h"
+          :utilization="usageInfo.five_hour.utilization"
+          :resets-at="usageInfo.five_hour.resets_at"
+          :window-stats="usageInfo.five_hour.window_stats"
+          color="indigo"
+        />
+        <UsageProgressBar
+          v-if="usageInfo?.seven_day"
+          label="7d"
+          :utilization="usageInfo.seven_day.utilization"
+          :resets-at="usageInfo.seven_day.resets_at"
+          :window-stats="usageInfo.seven_day.window_stats"
+          color="emerald"
+        />
+      </div>
+      <div v-else-if="isActiveOpenAIRateLimited && loading" class="space-y-1.5">
+        <div class="flex items-center gap-1">
+          <div class="h-3 w-[32px] animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
+          <div class="h-1.5 w-8 animate-pulse rounded-full bg-gray-200 dark:bg-gray-700"></div>
+          <div class="h-3 w-[32px] animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
+        </div>
+        <div class="flex items-center gap-1">
+          <div class="h-3 w-[32px] animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
+          <div class="h-1.5 w-8 animate-pulse rounded-full bg-gray-200 dark:bg-gray-700"></div>
+          <div class="h-3 w-[32px] animate-pulse rounded bg-gray-200 dark:bg-gray-700"></div>
+        </div>
+      </div>
+      <div v-else-if="hasCodexUsage" class="space-y-1">
         <!-- 5h Window -->
         <UsageProgressBar
           v-if="codex5hUsedPercent !== null"
@@ -341,7 +371,7 @@
         label="1d"
         :utilization="quotaDailyBar.utilization"
         :resets-at="quotaDailyBar.resetsAt"
-        :display-value="quotaDailyBar.displayValue"
+:display-value="quotaDailyBar.displayValue"
         color="indigo"
       />
       <UsageProgressBar
@@ -349,14 +379,14 @@
         label="7d"
         :utilization="quotaWeeklyBar.utilization"
         :resets-at="quotaWeeklyBar.resetsAt"
-        :display-value="quotaWeeklyBar.displayValue"
+:display-value="quotaWeeklyBar.displayValue"
         color="emerald"
       />
       <UsageProgressBar
         v-if="quotaTotalBar"
         label="total"
         :utilization="quotaTotalBar.utilization"
-        :display-value="quotaTotalBar.displayValue"
+:display-value="quotaTotalBar.displayValue"
         color="purple"
       />
     </div>
@@ -365,10 +395,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
 import type { Account, AccountUsageInfo, GeminiCredentials, WindowStats } from '@/types'
+import { buildOpenAIUsageRefreshKey } from '@/utils/accountUsageRefresh'
 import { resolveCodexUsageWindow } from '@/utils/codexUsage'
 import { enqueueUsageRequest } from '@/utils/usageLoadQueue'
 import UsageProgressBar from './UsageProgressBar.vue'
@@ -432,6 +463,36 @@ const hasCodexUsage = computed(() => {
 const hasOpenAIUsageFallback = computed(() => {
   if (props.account.platform !== 'openai' || props.account.type !== 'oauth') return false
   return !!usageInfo.value?.five_hour || !!usageInfo.value?.seven_day
+})
+
+const isActiveOpenAIRateLimited = computed(() => {
+  if (props.account.platform !== 'openai' || props.account.type !== 'oauth') return false
+  if (!props.account.rate_limit_reset_at) return false
+  const resetAt = Date.parse(props.account.rate_limit_reset_at)
+  return !Number.isNaN(resetAt) && resetAt > Date.now()
+})
+
+const preferFetchedOpenAIUsage = computed(() => {
+  return (isActiveOpenAIRateLimited.value || isOpenAICodexSnapshotStale.value) && hasOpenAIUsageFallback.value
+})
+
+const openAIUsageRefreshKey = computed(() => buildOpenAIUsageRefreshKey(props.account))
+
+const isOpenAICodexSnapshotStale = computed(() => {
+  if (props.account.platform !== 'openai' || props.account.type !== 'oauth') return false
+  const extra = props.account.extra as Record<string, unknown> | undefined
+  const updatedAtRaw = extra?.codex_usage_updated_at
+  if (!updatedAtRaw) return true
+  const updatedAt = Date.parse(String(updatedAtRaw))
+  if (Number.isNaN(updatedAt)) return true
+  return Date.now() - updatedAt >= 10 * 60 * 1000
+})
+
+const shouldAutoLoadUsageOnMount = computed(() => {
+  if (props.account.platform === 'openai' && props.account.type === 'oauth') {
+    return isActiveOpenAIRateLimited.value || !hasCodexUsage.value || isOpenAICodexSnapshotStale.value
+  }
+  return shouldFetchUsage.value
 })
 
 const codex5hUsedPercent = computed(() => codex5hWindow.value.usedPercent)
@@ -906,6 +967,17 @@ const quotaTotalBar = computed((): QuotaBarInfo | null => {
 })
 
 onMounted(() => {
+  if (!shouldAutoLoadUsageOnMount.value) return
   loadUsage()
+})
+
+watch(openAIUsageRefreshKey, (nextKey, prevKey) => {
+  if (!prevKey || nextKey === prevKey) return
+  if (props.account.platform !== 'openai' || props.account.type !== 'oauth') return
+  if (!isActiveOpenAIRateLimited.value && hasCodexUsage.value && !isOpenAICodexSnapshotStale.value) return
+
+  loadUsage().catch((e) => {
+    console.error('Failed to refresh OpenAI usage:', e)
+  })
 })
 </script>

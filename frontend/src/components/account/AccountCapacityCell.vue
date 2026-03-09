@@ -31,10 +31,12 @@
     <!-- 客户端亲和 -->
     <AffinityBadge v-if="showAffinity" :account-id="account.id" :count="affinityClientCount" :base="affinityBase" :buffer="affinityBuffer" />
 
-    <!-- 配额限制 -->
-    <QuotaBadge v-if="showDailyQuota" label="D" :used="account.quota_daily_used ?? 0" :limit="account.quota_daily_limit!" />
-    <QuotaBadge v-if="showWeeklyQuota" label="W" :used="account.quota_weekly_used ?? 0" :limit="account.quota_weekly_limit!" />
-    <QuotaBadge v-if="showTotalQuota" :used="account.quota_used ?? 0" :limit="account.quota_limit!" />
+    <!-- API Key 账号配额限制 -->
+    <div v-if="showDailyQuota || showWeeklyQuota || showTotalQuota" class="flex items-center gap-1">
+      <QuotaBadge v-if="showDailyQuota" :used="account.quota_daily_used ?? 0" :limit="account.quota_daily_limit!" label="D" />
+      <QuotaBadge v-if="showWeeklyQuota" :used="account.quota_weekly_used ?? 0" :limit="account.quota_weekly_limit!" label="W" />
+      <QuotaBadge v-if="showTotalQuota" :used="account.quota_used ?? 0" :limit="account.quota_limit!" />
+    </div>
   </div>
 </template>
 
@@ -197,6 +199,7 @@ const affinityBuffer = computed((): number | null => {
   return null
 })
 
+// 格式化费用显示
 const formatCost = (value: number | null | undefined) => {
   if (value === null || value === undefined) return '0'
   return value.toFixed(2)
