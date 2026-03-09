@@ -20,7 +20,7 @@ import (
 // mockAffinityCache 为亲和调度测试提供可控的 GatewayCache mock。
 // 通过 getCountBatchFunc 可以自定义 GetAccountAffinityCountBatch 的行为。
 type mockAffinityCache struct {
-	getCountBatchFunc func(ctx context.Context, groupID int64, accountIDs []int64, ttl time.Duration) (map[int64]int64, error)
+	getCountBatchFunc  func(ctx context.Context, groupID int64, accountIDs []int64, ttl time.Duration) (map[int64]int64, error)
 	getCountBatchCalls int // 记录 GetAccountAffinityCountBatch 被调用次数
 }
 
@@ -728,9 +728,9 @@ func TestClassifyByAffinityZone(t *testing.T) {
 
 	t.Run("greens preferred over yellows", func(t *testing.T) {
 		accs := []accountWithLoad{
-			makeAWL(1, 5, 3, 3),  // green (3 ≤ 5)
-			makeAWL(2, 5, 3, 7),  // yellow (5 < 7 ≤ 8)
-			makeAWL(3, 5, 3, 2),  // green (2 ≤ 5)
+			makeAWL(1, 5, 3, 3), // green (3 ≤ 5)
+			makeAWL(2, 5, 3, 7), // yellow (5 < 7 ≤ 8)
+			makeAWL(3, 5, 3, 2), // green (2 ≤ 5)
 		}
 		result := classifyByAffinityZone(accs)
 		require.Len(t, result, 2)

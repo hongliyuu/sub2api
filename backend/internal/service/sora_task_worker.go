@@ -11,15 +11,15 @@ import (
 // SoraTaskWorker polls unfinished Sora tasks in the background.
 // When a task completes, it downloads media to configured storage if available.
 type SoraTaskWorker struct {
-	taskService  *SoraTaskService
-	accountRepo  AccountRepository
+	taskService   *SoraTaskService
+	accountRepo   AccountRepository
 	objectStorage SoraObjectStorage
-	mediaStorage *SoraMediaStorage
-	interval     time.Duration
-	pollTimeout  time.Duration
-	stopCh       chan struct{}
-	stopOnce     sync.Once
-	wg           sync.WaitGroup
+	mediaStorage  *SoraMediaStorage
+	interval      time.Duration
+	pollTimeout   time.Duration
+	stopCh        chan struct{}
+	stopOnce      sync.Once
+	wg            sync.WaitGroup
 }
 
 func NewSoraTaskWorker(
@@ -33,13 +33,13 @@ func NewSoraTaskWorker(
 		interval = 60 * time.Second
 	}
 	return &SoraTaskWorker{
-		taskService:  taskService,
-		accountRepo:  accountRepo,
+		taskService:   taskService,
+		accountRepo:   accountRepo,
 		objectStorage: objectStorage,
-		mediaStorage: mediaStorage,
-		interval:     interval,
-		pollTimeout:  30 * time.Second,
-		stopCh:       make(chan struct{}),
+		mediaStorage:  mediaStorage,
+		interval:      interval,
+		pollTimeout:   30 * time.Second,
+		stopCh:        make(chan struct{}),
 	}
 }
 

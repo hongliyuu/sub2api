@@ -288,7 +288,6 @@ func (s *ConcurrencyCacheSuite) TestCleanupStaleProcessSlots() {
 	require.True(s.T(), errors.Is(err, redis.Nil))
 }
 
-
 func (s *ConcurrencyCacheSuite) TestGetAccountConcurrency_Missing() {
 	// When no slots exist, GetAccountConcurrency should return 0
 	cur, err := s.cache.GetAccountConcurrency(s.ctx, 999)
@@ -486,4 +485,3 @@ func (s *ConcurrencyCacheSuite) TestCleanupStaleProcessSlots_DeletesEmptySlotKey
 	require.NoError(s.T(), err)
 	require.EqualValues(s.T(), 0, exists)
 }
-

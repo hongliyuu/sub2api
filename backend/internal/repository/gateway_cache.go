@@ -31,12 +31,12 @@ var (
 	//go:embed lua/clear_account_affinity.lua
 	clearAccountAffinityLua string
 
-	getAffinityScript               = redis.NewScript(getAffinityLua)
-	updateAffinityScript            = redis.NewScript(updateAffinityLua)
-	getAffinityCountScript          = redis.NewScript(getAffinityCountLua)
-	getAffinityClientsScript        = redis.NewScript(getAffinityClientsLua)
+	getAffinityScript                  = redis.NewScript(getAffinityLua)
+	updateAffinityScript               = redis.NewScript(updateAffinityLua)
+	getAffinityCountScript             = redis.NewScript(getAffinityCountLua)
+	getAffinityClientsScript           = redis.NewScript(getAffinityClientsLua)
 	getAffinityClientsWithScoresScript = redis.NewScript(getAffinityClientsWithScoresLua)
-	clearAccountAffinityScript       = redis.NewScript(clearAccountAffinityLua)
+	clearAccountAffinityScript         = redis.NewScript(clearAccountAffinityLua)
 )
 
 type gatewayCache struct {

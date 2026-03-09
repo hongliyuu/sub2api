@@ -1808,7 +1808,7 @@ func TestStoreMediaWithDegradation_S3FailsFallbackToLocal(t *testing.T) {
 	mediaStorage := service.NewSoraMediaStorage(cfg)
 	h := &SoraClientHandler{
 		objectStorage: s3Storage,
-		mediaStorage: mediaStorage,
+		mediaStorage:  mediaStorage,
 	}
 
 	_, _, storageType, _, _ := h.storeMediaWithDegradation(

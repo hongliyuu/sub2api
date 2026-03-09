@@ -147,7 +147,6 @@ var (
 			return 1
 		`)
 
-
 	// cleanupExpiredSlotsScript 清理单个账号/用户有序集合中过期槽位
 	// KEYS[1] = 有序集合键
 	// ARGV[1] = TTL（秒）
@@ -215,8 +214,7 @@ var (
 
 		return removed
 	`)
- )
-
+)
 
 type concurrencyCache struct {
 	rdb                 *redis.Client
@@ -515,7 +513,6 @@ func (c *concurrencyCache) GetUsersLoadBatch(ctx context.Context, users []servic
 
 	return loadMap, nil
 }
-
 
 func (c *concurrencyCache) CleanupExpiredAccountSlots(ctx context.Context, accountID int64) error {
 	key := accountSlotKey(accountID)
