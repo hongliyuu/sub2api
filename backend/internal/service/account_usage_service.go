@@ -700,6 +700,7 @@ func (s *AccountUsageService) getAntigravityUsage(ctx context.Context, account *
 		fetchResult, err := s.antigravityQuotaFetcher.FetchQuota(fetchCtx, account, proxyURL)
 		if err != nil {
 			degraded := buildAntigravityDegradedUsage(err)
+			enrichDegradedWithAccountError(degraded, account)
 			s.cache.antigravityCache.Store(account.ID, &antigravityUsageCache{
 				usageInfo: degraded,
 				timestamp: time.Now(),
@@ -783,6 +784,30 @@ func buildAntigravityDegradedUsage(err error) *UsageInfo {
 	}
 
 	return info
+}
+
+// enrichDegradedWithAccountError 结合账号错误状态修正降级 UsageInfo
+// 场景：被封号的账号 OAuth token 失效，FetchAvailableModels 返回 401，
+// 降级逻辑设置了 needs_reauth，但账号实际是 403 封号/需验证。
+// 此函数用账号的 error_message 覆盖降级信息，显示正确的 forbidden 状态。
+func enrichDegradedWithAccountError(info *UsageInfo, account *Account) {
+	if info == nil || account == nil || account.Status != StatusError {
+		return
+	}
+	msg := strings.ToLower(account.ErrorMessage)
+	if !strings.Contains(msg, "403") && !strings.Contains(msg, "forbidden") &&
+		!strings.Contains(msg, "violation") && !strings.Contains(msg, "validation") {
+		return
+	}
+	fbType := classifyForbiddenType(account.ErrorMessage)
+	info.IsForbidden = true
+	info.ForbiddenType = fbType
+	info.ForbiddenReason = account.ErrorMessage
+	info.NeedsVerify = fbType == forbiddenTypeValidation
+	info.IsBanned = fbType == forbiddenTypeViolation
+	info.ValidationURL = extractValidationURL(account.ErrorMessage)
+	info.ErrorCode = errorCodeForbidden
+	info.NeedsReauth = false
 }
 
 // addWindowStats 为 usage 数据添加窗口期统计

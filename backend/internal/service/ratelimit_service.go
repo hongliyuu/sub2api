@@ -616,12 +616,8 @@ func (s *RateLimitService) handleAuthError(ctx context.Context, account *Account
 	slog.Warn("account_disabled_auth_error", "account_id", account.ID, "error", errorMsg)
 }
 
-// antigravityValidationBlockDuration Antigravity validation 类型 403 的临时封禁时长
-// 与 Antigravity-Manager 一致（10 分钟）
-const antigravityValidationBlockDuration = 10 * time.Minute
-
 // handle403 处理 403 Forbidden 错误
-// Antigravity 平台区分 validation（临时不可调度）和 violation（永久 SetError）；
+// Antigravity 平台区分 validation/violation/generic 三种类型，均 SetError 永久禁用；
 // 其他平台保持原有 SetError 行为。
 func (s *RateLimitService) handle403(ctx context.Context, account *Account, upstreamMsg string, responseBody []byte) (shouldDisable bool) {
 	if account.Platform == PlatformAntigravity {
@@ -637,7 +633,7 @@ func (s *RateLimitService) handle403(ctx context.Context, account *Account, upst
 }
 
 // handleAntigravity403 处理 Antigravity 平台的 403 错误
-// validation（需要验证）→ 临时不可调度（到期自动恢复）
+// validation（需要验证）→ 永久 SetError（需人工去 Google 验证后恢复）
 // violation（违规封号）→ 永久 SetError（需人工处理）
 // generic（通用禁止）→ 永久 SetError
 func (s *RateLimitService) handleAntigravity403(ctx context.Context, account *Account, upstreamMsg string, responseBody []byte) (shouldDisable bool) {
@@ -645,21 +641,12 @@ func (s *RateLimitService) handleAntigravity403(ctx context.Context, account *Ac
 
 	switch fbType {
 	case forbiddenTypeValidation:
-		// VALIDATION_REQUIRED: 临时不可调度，到期自动恢复
-		until := time.Now().Add(antigravityValidationBlockDuration)
-		reason := "Validation required (403)"
+		// VALIDATION_REQUIRED: 永久禁用，需人工去 Google 验证后手动恢复
+		msg := "Validation required (403): account needs Google verification"
 		if upstreamMsg != "" {
-			reason = "Validation required (403): " + upstreamMsg
+			msg = "Validation required (403): " + upstreamMsg
 		}
-		if err := s.accountRepo.SetTempUnschedulable(ctx, account.ID, until, reason); err != nil {
-			slog.Warn("antigravity_validation_block_failed", "account_id", account.ID, "error", err)
-		} else {
-			slog.Info("antigravity_validation_block_set",
-				"account_id", account.ID,
-				"until", until,
-				"forbidden_type", fbType,
-			)
-		}
+		s.handleAuthError(ctx, account, msg)
 		return true
 
 	case forbiddenTypeViolation:
