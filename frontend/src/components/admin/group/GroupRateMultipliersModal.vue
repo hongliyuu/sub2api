@@ -65,6 +65,16 @@
             <Icon v-if="addingRate" name="refresh" size="sm" class="mr-1 animate-spin" />
             {{ t('common.add') }}
           </button>
+          <button
+            v-if="entries.length > 0"
+            type="button"
+            class="btn shrink-0 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-100 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
+            :disabled="clearing"
+            @click="showClearConfirm = true"
+          >
+            <Icon v-if="clearing" name="refresh" size="sm" class="mr-1 inline animate-spin" />
+            {{ t('admin.groups.clearAll') }}
+          </button>
         </div>
       </div>
 
@@ -78,21 +88,9 @@
 
       <!-- 已设置的用户列表 -->
       <div v-else>
-        <div class="mb-2 flex items-center justify-between">
-          <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300">
-            {{ t('admin.groups.rateMultipliers') }} ({{ entries.length }})
-          </h4>
-          <button
-            v-if="entries.length > 0"
-            type="button"
-            class="btn btn-sm rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-100 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
-            :disabled="clearing"
-            @click="showClearConfirm = true"
-          >
-            <Icon v-if="clearing" name="refresh" size="sm" class="mr-1 inline animate-spin" />
-            {{ t('admin.groups.clearAll') }}
-          </button>
-        </div>
+        <h4 class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+          {{ t('admin.groups.rateMultipliers') }} ({{ entries.length }})
+        </h4>
 
         <div v-if="entries.length === 0" class="py-6 text-center text-sm text-gray-400 dark:text-gray-500">
           {{ t('admin.groups.noRateMultipliers') }}
@@ -165,11 +163,10 @@
 
           <!-- 分页 -->
           <Pagination
-            v-if="entries.length > pageSize"
             :total="entries.length"
             :page="currentPage"
             :page-size="pageSize"
-            :page-size-options="[20, 50, 100]"
+            :page-size-options="[10, 20, 50]"
             @update:page="currentPage = $event"
             @update:pageSize="handlePageSizeChange"
           />
@@ -227,7 +224,7 @@ const addingRate = ref(false)
 const clearing = ref(false)
 const showClearConfirm = ref(false)
 const currentPage = ref(1)
-const pageSize = ref(20)
+const pageSize = ref(10)
 
 let searchTimeout: ReturnType<typeof setTimeout>
 
