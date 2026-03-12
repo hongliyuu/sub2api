@@ -1533,6 +1533,7 @@ export default {
       rateSaved: '专属倍率已保存',
       finalRate: '最终倍率',
       unsavedChanges: '有未保存的修改',
+      revertChanges: '撤销修改',
       userInfo: '用户信息',
       subscription: {
         title: '订阅设置',

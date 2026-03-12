@@ -1434,6 +1434,7 @@ export default {
       rateSaved: 'Rate multipliers saved',
       finalRate: 'Final Rate',
       unsavedChanges: 'Unsaved changes',
+      revertChanges: 'Revert',
       userInfo: 'User Info',
       platforms: {
         all: 'All Platforms',

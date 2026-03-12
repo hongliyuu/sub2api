@@ -203,21 +203,35 @@
         </div>
       </div>
 
-      <!-- 底部操作栏：取消/保存 -->
-      <div v-if="isDirty" class="flex items-center justify-end gap-3 border-t border-gray-200 pt-4 dark:border-dark-600">
-        <span class="mr-auto text-xs text-amber-600 dark:text-amber-400">{{ t('admin.groups.unsavedChanges') }}</span>
-        <button type="button" class="btn btn-sm px-4 py-1.5" @click="handleCancel">
-          {{ t('common.cancel') }}
-        </button>
-        <button
-          type="button"
-          class="btn btn-primary btn-sm px-4 py-1.5"
-          :disabled="saving"
-          @click="handleSave"
-        >
-          <Icon v-if="saving" name="refresh" size="sm" class="mr-1 animate-spin" />
-          {{ t('common.save') }}
-        </button>
+      <!-- 底部操作栏 -->
+      <div class="flex items-center gap-3 border-t border-gray-200 pt-4 dark:border-dark-600">
+        <!-- 左侧：未保存提示 + 撤销 -->
+        <template v-if="isDirty">
+          <span class="text-xs text-amber-600 dark:text-amber-400">{{ t('admin.groups.unsavedChanges') }}</span>
+          <button
+            type="button"
+            class="text-xs font-medium text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+            @click="handleCancel"
+          >
+            {{ t('admin.groups.revertChanges') }}
+          </button>
+        </template>
+        <!-- 右侧：关闭 / 保存 -->
+        <div class="ml-auto flex items-center gap-3">
+          <button type="button" class="btn btn-sm px-4 py-1.5" @click="handleClose">
+            {{ t('common.close') }}
+          </button>
+          <button
+            v-if="isDirty"
+            type="button"
+            class="btn btn-primary btn-sm px-4 py-1.5"
+            :disabled="saving"
+            @click="handleSave"
+          >
+            <Icon v-if="saving" name="refresh" size="sm" class="mr-1 animate-spin" />
+            {{ t('common.save') }}
+          </button>
+        </div>
       </div>
     </div>
   </BaseDialog>
@@ -456,8 +470,8 @@ const handleSave = async () => {
     }))
     await adminAPI.groups.batchSetGroupRateMultipliers(props.group.id, entries)
     appStore.showSuccess(t('admin.groups.rateSaved'))
-    await loadEntries()
     emit('success')
+    emit('close')
   } catch (error) {
     appStore.showError(t('admin.groups.failedToSave'))
     console.error('Error saving rate multipliers:', error)
