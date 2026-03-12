@@ -97,7 +97,7 @@
             <button
               type="button"
               class="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-100 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
-              @click="showClearConfirm = true"
+              @click="clearAllLocal"
             >
               {{ t('admin.groups.clearAll') }}
             </button>
@@ -236,17 +236,6 @@
     </div>
   </BaseDialog>
 
-  <!-- 全部清空确认弹框 -->
-  <ConfirmDialog
-    :show="showClearConfirm"
-    :title="t('admin.groups.clearAll')"
-    :message="t('admin.groups.confirmClearAll')"
-    :confirm-text="t('admin.groups.clearAll')"
-    :cancel-text="t('common.cancel')"
-    :danger="true"
-    @confirm="clearAllLocal"
-    @cancel="showClearConfirm = false"
-  />
 </template>
 
 <script setup lang="ts">
@@ -257,7 +246,6 @@ import { adminAPI } from '@/api/admin'
 import type { GroupRateMultiplierEntry } from '@/api/admin/groups'
 import type { AdminGroup, AdminUser } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
-import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import Icon from '@/components/icons/Icon.vue'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
@@ -286,7 +274,6 @@ const searchResults = ref<AdminUser[]>([])
 const showDropdown = ref(false)
 const selectedUser = ref<AdminUser | null>(null)
 const newRate = ref<number | null>(null)
-const showClearConfirm = ref(false)
 const currentPage = ref(1)
 const pageSize = ref(10)
 const batchFactor = ref<number | null>(null)
@@ -448,7 +435,6 @@ const applyBatchFactor = () => {
 
 // 本地清空
 const clearAllLocal = () => {
-  showClearConfirm.value = false
   localEntries.value = []
 }
 
