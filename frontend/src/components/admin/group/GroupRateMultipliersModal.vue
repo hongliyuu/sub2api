@@ -1,5 +1,5 @@
 <template>
-  <BaseDialog :show="show" :title="t('admin.groups.rateMultipliersTitle')" width="wide" @close="$emit('close')">
+  <BaseDialog :show="show" :title="t('admin.groups.rateMultipliersTitle')" width="wide" @close="handleClose">
     <div v-if="group" class="space-y-4">
       <!-- 分组信息 -->
       <div class="flex flex-wrap items-center gap-3 rounded-lg bg-gray-50 px-4 py-2.5 text-sm dark:bg-dark-700">
@@ -12,8 +12,9 @@
         </span>
       </div>
 
-      <!-- 操作区：添加用户 + 批量调整 + 全部清空 -->
+      <!-- 操作区 -->
       <div class="rounded-lg border border-gray-200 p-3 dark:border-dark-600">
+        <!-- 添加用户 -->
         <h4 class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
           {{ t('admin.groups.addUserRate') }}
         </h4>
@@ -59,16 +60,15 @@
           <button
             type="button"
             class="btn btn-primary shrink-0"
-            :disabled="!selectedUser || !newRate || addingRate"
-            @click="handleAddRate"
+            :disabled="!selectedUser || !newRate"
+            @click="handleAddLocal"
           >
-            <Icon v-if="addingRate" name="refresh" size="sm" class="mr-1 animate-spin" />
             {{ t('common.add') }}
           </button>
         </div>
 
         <!-- 批量调整 + 全部清空 -->
-        <div v-if="entries.length > 0" class="mt-3 flex items-center gap-3 border-t border-gray-100 pt-3 dark:border-dark-600">
+        <div v-if="localEntries.length > 0" class="mt-3 flex items-center gap-3 border-t border-gray-100 pt-3 dark:border-dark-600">
           <span class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('admin.groups.batchAdjust') }}</span>
           <div class="flex items-center gap-1.5">
             <span class="text-xs text-gray-400">×</span>
@@ -84,10 +84,9 @@
             <button
               type="button"
               class="btn btn-primary btn-sm shrink-0 px-2.5 py-1 text-xs"
-              :disabled="!batchFactor || batchFactor <= 0 || adjusting"
-              @click="handleBatchAdjust"
+              :disabled="!batchFactor || batchFactor <= 0"
+              @click="applyBatchFactor"
             >
-              <Icon v-if="adjusting" name="refresh" size="sm" class="mr-1 animate-spin" />
               {{ t('admin.groups.applyMultiplier') }}
             </button>
           </div>
@@ -95,10 +94,8 @@
             <button
               type="button"
               class="rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-100 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/40"
-              :disabled="clearing"
               @click="showClearConfirm = true"
             >
-              <Icon v-if="clearing" name="refresh" size="sm" class="mr-1 inline animate-spin" />
               {{ t('admin.groups.clearAll') }}
             </button>
           </div>
@@ -116,15 +113,15 @@
       <!-- 已设置的用户列表 -->
       <div v-else>
         <h4 class="mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
-          {{ t('admin.groups.rateMultipliers') }} ({{ entries.length }})
+          {{ t('admin.groups.rateMultipliers') }} ({{ localEntries.length }})
         </h4>
 
-        <div v-if="entries.length === 0" class="py-6 text-center text-sm text-gray-400 dark:text-gray-500">
+        <div v-if="localEntries.length === 0" class="py-6 text-center text-sm text-gray-400 dark:text-gray-500">
           {{ t('admin.groups.noRateMultipliers') }}
         </div>
 
         <div v-else>
-          <!-- 表格：固定表头 + 可滚动内容 -->
+          <!-- 表格 -->
           <div class="overflow-hidden rounded-lg border border-gray-200 dark:border-dark-600">
             <div class="max-h-[420px] overflow-y-auto">
               <table class="w-full text-sm">
@@ -136,12 +133,13 @@
                     <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('admin.groups.columns.userNotes') }}</th>
                     <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('admin.groups.columns.userStatus') }}</th>
                     <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('admin.groups.columns.rateMultiplier') }}</th>
+                    <th v-if="showFinalRate" class="px-3 py-2 text-left text-xs font-medium text-primary-600 dark:text-primary-400">{{ t('admin.groups.finalRate') }}</th>
                     <th class="w-10 px-2 py-2"></th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100 dark:divide-dark-600">
                   <tr
-                    v-for="entry in paginatedEntries"
+                    v-for="entry in paginatedLocalEntries"
                     :key="entry.user_id"
                     class="hover:bg-gray-50 dark:hover:bg-dark-700/50"
                   >
@@ -161,14 +159,25 @@
                         {{ entry.user_status }}
                       </span>
                     </td>
-                    <td class="whitespace-nowrap px-3 py-2 font-medium text-gray-900 dark:text-white">
-                      {{ entry.rate_multiplier }}
+                    <td class="whitespace-nowrap px-3 py-2">
+                      <input
+                        type="number"
+                        step="0.001"
+                        min="0"
+                        autocomplete="off"
+                        :value="entry.rate_multiplier"
+                        class="hide-spinner w-20 rounded border border-gray-200 bg-white px-2 py-1 text-center text-sm font-medium transition-colors focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500/20 dark:border-dark-500 dark:bg-dark-700 dark:focus:border-primary-500"
+                        @change="updateLocalRate(entry.user_id, ($event.target as HTMLInputElement).value)"
+                      />
+                    </td>
+                    <td v-if="showFinalRate" class="whitespace-nowrap px-3 py-2 font-medium text-primary-600 dark:text-primary-400">
+                      {{ computeFinalRate(entry.rate_multiplier) }}
                     </td>
                     <td class="px-2 py-2">
                       <button
                         type="button"
                         class="rounded p-1 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
-                        @click="handleDeleteRate(entry)"
+                        @click="removeLocal(entry.user_id)"
                       >
                         <Icon name="trash" size="sm" />
                       </button>
@@ -181,7 +190,7 @@
 
           <!-- 分页 -->
           <Pagination
-            :total="entries.length"
+            :total="localEntries.length"
             :page="currentPage"
             :page-size="pageSize"
             :page-size-options="[10, 20, 50]"
@@ -189,6 +198,23 @@
             @update:pageSize="handlePageSizeChange"
           />
         </div>
+      </div>
+
+      <!-- 底部操作栏：取消/保存 -->
+      <div v-if="isDirty" class="flex items-center justify-end gap-3 border-t border-gray-200 pt-4 dark:border-dark-600">
+        <span class="mr-auto text-xs text-amber-600 dark:text-amber-400">{{ t('admin.groups.unsavedChanges') }}</span>
+        <button type="button" class="btn btn-sm px-4 py-1.5" @click="handleCancel">
+          {{ t('common.cancel') }}
+        </button>
+        <button
+          type="button"
+          class="btn btn-primary btn-sm px-4 py-1.5"
+          :disabled="saving"
+          @click="handleSave"
+        >
+          <Icon v-if="saving" name="refresh" size="sm" class="mr-1 animate-spin" />
+          {{ t('common.save') }}
+        </button>
       </div>
     </div>
   </BaseDialog>
@@ -201,7 +227,7 @@
     :confirm-text="t('admin.groups.clearAll')"
     :cancel-text="t('common.cancel')"
     :danger="true"
-    @confirm="handleClearAll"
+    @confirm="clearAllLocal"
     @cancel="showClearConfirm = false"
   />
 </template>
@@ -218,6 +244,8 @@ import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import Icon from '@/components/icons/Icon.vue'
 
+interface LocalEntry extends GroupRateMultiplierEntry {}
+
 const props = defineProps<{
   show: boolean
   group: AdminGroup | null
@@ -232,36 +260,58 @@ const { t } = useI18n()
 const appStore = useAppStore()
 
 const loading = ref(false)
-const entries = ref<GroupRateMultiplierEntry[]>([])
+const saving = ref(false)
+const serverEntries = ref<GroupRateMultiplierEntry[]>([])
+const localEntries = ref<LocalEntry[]>([])
 const searchQuery = ref('')
 const searchResults = ref<AdminUser[]>([])
 const showDropdown = ref(false)
 const selectedUser = ref<AdminUser | null>(null)
 const newRate = ref<number | null>(null)
-const addingRate = ref(false)
-const clearing = ref(false)
 const showClearConfirm = ref(false)
 const currentPage = ref(1)
 const pageSize = ref(10)
 const batchFactor = ref<number | null>(null)
-const adjusting = ref(false)
 
 let searchTimeout: ReturnType<typeof setTimeout>
 
-const paginatedEntries = computed(() => {
-  const start = (currentPage.value - 1) * pageSize.value
-  return entries.value.slice(start, start + pageSize.value)
+// 是否显示"最终倍率"预览列
+const showFinalRate = computed(() => {
+  return batchFactor.value != null && batchFactor.value > 0 && batchFactor.value !== 1
 })
+
+// 计算最终倍率预览
+const computeFinalRate = (rate: number) => {
+  if (!batchFactor.value) return rate
+  return parseFloat((rate * batchFactor.value).toFixed(6))
+}
+
+// 检测是否有未保存的修改
+const isDirty = computed(() => {
+  if (localEntries.value.length !== serverEntries.value.length) return true
+  const serverMap = new Map(serverEntries.value.map(e => [e.user_id, e.rate_multiplier]))
+  return localEntries.value.some(e => {
+    const serverRate = serverMap.get(e.user_id)
+    return serverRate === undefined || serverRate !== e.rate_multiplier
+  })
+})
+
+const paginatedLocalEntries = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return localEntries.value.slice(start, start + pageSize.value)
+})
+
+const cloneEntries = (entries: GroupRateMultiplierEntry[]): LocalEntry[] => {
+  return entries.map(e => ({ ...e }))
+}
 
 const loadEntries = async () => {
   if (!props.group) return
   loading.value = true
   try {
-    entries.value = await adminAPI.groups.getGroupRateMultipliers(props.group.id)
-    const totalPages = Math.max(1, Math.ceil(entries.value.length / pageSize.value))
-    if (currentPage.value > totalPages) {
-      currentPage.value = totalPages
-    }
+    serverEntries.value = await adminAPI.groups.getGroupRateMultipliers(props.group.id)
+    localEntries.value = cloneEntries(serverEntries.value)
+    adjustPage()
   } catch (error) {
     appStore.showError(t('admin.groups.failedToLoad'))
     console.error('Error loading group rate multipliers:', error)
@@ -270,15 +320,22 @@ const loadEntries = async () => {
   }
 }
 
+const adjustPage = () => {
+  const totalPages = Math.max(1, Math.ceil(localEntries.value.length / pageSize.value))
+  if (currentPage.value > totalPages) {
+    currentPage.value = totalPages
+  }
+}
+
 watch(() => props.show, (val) => {
   if (val && props.group) {
     currentPage.value = 1
-    loadEntries()
+    batchFactor.value = null
     searchQuery.value = ''
     searchResults.value = []
     selectedUser.value = null
     newRate.value = null
-    batchFactor.value = null
+    loadEntries()
   }
 })
 
@@ -313,78 +370,95 @@ const selectUser = (user: AdminUser) => {
   searchResults.value = []
 }
 
-const handleAddRate = async () => {
-  if (!selectedUser.value || !newRate.value || !props.group) return
-  addingRate.value = true
-  try {
-    await adminAPI.users.update(selectedUser.value.id, {
-      group_rates: { [props.group.id]: newRate.value }
-    })
-    appStore.showSuccess(t('admin.groups.rateAdded'))
-    searchQuery.value = ''
-    selectedUser.value = null
-    newRate.value = null
-    await loadEntries()
-    emit('success')
-  } catch (error) {
-    appStore.showError(t('admin.groups.failedToSave'))
-    console.error('Error adding rate multiplier:', error)
-  } finally {
-    addingRate.value = false
+// 本地添加（或覆盖已有用户）
+const handleAddLocal = () => {
+  if (!selectedUser.value || !newRate.value) return
+  const user = selectedUser.value
+  const idx = localEntries.value.findIndex(e => e.user_id === user.id)
+  const entry: LocalEntry = {
+    user_id: user.id,
+    user_name: user.username || '',
+    user_email: user.email,
+    user_notes: user.notes || '',
+    user_status: user.status || 'active',
+    rate_multiplier: newRate.value
+  }
+  if (idx >= 0) {
+    localEntries.value[idx] = entry
+  } else {
+    localEntries.value.push(entry)
+  }
+  searchQuery.value = ''
+  selectedUser.value = null
+  newRate.value = null
+  adjustPage()
+}
+
+// 本地修改倍率
+const updateLocalRate = (userId: number, value: string) => {
+  const num = parseFloat(value)
+  if (isNaN(num)) return
+  const entry = localEntries.value.find(e => e.user_id === userId)
+  if (entry) {
+    entry.rate_multiplier = num
   }
 }
 
-const handleBatchAdjust = async () => {
-  if (!props.group || !batchFactor.value || entries.value.length === 0) return
-  adjusting.value = true
-  try {
-    const newEntries = entries.value.map(e => ({
-      user_id: e.user_id,
-      rate_multiplier: parseFloat((e.rate_multiplier * batchFactor.value!).toFixed(6))
-    }))
-    await adminAPI.groups.batchSetGroupRateMultipliers(props.group.id, newEntries)
-    appStore.showSuccess(t('admin.groups.rateAdjusted'))
-    batchFactor.value = null
-    await loadEntries()
-    emit('success')
-  } catch (error) {
-    appStore.showError(t('admin.groups.failedToSave'))
-    console.error('Error batch adjusting rate multipliers:', error)
-  } finally {
-    adjusting.value = false
-  }
+// 本地删除
+const removeLocal = (userId: number) => {
+  localEntries.value = localEntries.value.filter(e => e.user_id !== userId)
+  adjustPage()
 }
 
-const handleDeleteRate = async (entry: GroupRateMultiplierEntry) => {
-  if (!props.group) return
-  try {
-    await adminAPI.users.update(entry.user_id, {
-      group_rates: { [props.group.id]: null }
-    })
-    appStore.showSuccess(t('admin.groups.rateDeleted'))
-    await loadEntries()
-    emit('success')
-  } catch (error) {
-    appStore.showError(t('admin.groups.failedToSave'))
-    console.error('Error deleting rate multiplier:', error)
+// 批量乘数应用到本地
+const applyBatchFactor = () => {
+  if (!batchFactor.value || batchFactor.value <= 0) return
+  for (const entry of localEntries.value) {
+    entry.rate_multiplier = parseFloat((entry.rate_multiplier * batchFactor.value).toFixed(6))
   }
+  batchFactor.value = null
 }
 
-const handleClearAll = async () => {
-  if (!props.group || entries.value.length === 0) return
+// 本地清空
+const clearAllLocal = () => {
   showClearConfirm.value = false
-  clearing.value = true
+  localEntries.value = []
+}
+
+// 取消：恢复到服务器数据
+const handleCancel = () => {
+  localEntries.value = cloneEntries(serverEntries.value)
+  batchFactor.value = null
+  adjustPage()
+}
+
+// 保存：一次性提交所有数据
+const handleSave = async () => {
+  if (!props.group) return
+  saving.value = true
   try {
-    await adminAPI.groups.clearGroupRateMultipliers(props.group.id)
-    appStore.showSuccess(t('admin.groups.rateCleared'))
+    const entries = localEntries.value.map(e => ({
+      user_id: e.user_id,
+      rate_multiplier: e.rate_multiplier
+    }))
+    await adminAPI.groups.batchSetGroupRateMultipliers(props.group.id, entries)
+    appStore.showSuccess(t('admin.groups.rateSaved'))
     await loadEntries()
     emit('success')
   } catch (error) {
     appStore.showError(t('admin.groups.failedToSave'))
-    console.error('Error clearing rate multipliers:', error)
+    console.error('Error saving rate multipliers:', error)
   } finally {
-    clearing.value = false
+    saving.value = false
   }
+}
+
+// 关闭时如果有未保存修改，先恢复
+const handleClose = () => {
+  if (isDirty.value) {
+    localEntries.value = cloneEntries(serverEntries.value)
+  }
+  emit('close')
 }
 
 // 点击外部关闭下拉

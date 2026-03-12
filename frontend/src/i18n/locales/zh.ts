@@ -1529,6 +1529,9 @@ export default {
       multiplierFactor: '乘数',
       applyMultiplier: '应用',
       rateAdjusted: '倍率已批量调整',
+      rateSaved: '专属倍率已保存',
+      finalRate: '最终倍率',
+      unsavedChanges: '有未保存的修改',
       userInfo: '用户信息',
       subscription: {
         title: '订阅设置',

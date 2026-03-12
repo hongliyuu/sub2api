@@ -1430,6 +1430,9 @@ export default {
       multiplierFactor: 'Factor',
       applyMultiplier: 'Apply',
       rateAdjusted: 'Rates adjusted successfully',
+      rateSaved: 'Rate multipliers saved',
+      finalRate: 'Final Rate',
+      unsavedChanges: 'Unsaved changes',
       userInfo: 'User Info',
       platforms: {
         all: 'All Platforms',
