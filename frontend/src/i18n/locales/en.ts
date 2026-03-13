@@ -2534,7 +2534,7 @@ export default {
         geminiFlashDaily: 'Flash',
         gemini3Pro: 'G3P',
         gemini3Flash: 'G3F',
-        gemini3Image: 'GImage',
+        gemini3Image: 'G31FI',
         claude: 'Claude'
       },
       tier: {
