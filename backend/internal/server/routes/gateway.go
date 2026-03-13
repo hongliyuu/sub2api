@@ -73,6 +73,8 @@ func RegisterGatewayRoutes(
 		gateway.GET("/responses", h.OpenAIGateway.ResponsesWebSocket)
 		// OpenAI Chat Completions API
 		gateway.POST("/chat/completions", h.OpenAIGateway.ChatCompletions)
+		// OpenAI Embeddings API (Gemini backend)
+		gateway.POST("/embeddings", h.OpenAIGateway.Embeddings)
 	}
 
 	// Gemini 原生 API 兼容层（Gemini SDK/CLI 直连）
