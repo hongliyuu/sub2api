@@ -3746,12 +3746,12 @@ func (s *OpenAIGatewayService) validateUpstreamBaseURL(raw string) (string, erro
 // 用户应在 base URL 中明确指定完整路径（如 https://api.openai.com/v1）
 func buildOpenAIResponsesURL(base string) string {
 	normalized := strings.TrimRight(strings.TrimSpace(base), "/")
-	
+
 	// 已经包含 /responses，直接返回
 	if strings.HasSuffix(normalized, "/responses") {
 		return normalized
 	}
-	
+
 	// 直接追加 /responses，不自动添加 /v1
 	return normalized + "/responses"
 }
