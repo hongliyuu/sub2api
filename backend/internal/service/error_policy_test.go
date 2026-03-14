@@ -110,13 +110,12 @@ func TestCheckErrorPolicy(t *testing.T) {
 			expected:   ErrorPolicyTempUnscheduled,
 		},
 		{
-			// Antigravity 401 不走升级逻辑（由 applyErrorPolicy 的 temp_unschedulable_rules 自行控制），
-			// second hit 仍然返回 TempUnscheduled。
-			name: "temp_unschedulable_401_second_hit_antigravity_stays_temp",
+			// Gemini OAuth 401 second hit 会升级为 error（返回 None，交由默认错误逻辑处理）。
+			name: "temp_unschedulable_401_second_hit_gemini_escalates",
 			account: &Account{
 				ID:                      15,
 				Type:                    AccountTypeOAuth,
-				Platform:                PlatformGemini, // 非 Antigravity 平台才有 401 升级逻辑
+				Platform:                PlatformGemini, // 非 Antigravity 平台 401 second hit 升级
 				TempUnschedulableReason: `{"status_code":401,"until_unix":1735689600}`,
 				Credentials: map[string]any{
 					"temp_unschedulable_enabled": true,
@@ -131,7 +130,7 @@ func TestCheckErrorPolicy(t *testing.T) {
 			},
 			statusCode: 401,
 			body:       []byte(`unauthorized`),
-			expected:   ErrorPolicyTempUnscheduled,
+			expected:   ErrorPolicyNone, // Gemini 401 second hit 升级为 error
 		},
 		{
 			name: "temp_unschedulable_401_antigravity_no_escalation",
