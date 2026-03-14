@@ -1490,7 +1490,8 @@ export default {
         openai: 'OpenAI',
         gemini: 'Gemini',
         antigravity: 'Antigravity',
-        sora: 'Sora'
+        sora: 'Sora',
+        minimax: 'MiniMax'
       },
       saving: '保存中...',
       noGroups: '暂无分组',
@@ -1892,7 +1893,8 @@ export default {
         anthropic: 'Anthropic',
         gemini: 'Gemini',
         antigravity: 'Antigravity',
-        sora: 'Sora'
+        sora: 'Sora',
+        minimax: 'MiniMax'
       },
       types: {
         oauth: 'OAuth',
@@ -2575,6 +2577,7 @@ export default {
       soraAccount: 'Sora 账号',
       geminiAccount: 'Gemini 账号',
       antigravityAccount: 'Antigravity 账号',
+      minimaxAccount: 'MiniMax 账号',
       inputMethod: '输入方式',
       reAuthorizedSuccess: '账号重新授权成功',
       // Test Modal
