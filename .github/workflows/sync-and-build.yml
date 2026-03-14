@@ -50,21 +50,41 @@ jobs:
           echo "tag=${UPSTREAM_TAG}" >> $GITHUB_OUTPUT
           echo "Upstream tag: ${UPSTREAM_TAG}"
 
-      - name: Check if tag exists
+      - name: Check if tag exists on remote
         if: steps.sync.outputs.sync_failed == 'false'
         id: check_tag
         run: |
           TAG="${{ steps.version.outputs.tag }}"
-          if git rev-parse "$TAG" >/dev/null 2>&1; then
+          if git ls-remote --tags origin | grep -q "refs/tags/$TAG$"; then
             echo "exists=true" >> $GITHUB_OUTPUT
-            echo "Tag $TAG already exists, skipping release"
+            echo "Tag $TAG exists on remote, will delete and recreate"
           else
             echo "exists=false" >> $GITHUB_OUTPUT
-            echo "Tag $TAG does not exist, will create release"
+            echo "Tag $TAG does not exist, will create new"
           fi
 
+      - name: Delete existing release and tag
+        if: steps.sync.outputs.sync_failed == 'false' && steps.check_tag.outputs.exists == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+
+          # Delete GitHub release if exists
+          if gh release view "$TAG" --repo ${{ github.repository }} >/dev/null 2>&1; then
+            echo "Deleting existing release $TAG"
+            gh release delete "$TAG" --repo ${{ github.repository }} --yes
+          fi
+
+          # Delete remote tag
+          echo "Deleting remote tag $TAG"
+          git push origin --delete "$TAG" || true
+
+          # Delete local tag if exists
+          git tag -d "$TAG" || true
+
       - name: Get upstream tag message
-        if: steps.sync.outputs.sync_failed == 'false' && steps.check_tag.outputs.exists == 'false'
+        if: steps.sync.outputs.sync_failed == 'false'
         id: tag_message
         run: |
           TAG="${{ steps.version.outputs.tag }}"
@@ -74,7 +94,7 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create and push tag
-        if: steps.sync.outputs.sync_failed == 'false' && steps.check_tag.outputs.exists == 'false'
+        if: steps.sync.outputs.sync_failed == 'false'
         run: |
           TAG="${{ steps.version.outputs.tag }}"
           MESSAGE="${{ steps.tag_message.outputs.message }}"
