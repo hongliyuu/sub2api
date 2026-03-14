@@ -817,9 +817,12 @@ func buildAntigravityDegradedUsage(err error) *UsageInfo {
 
 // enrichUsageWithAccountError 结合账号错误状态修正 UsageInfo
 // 场景 1（成功路径）：FetchAvailableModels 正常返回，但账号已因 403 被标记为 error，
-//   需要在正常 usage 数据上附加 forbidden/validation 信息。
+//
+//	需要在正常 usage 数据上附加 forbidden/validation 信息。
+//
 // 场景 2（降级路径）：被封号的账号 OAuth token 失效，FetchAvailableModels 返回 401，
-//   降级逻辑设置了 needs_reauth，但账号实际是 403 封号/需验证，需覆盖为正确状态。
+//
+//	降级逻辑设置了 needs_reauth，但账号实际是 403 封号/需验证，需覆盖为正确状态。
 func enrichUsageWithAccountError(info *UsageInfo, account *Account) {
 	if info == nil || account == nil || account.Status != StatusError {
 		return
