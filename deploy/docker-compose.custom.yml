@@ -5,7 +5,7 @@
 
 services:
   sub2api:
-    image: ghcr.io/peter5842/sub2api:latest
+    image: liudq6/sub2api:latest
     container_name: sub2api
     restart: unless-stopped
     ulimits:

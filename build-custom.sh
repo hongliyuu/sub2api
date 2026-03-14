@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-IMAGE_NAME="ghcr.io/peter5842/sub2api"
+IMAGE_NAME="liudq6/sub2api"
 TAG="${1:-latest}"
 
 echo "Building custom Sub2API Docker image..."

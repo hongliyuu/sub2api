@@ -65,5 +65,5 @@ docker-compose -f docker-compose.custom.yml logs -f sub2api
 
 ## Image Tags
 
-- `ghcr.io/peter5842/sub2api:latest` - Latest build
-- `ghcr.io/peter5842/sub2api:<commit-sha>` - Specific commit
+- `liudq6/sub2api:latest` - Latest build
+- `liudq6/sub2api:<commit-sha>` - Specific commit
