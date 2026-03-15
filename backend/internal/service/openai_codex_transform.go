@@ -337,33 +337,31 @@ func liftSystemMessagesToInstructions(reqBody map[string]any) bool {
 	systemTexts := make([]string, 0, 3)
 	modified := false
 
-	input, ok := reqBody["input"].([]any)
-	if ok && len(input) > 0 {
-		filtered := make([]any, 0, len(input))
-		for _, item := range input {
-			msg, ok := item.(map[string]any)
-			if !ok {
-				filtered = append(filtered, item)
-				continue
-			}
-			if !isSystemInstructionMessage(msg) {
-				filtered = append(filtered, item)
-				continue
-			}
-
-			text, ok := extractSystemMessageText(msg["content"])
-			if !ok {
-				filtered = append(filtered, item)
-				continue
-			}
-
+	if input, ok := reqBody["input"].([]any); ok {
+		normalizedInput, extractedTexts, changed := normalizeConversationItems(input)
+		if changed {
+			reqBody["input"] = normalizedInput
 			modified = true
-			if strings.TrimSpace(text) != "" {
-				systemTexts = append(systemTexts, text)
+		}
+		systemTexts = append(systemTexts, extractedTexts...)
+	}
+
+	if rawMessages, exists := reqBody["messages"]; exists {
+		if messages, ok := rawMessages.([]any); ok {
+			normalizedMessages, extractedTexts, changed := normalizeConversationItems(messages)
+			systemTexts = append(systemTexts, extractedTexts...)
+
+			if existingInput, ok := reqBody["input"].([]any); ok {
+				reqBody["input"] = append(normalizedMessages, existingInput...)
+			} else {
+				reqBody["input"] = normalizedMessages
+			}
+			delete(reqBody, "messages")
+			modified = true
+			if changed {
+				modified = true
 			}
 		}
-
-		reqBody["input"] = filtered
 	}
 
 	if topLevelSystem, exists := reqBody["system"]; exists {
@@ -393,6 +391,54 @@ func liftSystemMessagesToInstructions(reqBody map[string]any) bool {
 
 	reqBody["instructions"] = systemInstructions
 	return true
+}
+
+func normalizeConversationItems(items []any) ([]any, []string, bool) {
+	if len(items) == 0 {
+		return items, nil, false
+	}
+
+	normalized := make([]any, 0, len(items))
+	systemTexts := make([]string, 0, 2)
+	modified := false
+
+	for _, item := range items {
+		msg, ok := item.(map[string]any)
+		if !ok {
+			normalized = append(normalized, item)
+			continue
+		}
+
+		if isSystemInstructionMessage(msg) {
+			text, ok := extractSystemMessageText(msg["content"])
+			if !ok {
+				normalized = append(normalized, item)
+				continue
+			}
+			modified = true
+			if strings.TrimSpace(text) != "" {
+				systemTexts = append(systemTexts, text)
+			}
+			continue
+		}
+
+		role, _ := msg["role"].(string)
+		typ, _ := msg["type"].(string)
+		if strings.TrimSpace(role) != "" && strings.TrimSpace(typ) == "" {
+			copied := make(map[string]any, len(msg)+1)
+			for k, v := range msg {
+				copied[k] = v
+			}
+			copied["type"] = "message"
+			normalized = append(normalized, copied)
+			modified = true
+			continue
+		}
+
+		normalized = append(normalized, item)
+	}
+
+	return normalized, systemTexts, modified
 }
 
 func isSystemInstructionMessage(msg map[string]any) bool {

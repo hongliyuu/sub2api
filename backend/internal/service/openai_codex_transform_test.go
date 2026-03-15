@@ -318,6 +318,7 @@ func TestApplyCodexOAuthTransform_SystemMessagesWithoutTypeBecomeInstructions(t 
 	first, ok := input[0].(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, "user", first["role"])
+	require.Equal(t, "message", first["type"])
 }
 
 func TestApplyCodexOAuthTransform_TopLevelSystemBecomesInstructions(t *testing.T) {
@@ -337,6 +338,38 @@ func TestApplyCodexOAuthTransform_TopLevelSystemBecomesInstructions(t *testing.T
 	require.Equal(t, "Prefer concise patches.", reqBody["instructions"])
 	_, exists := reqBody["system"]
 	require.False(t, exists)
+}
+
+func TestApplyCodexOAuthTransform_MessagesBecomeInputAndInstructions(t *testing.T) {
+	reqBody := map[string]any{
+		"model": "gpt-5.4",
+		"messages": []any{
+			map[string]any{
+				"role":    "system",
+				"content": "Prefer terse answers.",
+			},
+			map[string]any{
+				"role":    "user",
+				"content": "hello",
+			},
+		},
+	}
+
+	result := applyCodexOAuthTransform(reqBody, false, false)
+	require.True(t, result.Modified)
+	require.Equal(t, "Prefer terse answers.", reqBody["instructions"])
+
+	_, exists := reqBody["messages"]
+	require.False(t, exists)
+
+	input, ok := reqBody["input"].([]any)
+	require.True(t, ok)
+	require.Len(t, input, 1)
+
+	first, ok := input[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "user", first["role"])
+	require.Equal(t, "message", first["type"])
 }
 
 func TestNormalizeCodexModel_Gpt53(t *testing.T) {
