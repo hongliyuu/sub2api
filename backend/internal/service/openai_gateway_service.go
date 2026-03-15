@@ -12,6 +12,7 @@ import (
 	"io"
 	"math/rand"
 	"net/http"
+	"net/url"
 	"sort"
 	"strconv"
 	"strings"
@@ -3803,18 +3804,37 @@ func (s *OpenAIGatewayService) validateUpstreamBaseURL(raw string) (string, erro
 }
 
 // buildOpenAIResponsesURL 组装 OpenAI Responses 端点。
-// 直接拼接 /responses，不自动添加 /v1。
-// 用户应在 base URL 中明确指定完整路径（如 https://api.openai.com/v1）
+// 智能处理标准 OpenAI API 和自定义代理端点：
+// - https://api.openai.com -> https://api.openai.com/v1/responses
+// - https://api.openai.com/v1 -> https://api.openai.com/v1/responses
+// - https://proxy.com/openai -> https://proxy.com/openai/responses
 func buildOpenAIResponsesURL(base string) string {
 	normalized := strings.TrimRight(strings.TrimSpace(base), "/")
 
-	// 已经包含 /responses，直接返回
+	// 已经包含完整路径
+	if strings.HasSuffix(normalized, "/v1/responses") {
+		return normalized
+	}
+
+	// 已经包含 /responses（可能是自定义端点）
 	if strings.HasSuffix(normalized, "/responses") {
 		return normalized
 	}
 
-	// 直接追加 /responses，不自动添加 /v1
-	return normalized + "/responses"
+	// 已经包含 /v1，只需追加 /responses
+	if strings.HasSuffix(normalized, "/v1") {
+		return normalized + "/responses"
+	}
+
+	// 解析 URL 检查是否有自定义路径
+	parsed, err := url.Parse(normalized)
+	if err == nil && parsed.Path != "" && parsed.Path != "/" {
+		// 有自定义路径（如 /openai），直接追加 /responses
+		return normalized + "/responses"
+	}
+
+	// 标准情况：追加 /v1/responses
+	return normalized + "/v1/responses"
 }
 
 func trimOpenAIEncryptedReasoningItems(reqBody map[string]any) bool {
