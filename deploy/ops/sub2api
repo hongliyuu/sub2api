@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+REPO_ROOT="${REPO_ROOT:-/home/ubuntu/sub2api}"
+RELEASE_SCRIPT="$REPO_ROOT/deploy/ops/release_oracle.sh"
+PREFLIGHT_SCRIPT="$REPO_ROOT/deploy/ops/preflight_oracle.sh"
+BACKUP_SCRIPT="$REPO_ROOT/deploy/ops/backup_sub2api.sh"
+VERIFY_BACKUP_SCRIPT="$REPO_ROOT/deploy/ops/verify_backup_sub2api.sh"
+
+usage() {
+  cat <<'EOF'
+Usage: sub2api <command> [args]
+
+Commands:
+  update          Fetch, fast-forward, rebuild, and restart sub2api
+  preflight       Run Oracle preflight checks
+  backup          Run online backup
+  verify-backup   Verify latest backup or a provided target
+  status          Show git branch status and running container status
+  version         Show repo version file and container image
+  help            Show this message
+EOF
+}
+
+require_file() {
+  local path="$1"
+  [ -f "$path" ] || {
+    printf 'missing file: %s\n' "$path" >&2
+    exit 1
+  }
+}
+
+cmd="${1:-help}"
+shift || true
+
+case "$cmd" in
+  update)
+    require_file "$RELEASE_SCRIPT"
+    cd "$REPO_ROOT"
+    DEPLOY_IF_UP_TO_DATE=1 bash "$RELEASE_SCRIPT" "$@"
+    ;;
+  preflight)
+    require_file "$PREFLIGHT_SCRIPT"
+    cd "$REPO_ROOT"
+    bash "$PREFLIGHT_SCRIPT" "$@"
+    ;;
+  backup)
+    require_file "$BACKUP_SCRIPT"
+    cd "$REPO_ROOT"
+    bash "$BACKUP_SCRIPT" "$@"
+    ;;
+  verify-backup)
+    require_file "$VERIFY_BACKUP_SCRIPT"
+    cd "$REPO_ROOT"
+    if [ "$#" -eq 0 ]; then
+      bash "$VERIFY_BACKUP_SCRIPT" latest
+    else
+      bash "$VERIFY_BACKUP_SCRIPT" "$@"
+    fi
+    ;;
+  status)
+    cd "$REPO_ROOT"
+    git status --short --branch
+    echo "---"
+    sudo docker ps --format '{{.Names}}\t{{.Image}}\t{{.Status}}' | grep -E '^sub2api(\t|-)'
+    ;;
+  version)
+    require_file "$REPO_ROOT/backend/cmd/server/VERSION"
+    printf 'repo_version=%s\n' "$(tr -d '\r\n' < "$REPO_ROOT/backend/cmd/server/VERSION")"
+    printf 'container_image=%s\n' "$(sudo docker inspect -f '{{.Config.Image}}' sub2api 2>/dev/null || echo unknown)"
+    ;;
+  help|-h|--help)
+    usage
+    ;;
+  *)
+    printf 'unknown command: %s\n\n' "$cmd" >&2
+    usage >&2
+    exit 1
+    ;;
+esac

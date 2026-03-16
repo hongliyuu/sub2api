@@ -14,6 +14,8 @@
   - 备份完整性检查脚本
 - `deploy/ops/release_oracle.sh`
   - 标准化 Oracle 发布脚本
+- `deploy/ops/sub2api`
+  - Oracle 主机命令入口，可通过 `sub2api update` 等子命令调用标准运维流程
 - `deploy/systemd/sub2api-backup.service`
 - `deploy/systemd/sub2api-backup.timer`
 
@@ -43,8 +45,7 @@ gh pr status
 2. 登录 Oracle 主机后执行：
 
 ```bash
-cd /home/ubuntu/sub2api
-bash deploy/ops/release_oracle.sh
+sub2api update
 ```
 
 `deploy/ops/release_oracle.sh` 会做这些事：
@@ -64,6 +65,17 @@ bash deploy/ops/release_oracle.sh
 BACKUP_BEFORE_DEPLOY=0 bash deploy/ops/release_oracle.sh
 DEPLOY_IF_UP_TO_DATE=1 bash deploy/ops/release_oracle.sh
 REMOTE=fork BRANCH=fix/openai-system-message-lifting bash deploy/ops/release_oracle.sh
+```
+
+`sub2api` 命令常用子命令：
+
+```bash
+sub2api update
+sub2api preflight
+sub2api backup
+sub2api verify-backup
+sub2api status
+sub2api version
 ```
 
 不要再用下面这类旧命令做生产更新：
@@ -98,7 +110,7 @@ sudo systemctl status sub2api-backup.timer
 ## 运维约束
 
 - 不要直接把生产机仓库当开发机长期改代码；先在本地/分支完成，再推到 fork，再在 Oracle 上 fast-forward 发布。
-- 生产发布唯一入口是 `bash deploy/ops/release_oracle.sh`；不要再手动执行 `docker compose pull sub2api`。
+- 生产发布唯一入口是 `sub2api update`（底层仍调用 `deploy/ops/release_oracle.sh`）；不要再手动执行 `docker compose pull sub2api`。
 - 每次改 `/etc/caddy/Caddyfile` 后，同步回 `deploy/Caddyfile.oracle-a1-free`，避免继续漂移。
 - `sub2api-backup.timer` 只负责产出备份，不自动删除旧备份。清理前先人工确认。
 - 发布前后至少跑一次 `deploy/ops/preflight_oracle.sh`。
