@@ -48,6 +48,19 @@ compose_cmd() {
   fi
 }
 
+require_source_build_compose() {
+  local compose_file="$1"
+  if grep -Eq '^[[:space:]]+build:' "$compose_file" && \
+     grep -Eq '^[[:space:]]+context:[[:space:]]+\.\.' "$compose_file" && \
+     grep -Eq '^[[:space:]]+dockerfile:[[:space:]]+deploy/Dockerfile' "$compose_file" && \
+     grep -Eq '^[[:space:]]+image:[[:space:]]+sub2api-local:latest' "$compose_file"; then
+    log "OK: compose keeps sub2api on repo source build (sub2api-local:latest)"
+  else
+    warn "compose is not pinned to repo source build; official image fallback would bypass local compatibility fixes"
+    issues=1
+  fi
+}
+
 issues=0
 
 [ -f "$ENV_FILE" ] || fail "missing env file: $ENV_FILE"
@@ -82,6 +95,15 @@ else
   issues=1
 fi
 
+if running_image="$(docker_cmd inspect -f '{{.Config.Image}}' "$SUB2API_CONTAINER" 2>/dev/null)"; then
+  if [ "$running_image" = "sub2api-local:latest" ]; then
+    log "OK: running image = $running_image"
+  else
+    warn "running image is $running_image; expected sub2api-local:latest"
+    issues=1
+  fi
+fi
+
 if curl -fsS "$HEALTH_URL" >/dev/null; then
   log "OK: health endpoint reachable at $HEALTH_URL"
 else
@@ -95,6 +117,8 @@ else
   warn "docker compose config validation failed"
   issues=1
 fi
+
+require_source_build_compose "$DEPLOY_DIR/docker-compose.yml"
 
 if [ -f "$REPO_CADDY_FILE" ] && [ -f "$LIVE_CADDY_FILE" ]; then
   if [ -n "$SUDO" ]; then

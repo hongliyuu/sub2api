@@ -51,11 +51,12 @@ bash deploy/ops/release_oracle.sh
 
 - 要求当前分支就是 `fix/openai-system-message-lifting`
 - 要求工作区干净
+- 要求 `deploy/docker-compose.yml` 仍然是仓库源码构建（`build: ..` + `image: sub2api-local:latest`）
 - `git fetch fork fix/openai-system-message-lifting`
 - 如果本地有未推送提交，直接失败，而不是继续部署
 - 默认先跑一次在线备份
 - 仅对 `sub2api` 服务执行 `docker compose up -d --build --no-deps`
-- 部署后等待 `/healthz` 恢复，再重新跑 preflight
+- 部署后等待 `/healthz` 恢复，再检查运行镜像必须是 `sub2api-local:latest`，最后重新跑 preflight
 
 常用参数：
 
@@ -64,6 +65,14 @@ BACKUP_BEFORE_DEPLOY=0 bash deploy/ops/release_oracle.sh
 DEPLOY_IF_UP_TO_DATE=1 bash deploy/ops/release_oracle.sh
 REMOTE=fork BRANCH=fix/openai-system-message-lifting bash deploy/ops/release_oracle.sh
 ```
+
+不要再用下面这类旧命令做生产更新：
+
+```bash
+sudo docker compose pull sub2api && sudo docker compose up -d sub2api
+```
+
+这会把生产机切回官方镜像，绕开 Oracle 本地兼容补丁。
 
 ## 备份
 
@@ -89,6 +98,7 @@ sudo systemctl status sub2api-backup.timer
 ## 运维约束
 
 - 不要直接把生产机仓库当开发机长期改代码；先在本地/分支完成，再推到 fork，再在 Oracle 上 fast-forward 发布。
+- 生产发布唯一入口是 `bash deploy/ops/release_oracle.sh`；不要再手动执行 `docker compose pull sub2api`。
 - 每次改 `/etc/caddy/Caddyfile` 后，同步回 `deploy/Caddyfile.oracle-a1-free`，避免继续漂移。
 - `sub2api-backup.timer` 只负责产出备份，不自动删除旧备份。清理前先人工确认。
 - 发布前后至少跑一次 `deploy/ops/preflight_oracle.sh`。

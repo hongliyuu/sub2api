@@ -65,7 +65,11 @@ func RegisterGatewayRoutes(
 			}
 			h.Gateway.CountTokens(c)
 		})
+		// Compatibility aliases for clients that probe models with HEAD or singular /model.
 		gateway.GET("/models", h.Gateway.Models)
+		gateway.HEAD("/models", h.Gateway.Models)
+		gateway.GET("/model", h.Gateway.Models)
+		gateway.HEAD("/model", h.Gateway.Models)
 		gateway.GET("/usage", h.Gateway.Usage)
 		// OpenAI Responses API
 		gateway.POST("/responses", h.OpenAIGateway.Responses)

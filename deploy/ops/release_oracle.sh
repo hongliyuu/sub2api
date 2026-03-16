@@ -51,6 +51,17 @@ compose_cmd() {
   fi
 }
 
+require_source_build_compose() {
+  if grep -Eq '^[[:space:]]+build:' "$COMPOSE_FILE" && \
+     grep -Eq '^[[:space:]]+context:[[:space:]]+\.\.' "$COMPOSE_FILE" && \
+     grep -Eq '^[[:space:]]+dockerfile:[[:space:]]+deploy/Dockerfile' "$COMPOSE_FILE" && \
+     grep -Eq '^[[:space:]]+image:[[:space:]]+sub2api-local:latest' "$COMPOSE_FILE"; then
+    log "compose file is pinned to repo source build"
+  else
+    fail "compose file is not pinned to repo source build; refusing release because official image fallback would bypass local fixes"
+  fi
+}
+
 wait_for_health() {
   local attempt=1
   while [ "$attempt" -le "$HEALTH_RETRIES" ]; do
@@ -75,6 +86,7 @@ cd "$REPO_ROOT"
 current_branch="$(git branch --show-current)"
 [ "$current_branch" = "$BRANCH" ] || fail "current branch is $current_branch, expected $BRANCH"
 [ -z "$(git status --porcelain)" ] || fail "repo working tree is not clean"
+require_source_build_compose
 
 bash "$PRECHECK_SCRIPT"
 
@@ -110,5 +122,7 @@ log "rebuilding and restarting $SERVICE"
 compose_cmd -f "$COMPOSE_FILE" up -d --build --no-deps "$SERVICE"
 
 wait_for_health
+running_image="$($SUDO docker inspect -f '{{.Config.Image}}' "$SERVICE" 2>/dev/null || true)"
+[ "$running_image" = "sub2api-local:latest" ] || fail "running image is $running_image, expected sub2api-local:latest"
 bash "$PRECHECK_SCRIPT"
 log "release completed"
