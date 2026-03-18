@@ -593,6 +593,118 @@ func TestServeEmbeddedFrontend(t *testing.T) {
 	})
 }
 
+// TestShouldBypassEmbeddedFrontend is a direct regression test for the bypass rules.
+// It guards against accidentally removing a path that should be forwarded to the backend.
+func TestShouldBypassEmbeddedFrontend(t *testing.T) {
+	bypass := []string{
+		// standard API prefixes
+		"/api/",
+		"/api/v1/users",
+		"/v1/models",
+		"/v1/chat/completions",
+		"/v1beta/generateContent",
+		"/sora/v1/videos",
+		"/antigravity/run",
+		"/setup/wizard",
+		// copilot paths (custom feature)
+		"/copilot/v1/chat/completions",
+		"/copilot/v1/models",
+		"/copilot/v1/responses",
+		"/copilot/v1/messages",
+		// exact-match API routes
+		"/health",
+		"/responses",
+		"/responses/compact",
+		// root-level completions alias (regression: must not be served as HTML)
+		"/chat/completions",
+	}
+	for _, path := range bypass {
+		t.Run("bypass:"+path, func(t *testing.T) {
+			assert.True(t, shouldBypassEmbeddedFrontend(path),
+				"path %q should bypass embedded frontend", path)
+		})
+	}
+
+	// Paths that belong to the SPA and must NOT bypass the middleware.
+	serve := []string{
+		"/",
+		"/dashboard",
+		"/login",
+		"/settings",
+		"/users/123",
+		// These look similar but are real SPA routes, not API routes:
+		"/chat",
+		"/completions-history",
+	}
+	for _, path := range serve {
+		t.Run("serve:"+path, func(t *testing.T) {
+			assert.False(t, shouldBypassEmbeddedFrontend(path),
+				"path %q should be served as SPA by embedded frontend", path)
+		})
+	}
+}
+
+// TestFrontendServer_Middleware_ChatCompletions is a dedicated regression test
+// that verifies POST /chat/completions reaches the backend handler and is NOT
+// intercepted by the embedded frontend middleware.
+func TestFrontendServer_Middleware_ChatCompletions(t *testing.T) {
+	t.Run("POST /chat/completions bypasses frontend middleware", func(t *testing.T) {
+		provider := &mockSettingsProvider{
+			settings: map[string]string{"test": "value"},
+		}
+
+		server, err := NewFrontendServer(provider)
+		require.NoError(t, err)
+
+		router := gin.New()
+		router.Use(server.Middleware())
+		backendCalled := false
+		router.POST("/chat/completions", func(c *gin.Context) {
+			backendCalled = true
+			c.JSON(http.StatusOK, gin.H{"object": "chat.completion"})
+		})
+
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/chat/completions",
+			strings.NewReader(`{"model":"gpt-4","messages":[]}`))
+		req.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(w, req)
+
+		assert.True(t, backendCalled,
+			"backend handler must be reached; middleware must not intercept POST /chat/completions")
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.NotContains(t, w.Header().Get("Content-Type"), "text/html",
+			"response should be JSON, not an HTML page")
+	})
+
+	t.Run("POST /copilot/v1/chat/completions bypasses frontend middleware", func(t *testing.T) {
+		provider := &mockSettingsProvider{
+			settings: map[string]string{"test": "value"},
+		}
+
+		server, err := NewFrontendServer(provider)
+		require.NoError(t, err)
+
+		router := gin.New()
+		router.Use(server.Middleware())
+		backendCalled := false
+		router.POST("/copilot/v1/chat/completions", func(c *gin.Context) {
+			backendCalled = true
+			c.JSON(http.StatusOK, gin.H{"object": "chat.completion"})
+		})
+
+		w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/copilot/v1/chat/completions",
+			strings.NewReader(`{"model":"gpt-4","messages":[]}`))
+		req.Header.Set("Content-Type", "application/json")
+		router.ServeHTTP(w, req)
+
+		assert.True(t, backendCalled,
+			"backend handler must be reached; middleware must not intercept Copilot routes")
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+}
+
 // Tests for HTMLCache
 func TestHTMLCache(t *testing.T) {
 	t.Run("new_cache_returns_nil", func(t *testing.T) {
