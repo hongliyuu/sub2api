@@ -62,7 +62,7 @@ case "$cmd" in
     cd "$REPO_ROOT"
     git status --short --branch
     echo "---"
-    sudo docker ps --format '{{.Names}}\t{{.Image}}\t{{.Status}}' | grep -E '^sub2api(\t|-)'
+    sudo docker ps --format '{{.Names}}\t{{.Image}}\t{{.Status}}' | awk -F '\t' '$1 == "sub2api" || index($1, "sub2api-") == 1'
     ;;
   version)
     require_file "$REPO_ROOT/backend/cmd/server/VERSION"
