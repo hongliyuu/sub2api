@@ -21,6 +21,7 @@ export interface SystemSettings {
   registration_email_suffix_whitelist: string[]
   promo_code_enabled: boolean
   password_reset_enabled: boolean
+  frontend_url: string
   invitation_code_enabled: boolean
   totp_enabled: boolean // TOTP 双因素认证
   totp_encryption_key_configured: boolean // TOTP 加密密钥是否已配置
@@ -40,6 +41,7 @@ export interface SystemSettings {
   purchase_subscription_enabled: boolean
   purchase_subscription_url: string
   sora_client_enabled: boolean
+  backend_mode_enabled: boolean
   custom_menu_items: CustomMenuItem[]
   // SMTP settings
   smtp_host: string
@@ -90,6 +92,7 @@ export interface UpdateSettingsRequest {
   registration_email_suffix_whitelist?: string[]
   promo_code_enabled?: boolean
   password_reset_enabled?: boolean
+  frontend_url?: string
   invitation_code_enabled?: boolean
   totp_enabled?: boolean // TOTP 双因素认证
   default_balance?: number
@@ -106,6 +109,7 @@ export interface UpdateSettingsRequest {
   purchase_subscription_enabled?: boolean
   purchase_subscription_url?: string
   sora_client_enabled?: boolean
+  backend_mode_enabled?: boolean
   custom_menu_items?: CustomMenuItem[]
   smtp_host?: string
   smtp_port?: number
@@ -273,6 +277,84 @@ export async function updateStreamTimeoutSettings(
   return data
 }
 
+// ==================== Rectifier Settings ====================
+
+/**
+ * Rectifier settings interface
+ */
+export interface RectifierSettings {
+  enabled: boolean
+  thinking_signature_enabled: boolean
+  thinking_budget_enabled: boolean
+}
+
+/**
+ * Get rectifier settings
+ * @returns Rectifier settings
+ */
+export async function getRectifierSettings(): Promise<RectifierSettings> {
+  const { data } = await apiClient.get<RectifierSettings>('/admin/settings/rectifier')
+  return data
+}
+
+/**
+ * Update rectifier settings
+ * @param settings - Rectifier settings to update
+ * @returns Updated settings
+ */
+export async function updateRectifierSettings(
+  settings: RectifierSettings
+): Promise<RectifierSettings> {
+  const { data } = await apiClient.put<RectifierSettings>(
+    '/admin/settings/rectifier',
+    settings
+  )
+  return data
+}
+
+// ==================== Beta Policy Settings ====================
+
+/**
+ * Beta policy rule interface
+ */
+export interface BetaPolicyRule {
+  beta_token: string
+  action: 'pass' | 'filter' | 'block'
+  scope: 'all' | 'oauth' | 'apikey' | 'bedrock'
+  error_message?: string
+}
+
+/**
+ * Beta policy settings interface
+ */
+export interface BetaPolicySettings {
+  rules: BetaPolicyRule[]
+}
+
+/**
+ * Get beta policy settings
+ * @returns Beta policy settings
+ */
+export async function getBetaPolicySettings(): Promise<BetaPolicySettings> {
+  const { data } = await apiClient.get<BetaPolicySettings>('/admin/settings/beta-policy')
+  return data
+}
+
+/**
+ * Update beta policy settings
+ * @param settings - Beta policy settings to update
+ * @returns Updated settings
+ */
+export async function updateBetaPolicySettings(
+  settings: BetaPolicySettings
+): Promise<BetaPolicySettings> {
+  const { data } = await apiClient.put<BetaPolicySettings>(
+    '/admin/settings/beta-policy',
+    settings
+  )
+  return data
+}
+
 // ==================== Sora S3 Settings ====================
 
 export interface SoraS3Settings {
@@ -419,6 +501,10 @@ export const settingsAPI = {
   deleteAdminApiKey,
   getStreamTimeoutSettings,
   updateStreamTimeoutSettings,
+  getRectifierSettings,
+  updateRectifierSettings,
+  getBetaPolicySettings,
+  updateBetaPolicySettings,
   getSoraS3Settings,
   updateSoraS3Settings,
   testSoraS3Connection,

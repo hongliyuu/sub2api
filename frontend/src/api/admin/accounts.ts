@@ -241,6 +241,28 @@ export async function clearRateLimit(id: number): Promise<Account> {
 }
 
 /**
+ * Recover account runtime state in one call
+ * @param id - Account ID
+ * @returns Updated account
+ */
+export async function recoverState(id: number): Promise<Account> {
+  const { data } = await apiClient.post<Account>(`/admin/accounts/${id}/recover-state`)
+  return data
+}
+
+/**
+ * Reset account quota usage
+ * @param id - Account ID
+ * @returns Updated account
+ */
+export async function resetAccountQuota(id: number): Promise<Account> {
+  const { data } = await apiClient.post<Account>(
+    `/admin/accounts/${id}/reset-quota`
+  )
+  return data
+}
+
+/**
  * Get temporary unschedulable status
  * @param id - Account ID
  * @returns Status with detail state if active
@@ -612,6 +634,43 @@ export async function validateSoraSessionToken(
   return data
 }
 
+/**
+ * Batch operation result type
+ */
+export interface BatchOperationResult {
+  total: number
+  success: number
+  failed: number
+  errors?: Array<{ account_id: number; error: string }>
+  warnings?: Array<{ account_id: number; warning: string }>
+}
+
+/**
+ * Batch clear account errors
+ * @param accountIds - Array of account IDs
+ * @returns Batch operation result
+ */
+export async function batchClearError(accountIds: number[]): Promise<BatchOperationResult> {
+  const { data } = await apiClient.post<BatchOperationResult>('/admin/accounts/batch-clear-error', {
+    account_ids: accountIds
+  })
+  return data
+}
+
+/**
+ * Batch refresh account credentials
+ * @param accountIds - Array of account IDs
+ * @returns Batch operation result
+ */
+export async function batchRefresh(accountIds: number[]): Promise<BatchOperationResult> {
+  const { data } = await apiClient.post<BatchOperationResult>('/admin/accounts/batch-refresh', {
+    account_ids: accountIds,
+  }, {
+    timeout: 120000  // 120s timeout for large batch refreshes
+  })
+  return data
+}
+
 export const accountsAPI = {
   list,
   listWithEtag,
@@ -629,6 +688,8 @@ export const accountsAPI = {
   getTodayStats,
   getBatchTodayStats,
   clearRateLimit,
+  recoverState,
+  resetAccountQuota,
   getTempUnschedulableStatus,
   resetTempUnschedulable,
   setSchedulable,
@@ -646,7 +707,9 @@ export const accountsAPI = {
   importData,
   getAntigravityDefaultModelMapping,
   getCopilotQuota,
-  getCopilotUsageSummary
+  getCopilotUsageSummary,
+  batchClearError,
+  batchRefresh
 }
 
 export default accountsAPI

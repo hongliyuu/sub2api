@@ -65,6 +65,19 @@ const minVersionErrorTTL = 5 * time.Second
 // minVersionDBTimeout singleflight 内 DB 查询超时，独立于请求 context
 const minVersionDBTimeout = 5 * time.Second
 
+// cachedBackendMode Backend Mode cache (in-process, 60s TTL)
+type cachedBackendMode struct {
+	value     bool
+	expiresAt int64 // unix nano
+}
+
+var backendModeCache atomic.Value // *cachedBackendMode
+var backendModeSF singleflight.Group
+
+const backendModeCacheTTL = 60 * time.Second
+const backendModeErrorTTL = 5 * time.Second
+const backendModeDBTimeout = 5 * time.Second
+
 // DefaultSubscriptionGroupReader validates group references used by default subscriptions.
 type DefaultSubscriptionGroupReader interface {
 	GetByID(ctx context.Context, id int64) (*Group, error)
@@ -103,6 +116,15 @@ func (s *SettingService) GetAllSettings(ctx context.Context) (*SystemSettings, e
 	return s.parseSettings(settings), nil
 }
 
+// GetFrontendURL 获取前端基础URL（数据库优先，fallback 到配置文件）
+func (s *SettingService) GetFrontendURL(ctx context.Context) string {
+	val, err := s.settingRepo.GetValue(ctx, SettingKeyFrontendURL)
+	if err == nil && strings.TrimSpace(val) != "" {
+		return strings.TrimSpace(val)
+	}
+	return s.cfg.Server.FrontendURL
+}
+
 // GetPublicSettings 获取公开设置（无需登录）
 func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings, error) {
 	keys := []string{
@@ -128,6 +150,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeySoraClientEnabled,
 		SettingKeyCustomMenuItems,
 		SettingKeyLinuxDoConnectEnabled,
+		SettingKeyBackendModeEnabled,
 	}
 
 	settings, err := s.settingRepo.GetMultiple(ctx, keys)
@@ -172,6 +195,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SoraClientEnabled:                settings[SettingKeySoraClientEnabled] == "true",
 		CustomMenuItems:                  settings[SettingKeyCustomMenuItems],
 		LinuxDoOAuthEnabled:              linuxDoEnabled,
+		BackendModeEnabled:               settings[SettingKeyBackendModeEnabled] == "true",
 	}, nil
 }
 
@@ -223,6 +247,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		SoraClientEnabled                bool            `json:"sora_client_enabled"`
 		CustomMenuItems                  json.RawMessage `json:"custom_menu_items"`
 		LinuxDoOAuthEnabled              bool            `json:"linuxdo_oauth_enabled"`
+		BackendModeEnabled               bool            `json:"backend_mode_enabled"`
 		Version                          string          `json:"version,omitempty"`
 	}{
 		RegistrationEnabled:              settings.RegistrationEnabled,
@@ -247,6 +272,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		SoraClientEnabled:                settings.SoraClientEnabled,
 		CustomMenuItems:                  filterUserVisibleMenuItems(settings.CustomMenuItems),
 		LinuxDoOAuthEnabled:              settings.LinuxDoOAuthEnabled,
+		BackendModeEnabled:               settings.BackendModeEnabled,
 		Version:                          s.version,
 	}, nil
 }
@@ -384,6 +410,7 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	updates[SettingKeyRegistrationEmailSuffixWhitelist] = string(registrationEmailSuffixWhitelistJSON)
 	updates[SettingKeyPromoCodeEnabled] = strconv.FormatBool(settings.PromoCodeEnabled)
 	updates[SettingKeyPasswordResetEnabled] = strconv.FormatBool(settings.PasswordResetEnabled)
+	updates[SettingKeyFrontendURL] = settings.FrontendURL
 	updates[SettingKeyInvitationCodeEnabled] = strconv.FormatBool(settings.InvitationCodeEnabled)
 	updates[SettingKeyTotpEnabled] = strconv.FormatBool(settings.TotpEnabled)
 
@@ -461,6 +488,9 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	// 分组隔离
 	updates[SettingKeyAllowUngroupedKeyScheduling] = strconv.FormatBool(settings.AllowUngroupedKeyScheduling)
 
+	// Backend Mode
+	updates[SettingKeyBackendModeEnabled] = strconv.FormatBool(settings.BackendModeEnabled)
+
 	err = s.settingRepo.SetMultiple(ctx, updates)
 	if err == nil {
 		// 先使 inflight singleflight 失效，再刷新缓存，缩小旧值覆盖新值的竞态窗口
@@ -468,6 +498,11 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 		minVersionCache.Store(&cachedMinVersion{
 			value:     settings.MinClaudeCodeVersion,
 			expiresAt: time.Now().Add(minVersionCacheTTL).UnixNano(),
+		})
+		backendModeSF.Forget("backend_mode")
+		backendModeCache.Store(&cachedBackendMode{
+			value:     settings.BackendModeEnabled,
+			expiresAt: time.Now().Add(backendModeCacheTTL).UnixNano(),
 		})
 		if s.onUpdate != nil {
 			s.onUpdate() // Invalidate cache after settings update
@@ -523,6 +558,52 @@ func (s *SettingService) IsRegistrationEnabled(ctx context.Context) bool {
 		return false
 	}
 	return value == "true"
+}
+
+// IsBackendModeEnabled checks if backend mode is enabled
+// Uses in-process atomic.Value cache with 60s TTL, zero-lock hot path
+func (s *SettingService) IsBackendModeEnabled(ctx context.Context) bool {
+	if cached, ok := backendModeCache.Load().(*cachedBackendMode); ok && cached != nil {
+		if time.Now().UnixNano() < cached.expiresAt {
+			return cached.value
+		}
+	}
+	result, _, _ := backendModeSF.Do("backend_mode", func() (any, error) {
+		if cached, ok := backendModeCache.Load().(*cachedBackendMode); ok && cached != nil {
+			if time.Now().UnixNano() < cached.expiresAt {
+				return cached.value, nil
+			}
+		}
+		dbCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), backendModeDBTimeout)
+		defer cancel()
+		value, err := s.settingRepo.GetValue(dbCtx, SettingKeyBackendModeEnabled)
+		if err != nil {
+			if errors.Is(err, ErrSettingNotFound) {
+				// Setting not yet created (fresh install) - default to disabled with full TTL
+				backendModeCache.Store(&cachedBackendMode{
+					value:     false,
+					expiresAt: time.Now().Add(backendModeCacheTTL).UnixNano(),
+				})
+				return false, nil
+			}
+			slog.Warn("failed to get backend_mode_enabled setting", "error", err)
+			backendModeCache.Store(&cachedBackendMode{
+				value:     false,
+				expiresAt: time.Now().Add(backendModeErrorTTL).UnixNano(),
+			})
+			return false, nil
+		}
+		enabled := value == "true"
+		backendModeCache.Store(&cachedBackendMode{
+			value:     enabled,
+			expiresAt: time.Now().Add(backendModeCacheTTL).UnixNano(),
+		})
+		return enabled, nil
+	})
+	if val, ok := result.(bool); ok {
+		return val
+	}
+	return false
 }
 
 // IsEmailVerifyEnabled 检查是否开启邮件验证
@@ -696,6 +777,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		RegistrationEmailSuffixWhitelist: ParseRegistrationEmailSuffixWhitelist(settings[SettingKeyRegistrationEmailSuffixWhitelist]),
 		PromoCodeEnabled:                 settings[SettingKeyPromoCodeEnabled] != "false", // 默认启用
 		PasswordResetEnabled:             emailVerifyEnabled && settings[SettingKeyPasswordResetEnabled] == "true",
+		FrontendURL:                      settings[SettingKeyFrontendURL],
 		InvitationCodeEnabled:            settings[SettingKeyInvitationCodeEnabled] == "true",
 		TotpEnabled:                      settings[SettingKeyTotpEnabled] == "true",
 		SMTPHost:                         settings[SettingKeySMTPHost],
@@ -719,6 +801,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		PurchaseSubscriptionURL:          strings.TrimSpace(settings[SettingKeyPurchaseSubscriptionURL]),
 		SoraClientEnabled:                settings[SettingKeySoraClientEnabled] == "true",
 		CustomMenuItems:                  settings[SettingKeyCustomMenuItems],
+		BackendModeEnabled:               settings[SettingKeyBackendModeEnabled] == "true",
 	}
 
 	// 解析整数类型
@@ -1192,6 +1275,113 @@ func (s *SettingService) GetMinClaudeCodeVersion(ctx context.Context) string {
 		return ""
 	}
 	return ver
+}
+
+// GetRectifierSettings 获取请求整流器配置
+func (s *SettingService) GetRectifierSettings(ctx context.Context) (*RectifierSettings, error) {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyRectifierSettings)
+	if err != nil {
+		if errors.Is(err, ErrSettingNotFound) {
+			return DefaultRectifierSettings(), nil
+		}
+		return nil, fmt.Errorf("get rectifier settings: %w", err)
+	}
+	if value == "" {
+		return DefaultRectifierSettings(), nil
+	}
+
+	var settings RectifierSettings
+	if err := json.Unmarshal([]byte(value), &settings); err != nil {
+		return DefaultRectifierSettings(), nil
+	}
+
+	return &settings, nil
+}
+
+// SetRectifierSettings 设置请求整流器配置
+func (s *SettingService) SetRectifierSettings(ctx context.Context, settings *RectifierSettings) error {
+	if settings == nil {
+		return fmt.Errorf("settings cannot be nil")
+	}
+
+	data, err := json.Marshal(settings)
+	if err != nil {
+		return fmt.Errorf("marshal rectifier settings: %w", err)
+	}
+
+	return s.settingRepo.Set(ctx, SettingKeyRectifierSettings, string(data))
+}
+
+// IsSignatureRectifierEnabled 判断签名整流是否启用（总开关 && 签名子开关）
+func (s *SettingService) IsSignatureRectifierEnabled(ctx context.Context) bool {
+	settings, err := s.GetRectifierSettings(ctx)
+	if err != nil {
+		return true // fail-open: 查询失败时默认启用
+	}
+	return settings.Enabled && settings.ThinkingSignatureEnabled
+}
+
+// IsBudgetRectifierEnabled 判断 Budget 整流是否启用（总开关 && Budget 子开关）
+func (s *SettingService) IsBudgetRectifierEnabled(ctx context.Context) bool {
+	settings, err := s.GetRectifierSettings(ctx)
+	if err != nil {
+		return true // fail-open: 查询失败时默认启用
+	}
+	return settings.Enabled && settings.ThinkingBudgetEnabled
+}
+
+// GetBetaPolicySettings 获取 Beta 策略配置
+func (s *SettingService) GetBetaPolicySettings(ctx context.Context) (*BetaPolicySettings, error) {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyBetaPolicySettings)
+	if err != nil {
+		if errors.Is(err, ErrSettingNotFound) {
+			return DefaultBetaPolicySettings(), nil
+		}
+		return nil, fmt.Errorf("get beta policy settings: %w", err)
+	}
+	if value == "" {
+		return DefaultBetaPolicySettings(), nil
+	}
+
+	var settings BetaPolicySettings
+	if err := json.Unmarshal([]byte(value), &settings); err != nil {
+		return DefaultBetaPolicySettings(), nil
+	}
+
+	return &settings, nil
+}
+
+// SetBetaPolicySettings 设置 Beta 策略配置
+func (s *SettingService) SetBetaPolicySettings(ctx context.Context, settings *BetaPolicySettings) error {
+	if settings == nil {
+		return fmt.Errorf("settings cannot be nil")
+	}
+
+	validActions := map[string]bool{
+		BetaPolicyActionPass: true, BetaPolicyActionFilter: true, BetaPolicyActionBlock: true,
+	}
+	validScopes := map[string]bool{
+		BetaPolicyScopeAll: true, BetaPolicyScopeOAuth: true, BetaPolicyScopeAPIKey: true, BetaPolicyScopeBedrock: true,
+	}
+
+	for i, rule := range settings.Rules {
+		if rule.BetaToken == "" {
+			return fmt.Errorf("rule[%d]: beta_token cannot be empty", i)
+		}
+		if !validActions[rule.Action] {
+			return fmt.Errorf("rule[%d]: invalid action %q", i, rule.Action)
+		}
+		if !validScopes[rule.Scope] {
+			return fmt.Errorf("rule[%d]: invalid scope %q", i, rule.Scope)
+		}
+	}
+
+	data, err := json.Marshal(settings)
+	if err != nil {
+		return fmt.Errorf("marshal beta policy settings: %w", err)
+	}
+
+	return s.settingRepo.Set(ctx, SettingKeyBetaPolicySettings, string(data))
 }
 
 // SetStreamTimeoutSettings 设置流超时处理配置
