@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { getCurrentInstance, onUnmounted, ref } from 'vue'
 import { useAppStore } from '@/stores/app'
 import { i18n } from '@/i18n'
 
@@ -31,6 +31,14 @@ function fallbackCopy(text: string): boolean {
 export function useClipboard() {
   const appStore = useAppStore()
   const copied = ref(false)
+  let copiedResetTimer: ReturnType<typeof setTimeout> | null = null
+
+  const clearCopiedResetTimer = () => {
+    if (copiedResetTimer !== null) {
+      clearTimeout(copiedResetTimer)
+      copiedResetTimer = null
+    }
+  }
 
   const copyToClipboard = async (
     text: string,
@@ -54,14 +62,22 @@ export function useClipboard() {
     if (success) {
       copied.value = true
       appStore.showSuccess(successMessage || t('common.copiedToClipboard'))
-      setTimeout(() => {
+      clearCopiedResetTimer()
+      copiedResetTimer = setTimeout(() => {
         copied.value = false
+        copiedResetTimer = null
       }, 2000)
     } else {
       appStore.showError(t('common.copyFailed'))
     }
 
     return success
+  }
+
+  if (getCurrentInstance()) {
+    onUnmounted(() => {
+      clearCopiedResetTimer()
+    })
   }
 
   return { copied, copyToClipboard }

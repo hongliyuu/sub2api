@@ -69,6 +69,22 @@ describe('useClipboard', () => {
     expect(copied.value).toBe(false)
   })
 
+  it('重复复制时应以最后一次复制的定时器为准', async () => {
+    const { copied, copyToClipboard } = useClipboard()
+
+    await copyToClipboard('first')
+    vi.advanceTimersByTime(1500)
+
+    await copyToClipboard('second')
+    expect(copied.value).toBe(true)
+
+    vi.advanceTimersByTime(600)
+    expect(copied.value).toBe(true)
+
+    vi.advanceTimersByTime(1400)
+    expect(copied.value).toBe(false)
+  })
+
   it('复制成功时调用 showSuccess', async () => {
     const { copyToClipboard } = useClipboard()
 
