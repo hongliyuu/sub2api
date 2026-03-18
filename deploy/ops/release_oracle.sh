@@ -110,7 +110,7 @@ get_base_release_version() {
 }
 
 compute_build_metadata() {
-  local base_version short_sha commit_count
+  local base_version short_sha tag_ref oracle_revision
   if [ -n "$BUILD_VERSION" ] && [ -n "$BUILD_COMMIT" ] && [ -n "$BUILD_DATE" ]; then
     return 0
   fi
@@ -118,10 +118,20 @@ compute_build_metadata() {
   base_version="$(get_base_release_version)"
   [ -n "$base_version" ] || fail "failed to determine base release version"
 
-  short_sha="$(git rev-parse --short=8 HEAD)"
-  commit_count="$(git rev-list --count HEAD)"
+  git fetch origin --tags --force >/dev/null 2>&1 || true
 
-  BUILD_VERSION="${BUILD_VERSION:-${base_version}-oracle.${commit_count}-${short_sha}}"
+  tag_ref="v${base_version}"
+  oracle_revision=1
+  if git rev-parse -q --verify "refs/tags/$tag_ref" >/dev/null 2>&1; then
+    oracle_revision="$(git rev-list --count "${tag_ref}..HEAD" 2>/dev/null || echo 1)"
+    if [ "$oracle_revision" -le 0 ] 2>/dev/null; then
+      oracle_revision=1
+    fi
+  fi
+
+  short_sha="$(git rev-parse --short=8 HEAD)"
+
+  BUILD_VERSION="${BUILD_VERSION:-${base_version}-o${oracle_revision}}"
   BUILD_COMMIT="${BUILD_COMMIT:-$short_sha}"
   BUILD_DATE="${BUILD_DATE:-$(date -u +'%Y-%m-%dT%H:%M:%SZ')}"
 }
