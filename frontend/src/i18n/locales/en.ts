@@ -1925,7 +1925,8 @@ export default {
         },
         sessions: {
           full: 'Active sessions full, new sessions must wait (idle timeout: {idle} min)',
-          normal: 'Active sessions normal (idle timeout: {idle} min)'
+          normal: 'Active sessions normal (idle timeout: {idle} min)',
+          trackOnly: 'Active sessions in {idle} min window (no limit)'
         },
         rpm: {
           full: 'RPM limit reached',
