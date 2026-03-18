@@ -4569,7 +4569,42 @@ func normalizeOpenAIPassthroughOAuthBody(body []byte, compact bool) ([]byte, boo
 		}
 	}
 
+	instructions := gjson.GetBytes(normalized, "instructions")
+	if !instructions.Exists() || instructions.Type != gjson.String || strings.TrimSpace(instructions.String()) == "" {
+		next, err := sjson.SetBytes(normalized, "instructions", defaultOpenAIPassthroughInstructions())
+		if err != nil {
+			return body, false, fmt.Errorf("normalize passthrough body instructions: %w", err)
+		}
+		normalized = next
+		changed = true
+	}
+
+	if maxOutputTokens := gjson.GetBytes(normalized, "max_output_tokens"); maxOutputTokens.Exists() {
+		next, err := sjson.DeleteBytes(normalized, "max_output_tokens")
+		if err != nil {
+			return body, false, fmt.Errorf("normalize passthrough body delete max_output_tokens: %w", err)
+		}
+		normalized = next
+		changed = true
+	}
+
+	if maxCompletionTokens := gjson.GetBytes(normalized, "max_completion_tokens"); maxCompletionTokens.Exists() {
+		next, err := sjson.DeleteBytes(normalized, "max_completion_tokens")
+		if err != nil {
+			return body, false, fmt.Errorf("normalize passthrough body delete max_completion_tokens: %w", err)
+		}
+		normalized = next
+		changed = true
+	}
+
 	return normalized, changed, nil
+}
+
+func defaultOpenAIPassthroughInstructions() string {
+	if value := strings.TrimSpace(openai.DefaultInstructions); value != "" {
+		return value
+	}
+	return "You are a helpful coding assistant."
 }
 
 func detectOpenAIPassthroughInstructionsRejectReason(reqModel string, body []byte) string {
