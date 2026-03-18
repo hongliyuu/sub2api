@@ -57,13 +57,15 @@ fi
 compose_cmd() {
   if docker compose version >/dev/null 2>&1; then
     if [ -n "$SUDO" ]; then
-      "$SUDO" docker compose "$@"
+      "$SUDO" env APP_VERSION="$APP_VERSION" APP_COMMIT="$APP_COMMIT" APP_DATE="$APP_DATE" \
+        docker compose "$@"
     else
       docker compose "$@"
     fi
   elif command -v docker-compose >/dev/null 2>&1; then
     if [ -n "$SUDO" ]; then
-      "$SUDO" docker-compose "$@"
+      "$SUDO" env APP_VERSION="$APP_VERSION" APP_COMMIT="$APP_COMMIT" APP_DATE="$APP_DATE" \
+        docker-compose "$@"
     else
       docker-compose "$@"
     fi
