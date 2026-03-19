@@ -1,25 +1,32 @@
 name: CI
 
 on:
-  push:
   pull_request:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
 
 jobs:
-  test:
+  backend-test:
+    name: backend-test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
           go-version-file: backend/go.mod
           check-latest: false
-          cache: true
+          cache-dependency-path: backend/go.sum
       - name: Verify Go version
-        run: |
-          go version | grep -q 'go1.26.1'
+        run: go version | grep -q 'go1.26.1'
       - name: Unit tests
         working-directory: backend
         run: make test-unit
@@ -27,21 +34,106 @@ jobs:
         working-directory: backend
         run: make test-integration
 
-  golangci-lint:
+  backend-golangci-lint:
+    name: backend-golangci-lint
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
           go-version-file: backend/go.mod
           check-latest: false
-          cache: true
+          cache-dependency-path: backend/go.sum
       - name: Verify Go version
-        run: |
-          go version | grep -q 'go1.26.1'
+        run: go version | grep -q 'go1.26.1'
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.9
           args: --timeout=30m
           working-directory: backend
+
+  frontend-lint:
+    name: frontend-lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: Lint frontend
+        working-directory: frontend
+        run: pnpm run lint:check
+
+  frontend-typecheck:
+    name: frontend-typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: Typecheck frontend
+        working-directory: frontend
+        run: pnpm run typecheck
+
+  frontend-test:
+    name: frontend-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: Run frontend tests
+        working-directory: frontend
+        run: pnpm run test:run
+
+  frontend-build:
+    name: frontend-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - name: Install dependencies
+        working-directory: frontend
+        run: pnpm install --frozen-lockfile
+      - name: Build frontend
+        working-directory: frontend
+        run: pnpm run build

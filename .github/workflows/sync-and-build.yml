@@ -1,23 +1,44 @@
-name: Sync Upstream and Build Docker
+name: Sync Upstream
 
 on:
   schedule:
-    - cron: '0 * * * *'  # Hourly at minute 0
-  workflow_dispatch:  # Manual trigger
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: sync-upstream-main
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+env:
+  SYNC_BRANCH: automation/upstream-main
+  UPSTREAM_REPO: Wei-Shaw/sub2api
+  UPSTREAM_REMOTE: upstream
+  CONFLICT_LABEL: upstream-sync-conflict
+  CONFLICT_TITLE: "automation: upstream sync conflict"
 
 jobs:
-  sync-and-build:
+  sync-upstream:
+    name: sync-upstream
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      packages: write
-
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
           token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Ensure labels exist
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          gh label create automation --color 5319e7 --description "Automation managed" --force
+          gh label create upstream-sync --color 0e8a16 --description "Upstream synchronization" --force
+          gh label create "$CONFLICT_LABEL" --color b60205 --description "Upstream sync needs manual conflict resolution" --force
 
       - name: Configure Git
         run: |
@@ -26,85 +47,149 @@ jobs:
 
       - name: Add upstream remote
         run: |
-          git remote add upstream https://github.com/Wei-Shaw/sub2api.git || true
-          git fetch upstream
+          git remote add "$UPSTREAM_REMOTE" "https://github.com/$UPSTREAM_REPO.git" 2>/dev/null || true
+          git fetch origin main --tags --force
+          git fetch "$UPSTREAM_REMOTE" main --tags --force
 
-      - name: Sync with upstream
+      - name: Prepare sync branch
         id: sync
+        shell: bash
         run: |
-          git merge upstream/main --no-edit || {
-            echo "sync_failed=true" >> $GITHUB_OUTPUT
-            exit 1
-          }
-          echo "sync_failed=false" >> $GITHUB_OUTPUT
+          set -euo pipefail
 
-      - name: Push changes
-        if: steps.sync.outputs.sync_failed == 'false'
-        run: git push origin main
+          BASE_SHA="$(git rev-parse origin/main)"
+          UPSTREAM_SHA="$(git rev-parse "${UPSTREAM_REMOTE}/main")"
+          UPSTREAM_SHORT="${UPSTREAM_SHA:0:7}"
+          MERGE_BASE="$(git merge-base origin/main "${UPSTREAM_REMOTE}/main")"
+          LATEST_TAG="$(git describe --tags --abbrev=0 "${UPSTREAM_REMOTE}/main" 2>/dev/null || true)"
 
-      - name: Get upstream version
-        if: steps.sync.outputs.sync_failed == 'false'
-        id: version
-        run: |
-          # Re-fetch tags with force to ensure clean state
-          git fetch upstream --tags --force
+          {
+            echo "base_sha=$BASE_SHA"
+            echo "upstream_sha=$UPSTREAM_SHA"
+            echo "upstream_short=$UPSTREAM_SHORT"
+            echo "merge_base=$MERGE_BASE"
+            echo "latest_tag=${LATEST_TAG:-}"
+          } >> "$GITHUB_OUTPUT"
 
-          UPSTREAM_TAG=$(git describe --tags --abbrev=0 upstream/main 2>/dev/null || echo "v0.0.0")
-          echo "tag=${UPSTREAM_TAG}" >> $GITHUB_OUTPUT
-          echo "Upstream tag: ${UPSTREAM_TAG}"
-
-      - name: Check if tag exists on remote
-        if: steps.sync.outputs.sync_failed == 'false'
-        id: check_tag
-        run: |
-          TAG="${{ steps.version.outputs.tag }}"
-          if git ls-remote --tags origin | grep -q "refs/tags/$TAG$"; then
-            echo "exists=true" >> $GITHUB_OUTPUT
-            echo "Tag $TAG exists on remote, will delete and recreate"
-          else
-            echo "exists=false" >> $GITHUB_OUTPUT
-            echo "Tag $TAG does not exist, will create new"
+          if git merge-base --is-ancestor "$UPSTREAM_SHA" "$BASE_SHA"; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "merge_conflict=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
-      - name: Delete existing release and tag
-        if: steps.sync.outputs.sync_failed == 'false' && steps.check_tag.outputs.exists == 'true'
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+          git checkout -B "$SYNC_BRANCH" "$BASE_SHA"
+
+          set +e
+          git merge "$UPSTREAM_SHA" --no-edit
+          merge_status=$?
+          set -e
+
+          if [ "$merge_status" -ne 0 ]; then
+            CONFLICT_FILES="$(git diff --name-only --diff-filter=U | paste -sd ',' -)"
+            echo "merge_conflict=true" >> "$GITHUB_OUTPUT"
+            echo "conflict_files=${CONFLICT_FILES}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "merge_conflict=false" >> "$GITHUB_OUTPUT"
+
+      - name: Close stale conflict issue
+        if: steps.sync.outputs.changed == 'false' || steps.sync.outputs.merge_conflict == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ISSUE_NUMBER="$(gh issue list --label "$CONFLICT_LABEL" --state open --json number --jq '.[0].number' || true)"
+          if [ -n "$ISSUE_NUMBER" ] && [ "$ISSUE_NUMBER" != "null" ]; then
+            gh issue close "$ISSUE_NUMBER" --comment "Upstream sync is healthy again. Closing automatically from run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          fi
+
+      - name: Create or update conflict issue
+        if: steps.sync.outputs.merge_conflict == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          BODY_FILE="$(mktemp)"
+          {
+            echo "Upstream sync hit a merge conflict and stopped before updating \`$SYNC_BRANCH\`."
+            echo
+            echo "- Upstream repository: \`$UPSTREAM_REPO\`"
+            echo "- Upstream commit: \`${{ steps.sync.outputs.upstream_sha }}\`"
+            echo "- Current main commit: \`${{ steps.sync.outputs.base_sha }}\`"
+            echo "- Workflow run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo
+            echo "Conflict files:"
+            IFS=',' read -ra files <<< "${{ steps.sync.outputs.conflict_files }}"
+            for file in "${files[@]}"; do
+              [ -n "$file" ] && echo "- \`$file\`"
+            done
+          } > "$BODY_FILE"
+
+          ISSUE_NUMBER="$(gh issue list --label "$CONFLICT_LABEL" --state open --json number --jq '.[0].number' || true)"
+          if [ -n "$ISSUE_NUMBER" ] && [ "$ISSUE_NUMBER" != "null" ]; then
+            gh issue edit "$ISSUE_NUMBER" --title "$CONFLICT_TITLE" --body-file "$BODY_FILE" --add-label automation --add-label upstream-sync --add-label "$CONFLICT_LABEL"
+          else
+            gh issue create --title "$CONFLICT_TITLE" --body-file "$BODY_FILE" --label automation --label upstream-sync --label "$CONFLICT_LABEL"
+          fi
+
+      - name: Stop on merge conflict
+        if: steps.sync.outputs.merge_conflict == 'true'
+        run: |
+          echo "Upstream sync conflict recorded in issue tracker."
+          exit 1
+
+      - name: Push sync branch
+        if: steps.sync.outputs.changed == 'true' && steps.sync.outputs.merge_conflict == 'false'
+        run: git push --force-with-lease origin "$SYNC_BRANCH"
+
+      - name: Create or update sync PR
+        if: steps.sync.outputs.changed == 'true' && steps.sync.outputs.merge_conflict == 'false'
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          TITLE="sync: upstream/main @ ${{ steps.sync.outputs.upstream_short }}"
+          BODY_FILE="$(mktemp)"
+          {
+            echo "This automation PR syncs \`$UPSTREAM_REPO\` into \`main\`."
+            echo
+            echo "- Upstream commit: \`${{ steps.sync.outputs.upstream_sha }}\`"
+            if [ -n "${{ steps.sync.outputs.latest_tag }}" ]; then
+              echo "- Latest upstream tag: \`${{ steps.sync.outputs.latest_tag }}\`"
+            fi
+            echo "- Compare: https://github.com/$UPSTREAM_REPO/compare/${{ steps.sync.outputs.merge_base }}...${{ steps.sync.outputs.upstream_sha }}"
+            echo "- Workflow run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo
+            echo "This PR is expected to auto-merge after required checks pass."
+          } > "$BODY_FILE"
+
+          PR_NUMBER="$(gh pr list --head "$SYNC_BRANCH" --base main --state open --json number --jq '.[0].number' || true)"
+          if [ -n "$PR_NUMBER" ] && [ "$PR_NUMBER" != "null" ]; then
+            gh pr edit "$PR_NUMBER" --title "$TITLE" --body-file "$BODY_FILE" --add-label automation --add-label upstream-sync
+          else
+            gh pr create \
+              --base main \
+              --head "$SYNC_BRANCH" \
+              --title "$TITLE" \
+              --body-file "$BODY_FILE" \
+              --label automation \
+              --label upstream-sync
+            PR_NUMBER="$(gh pr list --head "$SYNC_BRANCH" --base main --state open --json number --jq '.[0].number')"
+          fi
+
+          echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+
+      - name: Enable auto-merge
+        if: steps.pr.outputs.number != ''
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
-          TAG="${{ steps.version.outputs.tag }}"
-
-          # Delete GitHub release if exists
-          if gh release view "$TAG" --repo ${{ github.repository }} >/dev/null 2>&1; then
-            echo "Deleting existing release $TAG"
-            gh release delete "$TAG" --repo ${{ github.repository }} --yes
-          fi
-
-          # Delete remote tag
-          echo "Deleting remote tag $TAG"
-          git push origin --delete "$TAG" || true
-
-          # Delete local tag if exists
-          git tag -d "$TAG" || true
-
-      - name: Get upstream tag message
-        if: steps.sync.outputs.sync_failed == 'false'
-        id: tag_message
-        run: |
-          TAG="${{ steps.version.outputs.tag }}"
-          MESSAGE=$(git tag -l --format='%(contents)' "$TAG" upstream/main 2>/dev/null || echo "Release $TAG")
-          echo "message<<EOF" >> $GITHUB_OUTPUT
-          echo "$MESSAGE" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Create and push tag
-        if: steps.sync.outputs.sync_failed == 'false'
-        run: |
-          TAG="${{ steps.version.outputs.tag }}"
-          MESSAGE="${{ steps.tag_message.outputs.message }}"
-
-          # Delete local tag if exists (from upstream fetch)
-          git tag -d "$TAG" 2>/dev/null || true
-
-          git tag -a "$TAG" -m "$MESSAGE"
-          git push origin "$TAG"
-          echo "Created and pushed tag $TAG"
+          # Preserve upstream ancestry on main; squash merges would break ancestor-based sync detection.
+          gh pr merge "${{ steps.pr.outputs.number }}" --auto --merge
