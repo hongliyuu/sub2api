@@ -915,17 +915,16 @@ func buildJSONArrayRaw(items [][]byte) []byte {
 	}
 	total += len(items) - 1
 
-	var buf bytes.Buffer
-	buf.Grow(total)
-	buf.WriteByte('[')
+	buf := make([]byte, 0, total)
+	buf = append(buf, '[')
 	for i, item := range items {
 		if i > 0 {
-			buf.WriteByte(',')
+			buf = append(buf, ',')
 		}
-		buf.Write(item)
+		buf = append(buf, item...)
 	}
-	buf.WriteByte(']')
-	return buf.Bytes()
+	buf = append(buf, ']')
+	return buf
 }
 
 func setJSONValueBytes(body []byte, path string, value any) ([]byte, bool) {
