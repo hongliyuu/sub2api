@@ -442,6 +442,8 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			userAgent := c.GetHeader("User-Agent")
 			clientIP := ip.GetClientIP(c)
 			requestPayloadHash := service.HashUsageRequestPayload(body)
+			inboundEndpoint := GetInboundEndpoint(c)
+			upstreamEndpoint := GetUpstreamEndpoint(c, account.Platform)
 
 			if result.ReasoningEffort == nil {
 				result.ReasoningEffort = service.NormalizeClaudeOutputEffort(parsedReq.OutputEffort)
@@ -455,6 +457,8 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					User:               apiKey.User,
 					Account:            account,
 					Subscription:       subscription,
+					InboundEndpoint:    inboundEndpoint,
+					UpstreamEndpoint:   upstreamEndpoint,
 					UserAgent:          userAgent,
 					IPAddress:          clientIP,
 					RequestPayloadHash: requestPayloadHash,
@@ -757,6 +761,8 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			userAgent := c.GetHeader("User-Agent")
 			clientIP := ip.GetClientIP(c)
 			requestPayloadHash := service.HashUsageRequestPayload(body)
+			inboundEndpoint := GetInboundEndpoint(c)
+			upstreamEndpoint := GetUpstreamEndpoint(c, account.Platform)
 
 			if result.ReasoningEffort == nil {
 				result.ReasoningEffort = service.NormalizeClaudeOutputEffort(parsedReq.OutputEffort)
@@ -770,6 +776,8 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					User:               currentAPIKey.User,
 					Account:            account,
 					Subscription:       currentSubscription,
+					InboundEndpoint:    inboundEndpoint,
+					UpstreamEndpoint:   upstreamEndpoint,
 					UserAgent:          userAgent,
 					IPAddress:          clientIP,
 					RequestPayloadHash: requestPayloadHash,
@@ -935,7 +943,7 @@ func (h *GatewayHandler) parseUsageDateRange(c *gin.Context) (time.Time, time.Ti
 	}
 	if s := c.Query("end_date"); s != "" {
 		if t, err := timezone.ParseInLocation("2006-01-02", s); err == nil {
-			endTime = t.Add(24*time.Hour - time.Second) // end of day
+			endTime = t.AddDate(0, 0, 1) // half-open range upper bound
 		}
 	}
 	return startTime, endTime
@@ -1211,6 +1219,10 @@ func (h *GatewayHandler) handleFailoverExhausted(c *gin.Context, failoverErr *se
 		}
 	}
 
+	// 记录原始上游状态码，以便 ops 错误日志捕获真实的上游错误
+	upstreamMsg := service.ExtractUpstreamErrorMessage(responseBody)
+	service.SetOpsUpstreamError(c, statusCode, upstreamMsg, "")
+
 	// 使用默认的错误映射
 	status, errType, errMsg := h.mapUpstreamError(statusCode)
 	h.handleStreamingAwareError(c, status, errType, errMsg, streamStarted)
@@ -1219,6 +1231,7 @@ func (h *GatewayHandler) handleFailoverExhausted(c *gin.Context, failoverErr *se
 // handleFailoverExhaustedSimple 简化版本，用于没有响应体的情况
 func (h *GatewayHandler) handleFailoverExhaustedSimple(c *gin.Context, statusCode int, streamStarted bool) {
 	status, errType, errMsg := h.mapUpstreamError(statusCode)
+	service.SetOpsUpstreamError(c, statusCode, errMsg, "")
 	h.handleStreamingAwareError(c, status, errType, errMsg, streamStarted)
 }
 

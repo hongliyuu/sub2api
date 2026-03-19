@@ -44,6 +44,7 @@ func TestUsageLogRepositoryCreateSyncRequestTypeAndLegacyFields(t *testing.T) {
 			log.AccountID,
 			log.RequestID,
 			log.Model,
+			sqlmock.AnyArg(), // upstream_model
 			sqlmock.AnyArg(), // group_id
 			sqlmock.AnyArg(), // subscription_id
 			log.InputTokens,
@@ -114,6 +115,7 @@ func TestUsageLogRepositoryCreate_PersistsServiceTier(t *testing.T) {
 			log.AccountID,
 			log.RequestID,
 			log.Model,
+			sqlmock.AnyArg(),
 			sqlmock.AnyArg(),
 			sqlmock.AnyArg(),
 			log.InputTokens,
@@ -259,10 +261,10 @@ func TestUsageLogRepositoryGetUserSpendingRanking(t *testing.T) {
 	start := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	end := start.Add(24 * time.Hour)
 
-	rows := sqlmock.NewRows([]string{"user_id", "email", "actual_cost", "requests", "tokens", "total_actual_cost"}).
-		AddRow(int64(2), "beta@example.com", 12.5, int64(9), int64(900), 40.0).
-		AddRow(int64(1), "alpha@example.com", 12.5, int64(8), int64(800), 40.0).
-		AddRow(int64(3), "gamma@example.com", 4.25, int64(5), int64(300), 40.0)
+	rows := sqlmock.NewRows([]string{"user_id", "email", "actual_cost", "requests", "tokens", "total_actual_cost", "total_requests", "total_tokens"}).
+		AddRow(int64(2), "beta@example.com", 12.5, int64(9), int64(900), 40.0, int64(30), int64(2600)).
+		AddRow(int64(1), "alpha@example.com", 12.5, int64(8), int64(800), 40.0, int64(30), int64(2600)).
+		AddRow(int64(3), "gamma@example.com", 4.25, int64(5), int64(300), 40.0, int64(30), int64(2600))
 
 	mock.ExpectQuery("WITH user_spend AS \\(").
 		WithArgs(start, end, 12).
@@ -277,6 +279,8 @@ func TestUsageLogRepositoryGetUserSpendingRanking(t *testing.T) {
 			{UserID: 3, Email: "gamma@example.com", ActualCost: 4.25, Requests: 5, Tokens: 300},
 		},
 		TotalActualCost: 40.0,
+		TotalRequests:   30,
+		TotalTokens:     2600,
 	}, got)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
@@ -351,6 +355,7 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			int64(30), // account_id
 			sql.NullString{Valid: true, String: "req-1"},
 			"gpt-5",           // model
+			sql.NullString{},  // upstream_model
 			sql.NullInt64{},   // group_id
 			sql.NullInt64{},   // subscription_id
 			1,                 // input_tokens
@@ -402,6 +407,7 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			int64(31),
 			sql.NullString{Valid: true, String: "req-2"},
 			"gpt-5",
+			sql.NullString{},
 			sql.NullInt64{},
 			sql.NullInt64{},
 			1, 2, 3, 4, 5, 6,
@@ -443,6 +449,7 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			int64(32),
 			sql.NullString{Valid: true, String: "req-3"},
 			"gpt-5.4",
+			sql.NullString{},
 			sql.NullInt64{},
 			sql.NullInt64{},
 			1, 2, 3, 4, 5, 6,
