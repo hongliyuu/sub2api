@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -230,6 +231,7 @@ func (h *CopilotGatewayHandler) ChatCompletions(c *gin.Context) {
 
 		// Record usage to database.
 		if result != nil && result.Usage != nil {
+			inboundEp := snapshotInboundForUsageLog(c)
 			userAgent := c.GetHeader("User-Agent")
 			clientIP := ip.GetClientIP(c)
 			capturedResult := result
@@ -238,8 +240,9 @@ func (h *CopilotGatewayHandler) ChatCompletions(c *gin.Context) {
 				recordCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
 				fwdResult := &service.ForwardResult{
-					Model:  capturedResult.Model,
-					Stream: reqStream,
+					Model:         capturedResult.Model,
+					UpstreamModel: capturedResult.UpstreamModel,
+					Stream:        reqStream,
 					Usage: service.ClaudeUsage{
 						InputTokens:  capturedResult.Usage.PromptTokens,
 						OutputTokens: capturedResult.Usage.CompletionTokens,
@@ -248,21 +251,23 @@ func (h *CopilotGatewayHandler) ChatCompletions(c *gin.Context) {
 					FirstTokenMs: capturedResult.FirstTokenMs,
 				}
 				if err := h.gatewayService.RecordUsage(recordCtx, &service.RecordUsageInput{
-					Result:        fwdResult,
-					APIKey:        apiKey,
-					User:          apiKey.User,
-					Account:       capturedAccount,
-					Subscription:  subscription,
-					UserAgent:     userAgent,
-					IPAddress:     clientIP,
-					APIKeyService: nil,
+					Result:           fwdResult,
+					APIKey:           apiKey,
+					User:             apiKey.User,
+					Account:          capturedAccount,
+					Subscription:     subscription,
+					InboundEndpoint:  inboundEp,
+					UpstreamEndpoint: EndpointChatCompletions,
+					UserAgent:        userAgent,
+					IPAddress:        clientIP,
+					APIKeyService:    nil,
 				}); err != nil {
 					reqLog.Error("copilot.record_usage_failed", zap.Error(err))
 				}
 			}()
 		}
 
-		reqLog.Debug("copilot.messages.completed",
+		reqLog.Debug("copilot.chat_completions.completed",
 			zap.Int64("account_id", account.ID),
 			zap.Int("switch_count", switchCount))
 		return
@@ -470,6 +475,7 @@ func (h *CopilotGatewayHandler) Responses(c *gin.Context) {
 		}
 
 		if result != nil && result.Usage != nil {
+			inboundEp := snapshotInboundForUsageLog(c)
 			userAgent := c.GetHeader("User-Agent")
 			clientIP := ip.GetClientIP(c)
 			capturedResult := result
@@ -478,8 +484,9 @@ func (h *CopilotGatewayHandler) Responses(c *gin.Context) {
 				recordCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
 				fwdResult := &service.ForwardResult{
-					Model:  capturedResult.Model,
-					Stream: reqStream,
+					Model:           capturedResult.Model,
+					UpstreamModel:   capturedResult.UpstreamModel,
+					Stream:          reqStream,
 					Usage: service.ClaudeUsage{
 						InputTokens:  capturedResult.Usage.PromptTokens,
 						OutputTokens: capturedResult.Usage.CompletionTokens,
@@ -489,14 +496,16 @@ func (h *CopilotGatewayHandler) Responses(c *gin.Context) {
 					ReasoningEffort: capturedResult.ReasoningEffort,
 				}
 				if err := h.gatewayService.RecordUsage(recordCtx, &service.RecordUsageInput{
-					Result:        fwdResult,
-					APIKey:        apiKey,
-					User:          apiKey.User,
-					Account:       capturedAccount,
-					Subscription:  subscription,
-					UserAgent:     userAgent,
-					IPAddress:     clientIP,
-					APIKeyService: nil,
+					Result:           fwdResult,
+					APIKey:           apiKey,
+					User:             apiKey.User,
+					Account:          capturedAccount,
+					Subscription:     subscription,
+					InboundEndpoint:  inboundEp,
+					UpstreamEndpoint: EndpointResponses,
+					UserAgent:        userAgent,
+					IPAddress:        clientIP,
+					APIKeyService:    nil,
 				}); err != nil {
 					reqLog.Error("copilot.responses.record_usage_failed", zap.Error(err))
 				}
@@ -712,6 +721,7 @@ func (h *CopilotGatewayHandler) Messages(c *gin.Context) {
 
 		// Record usage to database.
 		if result != nil && result.Usage != nil {
+			inboundEp := snapshotInboundForUsageLog(c)
 			userAgent := c.GetHeader("User-Agent")
 			clientIP := ip.GetClientIP(c)
 			capturedResult := result
@@ -720,8 +730,9 @@ func (h *CopilotGatewayHandler) Messages(c *gin.Context) {
 				recordCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
 				fwdResult := &service.ForwardResult{
-					Model:  capturedResult.Model,
-					Stream: reqStream,
+					Model:         capturedResult.Model,
+					UpstreamModel: capturedResult.UpstreamModel,
+					Stream:        reqStream,
 					Usage: service.ClaudeUsage{
 						InputTokens:  capturedResult.Usage.PromptTokens,
 						OutputTokens: capturedResult.Usage.CompletionTokens,
@@ -730,14 +741,16 @@ func (h *CopilotGatewayHandler) Messages(c *gin.Context) {
 					FirstTokenMs: capturedResult.FirstTokenMs,
 				}
 				if err := h.gatewayService.RecordUsage(recordCtx, &service.RecordUsageInput{
-					Result:        fwdResult,
-					APIKey:        apiKey,
-					User:          apiKey.User,
-					Account:       capturedAccount,
-					Subscription:  subscription,
-					UserAgent:     userAgent,
-					IPAddress:     clientIP,
-					APIKeyService: nil,
+					Result:           fwdResult,
+					APIKey:           apiKey,
+					User:             apiKey.User,
+					Account:          capturedAccount,
+					Subscription:     subscription,
+					InboundEndpoint:  inboundEp,
+					UpstreamEndpoint: EndpointChatCompletions,
+					UserAgent:        userAgent,
+					IPAddress:        clientIP,
+					APIKeyService:    nil,
 				}); err != nil {
 					reqLog.Error("copilot.messages.record_usage_failed", zap.Error(err))
 				}
@@ -749,4 +762,22 @@ func (h *CopilotGatewayHandler) Messages(c *gin.Context) {
 			zap.Int("switch_count", switchCount))
 		return
 	}
+}
+
+// snapshotInboundForUsageLog returns the canonical inbound path stored in usage_logs.
+// Call it on the request goroutine before starting async RecordUsage: Gin may reuse
+// *gin.Context after the handler returns, so do not call GetInboundEndpoint(c) inside go func().
+func snapshotInboundForUsageLog(c *gin.Context) string {
+	if c == nil {
+		return ""
+	}
+	s := strings.TrimSpace(GetInboundEndpoint(c))
+	if s != "" {
+		return s
+	}
+	path := ""
+	if c.Request != nil && c.Request.URL != nil {
+		path = c.Request.URL.Path
+	}
+	return NormalizeInboundEndpoint(path)
 }

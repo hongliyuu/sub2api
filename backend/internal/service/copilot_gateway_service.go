@@ -70,6 +70,8 @@ func NewCopilotGatewayService(
 type CopilotForwardResult struct {
 	StatusCode      int
 	Model           string
+	// UpstreamModel is the model id in the JSON body sent to Copilot (after mapping/normalization).
+	UpstreamModel   string
 	Usage           *CopilotUsage
 	Duration        time.Duration // 请求总耗时
 	FirstTokenMs    *int          // 首token时间（流式请求，毫秒）
@@ -99,6 +101,7 @@ func (s *CopilotGatewayService) ForwardChatCompletions(
 	body = mergeConsecutiveSameRoleMessagesInOpenAIBody(body)
 
 	body, logModel := rewriteCopilotUpstreamModel(body, account)
+	upstreamSent := strings.TrimSpace(extractModelFromBody(body))
 
 	// Get Copilot API token
 	token, err := s.tokenProvider.GetAccessToken(ctx, account)
@@ -166,11 +169,11 @@ func (s *CopilotGatewayService) ForwardChatCompletions(
 
 	// Handle streaming response
 	if isStream {
-		return s.handleStreamingResponse(c, resp, model, startTime)
+		return s.handleStreamingResponse(c, resp, model, upstreamSent, startTime)
 	}
 
 	// Handle non-streaming response
-	return s.handleNonStreamingResponse(c, resp, model, startTime)
+	return s.handleNonStreamingResponse(c, resp, model, upstreamSent, startTime)
 }
 
 // handleStreamingResponse proxies SSE streaming from Copilot API to the client.
@@ -178,6 +181,7 @@ func (s *CopilotGatewayService) handleStreamingResponse(
 	c *gin.Context,
 	resp *http.Response,
 	model string,
+	upstreamModel string,
 	startTime time.Time,
 ) (*CopilotForwardResult, error) {
 	defer func() { _ = resp.Body.Close() }()
@@ -204,11 +208,12 @@ func (s *CopilotGatewayService) handleStreamingResponse(
 		if err := c.Request.Context().Err(); err != nil {
 			slog.Debug("copilot stream: client disconnected", "error", err)
 			return &CopilotForwardResult{
-				StatusCode:   http.StatusOK,
-				Model:        model,
-				Usage:        usage,
-				Duration:     time.Since(startTime),
-				FirstTokenMs: firstTokenMs,
+				StatusCode:    http.StatusOK,
+				Model:         model,
+				UpstreamModel: upstreamModel,
+				Usage:         usage,
+				Duration:      time.Since(startTime),
+				FirstTokenMs:  firstTokenMs,
 			}, nil
 		}
 
@@ -248,11 +253,12 @@ func (s *CopilotGatewayService) handleStreamingResponse(
 	}
 
 	return &CopilotForwardResult{
-		StatusCode:   http.StatusOK,
-		Model:        model,
-		Usage:        usage,
-		Duration:     time.Since(startTime),
-		FirstTokenMs: firstTokenMs,
+		StatusCode:    http.StatusOK,
+		Model:         model,
+		UpstreamModel: upstreamModel,
+		Usage:         usage,
+		Duration:      time.Since(startTime),
+		FirstTokenMs:  firstTokenMs,
 	}, nil
 }
 
@@ -261,6 +267,7 @@ func (s *CopilotGatewayService) handleNonStreamingResponse(
 	c *gin.Context,
 	resp *http.Response,
 	model string,
+	upstreamModel string,
 	startTime time.Time,
 ) (*CopilotForwardResult, error) {
 	defer func() { _ = resp.Body.Close() }()
@@ -284,10 +291,11 @@ func (s *CopilotGatewayService) handleNonStreamingResponse(
 	c.Data(http.StatusOK, "application/json", body)
 
 	return &CopilotForwardResult{
-		StatusCode: http.StatusOK,
-		Model:      model,
-		Usage:      usage,
-		Duration:   time.Since(startTime),
+		StatusCode:    http.StatusOK,
+		Model:         model,
+		UpstreamModel: upstreamModel,
+		Usage:         usage,
+		Duration:      time.Since(startTime),
 	}, nil
 }
 
@@ -632,6 +640,7 @@ func (s *CopilotGatewayService) ForwardResponses(
 	reasoningEffort := extractCopilotReasoningEffort(body)
 
 	body, logModel := rewriteCopilotUpstreamModel(body, account)
+	upstreamSent := strings.TrimSpace(extractModelFromBody(body))
 	model := logModel
 	if model == "" {
 		model = extractModelFromBody(body)
@@ -670,9 +679,9 @@ func (s *CopilotGatewayService) ForwardResponses(
 	var result *CopilotForwardResult
 	var fwdErr error
 	if isStream {
-		result, fwdErr = s.handleStreamingResponse(c, resp, model, startTime)
+		result, fwdErr = s.handleStreamingResponse(c, resp, model, upstreamSent, startTime)
 	} else {
-		result, fwdErr = s.handleNonStreamingResponse(c, resp, model, startTime)
+		result, fwdErr = s.handleNonStreamingResponse(c, resp, model, upstreamSent, startTime)
 	}
 	if fwdErr != nil || result == nil {
 		return result, fwdErr
@@ -718,6 +727,7 @@ func (s *CopilotGatewayService) ForwardMessages(
 	openAIBody = forceStreamTrue(openAIBody)
 
 	openAIBody, _ = rewriteCopilotUpstreamModel(openAIBody, account)
+	upstreamSent := strings.TrimSpace(extractModelFromBody(openAIBody))
 
 	// Log / billing: preserve the client's Anthropic model id, not the Copilot wire id.
 	model := clientModel
@@ -781,11 +791,11 @@ func (s *CopilotGatewayService) ForwardMessages(
 
 	if clientWantsStream {
 		// Client wants SSE → stream Anthropic events directly.
-		return s.handleMessagesStreamingResponse(c, resp, model, startTime)
+		return s.handleMessagesStreamingResponse(c, resp, model, upstreamSent, startTime)
 	}
 	// Client wants non-streaming Anthropic JSON, but upstream is streaming.
 	// Reassemble the SSE chunks into a single OpenAI response, then translate.
-	return s.handleMessagesStreamToNonStreamingResponse(c, resp, model, startTime)
+	return s.handleMessagesStreamToNonStreamingResponse(c, resp, model, upstreamSent, startTime)
 }
 
 // handleMessagesStreamingResponse reads the Copilot SSE stream, translates each
@@ -794,6 +804,7 @@ func (s *CopilotGatewayService) handleMessagesStreamingResponse(
 	c *gin.Context,
 	resp *http.Response,
 	model string,
+	upstreamModel string,
 	startTime time.Time,
 ) (*CopilotForwardResult, error) {
 	defer func() { _ = resp.Body.Close() }()
@@ -824,11 +835,12 @@ func (s *CopilotGatewayService) handleMessagesStreamingResponse(
 		if err := c.Request.Context().Err(); err != nil {
 			slog.Debug("copilot messages stream: client disconnected", "error", err)
 			return &CopilotForwardResult{
-				StatusCode:   http.StatusOK,
-				Model:        model,
-				Usage:        usage,
-				Duration:     time.Since(startTime),
-				FirstTokenMs: firstTokenMs,
+				StatusCode:    http.StatusOK,
+				Model:         model,
+				UpstreamModel: upstreamModel,
+				Usage:         usage,
+				Duration:      time.Since(startTime),
+				FirstTokenMs:  firstTokenMs,
 			}, nil
 		}
 
@@ -893,11 +905,12 @@ func (s *CopilotGatewayService) handleMessagesStreamingResponse(
 	}
 
 	return &CopilotForwardResult{
-		StatusCode:   http.StatusOK,
-		Model:        model,
-		Usage:        usage,
-		Duration:     time.Since(startTime),
-		FirstTokenMs: firstTokenMs,
+		StatusCode:    http.StatusOK,
+		Model:         model,
+		UpstreamModel: upstreamModel,
+		Usage:         usage,
+		Duration:      time.Since(startTime),
+		FirstTokenMs:  firstTokenMs,
 	}, nil
 }
 
@@ -930,6 +943,7 @@ func (s *CopilotGatewayService) handleMessagesStreamToNonStreamingResponse(
 	c *gin.Context,
 	resp *http.Response,
 	model string,
+	upstreamModel string,
 	startTime time.Time,
 ) (*CopilotForwardResult, error) {
 	defer func() { _ = resp.Body.Close() }()
@@ -1030,10 +1044,11 @@ func (s *CopilotGatewayService) handleMessagesStreamToNonStreamingResponse(
 				"scan_err", scanErr,
 				"ctx_err", c.Request.Context().Err())
 			return &CopilotForwardResult{
-				StatusCode:   499, // Client Closed Request (nginx convention)
-				Model:        model,
-				Duration:     time.Since(startTime),
-				FirstTokenMs: firstTokenMs,
+				StatusCode:    499, // Client Closed Request (nginx convention)
+				Model:         model,
+				UpstreamModel: upstreamModel,
+				Duration:      time.Since(startTime),
+				FirstTokenMs:  firstTokenMs,
 			}, nil
 		}
 
@@ -1069,10 +1084,11 @@ func (s *CopilotGatewayService) handleMessagesStreamToNonStreamingResponse(
 				},
 			})
 			return &CopilotForwardResult{
-				StatusCode:   529,
-				Model:        model,
-				Duration:     time.Since(startTime),
-				FirstTokenMs: firstTokenMs,
+				StatusCode:    529,
+				Model:         model,
+				UpstreamModel: upstreamModel,
+				Duration:      time.Since(startTime),
+				FirstTokenMs:  firstTokenMs,
 			}, nil
 		}
 	}
@@ -1137,21 +1153,23 @@ func (s *CopilotGatewayService) handleMessagesStreamToNonStreamingResponse(
 			"error", err, "model", model)
 		c.Data(http.StatusOK, "application/json", assembledBody)
 		return &CopilotForwardResult{
-			StatusCode:   http.StatusOK,
-			Model:        model,
-			Usage:        copilotUsage,
-			Duration:     time.Since(startTime),
-			FirstTokenMs: firstTokenMs,
+			StatusCode:    http.StatusOK,
+			Model:         model,
+			UpstreamModel: upstreamModel,
+			Usage:         copilotUsage,
+			Duration:      time.Since(startTime),
+			FirstTokenMs:  firstTokenMs,
 		}, nil
 	}
 
 	c.Data(http.StatusOK, "application/json", anthropicBody)
 	return &CopilotForwardResult{
-		StatusCode:   http.StatusOK,
-		Model:        model,
-		Usage:        copilotUsage,
-		Duration:     time.Since(startTime),
-		FirstTokenMs: firstTokenMs,
+		StatusCode:    http.StatusOK,
+		Model:         model,
+		UpstreamModel: upstreamModel,
+		Usage:         copilotUsage,
+		Duration:      time.Since(startTime),
+		FirstTokenMs:  firstTokenMs,
 	}, nil
 }
 
