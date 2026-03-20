@@ -55,29 +55,46 @@ func TestCopilotInitiator(t *testing.T) {
 	}
 }
 
-func TestCopilotMaxOutputTokensCap(t *testing.T) {
+func TestCopilotModelUsesMaxOutputClamp(t *testing.T) {
 	tests := []struct {
 		model string
-		want  int
+		want  bool
 	}{
-		{"", 0},
-		{"claude-haiku-4-5-20251001", 0},
-		{"claude-sonnet-4.6", 8192},
-		{"claude-opus-4.6", 8192},
-		{"gpt-4", 0},
+		{"", false},
+		{"claude-haiku-4-5-20251001", false},
+		{"claude-sonnet-4.6", true},
+		{"claude-opus-4.6", true},
+		{"gpt-4", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.model, func(t *testing.T) {
-			if got := copilotMaxOutputTokensCap(tt.model); got != tt.want {
-				t.Errorf("copilotMaxOutputTokensCap(%q) = %d, want %d", tt.model, got, tt.want)
+			if got := copilotModelUsesMaxOutputClamp(tt.model); got != tt.want {
+				t.Errorf("copilotModelUsesMaxOutputClamp(%q) = %v, want %v", tt.model, got, tt.want)
 			}
 		})
 	}
 }
 
+func TestEffectiveCopilotMaxOutputTokensCap(t *testing.T) {
+	cap, clamp := effectiveCopilotMaxOutputTokensCap(nil)
+	if !clamp || cap != defaultCopilotMaxOutputTokens {
+		t.Fatalf("nil account: cap=%d clamp=%v", cap, clamp)
+	}
+	acc := &Account{Credentials: map[string]any{"copilot_max_output_tokens": json.Number("16384")}}
+	cap, clamp = effectiveCopilotMaxOutputTokensCap(acc)
+	if !clamp || cap != 16384 {
+		t.Fatalf("custom 16384: cap=%d clamp=%v", cap, clamp)
+	}
+	off := &Account{Credentials: map[string]any{"copilot_max_output_tokens": 0}}
+	cap, clamp = effectiveCopilotMaxOutputTokensCap(off)
+	if clamp || cap != 0 {
+		t.Fatalf("explicit 0: cap=%d clamp=%v", cap, clamp)
+	}
+}
+
 func TestClampCopilotUpstreamMaxTokens(t *testing.T) {
 	raw := `{"model":"claude-sonnet-4.6","max_tokens":32000,"messages":[{"role":"user","content":"hi"}],"stream":true}`
-	out := clampCopilotUpstreamMaxTokens([]byte(raw))
+	out := clampCopilotUpstreamMaxTokens([]byte(raw), nil)
 	var parsed struct {
 		Model     string `json:"model"`
 		MaxTokens int    `json:"max_tokens"`
@@ -85,17 +102,37 @@ func TestClampCopilotUpstreamMaxTokens(t *testing.T) {
 	if err := json.Unmarshal(out, &parsed); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if parsed.MaxTokens != 8192 {
-		t.Fatalf("max_tokens = %d, want 8192", parsed.MaxTokens)
+	if parsed.MaxTokens != defaultCopilotMaxOutputTokens {
+		t.Fatalf("max_tokens = %d, want %d", parsed.MaxTokens, defaultCopilotMaxOutputTokens)
 	}
 
-	unchanged := clampCopilotUpstreamMaxTokens([]byte(`{"model":"claude-haiku-4.5","max_tokens":32000,"stream":true}`))
+	custom := &Account{Credentials: map[string]any{"copilot_max_output_tokens": float64(4096)}}
+	out2 := clampCopilotUpstreamMaxTokens([]byte(raw), custom)
 	var p2 struct {
 		MaxTokens int `json:"max_tokens"`
 	}
-	_ = json.Unmarshal(unchanged, &p2)
-	if p2.MaxTokens != 32000 {
-		t.Fatalf("haiku max_tokens = %d, want 32000", p2.MaxTokens)
+	_ = json.Unmarshal(out2, &p2)
+	if p2.MaxTokens != 4096 {
+		t.Fatalf("custom cap max_tokens = %d, want 4096", p2.MaxTokens)
+	}
+
+	off := &Account{Credentials: map[string]any{"copilot_max_output_tokens": 0}}
+	out3 := clampCopilotUpstreamMaxTokens([]byte(raw), off)
+	var p3 struct {
+		MaxTokens int `json:"max_tokens"`
+	}
+	_ = json.Unmarshal(out3, &p3)
+	if p3.MaxTokens != 32000 {
+		t.Fatalf("clamp off max_tokens = %d, want 32000", p3.MaxTokens)
+	}
+
+	unchanged := clampCopilotUpstreamMaxTokens([]byte(`{"model":"claude-haiku-4.5","max_tokens":32000,"stream":true}`), nil)
+	var p4 struct {
+		MaxTokens int `json:"max_tokens"`
+	}
+	_ = json.Unmarshal(unchanged, &p4)
+	if p4.MaxTokens != 32000 {
+		t.Fatalf("haiku max_tokens = %d, want 32000", p4.MaxTokens)
 	}
 }
 

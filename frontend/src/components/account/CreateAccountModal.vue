@@ -1152,6 +1152,17 @@
           </div>
           <p class="input-hint mt-1.5">{{ t('admin.accounts.copilot.planTypeHint') }}</p>
         </div>
+        <div>
+          <label class="input-label">{{ t('admin.accounts.copilot.maxOutputTokensLabel') }}</label>
+          <input
+            v-model="copilotMaxOutputTokens"
+            type="text"
+            inputmode="numeric"
+            class="input font-mono"
+            placeholder="8192"
+          />
+          <p class="input-hint">{{ t('admin.accounts.copilot.maxOutputTokensHint') }}</p>
+        </div>
       </div>
 
       <!-- API Key input (only for apikey type, excluding Antigravity and Copilot which have their own fields) -->
@@ -3223,6 +3234,7 @@ const apiKeyValue = ref('')
 const copilotGithubToken = ref('') // For Copilot: GitHub Personal Access Token
 const copilotAddMethod = ref<'device-oauth' | 'pat'>('device-oauth') // Copilot auth method
 const copilotPlanType = ref('individual') // Copilot plan type: individual / business / enterprise
+const copilotMaxOutputTokens = ref('')
 const copilotDeviceState = ref<'idle' | 'waiting' | 'success' | 'error'>('idle')
 const copilotDeviceLoading = ref(false)
 const copilotDeviceError = ref('')
@@ -3589,6 +3601,7 @@ watch(
       copilotAddMethod.value = 'device-oauth'
       copilotGithubToken.value = ''
       copilotPlanType.value = 'individual'
+      copilotMaxOutputTokens.value = ''
       resetCopilotDeviceFlow()
     }
     if (newPlatform !== 'openai') {
@@ -4280,6 +4293,17 @@ const handleSubmit = async () => {
     const credentials: Record<string, unknown> = {
       github_token: githubToken,
       plan_type: copilotPlanType.value || 'individual'
+    }
+    const maxOutRaw = copilotMaxOutputTokens.value.trim()
+    if (maxOutRaw === '0') {
+      credentials.copilot_max_output_tokens = 0
+    } else if (maxOutRaw !== '') {
+      const n = parseInt(maxOutRaw, 10)
+      if (!Number.isFinite(n) || n < 0) {
+        appStore.showError(t('admin.accounts.copilot.maxOutputTokensInvalid'))
+        return
+      }
+      credentials.copilot_max_output_tokens = n
     }
 
     await createAccountAndFinish('copilot', 'apikey', credentials)

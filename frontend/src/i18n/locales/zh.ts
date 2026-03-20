@@ -2972,6 +2972,10 @@ export default {
         planTypeBusiness: '商业版 (Business)',
         planTypeEnterprise: '企业版 (Enterprise)',
         baseUrlHint: '留空自动根据账号类型选择端点；仅在使用私有/代理端点时填写。',
+        maxOutputTokensLabel: 'Sonnet/Opus 输出上限 (max_tokens)',
+        maxOutputTokensHint:
+          '选填。经 Copilot 转发时，对 Claude Sonnet/Opus 在调用 GitHub 前限制 completion 的 max_tokens（留空默认 8192）。填 0 表示不限制（可能再次触发上游 400）。Haiku 不经过此限制。',
+        maxOutputTokensInvalid: '请输入非负整数作为输出上限，或填 0 表示不限制。',
         deviceOAuth: 'GitHub 登录（推荐）',
         deviceOAuthDesc: '通过浏览器登录，支持组织 Copilot',
         patMethod: '个人访问令牌',

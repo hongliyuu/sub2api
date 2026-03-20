@@ -430,6 +430,17 @@
           </div>
           <p class="input-hint mt-1.5">{{ t('admin.accounts.copilot.planTypeHint') }}</p>
         </div>
+        <div>
+          <label class="input-label">{{ t('admin.accounts.copilot.maxOutputTokensLabel') }}</label>
+          <input
+            v-model="copilotMaxOutputTokens"
+            type="text"
+            inputmode="numeric"
+            class="input font-mono"
+            placeholder="8192"
+          />
+          <p class="input-hint">{{ t('admin.accounts.copilot.maxOutputTokensHint') }}</p>
+        </div>
         <!-- Advanced: custom base URL (collapsed by default) -->
         <details class="rounded-lg border border-gray-200 dark:border-dark-600">
           <summary class="cursor-pointer select-none px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
@@ -1913,6 +1924,8 @@ const editBaseUrl = ref('https://api.anthropic.com')
 const editApiKey = ref('')
 const editGithubToken = ref('')
 const copilotEditPlanType = ref('individual') // individual | business | enterprise
+/** Copilot Sonnet/Opus max_tokens ceiling; empty = default 8192; "0" = do not clamp */
+const copilotMaxOutputTokens = ref('')
 // Bedrock credentials
 const editBedrockAccessKeyId = ref('')
 const editBedrockSecretAccessKey = ref('')
@@ -2139,6 +2152,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
 
   // Load intercept warmup requests setting (applies to all account types)
   const credentials = newAccount.credentials as Record<string, unknown> | undefined
+  copilotMaxOutputTokens.value = ''
   interceptWarmupRequests.value = credentials?.intercept_warmup_requests === true
   autoPauseOnExpired.value = newAccount.auto_pause_on_expired === true
 
@@ -2267,6 +2281,14 @@ const syncFormFromAccount = (newAccount: Account | null) => {
             copilotModelMappings.value = Object.entries(rawCopilotMapping).map(([from, to]) => ({ from, to }))
           } else {
             copilotModelMappings.value = []
+          }
+          const rawMaxOut = credentials.copilot_max_output_tokens
+          if (rawMaxOut === 0 || rawMaxOut === '0') {
+            copilotMaxOutputTokens.value = '0'
+          } else if (rawMaxOut !== undefined && rawMaxOut !== null && String(rawMaxOut).trim() !== '') {
+            copilotMaxOutputTokens.value = String(rawMaxOut)
+          } else {
+            copilotMaxOutputTokens.value = ''
           }
         } else {
           const platformDefaultUrl =
@@ -2884,6 +2906,19 @@ const handleSubmit = async () => {
         const copilotMapping = buildModelMappingObject('mapping', [], copilotModelMappings.value)
         if (copilotMapping) {
           newCredentials.model_mapping = copilotMapping
+        }
+        const maxOutRaw = copilotMaxOutputTokens.value.trim()
+        if (maxOutRaw === '') {
+          delete (newCredentials as Record<string, unknown>).copilot_max_output_tokens
+        } else if (maxOutRaw === '0') {
+          newCredentials.copilot_max_output_tokens = 0
+        } else {
+          const n = parseInt(maxOutRaw, 10)
+          if (!Number.isFinite(n) || n < 0) {
+            appStore.showError(t('admin.accounts.copilot.maxOutputTokensInvalid'))
+            return
+          }
+          newCredentials.copilot_max_output_tokens = n
         }
         applyInterceptWarmup(newCredentials, interceptWarmupRequests.value, 'edit')
         if (!applyTempUnschedConfig(newCredentials)) {

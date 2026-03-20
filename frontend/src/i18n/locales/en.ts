@@ -2839,6 +2839,10 @@ export default {
         planTypeBusiness: 'Business',
         planTypeEnterprise: 'Enterprise',
         baseUrlHint: 'Leave blank to auto-select endpoint by account type. Fill in only for private/proxy endpoints.',
+        maxOutputTokensLabel: 'Sonnet/Opus output cap (max_tokens)',
+        maxOutputTokensHint:
+          'Optional. For Claude Sonnet/Opus via Copilot, limits completion max_tokens before calling GitHub (default 8192 if empty). Use 0 to disable clamping (may cause upstream 400). Haiku is not clamped.',
+        maxOutputTokensInvalid: 'Enter a non-negative integer for the output cap, or 0 to disable clamping.',
         deviceOAuth: 'GitHub Login (Recommended)',
         deviceOAuthDesc: 'Login via browser, works with org Copilot',
         patMethod: 'Personal Access Token',
