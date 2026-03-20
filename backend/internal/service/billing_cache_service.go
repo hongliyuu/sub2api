@@ -83,6 +83,14 @@ type apiKeyRateLimitLoader interface {
 // BillingCacheService 计费缓存服务
 // 负责余额和订阅数据的缓存管理，提供高性能的计费资格检查
 type BillingCacheService struct {
+	// 丢弃日志节流计数器（减少高负载下日志噪音）
+	// 注意：uint64/int64 字段必须位于结构体最前面，确保在 32-bit 平台上
+	// 满足 sync/atomic 要求的 8 字节对齐（参见 sync/atomic 文档）。
+	cacheWriteDropFullCount     uint64
+	cacheWriteDropFullLastLog   int64
+	cacheWriteDropClosedCount   uint64
+	cacheWriteDropClosedLastLog int64
+
 	cache                 BillingCache
 	userRepo              UserRepository
 	subRepo               UserSubscriptionRepository
@@ -96,11 +104,6 @@ type BillingCacheService struct {
 	cacheWriteMu       sync.RWMutex
 	stopped            atomic.Bool
 	balanceLoadSF      singleflight.Group
-	// 丢弃日志节流计数器（减少高负载下日志噪音）
-	cacheWriteDropFullCount     uint64
-	cacheWriteDropFullLastLog   int64
-	cacheWriteDropClosedCount   uint64
-	cacheWriteDropClosedLastLog int64
 }
 
 // NewBillingCacheService 创建计费缓存服务

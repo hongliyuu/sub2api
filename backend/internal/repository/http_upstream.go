@@ -61,12 +61,15 @@ type poolSettings struct {
 
 // upstreamClientEntry 上游客户端缓存条目
 // 记录客户端实例及其元数据，用于连接池管理和淘汰策略
+//
+// 字段顺序说明：lastUsed/inFlight 必须置于结构体首部，确保在 32-bit 平台上
+// 满足 sync/atomic 要求的 8 字节对齐（参见 sync/atomic 文档）。
 type upstreamClientEntry struct {
+	lastUsed int64        // 最后使用时间戳（纳秒），用于 LRU 淘汰
+	inFlight int64        // 当前进行中的请求数，>0 时不可淘汰
 	client   *http.Client // HTTP 客户端实例
 	proxyKey string       // 代理标识（用于检测代理变更）
 	poolKey  string       // 连接池配置标识（用于检测配置变更）
-	lastUsed int64        // 最后使用时间戳（纳秒），用于 LRU 淘汰
-	inFlight int64        // 当前进行中的请求数，>0 时不可淘汰
 }
 
 // httpUpstreamService 通用 HTTP 上游服务
