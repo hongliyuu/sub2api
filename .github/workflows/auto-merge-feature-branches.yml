@@ -1,0 +1,73 @@
+name: Auto-merge Feature Branches
+
+on:
+  push:
+    branches:
+      - 'feat/**'
+      - 'fix/**'
+
+concurrency:
+  group: auto-merge-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Check for merge conflicts
+        id: conflict_check
+        run: |
+          git fetch origin main
+          if ! git merge-tree $(git merge-base HEAD origin/main) HEAD origin/main | grep -q "^changed in both"; then
+            echo "has_conflict=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_conflict=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create conflict issue
+        if: steps.conflict_check.outputs.has_conflict == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          gh issue create \
+            --title "Merge conflict in ${{ github.ref_name }}" \
+            --body "Branch ${{ github.ref_name }} has conflicts with main. Please resolve manually."
+          exit 1
+
+      - name: Create or update PR
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          BRANCH="${{ github.ref_name }}"
+          if gh pr list --head "$BRANCH" --base main --json number --jq '.[0].number' | grep -q .; then
+            echo "PR already exists, updating..."
+          else
+            gh pr create \
+              --base main \
+              --head "$BRANCH" \
+              --title "Auto-merge: $BRANCH" \
+              --body "Automated PR from $BRANCH to main"
+          fi
+
+      - name: Enable auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          BRANCH="${{ github.ref_name }}"
+          PR_NUMBER=$(gh pr list --head "$BRANCH" --base main --json number --jq '.[0].number')
+          gh pr merge "$PR_NUMBER" --auto --merge

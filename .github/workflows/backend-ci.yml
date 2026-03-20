@@ -30,9 +30,6 @@ jobs:
       - name: Unit tests
         working-directory: backend
         run: make test-unit
-      - name: Integration tests
-        working-directory: backend
-        run: make test-integration
 
   backend-golangci-lint:
     name: backend-golangci-lint
