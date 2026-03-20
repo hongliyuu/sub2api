@@ -16,6 +16,8 @@ func TestNormalizeModelIDForCopilotUpstream(t *testing.T) {
 		{"claude-sonnet-4-5-20250929", "claude-sonnet-4.5"},
 		{"claude-sonnet-4-5", "claude-sonnet-4.5"},
 		{"claude-sonnet-4-6", "claude-sonnet-4.6"},
+		// Claude Code may emit dot form; keep stable wire id for Copilot.
+		{"claude-sonnet-4.6", "claude-sonnet-4.6"},
 		{"claude-opus-4-5-20251101", "claude-opus-4.5"},
 		{"claude-opus-4-6", "claude-opus-4.6"},
 		{"claude-sonnet-4", "claude-sonnet-4"},

@@ -727,6 +727,13 @@ func (s *CopilotGatewayService) ForwardMessages(
 	openAIBody = forceStreamTrue(openAIBody)
 
 	openAIBody, _ = rewriteCopilotUpstreamModel(openAIBody, account)
+
+	// Same normalization as ForwardChatCompletions: GitHub Copilot often returns 400 when
+	// the OpenAI-shaped body still has adjacent user/system messages. The Anthropic→OpenAI
+	// translator merges most cases in sanitizeOpenAIMessages; this pass catches any
+	// remaining edge cases after model rewrite (matches ericc-ch/copilot-api chat path).
+	openAIBody = mergeConsecutiveSameRoleMessagesInOpenAIBody(openAIBody)
+
 	upstreamSent := strings.TrimSpace(extractModelFromBody(openAIBody))
 
 	// Log / billing: preserve the client's Anthropic model id, not the Copilot wire id.
@@ -786,6 +793,14 @@ func (s *CopilotGatewayService) ForwardMessages(
 		"latency_ms", time.Since(startTime).Milliseconds())
 
 	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusBadRequest {
+			slog.Warn("copilot messages upstream 400 (outgoing openai body snippet)",
+				"account_id", account.ID,
+				"model", model,
+				"upstream_model", upstreamSent,
+				"x_request_id", resp.Header.Get("x-request-id"),
+				"openai_body_snip", truncateString(string(openAIBody), 2048))
+		}
 		return s.handleErrorResponse(c, resp, account)
 	}
 

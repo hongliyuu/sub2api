@@ -1,5 +1,11 @@
 # 更新记录
 
+## 2026-03-20（0.1.110）
+
+- 版本号：`0.1.109` → `0.1.110`。
+- Copilot `/v1/messages`：`rewriteCopilotUpstreamModel` 之后增加与 `/chat/completions` 一致的 `mergeConsecutiveSameRoleMessagesInOpenAIBody`，减少上游因相邻同 role 消息返回 400；上游 400 时 WARN 输出 `openai_body_snip`、`upstream_model`、`x_request_id` 便于线上对照。
+- 模型归一化单测：补充 `claude-sonnet-4.6`（点分形式）应保持不变的用例。
+
 ## 2026-03-20（0.1.109）
 
 - 版本号：`0.1.108` → `0.1.109`。
