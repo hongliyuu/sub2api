@@ -1,5 +1,11 @@
 # 更新记录
 
+## 2026-03-21（0.1.111）
+
+- 版本号：`0.1.110` → `0.1.111`。
+- Copilot 网关：对转发至 GitHub `/chat/completions` 的请求，在 **Sonnet/Opus**（非 Haiku）上将过大的 `max_tokens`（如 Claude Code 默认 32000）**限制为 8192**，避免上游以泛型 HTTP 400 拒绝；`/v1/messages` 与 OpenAI `/chat/completions` 两条路径均生效。
+- Copilot 上游非 200 时通过 `setOpsUpstreamError` 写入响应体摘要，便于「请求排查」中「上游错误」不再长期为空。
+
 ## 2026-03-20（0.1.110）
 
 - 版本号：`0.1.109` → `0.1.110`。

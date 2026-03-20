@@ -101,6 +101,7 @@ func (s *CopilotGatewayService) ForwardChatCompletions(
 	body = mergeConsecutiveSameRoleMessagesInOpenAIBody(body)
 
 	body, logModel := rewriteCopilotUpstreamModel(body, account)
+	body = clampCopilotUpstreamMaxTokens(body)
 	upstreamSent := strings.TrimSpace(extractModelFromBody(body))
 
 	// Get Copilot API token
@@ -319,6 +320,15 @@ func (s *CopilotGatewayService) handleErrorResponse(
 		"account_id", account.ID,
 		"status", resp.StatusCode,
 		"body", string(body))
+
+	// So ops / 请求排查 can show upstream text (Copilot often returns plain "Bad Request").
+	if c != nil {
+		msg := strings.TrimSpace(string(body))
+		if len(msg) > 2048 {
+			msg = msg[:2048] + "..."
+		}
+		setOpsUpstreamError(c, resp.StatusCode, msg, "")
+	}
 
 	// Handle specific error codes
 	switch resp.StatusCode {
@@ -733,6 +743,7 @@ func (s *CopilotGatewayService) ForwardMessages(
 	// translator merges most cases in sanitizeOpenAIMessages; this pass catches any
 	// remaining edge cases after model rewrite (matches ericc-ch/copilot-api chat path).
 	openAIBody = mergeConsecutiveSameRoleMessagesInOpenAIBody(openAIBody)
+	openAIBody = clampCopilotUpstreamMaxTokens(openAIBody)
 
 	upstreamSent := strings.TrimSpace(extractModelFromBody(openAIBody))
 
@@ -1379,6 +1390,51 @@ func (s *CopilotGatewayService) FetchAllCopilotQuotas(
 	}
 	wg.Wait()
 	return results, nil
+}
+
+// copilotMaxOutputTokensCap returns a max_tokens ceiling for Copilot /chat/completions
+// when Claude Code sends very large values (e.g. 32000). GitHub often responds with
+// HTTP 400 and a generic body for Sonnet/Opus while Haiku accepts the same request.
+// 0 means do not clamp.
+func copilotMaxOutputTokensCap(model string) int {
+	m := strings.ToLower(strings.TrimSpace(model))
+	if m == "" {
+		return 0
+	}
+	if strings.Contains(m, "haiku") {
+		return 0
+	}
+	if strings.Contains(m, "sonnet") || strings.Contains(m, "opus") {
+		return 8192
+	}
+	return 0
+}
+
+// clampCopilotUpstreamMaxTokens lowers max_tokens when copilotMaxOutputTokensCap applies.
+func clampCopilotUpstreamMaxTokens(body []byte) []byte {
+	if len(body) == 0 {
+		return body
+	}
+	model := strings.TrimSpace(gjson.GetBytes(body, "model").String())
+	mt := gjson.GetBytes(body, "max_tokens")
+	if !mt.Exists() {
+		return body
+	}
+	max := int(mt.Int())
+	if max <= 0 {
+		return body
+	}
+	capTok := copilotMaxOutputTokensCap(model)
+	if capTok <= 0 || max <= capTok {
+		return body
+	}
+	out, err := sjson.SetBytes(body, "max_tokens", capTok)
+	if err != nil {
+		return body
+	}
+	slog.Debug("copilot: clamped max_tokens for upstream compatibility",
+		"model", model, "requested_max_tokens", max, "clamped_to", capTok)
+	return out
 }
 
 // mergeConsecutiveSameRoleMessagesInOpenAIBody parses an OpenAI Chat Completions

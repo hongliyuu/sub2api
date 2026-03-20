@@ -55,6 +55,50 @@ func TestCopilotInitiator(t *testing.T) {
 	}
 }
 
+func TestCopilotMaxOutputTokensCap(t *testing.T) {
+	tests := []struct {
+		model string
+		want  int
+	}{
+		{"", 0},
+		{"claude-haiku-4-5-20251001", 0},
+		{"claude-sonnet-4.6", 8192},
+		{"claude-opus-4.6", 8192},
+		{"gpt-4", 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.model, func(t *testing.T) {
+			if got := copilotMaxOutputTokensCap(tt.model); got != tt.want {
+				t.Errorf("copilotMaxOutputTokensCap(%q) = %d, want %d", tt.model, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestClampCopilotUpstreamMaxTokens(t *testing.T) {
+	raw := `{"model":"claude-sonnet-4.6","max_tokens":32000,"messages":[{"role":"user","content":"hi"}],"stream":true}`
+	out := clampCopilotUpstreamMaxTokens([]byte(raw))
+	var parsed struct {
+		Model     string `json:"model"`
+		MaxTokens int    `json:"max_tokens"`
+	}
+	if err := json.Unmarshal(out, &parsed); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if parsed.MaxTokens != 8192 {
+		t.Fatalf("max_tokens = %d, want 8192", parsed.MaxTokens)
+	}
+
+	unchanged := clampCopilotUpstreamMaxTokens([]byte(`{"model":"claude-haiku-4.5","max_tokens":32000,"stream":true}`))
+	var p2 struct {
+		MaxTokens int `json:"max_tokens"`
+	}
+	_ = json.Unmarshal(unchanged, &p2)
+	if p2.MaxTokens != 32000 {
+		t.Fatalf("haiku max_tokens = %d, want 32000", p2.MaxTokens)
+	}
+}
+
 func TestDetectStreamMode(t *testing.T) {
 	tests := []struct {
 		name string
