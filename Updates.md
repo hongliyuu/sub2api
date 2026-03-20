@@ -1,5 +1,10 @@
 # 更新记录
 
+## 2026-03-21（0.1.116）
+
+- 版本号：`0.1.115` → `0.1.116`。
+- **修复 CI**：`backend/internal/service/copilot_gateway_service.go` 中 Copilot `max_tokens` 相关 `const` 块经 **`gofmt`（Go 1.26.1）** 对齐；消除 `golangci-lint` 的 `gofmt` 报错（与 0.1.112 起同类问题：手工对齐列宽与官方格式化不一致）。
+
 ## 2026-03-21（0.1.115）
 
 - 版本号：`0.1.114` → `0.1.115`。

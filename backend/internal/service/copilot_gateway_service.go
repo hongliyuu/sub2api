@@ -1393,9 +1393,9 @@ func (s *CopilotGatewayService) FetchAllCopilotQuotas(
 }
 
 const (
-	defaultCopilotMaxOutputTokens           = 8192
-	copilotMaxOutputTokensCredentialKey     = "copilot_max_output_tokens"
-	copilotMaxOutputTokensSanityUpperBound  = 262144
+	defaultCopilotMaxOutputTokens          = 8192
+	copilotMaxOutputTokensCredentialKey    = "copilot_max_output_tokens"
+	copilotMaxOutputTokensSanityUpperBound = 262144
 )
 
 // copilotModelUsesMaxOutputClamp is true for Copilot wire models where we may need to
