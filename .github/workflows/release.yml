@@ -300,3 +300,31 @@ jobs:
           git add backend/cmd/server/VERSION
           git commit -m "chore: sync VERSION to ${VERSION} [skip ci]"
           git push origin HEAD:${{ github.event.repository.default_branch }}
+
+  ensure-latest:
+    needs: [release]
+    if: ${{ needs.release.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure latest points to highest version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            CURRENT_TAG="${{ github.event.inputs.tag }}"
+          else
+            CURRENT_TAG="${GITHUB_REF#refs/tags/}"
+          fi
+
+          HIGHEST_TAG="$(gh release list --repo "$GITHUB_REPOSITORY" --exclude-drafts --exclude-pre-releases --limit 100 --json tagName --jq '
+            [.[] | .tagName | select(startswith("v"))]
+            | sort_by(split(".") | map(ltrimstr("v") | tonumber))
+            | last
+          ')"
+
+          echo "Current: $CURRENT_TAG, Highest: $HIGHEST_TAG"
+
+          if [ "$CURRENT_TAG" != "$HIGHEST_TAG" ] && [ -n "$HIGHEST_TAG" ]; then
+            echo "Ensuring latest points to $HIGHEST_TAG (not $CURRENT_TAG)"
+            gh release edit "$HIGHEST_TAG" --repo "$GITHUB_REPOSITORY" --latest
+          fi
