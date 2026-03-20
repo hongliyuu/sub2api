@@ -2,7 +2,8 @@
 
 ## 2026-03-20
 
-- 版本号：`0.1.106` → `0.1.107`。
+- 版本号：`0.1.107` → `0.1.108`（合并上游 Wei-Shaw/sub2api `main` 至 `a225a241`）。
+- 合并上游：OpenAI `gpt-5.4-mini` / `gpt-5.4-nano` 定价与模型配置；日/周配额重置后用量展示不再沿用累计旧值；Anthropic→OpenAI 推理级别映射与 Codex 转换；OpenAI 默认模型转发；`UseKeyModal` 配额展示与单测等（对应上游 PR #1172、#1176、#1171、#1162 等）。
 
 - Copilot 计费：`/copilot/v1`、`/copilot` 路由组挂载 `InboundEndpointMiddleware`；异步 `RecordUsage` 之前在请求协程内快照 `inbound`（禁止在 `go func()` 里读 `GetInboundEndpoint(c)`，避免 Gin 回收 Context 后入站路径为空）；上游路径与全局常量对齐为 `/v1/chat/completions`、`/v1/responses`。
 - 运维 / 请求排查：左右分栏改为组件内 `scoped` 媒体查询（`grid-template-columns`），避免 Tailwind 任意 `grid-cols-[minmax(...,...)]` 因逗号解析失败而始终单列。
