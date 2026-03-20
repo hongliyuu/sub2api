@@ -108,7 +108,7 @@ jobs:
 
           echo "Fork latest version: $FORK_VERSION"
 
-          # 收集高于当前版本的上游 tag
+          # 收集需要同步的 tag（包括需要强制替换的）
           TAGS=()
           while read -r tag; do
             [ -z "$tag" ] && continue
@@ -118,7 +118,15 @@ jobs:
             if [ "$(printf '%s\n' "$FORK_VERSION" "$TAG_VERSION" | sort -V | tail -1)" = "$TAG_VERSION" ] && [ "$TAG_VERSION" != "$FORK_VERSION" ]; then
               TAG_COMMIT="$(git rev-list -n 1 "$tag")"
               if git merge-base --is-ancestor "$TAG_COMMIT" HEAD; then
-                if ! git ls-remote --tags origin "refs/tags/$tag" | grep -q .; then
+                # 检查 fork 是否已有此 tag
+                if git ls-remote --tags origin "refs/tags/$tag" | grep -q .; then
+                  # 比较 commit，如果不同则需要强制替换
+                  FORK_TAG_COMMIT="$(git ls-remote --tags origin "refs/tags/$tag" | awk '{print $1}')"
+                  if [ "$TAG_COMMIT" != "$FORK_TAG_COMMIT" ]; then
+                    TAGS+=("$tag")
+                    echo "Found tag with changes: $tag (will force replace)"
+                  fi
+                else
                   TAGS+=("$tag")
                   echo "Found new tag: $tag (newer than $FORK_VERSION)"
                 fi
@@ -153,11 +161,23 @@ jobs:
           for tag in ${{ steps.upstream_tag.outputs.all_tags }}; do
             echo "=== Processing tag: $tag ==="
 
+            # 检查 fork 是否已有此 tag
+            if git ls-remote --tags origin "refs/tags/$tag" | grep -q .; then
+              echo "Tag exists in fork, will force replace"
+
+              # 删除旧的 GitHub Release（如果存在）
+              if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+                echo "Deleting existing release: $tag"
+                gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes
+              fi
+            fi
+
+            # 重新创建 tag 并强制推送
             MSG_FILE="$(mktemp)"
             git for-each-ref "refs/tags/$tag" --format='%(contents)' > "$MSG_FILE" 2>/dev/null || echo "$tag" > "$MSG_FILE"
-            git tag -d "$tag"
+            git tag -d "$tag" 2>/dev/null || true
             git tag -a "$tag" -F "$MSG_FILE" HEAD
-            git push origin "refs/tags/$tag"
+            git push --force origin "refs/tags/$tag"
 
             echo "Waiting for release workflow to start..."
             sleep 60
