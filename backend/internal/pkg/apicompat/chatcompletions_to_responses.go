@@ -6,6 +6,11 @@ import (
 	"strings"
 )
 
+type chatMessageContent struct {
+	Text  *string
+	Parts []ChatContentPart
+}
+
 // ChatCompletionsToResponses converts a Chat Completions request into a
 // Responses API request. The upstream always streams, so Stream is forced to
 // true. store is always false and reasoning.encrypted_content is always
@@ -268,67 +273,58 @@ func chatFunctionToResponses(m ChatMessage) ([]ResponsesInputItem, error) {
 }
 
 // parseChatContent returns the string value of a ChatMessage Content field.
-// Content must be a JSON string. Returns "" if content is null or empty.
+// Content can be a JSON string or an array of typed parts. Array content is
+// flattened to text by concatenating text parts and ignoring non-text parts.
 func parseChatContent(raw json.RawMessage) (string, error) {
-	if len(raw) == 0 {
-		return "", nil
+	parsed, err := parseChatMessageContent(raw)
+	if err != nil {
+		return "", err
 	}
+	if parsed.Text != nil {
+		return *parsed.Text, nil
+	}
+	return flattenChatContentParts(parsed.Parts), nil
+}
+
+func parseChatMessageContent(raw json.RawMessage) (chatMessageContent, error) {
+	if len(raw) == 0 {
+		return chatMessageContent{Text: stringPtr("")}, nil
+	}
+
 	var s string
 	if err := json.Unmarshal(raw, &s); err == nil {
-		return s, nil
+		return chatMessageContent{Text: &s}, nil
 	}
 
 	parts, err := parseChatTypedContent(raw)
-	if err != nil {
-		return "", fmt.Errorf("parse content: %w", err)
+	if err == nil {
+		return chatMessageContent{Parts: parts}, nil
 	}
 
-	var b strings.Builder
-	for _, p := range parts {
-		if p.Type == "text" && p.Text != "" {
-			b.WriteString(p.Text)
-		}
-	}
-	return b.String(), nil
+	return chatMessageContent{}, fmt.Errorf("parse content: %w", err)
 }
 
 func chatRoleContentToResponses(role string, raw json.RawMessage) ([]ResponsesInputItem, error) {
-	if len(raw) == 0 {
-		content, marshalErr := json.Marshal("")
-		if marshalErr != nil {
-			return nil, marshalErr
-		}
-		return []ResponsesInputItem{{Role: role, Content: content}}, nil
-	}
-
-	var s string
-	if err := json.Unmarshal(raw, &s); err == nil {
-		content, marshalErr := json.Marshal(s)
-		if marshalErr != nil {
-			return nil, marshalErr
-		}
-		return []ResponsesInputItem{{Role: role, Content: content}}, nil
-	}
-
-	responseParts, err := convertChatTypedContentToResponsesParts(raw)
+	parsed, err := parseChatMessageContent(raw)
 	if err != nil {
 		return nil, fmt.Errorf("parse %s content: %w", role, err)
 	}
-
-	content, err := json.Marshal(responseParts)
+	content, err := marshalChatInputContent(parsed)
 	if err != nil {
 		return nil, err
 	}
 	return []ResponsesInputItem{{Role: role, Content: content}}, nil
 }
 
-func convertChatTypedContentToResponsesParts(raw json.RawMessage) ([]ResponsesContentPart, error) {
-	parts, err := parseChatTypedContent(raw)
-	if err != nil {
-		return nil, err
+func marshalChatInputContent(content chatMessageContent) (json.RawMessage, error) {
+	if content.Text != nil {
+		return json.Marshal(*content.Text)
 	}
+	return json.Marshal(convertChatContentPartsToResponses(content.Parts))
+}
 
-	responseParts := make([]ResponsesContentPart, 0, len(parts))
+func convertChatContentPartsToResponses(parts []ChatContentPart) []ResponsesContentPart {
+	var responseParts []ResponsesContentPart
 	for _, p := range parts {
 		switch p.Type {
 		case "text":
@@ -347,7 +343,21 @@ func convertChatTypedContentToResponsesParts(raw json.RawMessage) ([]ResponsesCo
 			}
 		}
 	}
-	return responseParts, nil
+	return responseParts
+}
+
+func flattenChatContentParts(parts []ChatContentPart) string {
+	var textParts []string
+	for _, p := range parts {
+		if p.Type == "text" && p.Text != "" {
+			textParts = append(textParts, p.Text)
+		}
+	}
+	return strings.Join(textParts, "")
+}
+
+func stringPtr(s string) *string {
+	return &s
 }
 
 func parseChatTypedContent(raw json.RawMessage) ([]ChatContentPart, error) {

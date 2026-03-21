@@ -133,7 +133,7 @@ func TestUserUsageListInvalidStream(t *testing.T) {
 
 func TestUserUsageDashboardModelsSupportsAPIKeyID(t *testing.T) {
 	repo := &userUsageRepoCapture{
-		apiKeyStats: []usagestats.ModelStat{{Model: "gpt-5.2", RequestCount: 3}},
+		apiKeyStats: []usagestats.ModelStat{{Model: "gpt-5.2", Requests: 3}},
 	}
 	apiKeyRepo := &usageDashboardAPIKeyRepoStub{
 		keys: map[int64]*service.APIKey{
