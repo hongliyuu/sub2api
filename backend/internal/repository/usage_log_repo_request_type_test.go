@@ -77,6 +77,7 @@ func TestUsageLogRepositoryCreateSyncRequestTypeAndLegacyFields(t *testing.T) {
 			sqlmock.AnyArg(), // inbound_endpoint
 			sqlmock.AnyArg(), // upstream_endpoint
 			log.CacheTTLOverridden,
+			sqlmock.AnyArg(), // request_body_bytes
 			createdAt,
 		).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).AddRow(int64(99), createdAt))
@@ -146,8 +147,9 @@ func TestUsageLogRepositoryCreate_PersistsServiceTier(t *testing.T) {
 			serviceTier,
 			sqlmock.AnyArg(),
 			sqlmock.AnyArg(),
-			sqlmock.AnyArg(),
+			sqlmock.AnyArg(), // upstream_endpoint
 			log.CacheTTLOverridden,
+			sqlmock.AnyArg(), // request_body_bytes
 			createdAt,
 		).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).AddRow(int64(100), createdAt))
