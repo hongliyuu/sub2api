@@ -744,10 +744,11 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 			inbound_endpoint,
 			upstream_endpoint,
 			cache_ttl_overridden,
+			request_body_bytes,
 			created_at
 		) AS (VALUES `)
 
-	args := make([]any, 0, len(keys)*39)
+	args := make([]any, 0, len(keys)*41)
 	argPos := 1
 	for idx, key := range keys {
 		if idx > 0 {
@@ -938,10 +939,11 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			inbound_endpoint,
 			upstream_endpoint,
 			cache_ttl_overridden,
+			request_body_bytes,
 			created_at
 		) AS (VALUES `)
 
-	args := make([]any, 0, len(preparedList)*39)
+	args := make([]any, 0, len(preparedList)*40)
 	argPos := 1
 	for idx, prepared := range preparedList {
 		if idx > 0 {
