@@ -863,9 +863,18 @@ func TestParseGatewayRequest_MaxTokensBoundary(t *testing.T) {
 			wantMaxTokens: -1,
 		},
 		{
-			name:          "超大值不 panic",
-			body:          `{"max_tokens":9999999999999999}`,
-			wantMaxTokens: 10000000000000000, // float64 精度导致 9999999999999999 → 1e16
+			name: "超大值不 panic",
+			body: `{"max_tokens":9999999999999999}`,
+			// float64 精度: 9999999999999999 → 1e16 = 10000000000000000
+			// 32-bit: 1e16 > math.MaxInt32, parse code 条件不满足, MaxTokens=0
+			// 64-bit: 1e16 <= math.MaxInt64, MaxTokens=int(1e16)
+			wantMaxTokens: func() int {
+				v := int64(1e16)
+				if v != int64(int(v)) {
+					return 0
+				}
+				return int(v)
+			}(),
 		},
 		{
 			name:          "null 值被忽略",
@@ -1094,4 +1103,125 @@ func BenchmarkParseGatewayRequest_New_Large(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, _ = ParseGatewayRequest(data, "")
 	}
+}
+
+// ============ NormalizeToolSchemas 测试 ============
+
+func TestNormalizeToolSchemas_NoChange_WhenNoTools(t *testing.T) {
+	body := []byte(`{"model":"claude-haiku-4-5","messages":[]}`)
+	out := NormalizeToolSchemas(body)
+	require.Equal(t, string(body), string(out), "无 tools 字段时应原样返回")
+}
+
+func TestNormalizeToolSchemas_NoChange_WhenObjectHasProperties(t *testing.T) {
+	body := []byte(`{"tools":[{"name":"foo","input_schema":{"type":"object","properties":{"x":{"type":"string"}}}}]}`)
+	out := NormalizeToolSchemas(body)
+	require.Equal(t, string(body), string(out), "已有 properties 时应原样返回")
+}
+
+func TestNormalizeToolSchemas_AddsEmptyProperties_WhenObjectMissingProperties(t *testing.T) {
+	body := []byte(`{"model":"claude-haiku-4-5","tools":[{"name":"mcp__pencil__get_style_guide_tags","input_schema":{"type":"object"}}]}`)
+	out := NormalizeToolSchemas(body)
+
+	var req map[string]any
+	require.NoError(t, json.Unmarshal(out, &req))
+	tools, ok := req["tools"].([]any)
+	require.True(t, ok)
+	require.Len(t, tools, 1)
+	tool, ok := tools[0].(map[string]any)
+	require.True(t, ok)
+	schema, ok := tool["input_schema"].(map[string]any)
+	require.True(t, ok)
+	props, ok := schema["properties"].(map[string]any)
+	require.True(t, ok, "properties 应被自动补全")
+	require.Empty(t, props, "properties 应为空 map")
+}
+
+func TestNormalizeToolSchemas_AddsEmptyProperties_CustomMCPTool(t *testing.T) {
+	body := []byte(`{"tools":[{"type":"custom","name":"mcp__pencil__get_style_guide_tags","custom":{"description":"get tags","input_schema":{"type":"object"}}}]}`)
+	out := NormalizeToolSchemas(body)
+
+	var req map[string]any
+	require.NoError(t, json.Unmarshal(out, &req))
+	tools, ok := req["tools"].([]any)
+	require.True(t, ok)
+	tool, ok := tools[0].(map[string]any)
+	require.True(t, ok)
+	custom, ok := tool["custom"].(map[string]any)
+	require.True(t, ok)
+	schema, ok := custom["input_schema"].(map[string]any)
+	require.True(t, ok)
+	props, ok := schema["properties"].(map[string]any)
+	require.True(t, ok, "custom tool properties 应被自动补全")
+	require.Empty(t, props)
+}
+
+func TestNormalizeToolSchemas_FixesNestedObjectSchema(t *testing.T) {
+	body := []byte(`{"tools":[{"name":"foo","input_schema":{"type":"object","properties":{"nested":{"type":"object"}}}}]}`)
+	out := NormalizeToolSchemas(body)
+
+	var req map[string]any
+	require.NoError(t, json.Unmarshal(out, &req))
+	tools := req["tools"].([]any)
+	tool := tools[0].(map[string]any)
+	schema := tool["input_schema"].(map[string]any)
+	props := schema["properties"].(map[string]any)
+	nested, ok := props["nested"].(map[string]any)
+	require.True(t, ok)
+	nestedProps, ok := nested["properties"].(map[string]any)
+	require.True(t, ok, "嵌套 object schema 的 properties 也应被补全")
+	require.Empty(t, nestedProps)
+}
+
+func TestNormalizeToolSchemas_FixesObjectInAnyOf(t *testing.T) {
+	body := []byte(`{"tools":[{"name":"foo","input_schema":{"type":"object","properties":{"x":{"anyOf":[{"type":"object"}]}}}}]}`)
+	out := NormalizeToolSchemas(body)
+
+	var req map[string]any
+	require.NoError(t, json.Unmarshal(out, &req))
+	tools := req["tools"].([]any)
+	tool := tools[0].(map[string]any)
+	schema := tool["input_schema"].(map[string]any)
+	props := schema["properties"].(map[string]any)
+	xSchema := props["x"].(map[string]any)
+	anyOf := xSchema["anyOf"].([]any)
+	require.Len(t, anyOf, 1)
+	branch := anyOf[0].(map[string]any)
+	_, hasProps := branch["properties"]
+	require.True(t, hasProps, "anyOf 内的 object schema 也应补全 properties")
+}
+
+func TestNormalizeToolSchemas_InvalidJSON_ReturnsOriginal(t *testing.T) {
+	body := []byte(`{invalid json`)
+	out := NormalizeToolSchemas(body)
+	require.Equal(t, string(body), string(out), "非法 JSON 应原样返回")
+}
+
+func TestNormalizeToolSchemas_MultipleTools_PartialFix(t *testing.T) {
+	body := []byte(`{"tools":[
+		{"name":"tool1","input_schema":{"type":"object"}},
+		{"name":"tool2","input_schema":{"type":"object","properties":{"a":{"type":"string"}}}},
+		{"name":"tool3","input_schema":{"type":"string"}}
+	]}`)
+	out := NormalizeToolSchemas(body)
+
+	var req map[string]any
+	require.NoError(t, json.Unmarshal(out, &req))
+	tools := req["tools"].([]any)
+	require.Len(t, tools, 3)
+
+	tool1 := tools[0].(map[string]any)
+	schema1 := tool1["input_schema"].(map[string]any)
+	_, hasProps1 := schema1["properties"]
+	require.True(t, hasProps1, "tool1 应补全 properties")
+
+	tool2 := tools[1].(map[string]any)
+	schema2 := tool2["input_schema"].(map[string]any)
+	props2, _ := schema2["properties"].(map[string]any)
+	require.Contains(t, props2, "a", "tool2 原有 properties 应保持不变")
+
+	tool3 := tools[2].(map[string]any)
+	schema3 := tool3["input_schema"].(map[string]any)
+	_, hasProps3 := schema3["properties"]
+	require.False(t, hasProps3, "type:string 不是 object，不应添加 properties")
 }

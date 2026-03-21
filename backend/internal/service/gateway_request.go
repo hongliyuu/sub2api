@@ -875,3 +875,115 @@ func RectifyThinkingBudget(body []byte) ([]byte, bool) {
 
 	return modified, changed
 }
+
+// NormalizeToolSchemas fixes tool schemas that would be rejected by the Anthropic upstream.
+// Specifically, it adds empty properties to any object schema that lacks them,
+// which is required by the API ("object schema missing properties").
+// Applies to both standard tool input_schema and custom/MCP tool custom.input_schema,
+// and recursively fixes nested object schemas within properties, items, anyOf, oneOf, allOf.
+// Returns modified body or original body on no-op / parse error (fail-safe).
+func NormalizeToolSchemas(body []byte) []byte {
+	// Fast path: skip if body has no "tools" or no object-type schemas.
+	if !bytes.Contains(body, []byte(`"tools"`)) {
+		return body
+	}
+	if !bytes.Contains(body, []byte(`"object"`)) {
+		return body
+	}
+
+	var req map[string]any
+	if err := json.Unmarshal(body, &req); err != nil {
+		return body
+	}
+
+	tools, ok := req["tools"].([]any)
+	if !ok || len(tools) == 0 {
+		return body
+	}
+
+	modified := false
+	for _, tool := range tools {
+		toolMap, ok := tool.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		// Standard tool: { "name": "...", "input_schema": {...} }
+		if schema, ok := toolMap["input_schema"].(map[string]any); ok {
+			if fixObjectSchemaProperties(schema) {
+				modified = true
+			}
+		}
+
+		// Custom/MCP tool: { "type": "custom", "custom": { "input_schema": {...} } }
+		if custom, ok := toolMap["custom"].(map[string]any); ok {
+			if schema, ok := custom["input_schema"].(map[string]any); ok {
+				if fixObjectSchemaProperties(schema) {
+					modified = true
+				}
+			}
+		}
+	}
+
+	if !modified {
+		return body
+	}
+
+	newBody, err := json.Marshal(req)
+	if err != nil {
+		return body
+	}
+	return newBody
+}
+
+// fixObjectSchemaProperties recursively ensures every object-typed schema node has a
+// "properties" field, adding an empty one when missing.
+// Returns true if any schema was modified.
+func fixObjectSchemaProperties(schema map[string]any) bool {
+	if schema == nil {
+		return false
+	}
+
+	modified := false
+
+	schemaType, _ := schema["type"].(string)
+	if schemaType == "object" {
+		if _, hasProps := schema["properties"]; !hasProps {
+			schema["properties"] = map[string]any{}
+			modified = true
+		}
+	}
+
+	// Recurse into properties values.
+	if props, ok := schema["properties"].(map[string]any); ok {
+		for _, v := range props {
+			if sub, ok := v.(map[string]any); ok {
+				if fixObjectSchemaProperties(sub) {
+					modified = true
+				}
+			}
+		}
+	}
+
+	// Recurse into array items.
+	if items, ok := schema["items"].(map[string]any); ok {
+		if fixObjectSchemaProperties(items) {
+			modified = true
+		}
+	}
+
+	// Recurse into anyOf / oneOf / allOf branches.
+	for _, key := range []string{"anyOf", "oneOf", "allOf"} {
+		if arr, ok := schema[key].([]any); ok {
+			for _, item := range arr {
+				if sub, ok := item.(map[string]any); ok {
+					if fixObjectSchemaProperties(sub) {
+						modified = true
+					}
+				}
+			}
+		}
+	}
+
+	return modified
+}

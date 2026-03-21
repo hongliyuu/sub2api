@@ -39,14 +39,14 @@ const (
 )
 
 const (
-	GB = 1024 * 1024 * 1024
-	TB = 1024 * GB
+	GB int64 = 1024 * 1024 * 1024
+	TB int64 = 1024 * GB
 
-	StorageTierUnlimited = 100 * TB // 100TB
-	StorageTierAIPremium = 2 * TB   // 2TB
-	StorageTierStandard  = 200 * GB // 200GB
-	StorageTierBasic     = 100 * GB // 100GB
-	StorageTierFree      = 15 * GB  // 15GB
+	StorageTierUnlimited int64 = 100 * TB // 100TB
+	StorageTierAIPremium int64 = 2 * TB   // 2TB
+	StorageTierStandard  int64 = 200 * GB // 200GB
+	StorageTierBasic     int64 = 100 * GB // 100GB
+	StorageTierFree      int64 = 15 * GB  // 15GB
 )
 
 type GeminiOAuthService struct {
