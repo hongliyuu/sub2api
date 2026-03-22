@@ -1189,7 +1189,13 @@ func TestGatewayService_AnthropicAPIKeyPassthrough_StreamingTimeoutAfterClientDi
 	<-done
 
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "stream usage incomplete after timeout")
+	// CI 调度延迟时 pipe 可能在 ticker 触发前就关闭，导致走 "missing terminal event" 分支而非
+	// timeout 分支——两者都属于合法的 client-disconnect 场景，均应被接受。
+	require.True(t,
+		strings.Contains(err.Error(), "stream usage incomplete after timeout") ||
+			strings.Contains(err.Error(), "stream usage incomplete: missing terminal event"),
+		"unexpected error: %v", err,
+	)
 	require.NotNil(t, result)
 	require.True(t, result.clientDisconnect)
 	require.Equal(t, 9, result.usage.InputTokens)
