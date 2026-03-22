@@ -598,6 +598,10 @@ func (h *CopilotGatewayHandler) Messages(c *gin.Context) {
 	reqStream := gjson.GetBytes(body, "stream").Bool()
 	reqMaxTokens := int(gjson.GetBytes(body, "max_tokens").Int())
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
+	reqLog.Debug("copilot.messages.request_size",
+		zap.Int64("incoming_content_length", c.Request.ContentLength),
+		zap.Int("incoming_body_bytes", len(body)),
+		zap.Int("incoming_max_tokens", reqMaxTokens))
 
 	setOpsRequestContext(c, reqModel, reqStream, body)
 
