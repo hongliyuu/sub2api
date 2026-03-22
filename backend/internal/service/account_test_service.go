@@ -1292,6 +1292,13 @@ func endpointPathForLog(endpoint string) string {
 	return parsed.Path
 }
 
+func truncateLogBody(s string, max int) string {
+	if max <= 0 || len(s) <= max {
+		return s
+	}
+	return s[:max] + "...(truncated)"
+}
+
 func (s *AccountTestService) logSoraCloudflareChallenge(account *Account, proxyURL, endpoint string, headers http.Header, body []byte) {
 	accountID := int64(0)
 	platform := ""
@@ -1385,6 +1392,17 @@ const (
 	copilotEndpointMessages
 )
 
+func copilotEndpointPath(endpoint copilotTestEndpoint) string {
+	switch endpoint {
+	case copilotEndpointResponses:
+		return "/responses"
+	case copilotEndpointMessages:
+		return "/v1/messages"
+	default:
+		return "/chat/completions"
+	}
+}
+
 // selectCopilotTestEndpoint determines which test endpoint to use for the given model.
 // It queries the /models endpoint to find the model's supported_endpoints, then picks:
 //   - "/responses"       → copilotEndpointResponses
@@ -1475,6 +1493,7 @@ func (s *AccountTestService) selectCopilotTestEndpoint(ctx context.Context, copi
 //  5. Stream the response back to the client as SSE events
 func (s *AccountTestService) testCopilotAccountConnection(c *gin.Context, account *Account, modelID string) error {
 	ctx := c.Request.Context()
+	accountID := account.ID
 
 	// Validate github_token credential
 	githubToken := strings.TrimSpace(account.GetCredential("github_token"))
@@ -1487,6 +1506,8 @@ func (s *AccountTestService) testCopilotAccountConnection(c *gin.Context, accoun
 	if testModelID == "" {
 		testModelID = copilot.DefaultTestModel
 	}
+
+	log.Printf("[AccountTest][Copilot] start account_id=%d model=%s account_type=%s", accountID, testModelID, account.Type)
 
 	// Apply model mapping and normalize model name for Copilot API.
 	// normalizeCopilotModel handles both account-level mapping and the generic
@@ -1512,6 +1533,7 @@ func (s *AccountTestService) testCopilotAccountConnection(c *gin.Context, accoun
 	if err != nil {
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Token exchange failed: %s", err.Error()))
 	}
+	log.Printf("[AccountTest][Copilot] token_exchange_ok account_id=%d model=%s", accountID, testModelID)
 
 	s.sendEvent(c, TestEvent{Type: "content", Text: "✓ Token exchange successful\n\n"})
 
@@ -1523,19 +1545,20 @@ func (s *AccountTestService) testCopilotAccountConnection(c *gin.Context, accoun
 
 	// Step 3: Select the test endpoint based on what the model supports
 	endpoint := s.selectCopilotTestEndpoint(ctx, copilotToken, baseURL, testModelID)
+	log.Printf("[AccountTest][Copilot] endpoint_selected account_id=%d model=%s base_url=%s endpoint=%s", accountID, testModelID, endpointPathForLog(baseURL), copilotEndpointPath(endpoint))
 
 	switch endpoint {
 	case copilotEndpointResponses:
-		return s.testCopilotWithResponsesEndpoint(c, ctx, copilotToken, baseURL, testModelID)
+		return s.testCopilotWithResponsesEndpoint(c, ctx, accountID, copilotToken, baseURL, testModelID)
 	case copilotEndpointMessages:
-		return s.testCopilotWithMessagesEndpoint(c, ctx, copilotToken, baseURL, testModelID)
+		return s.testCopilotWithMessagesEndpoint(c, ctx, accountID, copilotToken, baseURL, testModelID)
 	default:
-		return s.testCopilotWithChatCompletions(c, ctx, copilotToken, baseURL, testModelID)
+		return s.testCopilotWithChatCompletions(c, ctx, accountID, copilotToken, baseURL, testModelID)
 	}
 }
 
 // testCopilotWithChatCompletions tests a model via the /chat/completions endpoint.
-func (s *AccountTestService) testCopilotWithChatCompletions(c *gin.Context, ctx context.Context, copilotToken, baseURL, modelID string) error {
+func (s *AccountTestService) testCopilotWithChatCompletions(c *gin.Context, ctx context.Context, accountID int64, copilotToken, baseURL, modelID string) error {
 	s.sendEvent(c, TestEvent{Type: "content", Text: "Testing via /chat/completions...\n"})
 
 	payload := map[string]any{
@@ -1564,14 +1587,18 @@ func (s *AccountTestService) testCopilotWithChatCompletions(c *gin.Context, ctx 
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
+	start := time.Now()
 	resp, err := client.Do(req) //nolint:gosec // URL is from trusted Copilot API config
 	if err != nil {
+		log.Printf("[AccountTest][Copilot] upstream_failed account_id=%d model=%s endpoint=%s latency_ms=%d error=%v", accountID, modelID, "/chat/completions", time.Since(start).Milliseconds(), err)
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Copilot API request failed: %s", err.Error()))
 	}
 	defer func() { _ = resp.Body.Close() }()
+	log.Printf("[AccountTest][Copilot] upstream_response account_id=%d model=%s endpoint=%s status=%d latency_ms=%d", accountID, modelID, "/chat/completions", resp.StatusCode, time.Since(start).Milliseconds())
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		log.Printf("[AccountTest][Copilot] upstream_error_body account_id=%d model=%s endpoint=%s body=%q", accountID, modelID, "/chat/completions", truncateLogBody(string(body), 512))
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Copilot API returned HTTP %d: %s", resp.StatusCode, string(body)))
 	}
 
@@ -1581,7 +1608,7 @@ func (s *AccountTestService) testCopilotWithChatCompletions(c *gin.Context, ctx 
 }
 
 // testCopilotWithResponsesEndpoint tests a model via the /responses endpoint (e.g. Codex models).
-func (s *AccountTestService) testCopilotWithResponsesEndpoint(c *gin.Context, ctx context.Context, copilotToken, baseURL, modelID string) error {
+func (s *AccountTestService) testCopilotWithResponsesEndpoint(c *gin.Context, ctx context.Context, accountID int64, copilotToken, baseURL, modelID string) error {
 	s.sendEvent(c, TestEvent{Type: "content", Text: "Testing via /responses (Codex endpoint)...\n"})
 
 	payload := map[string]any{
@@ -1607,14 +1634,18 @@ func (s *AccountTestService) testCopilotWithResponsesEndpoint(c *gin.Context, ct
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
+	start := time.Now()
 	resp, err := client.Do(req) //nolint:gosec // URL is from trusted Copilot API config
 	if err != nil {
+		log.Printf("[AccountTest][Copilot] upstream_failed account_id=%d model=%s endpoint=%s latency_ms=%d error=%v", accountID, modelID, "/responses", time.Since(start).Milliseconds(), err)
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Copilot API request failed: %s", err.Error()))
 	}
 	defer func() { _ = resp.Body.Close() }()
+	log.Printf("[AccountTest][Copilot] upstream_response account_id=%d model=%s endpoint=%s status=%d latency_ms=%d", accountID, modelID, "/responses", resp.StatusCode, time.Since(start).Milliseconds())
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		log.Printf("[AccountTest][Copilot] upstream_error_body account_id=%d model=%s endpoint=%s body=%q", accountID, modelID, "/responses", truncateLogBody(string(body), 512))
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Copilot API returned HTTP %d: %s", resp.StatusCode, string(body)))
 	}
 
@@ -1624,7 +1655,7 @@ func (s *AccountTestService) testCopilotWithResponsesEndpoint(c *gin.Context, ct
 }
 
 // testCopilotWithMessagesEndpoint tests a model via the /v1/messages endpoint.
-func (s *AccountTestService) testCopilotWithMessagesEndpoint(c *gin.Context, ctx context.Context, copilotToken, baseURL, modelID string) error {
+func (s *AccountTestService) testCopilotWithMessagesEndpoint(c *gin.Context, ctx context.Context, accountID int64, copilotToken, baseURL, modelID string) error {
 	s.sendEvent(c, TestEvent{Type: "content", Text: "Testing via /v1/messages...\n"})
 
 	payload := map[string]any{
@@ -1653,14 +1684,18 @@ func (s *AccountTestService) testCopilotWithMessagesEndpoint(c *gin.Context, ctx
 	}
 
 	client := &http.Client{Timeout: 30 * time.Second}
+	start := time.Now()
 	resp, err := client.Do(req) //nolint:gosec // URL is from trusted Copilot API config
 	if err != nil {
+		log.Printf("[AccountTest][Copilot] upstream_failed account_id=%d model=%s endpoint=%s latency_ms=%d error=%v", accountID, modelID, "/v1/messages", time.Since(start).Milliseconds(), err)
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Copilot API request failed: %s", err.Error()))
 	}
 	defer func() { _ = resp.Body.Close() }()
+	log.Printf("[AccountTest][Copilot] upstream_response account_id=%d model=%s endpoint=%s status=%d latency_ms=%d", accountID, modelID, "/v1/messages", resp.StatusCode, time.Since(start).Milliseconds())
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		log.Printf("[AccountTest][Copilot] upstream_error_body account_id=%d model=%s endpoint=%s body=%q", accountID, modelID, "/v1/messages", truncateLogBody(string(body), 512))
 		return s.sendErrorAndEnd(c, fmt.Sprintf("Copilot API returned HTTP %d: %s", resp.StatusCode, string(body)))
 	}
 
