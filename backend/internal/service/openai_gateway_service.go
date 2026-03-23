@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"net"
 	"net/http"
 	"sort"
 	"strconv"
@@ -1611,6 +1612,87 @@ func (s *OpenAIGatewayService) handleFailoverSideEffects(ctx context.Context, re
 	s.rateLimitService.HandleUpstreamError(ctx, account, resp.StatusCode, resp.Header, body)
 }
 
+func (s *OpenAIGatewayService) shouldFailoverOpenAIPassthroughResponse(statusCode int, upstreamMsg string, responseBody []byte) bool {
+	switch statusCode {
+	case http.StatusTooManyRequests:
+		return isOpenAIWSRateLimitError(
+			gjson.GetBytes(responseBody, "error.code").String(),
+			gjson.GetBytes(responseBody, "error.type").String(),
+			upstreamMsg,
+		)
+	case http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout, 529:
+		return true
+	default:
+		return isOpenAITransientProcessingError(statusCode, upstreamMsg, responseBody)
+	}
+}
+
+func (s *OpenAIGatewayService) shouldFailoverOpenAIPassthroughRequestError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) || errors.Is(err, net.ErrClosed) {
+		return true
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+	msg := strings.ToLower(strings.TrimSpace(err.Error()))
+	switch {
+	case strings.Contains(msg, "timeout"),
+		strings.Contains(msg, "timed out"),
+		strings.Contains(msg, "deadline exceeded"),
+		strings.Contains(msg, "unexpected eof"),
+		strings.Contains(msg, "connection reset"),
+		strings.Contains(msg, "broken pipe"),
+		strings.Contains(msg, "stream disconnected"):
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *OpenAIGatewayService) markOpenAIPassthroughTransientOverload(ctx context.Context, account *Account, trigger string) {
+	if s == nil || s.accountRepo == nil || account == nil {
+		return
+	}
+	cooldownMinutes := 5
+	if s.cfg != nil && s.cfg.RateLimit.OverloadCooldownMinutes > 0 {
+		cooldownMinutes = s.cfg.RateLimit.OverloadCooldownMinutes
+	}
+	until := time.Now().Add(time.Duration(cooldownMinutes) * time.Minute)
+	if err := s.accountRepo.SetOverloaded(ctx, account.ID, until); err != nil {
+		logger.FromContext(ctx).With(
+			zap.String("component", "service.openai_gateway"),
+			zap.Int64("account_id", account.ID),
+			zap.String("trigger", strings.TrimSpace(trigger)),
+			zap.Error(err),
+		).Warn("OpenAI passthrough 瞬态错误冷却写库失败")
+		return
+	}
+	logger.FromContext(ctx).With(
+		zap.String("component", "service.openai_gateway"),
+		zap.Int64("account_id", account.ID),
+		zap.String("trigger", strings.TrimSpace(trigger)),
+		zap.Time("until", until),
+	).Warn("OpenAI passthrough 瞬态错误触发账号冷却")
+}
+
+func (s *OpenAIGatewayService) applyOpenAIPassthroughFailoverSideEffects(ctx context.Context, account *Account, statusCode int, headers http.Header, responseBody []byte, trigger string) {
+	if account == nil {
+		return
+	}
+	switch statusCode {
+	case http.StatusTooManyRequests, 529:
+		if s.rateLimitService != nil {
+			s.rateLimitService.HandleUpstreamError(ctx, account, statusCode, headers, responseBody)
+		}
+	case http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		s.markOpenAIPassthroughTransientOverload(ctx, account, trigger)
+	}
+}
+
 // Forward forwards request to OpenAI API
 func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte) (*OpenAIForwardResult, error) {
 	startTime := time.Now()
@@ -2285,6 +2367,23 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStart).Milliseconds())
 	if err != nil {
 		safeErr := sanitizeUpstreamErrorMessage(err.Error())
+		if s.shouldFailoverOpenAIPassthroughRequestError(err) {
+			setOpsUpstreamError(c, http.StatusBadGateway, safeErr, "")
+			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+				Platform:           account.Platform,
+				AccountID:          account.ID,
+				AccountName:        account.Name,
+				UpstreamStatusCode: http.StatusBadGateway,
+				Passthrough:        true,
+				Kind:               "failover",
+				Message:            safeErr,
+			})
+			s.markOpenAIPassthroughTransientOverload(ctx, account, safeErr)
+			return nil, &UpstreamFailoverError{
+				StatusCode:   http.StatusBadGateway,
+				ResponseBody: []byte(safeErr),
+			}
+		}
 		setOpsUpstreamError(c, 0, safeErr, "")
 		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 			Platform:           account.Platform,
@@ -2306,7 +2405,42 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 400 {
-		// 透传模式不做 failover（避免改变原始上游语义），按上游原样返回错误响应。
+		responseBody, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+		_ = resp.Body.Close()
+		resp.Body = io.NopCloser(bytes.NewReader(responseBody))
+		upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(responseBody))
+		upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
+		upstreamDetail := ""
+		if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
+			maxBytes := s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes
+			if maxBytes <= 0 {
+				maxBytes = 2048
+			}
+			upstreamDetail = truncateString(string(responseBody), maxBytes)
+		}
+		if s.shouldFailoverOpenAIPassthroughResponse(resp.StatusCode, upstreamMsg, responseBody) {
+			setOpsUpstreamError(c, resp.StatusCode, upstreamMsg, upstreamDetail)
+			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+				Platform:             account.Platform,
+				AccountID:            account.ID,
+				AccountName:          account.Name,
+				UpstreamStatusCode:   resp.StatusCode,
+				UpstreamRequestID:    resp.Header.Get("x-request-id"),
+				Passthrough:          true,
+				Kind:                 "failover",
+				Message:              upstreamMsg,
+				Detail:               upstreamDetail,
+				UpstreamResponseBody: upstreamDetail,
+			})
+			s.applyOpenAIPassthroughFailoverSideEffects(ctx, account, resp.StatusCode, resp.Header, responseBody, upstreamMsg)
+			return nil, &UpstreamFailoverError{
+				StatusCode:             resp.StatusCode,
+				ResponseBody:           responseBody,
+				ResponseHeaders:        resp.Header.Clone(),
+				RetryableOnSameAccount: account.IsPoolMode() && isPoolModeRetryableStatus(resp.StatusCode),
+			}
+		}
+		resp.Body = io.NopCloser(bytes.NewReader(responseBody))
 		return nil, s.handleErrorResponsePassthrough(ctx, resp, c, account, body)
 	}
 
