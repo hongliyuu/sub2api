@@ -1846,11 +1846,11 @@ func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *i
 
 	var accounts []Account
 	var err error
-	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
-		accounts, err = s.accountRepo.ListSchedulableByPlatform(ctx, platform)
-	} else if groupID != nil {
+	if groupID != nil {
 		accounts, err = s.accountRepo.ListSchedulableByGroupIDAndPlatform(ctx, *groupID, platform)
-		// 分组内无账号则返回空列表，由上层处理错误，不再回退到全平台查询
+		// Group-specific keys stay pinned to their own accounts even in simple mode.
+	} else if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
+		accounts, err = s.accountRepo.ListSchedulableByPlatform(ctx, platform)
 	} else {
 		accounts, err = s.accountRepo.ListSchedulableUngroupedByPlatform(ctx, platform)
 	}
@@ -1882,9 +1882,7 @@ func (s *GatewayService) listSoraSchedulableAccounts(ctx context.Context, groupI
 
 	var accounts []Account
 	var err error
-	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
-		accounts, err = s.accountRepo.ListByPlatform(ctx, PlatformSora)
-	} else if groupID != nil {
+	if groupID != nil {
 		accounts, err = s.accountRepo.ListByGroup(ctx, *groupID)
 	} else {
 		accounts, err = s.accountRepo.ListByPlatform(ctx, PlatformSora)
