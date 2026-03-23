@@ -968,3 +968,119 @@ func inputJSONDeltaEvent(idx int, partial string) string {
 	})
 	return string(b)
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Context window truncation
+// ─────────────────────────────────────────────────────────────────────────────
+
+// TruncateAnthropicBodyToLimit trims the messages array in an Anthropic-format
+// request body so the serialised body fits within limitBytes.
+//
+// Strategy:
+//  1. Keep the system prompt and tools untouched — they are necessary for
+//     every turn and cannot be removed without breaking the request.
+//  2. Drop the oldest conversation turns from the front of messages[].
+//     Each "turn" is a contiguous block of one or more messages that forms a
+//     coherent unit: user → (assistant + optional tool results) → next user.
+//  3. After each drop, re-serialise and check the size.  Stop as soon as the
+//     body is within the limit, or when fewer than minMessages remain (at
+//     which point truncation is no longer safe and the caller should reject).
+//
+// The function returns (trimmedBody, truncated, err).
+// When truncated == false and err == nil the original body already fits.
+// When the body cannot be brought within the limit without dropping below
+// minMessages the function returns the most-trimmed body with truncated==true
+// so the caller can decide whether to reject or forward anyway.
+func TruncateAnthropicBodyToLimit(body []byte, limitBytes int) (trimmed []byte, truncated bool, err error) {
+	const minMessages = 2 // always keep at least one user + one assistant turn
+
+	if len(body) <= limitBytes {
+		return body, false, nil
+	}
+
+	// Parse only the fields we need to manipulate.
+	var req struct {
+		Messages []json.RawMessage `json:"messages"`
+	}
+	// Use a generic map so we preserve every other field verbatim.
+	var generic map[string]json.RawMessage
+	if err = json.Unmarshal(body, &generic); err != nil {
+		return body, false, fmt.Errorf("truncate: parse body: %w", err)
+	}
+
+	msgsRaw, ok := generic["messages"]
+	if !ok {
+		return body, false, nil // no messages field — cannot truncate
+	}
+	if err = json.Unmarshal(msgsRaw, &req.Messages); err != nil {
+		return body, false, fmt.Errorf("truncate: parse messages: %w", err)
+	}
+
+	msgs := req.Messages
+	for len(msgs) > minMessages {
+		// Drop the oldest message (index 0).
+		// Before dropping, also remove the immediately following messages if
+		// they form the "response" half of the same turn — i.e. consecutive
+		// assistant messages or tool-role messages that answered the dropped
+		// user turn.  This keeps tool_use / tool_result pairs intact.
+		dropCount := 1
+		if len(msgs) > 1 {
+			// Check role of msg[0] to decide how many to drop together.
+			var m0 struct {
+				Role string `json:"role"`
+			}
+			if jsonErr := json.Unmarshal(msgs[0], &m0); jsonErr == nil && m0.Role == "user" {
+				// Drop this user message plus the next assistant + any following
+				// tool messages so we don't leave an orphaned tool_result.
+				i := 1
+				for i < len(msgs) {
+					var mi struct {
+						Role string `json:"role"`
+					}
+					if jsonErr := json.Unmarshal(msgs[i], &mi); jsonErr != nil {
+						break
+					}
+					if mi.Role == "assistant" || mi.Role == "tool" {
+						i++
+					} else {
+						break
+					}
+				}
+				dropCount = i
+			}
+		}
+		if len(msgs)-dropCount < minMessages {
+			// Dropping this batch would go below minimum — drop one at a time instead.
+			dropCount = len(msgs) - minMessages
+			if dropCount <= 0 {
+				break
+			}
+		}
+		msgs = msgs[dropCount:]
+
+		// Re-serialise and check size.
+		newMsgsJSON, marshalErr := json.Marshal(msgs)
+		if marshalErr != nil {
+			return body, false, fmt.Errorf("truncate: serialise messages: %w", marshalErr)
+		}
+		generic["messages"] = newMsgsJSON
+
+		candidate, marshalErr := json.Marshal(generic)
+		if marshalErr != nil {
+			return body, false, fmt.Errorf("truncate: serialise body: %w", marshalErr)
+		}
+		if len(candidate) <= limitBytes {
+			return candidate, true, nil
+		}
+		// Still too large — continue trimming.
+		body = candidate
+	}
+
+	// Could not bring body within limit while keeping minMessages.
+	// Return the most-trimmed version with truncated=true; caller decides.
+	candidate, _ := json.Marshal(generic)
+	if len(candidate) == 0 {
+		candidate = body
+	}
+	return candidate, true, nil
+}

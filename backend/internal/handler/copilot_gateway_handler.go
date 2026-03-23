@@ -704,7 +704,43 @@ func (h *CopilotGatewayHandler) Messages(c *gin.Context) {
 			zap.String("account_name", account.Name))
 		setOpsSelectedAccount(c, account.ID, account.Platform)
 
-		// Reject oversized request bodies before hitting the upstream.
+		// Truncate oversized request bodies before forwarding to the upstream.
+		// When the body exceeds the account limit we trim old conversation turns
+		// (preserving the system prompt and tools) so the request can proceed
+		// rather than immediately rejecting with 413.  If the body cannot be
+		// brought within the limit even after truncation, we reject.
+		limit := account.GetMaxBodyBytes()
+		if limit <= 0 {
+			limit = defaultCopilotMaxBodyBytes
+		}
+		if len(body) > limit {
+			trimmed, wasTruncated, truncErr := service.TruncateAnthropicBodyToLimit(body, limit)
+			if truncErr != nil {
+				reqLog.Warn("copilot.messages.truncate_error",
+					zap.Int64("account_id", account.ID),
+					zap.Int("original_bytes", len(body)),
+					zap.Int("limit_bytes", limit),
+					zap.Error(truncErr))
+				// Fall through to the size check which will reject.
+			} else if wasTruncated {
+				if len(trimmed) <= limit {
+					reqLog.Info("copilot.messages.context_truncated",
+						zap.Int64("account_id", account.ID),
+						zap.Int("original_bytes", len(body)),
+						zap.Int("trimmed_bytes", len(trimmed)),
+						zap.Int("limit_bytes", limit))
+					body = trimmed
+					setOpsRequestContext(c, reqModel, reqStream, body)
+				} else {
+					// Even after truncation still over limit — reject.
+					reqLog.Warn("copilot.messages.truncate_insufficient",
+						zap.Int64("account_id", account.ID),
+						zap.Int("trimmed_bytes", len(trimmed)),
+						zap.Int("limit_bytes", limit))
+				}
+			}
+		}
+		// Final size guard — rejects only if truncation was insufficient or errored.
 		if h.checkCopilotBodySize(c, body, account, true) {
 			return
 		}
