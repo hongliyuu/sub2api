@@ -244,6 +244,7 @@ export default {
 
   // Common
   common: {
+    multiplier: '倍率',
     loading: '加载中...',
     justNow: '刚刚',
     save: '保存',
