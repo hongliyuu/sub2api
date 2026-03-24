@@ -1068,6 +1068,10 @@ func windowStatsFromAccountStats(stats *usagestats.AccountStats) *WindowStats {
 }
 
 func buildCodexUsageProgressFromExtra(extra map[string]any, window string, now time.Time) *UsageProgress {
+	return buildCodexUsageProgressFromExtraWithScope(extra, window, now, openAICodexQuotaScopeCodex)
+}
+
+func buildCodexUsageProgressFromExtraWithScope(extra map[string]any, window string, now time.Time, scope openAICodexQuotaScope) *UsageProgress {
 	if len(extra) == 0 {
 		return nil
 	}
@@ -1078,15 +1082,19 @@ func buildCodexUsageProgressFromExtra(extra map[string]any, window string, now t
 		resetAtKey     string
 	)
 
+	key := func(suffix string) string {
+		return codexScopeExtraKey(scope, suffix)
+	}
+
 	switch window {
 	case "5h":
-		usedPercentKey = "codex_5h_used_percent"
-		resetAfterKey = "codex_5h_reset_after_seconds"
-		resetAtKey = "codex_5h_reset_at"
+		usedPercentKey = key("5h_used_percent")
+		resetAfterKey = key("5h_reset_after_seconds")
+		resetAtKey = key("5h_reset_at")
 	case "7d":
-		usedPercentKey = "codex_7d_used_percent"
-		resetAfterKey = "codex_7d_reset_after_seconds"
-		resetAtKey = "codex_7d_reset_at"
+		usedPercentKey = key("7d_used_percent")
+		resetAfterKey = key("7d_reset_after_seconds")
+		resetAtKey = key("7d_reset_at")
 	default:
 		return nil
 	}
@@ -1109,7 +1117,7 @@ func buildCodexUsageProgressFromExtra(extra map[string]any, window string, now t
 	if progress.ResetsAt == nil {
 		if resetAfterSeconds := parseExtraInt(extra[resetAfterKey]); resetAfterSeconds > 0 {
 			base := now
-			if updatedAtRaw, ok := extra["codex_usage_updated_at"]; ok {
+			if updatedAtRaw, ok := extra[key("usage_updated_at")]; ok {
 				if updatedAt, err := parseTime(fmt.Sprint(updatedAtRaw)); err == nil {
 					base = updatedAt
 				}
