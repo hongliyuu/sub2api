@@ -16,9 +16,9 @@ import (
 // refreshAPIAccountRepo implements AccountRepository for OAuthRefreshAPI tests.
 type refreshAPIAccountRepo struct {
 	mockAccountRepoForGemini
-	account   *Account   // returned by GetByID
-	getByIDErr error
-	updateErr  error
+	account     *Account // returned by GetByID
+	getByIDErr  error
+	updateErr   error
 	updateCalls int
 }
 
@@ -193,7 +193,7 @@ func TestRefreshIfNeeded_RefreshError(t *testing.T) {
 	require.Error(t, err)
 	require.Nil(t, result)
 	require.Contains(t, err.Error(), "invalid_grant")
-	require.Equal(t, 0, repo.updateCalls) // no DB update on refresh error
+	require.Equal(t, 0, repo.updateCalls)   // no DB update on refresh error
 	require.Equal(t, 1, cache.releaseCalls) // lock still released via defer
 }
 
@@ -299,8 +299,8 @@ func TestMergeCredentials_NewOverridesOld(t *testing.T) {
 
 	result := MergeCredentials(old, new)
 
-	require.Equal(t, "new-token", result["access_token"])     // overridden
-	require.Equal(t, "old-refresh", result["refresh_token"])  // preserved
+	require.Equal(t, "new-token", result["access_token"])    // overridden
+	require.Equal(t, "old-refresh", result["refresh_token"]) // preserved
 }
 
 // ========== BuildClaudeAccountCredentials tests ==========

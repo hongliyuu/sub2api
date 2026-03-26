@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	copilotpkg "github.com/Wei-Shaw/sub2api/internal/pkg/copilot"
 	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
-	copilotpkg "github.com/Wei-Shaw/sub2api/internal/pkg/copilot"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
@@ -45,7 +45,7 @@ const (
 
 // copilotModelCacheEntry holds a cached model-list response for a single group.
 type copilotModelCacheEntry struct {
-	data         []byte    // raw JSON as returned to the client
+	data         []byte // raw JSON as returned to the client
 	cachedAt     time.Time
 	fromUpstream bool // true = populated from upstream (long TTL); false = static fallback (short TTL)
 }

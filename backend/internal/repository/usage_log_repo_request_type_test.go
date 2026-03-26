@@ -384,14 +384,14 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullFloat64{}, // account_rate_multiplier
 			int16(service.BillingTypeBalance),
 			int16(service.RequestTypeWSV2),
-			false, // legacy stream
-			false, // legacy openai ws
-			sql.NullInt64{}, // duration_ms
-			sql.NullInt64{}, // first_token_ms
-			sql.NullInt64{}, // auth_latency_ms
-			sql.NullInt64{}, // routing_latency_ms
-			sql.NullInt64{}, // upstream_latency_ms
-			sql.NullInt64{}, // response_latency_ms
+			false,            // legacy stream
+			false,            // legacy openai ws
+			sql.NullInt64{},  // duration_ms
+			sql.NullInt64{},  // first_token_ms
+			sql.NullInt64{},  // auth_latency_ms
+			sql.NullInt64{},  // routing_latency_ms
+			sql.NullInt64{},  // upstream_latency_ms
+			sql.NullInt64{},  // response_latency_ms
 			sql.NullString{}, // user_agent
 			sql.NullString{}, // ip_address
 			0,
@@ -433,12 +433,12 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			int16(service.RequestTypeUnknown),
 			true,
 			false,
-			sql.NullInt64{}, // duration_ms
-			sql.NullInt64{}, // first_token_ms
-			sql.NullInt64{}, // auth_latency_ms
-			sql.NullInt64{}, // routing_latency_ms
-			sql.NullInt64{}, // upstream_latency_ms
-			sql.NullInt64{}, // response_latency_ms
+			sql.NullInt64{},  // duration_ms
+			sql.NullInt64{},  // first_token_ms
+			sql.NullInt64{},  // auth_latency_ms
+			sql.NullInt64{},  // routing_latency_ms
+			sql.NullInt64{},  // upstream_latency_ms
+			sql.NullInt64{},  // response_latency_ms
 			sql.NullString{}, // user_agent
 			sql.NullString{}, // ip_address
 			0,
@@ -480,12 +480,12 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			int16(service.RequestTypeSync),
 			false,
 			false,
-			sql.NullInt64{}, // duration_ms
-			sql.NullInt64{}, // first_token_ms
-			sql.NullInt64{}, // auth_latency_ms
-			sql.NullInt64{}, // routing_latency_ms
-			sql.NullInt64{}, // upstream_latency_ms
-			sql.NullInt64{}, // response_latency_ms
+			sql.NullInt64{},  // duration_ms
+			sql.NullInt64{},  // first_token_ms
+			sql.NullInt64{},  // auth_latency_ms
+			sql.NullInt64{},  // routing_latency_ms
+			sql.NullInt64{},  // upstream_latency_ms
+			sql.NullInt64{},  // response_latency_ms
 			sql.NullString{}, // user_agent
 			sql.NullString{}, // ip_address
 			0,
