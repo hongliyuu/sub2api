@@ -392,7 +392,9 @@ func sanitizeOpenAIMessages(msgs []openAIMessage) []openAIMessage {
 		canMerge := cur.Role == prev.Role &&
 			(cur.Role == "user" || cur.Role == "system") &&
 			len(cur.ToolCalls) == 0 &&
-			len(prev.ToolCalls) == 0
+			len(prev.ToolCalls) == 0 &&
+			!hasImageContentPart(cur.Content) &&
+			!hasImageContentPart(prev.Content)
 
 		if !canMerge {
 			result = append(result, cur)
@@ -430,6 +432,23 @@ func contentToString(content any) string {
 	default:
 		return ""
 	}
+}
+
+// hasImageContentPart reports whether a message content value contains at least
+// one image_url content part.  Used by sanitizeOpenAIMessages to prevent
+// consecutive user messages that contain images from being merged via
+// contentToString, which would silently drop the image_url parts.
+func hasImageContentPart(content any) bool {
+	parts, ok := content.([]openAIContentPart)
+	if !ok {
+		return false
+	}
+	for _, p := range parts {
+		if p.Type == "image_url" {
+			return true
+		}
+	}
+	return false
 }
 
 // extractSystemText parses the Anthropic system field, which can be either a

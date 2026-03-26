@@ -4069,6 +4069,12 @@ type OpenAIRecordUsageInput struct {
 	RequestPayloadHash string
 	RequestBodyBytes   *int // 请求体字节数
 	APIKeyService      APIKeyQuotaUpdater
+
+	// 阶段耗时（由 handler 层从 gin context 读取后传入，精确定位性能瓶颈）
+	AuthLatencyMs     *int // 认证鉴权阶段耗时
+	RoutingLatencyMs  *int // 路由选择阶段耗时（账号选择 + 并发槽位等待）
+	UpstreamLatencyMs *int // 上游请求阶段耗时（发出请求→收到首字节）
+	ResponseLatencyMs *int // 响应处理阶段耗时（流式传输或读取响应体）
 }
 
 // RecordUsage records usage and deducts balance
@@ -4163,6 +4169,10 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		OpenAIWSMode:          result.OpenAIWSMode,
 		DurationMs:            &durationMs,
 		FirstTokenMs:          result.FirstTokenMs,
+		AuthLatencyMs:         input.AuthLatencyMs,
+		RoutingLatencyMs:      input.RoutingLatencyMs,
+		UpstreamLatencyMs:     input.UpstreamLatencyMs,
+		ResponseLatencyMs:     input.ResponseLatencyMs,
 		RequestBodyBytes:      input.RequestBodyBytes,
 		CreatedAt:             time.Now(),
 	}

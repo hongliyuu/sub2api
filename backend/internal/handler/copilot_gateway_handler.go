@@ -2,14 +2,17 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
+	copilotpkg "github.com/Wei-Shaw/sub2api/internal/pkg/copilot"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
@@ -23,16 +26,47 @@ import (
 // It exposes OpenAI-compatible endpoints (/copilot/v1/chat/completions, /copilot/v1/models)
 // that proxy to the GitHub Copilot API via CopilotGatewayService.
 
-// defaultCopilotMaxBodyBytes is the system-level request body size limit for Copilot accounts.
-// Requests exceeding this limit are rejected before forwarding to avoid upstream 5xx errors.
-// Per-account overrides can be set via account.Extra["max_body_bytes"].
-const defaultCopilotMaxBodyBytes = 400 * 1024 // 400 KB
+// fallbackCopilotMaxBodyBytes is the built-in fallback used when
+// gateway.copilot_default_max_body_kb is not set in the configuration.
+const fallbackCopilotMaxBodyBytes = 1024 * 1024 * 1024 // 1 GB
+
+const (
+	// copilotModelCacheTTL is the TTL for model list entries fetched from the
+	// upstream Copilot /models endpoint.  One hour is intentionally long because
+	// the model catalogue changes rarely and Claude Code fetches /models on every
+	// startup, so a short TTL would cause unnecessary upstream traffic.
+	copilotModelCacheTTL = 1 * time.Hour
+
+	// copilotModelCacheFailedTTL is the shorter TTL used when the cache entry
+	// contains a fallback static model list (upstream was unreachable).  Two
+	// minutes allows the cache to self-heal quickly once the upstream recovers.
+	copilotModelCacheFailedTTL = 2 * time.Minute
+)
+
+// copilotModelCacheEntry holds a cached model-list response for a single group.
+type copilotModelCacheEntry struct {
+	data         []byte    // raw JSON as returned to the client
+	cachedAt     time.Time
+	fromUpstream bool // true = populated from upstream (long TTL); false = static fallback (short TTL)
+}
+
 type CopilotGatewayHandler struct {
 	gatewayService        *service.GatewayService
 	copilotGatewayService *service.CopilotGatewayService
 	billingCacheService   *service.BillingCacheService
 	concurrencyHelper     *ConcurrencyHelper
 	maxAccountSwitches    int
+	// defaultMaxBodyBytes is the system-level body size limit for Copilot requests.
+	// It is read from gateway.copilot_default_max_body_kb at startup and falls back
+	// to fallbackCopilotMaxBodyBytes when the config value is 0 / absent.
+	// Per-account overrides via account.Extra["max_body_bytes"] take precedence.
+	defaultMaxBodyBytes int
+
+	// modelCacheMu protects modelCache.
+	modelCacheMu sync.RWMutex
+	// modelCache stores per-group model list cache entries keyed by groupID.
+	// groupID 0 is used when apiKey.GroupID is nil.
+	modelCache map[int64]*copilotModelCacheEntry
 }
 
 // NewCopilotGatewayHandler creates a new CopilotGatewayHandler.
@@ -45,10 +79,14 @@ func NewCopilotGatewayHandler(
 ) *CopilotGatewayHandler {
 	pingInterval := time.Duration(0)
 	maxAccountSwitches := 3
+	defaultMaxBodyBytes := fallbackCopilotMaxBodyBytes
 	if cfg != nil {
 		pingInterval = time.Duration(cfg.Concurrency.PingInterval) * time.Second
 		if cfg.Gateway.MaxAccountSwitches > 0 {
 			maxAccountSwitches = cfg.Gateway.MaxAccountSwitches
+		}
+		if cfg.Gateway.CopilotDefaultMaxBodyKB > 0 {
+			defaultMaxBodyBytes = int(cfg.Gateway.CopilotDefaultMaxBodyKB * 1024)
 		}
 	}
 	return &CopilotGatewayHandler{
@@ -57,6 +95,8 @@ func NewCopilotGatewayHandler(
 		billingCacheService:   billingCacheService,
 		concurrencyHelper:     NewConcurrencyHelper(concurrencyService, SSEPingFormatComment, pingInterval),
 		maxAccountSwitches:    maxAccountSwitches,
+		defaultMaxBodyBytes:   defaultMaxBodyBytes,
+		modelCache:            make(map[int64]*copilotModelCacheEntry),
 	}
 }
 
@@ -65,6 +105,8 @@ func NewCopilotGatewayHandler(
 // The ForcePlatform middleware must be applied on the route group to set the
 // platform context to "copilot" so that account selection picks only Copilot accounts.
 func (h *CopilotGatewayHandler) ChatCompletions(c *gin.Context) {
+	requestStart := time.Now()
+
 	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
 	if !ok {
 		h.errorResponse(c, http.StatusUnauthorized, "authentication_error", "Invalid API key")
@@ -144,6 +186,8 @@ func (h *CopilotGatewayHandler) ChatCompletions(c *gin.Context) {
 	if userReleaseFunc != nil {
 		defer userReleaseFunc()
 	}
+	service.SetOpsLatencyMs(c, service.OpsAuthLatencyMsKey, time.Since(requestStart).Milliseconds())
+	routingStart := time.Now()
 
 	// Select a Copilot account.
 	// ForcePlatform middleware sets platform = "copilot" in context, so
@@ -179,7 +223,18 @@ func (h *CopilotGatewayHandler) ChatCompletions(c *gin.Context) {
 		}
 
 		// Forward request to Copilot API
+		service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, time.Since(routingStart).Milliseconds())
+		forwardStart := time.Now()
 		result, fwdErr := h.copilotGatewayService.ForwardChatCompletions(ctx, c, account, body)
+		forwardDurationMs := time.Since(forwardStart).Milliseconds()
+		if fwdErr == nil {
+			upstreamMs, _ := getContextInt64(c, service.OpsUpstreamLatencyMsKey)
+			responseMs := forwardDurationMs
+			if upstreamMs > 0 && forwardDurationMs > upstreamMs {
+				responseMs = forwardDurationMs - upstreamMs
+			}
+			service.SetOpsLatencyMs(c, service.OpsResponseLatencyMsKey, responseMs)
+		}
 		if fwdErr != nil {
 			failedAccountIDs[account.ID] = struct{}{}
 			switchCount++
@@ -247,6 +302,11 @@ func (h *CopilotGatewayHandler) ChatCompletions(c *gin.Context) {
 			clientIP := ip.GetClientIP(c)
 			capturedResult := result
 			capturedAccount := account
+			// 在 goroutine 外捕获阶段耗时（gin.Context 仅在请求 goroutine 中有效）
+			authLatencyMs := getContextLatencyMsPtr(c, service.OpsAuthLatencyMsKey)
+			routingLatencyMs := getContextLatencyMsPtr(c, service.OpsRoutingLatencyMsKey)
+			upstreamLatencyMsVal := getContextLatencyMsPtr(c, service.OpsUpstreamLatencyMsKey)
+			responseLatencyMsVal := getContextLatencyMsPtr(c, service.OpsResponseLatencyMsKey)
 			go func() {
 				recordCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
@@ -262,17 +322,21 @@ func (h *CopilotGatewayHandler) ChatCompletions(c *gin.Context) {
 					FirstTokenMs: capturedResult.FirstTokenMs,
 				}
 				if err := h.gatewayService.RecordUsage(recordCtx, &service.RecordUsageInput{
-					Result:           fwdResult,
-					APIKey:           apiKey,
-					User:             apiKey.User,
-					Account:          capturedAccount,
-					Subscription:     subscription,
-					InboundEndpoint:  inboundEp,
-					UpstreamEndpoint: EndpointChatCompletions,
-					UserAgent:        userAgent,
-					IPAddress:        clientIP,
-					RequestBodyBytes: intPtr(len(body)),
-					APIKeyService:    nil,
+					Result:            fwdResult,
+					APIKey:            apiKey,
+					User:              apiKey.User,
+					Account:           capturedAccount,
+					Subscription:      subscription,
+					InboundEndpoint:   inboundEp,
+					UpstreamEndpoint:  EndpointChatCompletions,
+					UserAgent:         userAgent,
+					IPAddress:         clientIP,
+					RequestBodyBytes:  intPtr(len(body)),
+					APIKeyService:     nil,
+					AuthLatencyMs:     authLatencyMs,
+					RoutingLatencyMs:  routingLatencyMs,
+					UpstreamLatencyMs: upstreamLatencyMsVal,
+					ResponseLatencyMs: responseLatencyMsVal,
 				}); err != nil {
 					reqLog.Error("copilot.record_usage_failed", zap.Error(err))
 				}
@@ -287,6 +351,17 @@ func (h *CopilotGatewayHandler) ChatCompletions(c *gin.Context) {
 }
 
 // Models handles Copilot /v1/models endpoint.
+//
+// The response is cached per GroupID to avoid hammering the upstream Copilot
+// /models endpoint on every Claude Code startup.  Degradation policy (high-
+// availability first):
+//
+//   - Fresh cache hit                                 → 200 cached data
+//   - Cache expired + upstream success                → 200 refresh cache
+//   - Cache expired + upstream failure + stale exists → 200 stale data  + warn log
+//   - Cache expired + upstream failure + no cache     → 200 static defaults + warn log
+//   - No account available         + stale exists     → 200 stale data  + warn log
+//   - No account available         + no cache         → 503 (truly unserviceable)
 func (h *CopilotGatewayHandler) Models(c *gin.Context) {
 	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
 	if !ok {
@@ -299,25 +374,112 @@ func (h *CopilotGatewayHandler) Models(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
-	// Select any active Copilot account to query models.
+	groupID := int64(0)
+	if apiKey.GroupID != nil {
+		groupID = *apiKey.GroupID
+	}
+
+	// 1. Fresh cache hit — return immediately without touching the upstream.
+	if cached, ok := h.getModelCache(groupID); ok {
+		c.Data(http.StatusOK, "application/json", cached)
+		return
+	}
+
+	// 2. Select any active Copilot account for this group.
 	// ForcePlatform middleware ensures only copilot accounts are returned.
 	account, err := h.gatewayService.SelectAccountForModelWithExclusions(ctx, apiKey.GroupID, "", "", nil)
 	if err != nil || account == nil {
-		reqLog.Warn("copilot.models_account_select_failed", zap.Error(err))
+		if stale := h.getStaleModelCache(groupID); stale != nil {
+			// Account pool is empty but we have an old cache — serve it and log.
+			reqLog.Warn("copilot.models_no_account_stale_cache",
+				zap.Int64("group_id", groupID), zap.Error(err))
+			c.Data(http.StatusOK, "application/json", stale)
+			return
+		}
+		// No account and no cache at all — genuinely unserviceable.
+		reqLog.Warn("copilot.models_account_select_failed",
+			zap.Int64("group_id", groupID), zap.Error(err))
 		h.errorResponse(c, http.StatusServiceUnavailable, "api_error", "No available Copilot accounts")
 		return
 	}
 
+	// 3. Fetch model list from upstream.
 	body, err := h.copilotGatewayService.ListModels(ctx, account)
 	if err != nil {
-		reqLog.Warn("copilot.models_request_failed",
-			zap.Int64("account_id", account.ID),
-			zap.Error(err))
-		h.errorResponse(c, http.StatusBadGateway, "upstream_error", "Failed to list models")
+		if stale := h.getStaleModelCache(groupID); stale != nil {
+			// Upstream failed but we have a stale cache — serve it.
+			reqLog.Warn("copilot.models_upstream_failed_stale_cache",
+				zap.Int64("account_id", account.ID), zap.Error(err))
+			c.Data(http.StatusOK, "application/json", stale)
+			return
+		}
+		// Upstream failed and no cache at all — fall back to static defaults.
+		// Use a short TTL so we retry the upstream soon.
+		reqLog.Warn("copilot.models_upstream_failed_fallback_defaults",
+			zap.Int64("account_id", account.ID), zap.Error(err))
+		defaultJSON := buildDefaultCopilotModelsJSON()
+		h.setModelCache(groupID, defaultJSON, false)
+		c.Data(http.StatusOK, "application/json", defaultJSON)
 		return
 	}
 
+	// 4. Success — refresh cache and respond.
+	h.setModelCache(groupID, body, true)
 	c.Data(http.StatusOK, "application/json", body)
+}
+
+// getModelCache returns the cached model list for groupID if it exists and has
+// not yet expired.  The second return value is false on a cache miss or expiry.
+func (h *CopilotGatewayHandler) getModelCache(groupID int64) ([]byte, bool) {
+	h.modelCacheMu.RLock()
+	defer h.modelCacheMu.RUnlock()
+	entry, ok := h.modelCache[groupID]
+	if !ok || entry == nil {
+		return nil, false
+	}
+	ttl := copilotModelCacheTTL
+	if !entry.fromUpstream {
+		ttl = copilotModelCacheFailedTTL
+	}
+	if time.Since(entry.cachedAt) > ttl {
+		return nil, false
+	}
+	return entry.data, true
+}
+
+// getStaleModelCache returns whatever is cached for groupID regardless of TTL.
+// It returns nil when no entry exists at all.  Used for graceful degradation.
+func (h *CopilotGatewayHandler) getStaleModelCache(groupID int64) []byte {
+	h.modelCacheMu.RLock()
+	defer h.modelCacheMu.RUnlock()
+	if entry, ok := h.modelCache[groupID]; ok && entry != nil {
+		return entry.data
+	}
+	return nil
+}
+
+// setModelCache stores the model list for groupID.
+// fromUpstream indicates whether data came from the live upstream (true) or is
+// a static fallback (false); it controls which TTL will be applied on read.
+func (h *CopilotGatewayHandler) setModelCache(groupID int64, data []byte, fromUpstream bool) {
+	h.modelCacheMu.Lock()
+	defer h.modelCacheMu.Unlock()
+	h.modelCache[groupID] = &copilotModelCacheEntry{
+		data:         data,
+		cachedAt:     time.Now(),
+		fromUpstream: fromUpstream,
+	}
+}
+
+// buildDefaultCopilotModelsJSON serialises copilotpkg.DefaultModels into the
+// OpenAI /models list format, matching the shape returned by ListModels().
+func buildDefaultCopilotModelsJSON() []byte {
+	payload := map[string]any{
+		"object": "list",
+		"data":   copilotpkg.DefaultModels,
+	}
+	b, _ := json.Marshal(payload) // DefaultModels is a compile-time constant; Marshal cannot fail.
+	return b
 }
 
 // Responses handles Copilot /responses endpoint (OpenAI Responses API, used by Codex CLI).
@@ -327,6 +489,8 @@ func (h *CopilotGatewayHandler) Models(c *gin.Context) {
 // The request/response format is passed through as-is to the Copilot API's
 // /responses endpoint; no protocol translation is needed.
 func (h *CopilotGatewayHandler) Responses(c *gin.Context) {
+	requestStartResponses := time.Now()
+
 	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
 	if !ok {
 		h.errorResponse(c, http.StatusUnauthorized, "authentication_error", "Invalid API key")
@@ -400,6 +564,8 @@ func (h *CopilotGatewayHandler) Responses(c *gin.Context) {
 	if userReleaseFunc != nil {
 		defer userReleaseFunc()
 	}
+	service.SetOpsLatencyMs(c, service.OpsAuthLatencyMsKey, time.Since(requestStartResponses).Milliseconds())
+	routingStartResponses := time.Now()
 
 	failedAccountIDs := make(map[int64]struct{})
 	switchCount := 0
@@ -431,7 +597,18 @@ func (h *CopilotGatewayHandler) Responses(c *gin.Context) {
 			return
 		}
 
+		service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, time.Since(routingStartResponses).Milliseconds())
+		forwardStartResponses := time.Now()
 		result, fwdErr := h.copilotGatewayService.ForwardResponses(ctx, c, account, body)
+		forwardDurationMsResp := time.Since(forwardStartResponses).Milliseconds()
+		if fwdErr == nil {
+			upstreamMsResp, _ := getContextInt64(c, service.OpsUpstreamLatencyMsKey)
+			responseMsResp := forwardDurationMsResp
+			if upstreamMsResp > 0 && forwardDurationMsResp > upstreamMsResp {
+				responseMsResp = forwardDurationMsResp - upstreamMsResp
+			}
+			service.SetOpsLatencyMs(c, service.OpsResponseLatencyMsKey, responseMsResp)
+		}
 		if fwdErr != nil {
 			failedAccountIDs[account.ID] = struct{}{}
 			switchCount++
@@ -497,6 +674,10 @@ func (h *CopilotGatewayHandler) Responses(c *gin.Context) {
 			clientIP := ip.GetClientIP(c)
 			capturedResult := result
 			capturedAccount := account
+			authLatencyMsResp := getContextLatencyMsPtr(c, service.OpsAuthLatencyMsKey)
+			routingLatencyMsResp := getContextLatencyMsPtr(c, service.OpsRoutingLatencyMsKey)
+			upstreamLatencyMsRespVal := getContextLatencyMsPtr(c, service.OpsUpstreamLatencyMsKey)
+			responseLatencyMsRespVal := getContextLatencyMsPtr(c, service.OpsResponseLatencyMsKey)
 			go func() {
 				recordCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
@@ -513,17 +694,21 @@ func (h *CopilotGatewayHandler) Responses(c *gin.Context) {
 					ReasoningEffort: capturedResult.ReasoningEffort,
 				}
 				if err := h.gatewayService.RecordUsage(recordCtx, &service.RecordUsageInput{
-					Result:           fwdResult,
-					APIKey:           apiKey,
-					User:             apiKey.User,
-					Account:          capturedAccount,
-					Subscription:     subscription,
-					InboundEndpoint:  inboundEp,
-					UpstreamEndpoint: EndpointResponses,
-					UserAgent:        userAgent,
-					IPAddress:        clientIP,
-					RequestBodyBytes: intPtr(len(body)),
-					APIKeyService:    nil,
+					Result:            fwdResult,
+					APIKey:            apiKey,
+					User:              apiKey.User,
+					Account:           capturedAccount,
+					Subscription:      subscription,
+					InboundEndpoint:   inboundEp,
+					UpstreamEndpoint:  EndpointResponses,
+					UserAgent:         userAgent,
+					IPAddress:         clientIP,
+					RequestBodyBytes:  intPtr(len(body)),
+					APIKeyService:     nil,
+					AuthLatencyMs:     authLatencyMsResp,
+					RoutingLatencyMs:  routingLatencyMsResp,
+					UpstreamLatencyMs: upstreamLatencyMsRespVal,
+					ResponseLatencyMs: responseLatencyMsRespVal,
 				}); err != nil {
 					reqLog.Error("copilot.responses.record_usage_failed", zap.Error(err))
 				}
@@ -543,7 +728,7 @@ func (h *CopilotGatewayHandler) Responses(c *gin.Context) {
 func (h *CopilotGatewayHandler) checkCopilotBodySize(c *gin.Context, body []byte, account *service.Account, anthropicFmt bool) bool {
 	limit := account.GetMaxBodyBytes()
 	if limit <= 0 {
-		limit = defaultCopilotMaxBodyBytes
+		limit = h.defaultMaxBodyBytes
 	}
 	if len(body) <= limit {
 		return false
@@ -589,6 +774,8 @@ func (h *CopilotGatewayHandler) anthropicErrorResponse(c *gin.Context, status in
 // Anthropic request to OpenAI format, forwards it to the Copilot API, and
 // translates the response back to Anthropic format before returning.
 func (h *CopilotGatewayHandler) Messages(c *gin.Context) {
+	requestStartMessages := time.Now()
+
 	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
 	if !ok {
 		h.anthropicErrorResponse(c, http.StatusUnauthorized, "authentication_error", "Invalid API key")
@@ -677,6 +864,8 @@ func (h *CopilotGatewayHandler) Messages(c *gin.Context) {
 	if userReleaseFunc != nil {
 		defer userReleaseFunc()
 	}
+	service.SetOpsLatencyMs(c, service.OpsAuthLatencyMsKey, time.Since(requestStartMessages).Milliseconds())
+	routingStartMessages := time.Now()
 
 	// Select a Copilot account with failover.
 	failedAccountIDs := make(map[int64]struct{})
@@ -711,7 +900,7 @@ func (h *CopilotGatewayHandler) Messages(c *gin.Context) {
 		// brought within the limit even after truncation, we reject.
 		limit := account.GetMaxBodyBytes()
 		if limit <= 0 {
-			limit = defaultCopilotMaxBodyBytes
+			limit = h.defaultMaxBodyBytes
 		}
 		if len(body) > limit {
 			trimmed, wasTruncated, truncErr := service.TruncateAnthropicBodyToLimit(body, limit)
@@ -746,7 +935,18 @@ func (h *CopilotGatewayHandler) Messages(c *gin.Context) {
 		}
 
 		// Forward request, translating Anthropic ↔ Copilot.
+		service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, time.Since(routingStartMessages).Milliseconds())
+		forwardStartMessages := time.Now()
 		result, fwdErr := h.copilotGatewayService.ForwardMessages(ctx, c, account, body)
+		forwardDurationMsMsg := time.Since(forwardStartMessages).Milliseconds()
+		if fwdErr == nil {
+			upstreamMsMsg, _ := getContextInt64(c, service.OpsUpstreamLatencyMsKey)
+			responseMsMsg := forwardDurationMsMsg
+			if upstreamMsMsg > 0 && forwardDurationMsMsg > upstreamMsMsg {
+				responseMsMsg = forwardDurationMsMsg - upstreamMsMsg
+			}
+			service.SetOpsLatencyMs(c, service.OpsResponseLatencyMsKey, responseMsMsg)
+		}
 		if fwdErr != nil {
 			failedAccountIDs[account.ID] = struct{}{}
 			switchCount++
@@ -813,6 +1013,10 @@ func (h *CopilotGatewayHandler) Messages(c *gin.Context) {
 			clientIP := ip.GetClientIP(c)
 			capturedResult := result
 			capturedAccount := account
+			authLatencyMsMsg := getContextLatencyMsPtr(c, service.OpsAuthLatencyMsKey)
+			routingLatencyMsMsg := getContextLatencyMsPtr(c, service.OpsRoutingLatencyMsKey)
+			upstreamLatencyMsMsgVal := getContextLatencyMsPtr(c, service.OpsUpstreamLatencyMsKey)
+			responseLatencyMsMsgVal := getContextLatencyMsPtr(c, service.OpsResponseLatencyMsKey)
 			go func() {
 				recordCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
@@ -828,17 +1032,21 @@ func (h *CopilotGatewayHandler) Messages(c *gin.Context) {
 					FirstTokenMs: capturedResult.FirstTokenMs,
 				}
 				if err := h.gatewayService.RecordUsage(recordCtx, &service.RecordUsageInput{
-					Result:           fwdResult,
-					APIKey:           apiKey,
-					User:             apiKey.User,
-					Account:          capturedAccount,
-					Subscription:     subscription,
-					InboundEndpoint:  inboundEp,
-					UpstreamEndpoint: EndpointChatCompletions,
-					UserAgent:        userAgent,
-					IPAddress:        clientIP,
-					RequestBodyBytes: intPtr(len(body)),
-					APIKeyService:    nil,
+					Result:            fwdResult,
+					APIKey:            apiKey,
+					User:              apiKey.User,
+					Account:           capturedAccount,
+					Subscription:      subscription,
+					InboundEndpoint:   inboundEp,
+					UpstreamEndpoint:  EndpointChatCompletions,
+					UserAgent:         userAgent,
+					IPAddress:         clientIP,
+					RequestBodyBytes:  intPtr(len(body)),
+					APIKeyService:     nil,
+					AuthLatencyMs:     authLatencyMsMsg,
+					RoutingLatencyMs:  routingLatencyMsMsg,
+					UpstreamLatencyMs: upstreamLatencyMsMsgVal,
+					ResponseLatencyMs: responseLatencyMsMsgVal,
 				}); err != nil {
 					reqLog.Error("copilot.messages.record_usage_failed", zap.Error(err))
 				}

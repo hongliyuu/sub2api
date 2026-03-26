@@ -418,3 +418,99 @@ func TestTranslateAnthropicToOpenAI_Sanitize_RealWorld400Pattern(t *testing.T) {
 		t.Logf("  [%d] role=%s has_tool_calls=%v has_tool_call_id=%v", i, role, hasTC, hasTCID)
 	}
 }
+
+// ── P1-A regression: image content must survive sanitize/merge ───────────────
+
+// TestSanitizeOpenAIMessages_ImageMessageNotMerged verifies that a consecutive
+// pair of user messages where one contains an image_url content part is NOT
+// merged via contentToString (which would silently drop the image).
+// The two messages must remain as separate entries in the output.
+func TestSanitizeOpenAIMessages_ImageMessageNotMerged(t *testing.T) {
+	// First user message: plain text (e.g. deferred-tools injection from Claude Code)
+	// Second user message: text + image (what the user actually sent)
+	body := `{
+		"model": "claude-sonnet-4.6",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": "<available-deferred-tools>\nAgent\n</available-deferred-tools>"},
+			{"role": "user", "content": [
+				{"type": "text", "text": "what is in this image?"},
+				{"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "abc="}}
+			]}
+		]
+	}`
+	msgs := messagesFrom(t, mustTranslate(t, body))
+
+	// Both user messages must be preserved (not merged).
+	userMsgs := 0
+	for _, m := range msgs {
+		if m["role"] == "user" {
+			userMsgs++
+		}
+	}
+	if userMsgs != 2 {
+		t.Errorf("expected 2 user messages (not merged because one has image), got %d: %v", userMsgs, msgs)
+	}
+
+	// The message with image content must still contain an image_url part.
+	imageFound := false
+	for _, m := range msgs {
+		if m["role"] != "user" {
+			continue
+		}
+		arr, ok := m["content"].([]any)
+		if !ok {
+			continue
+		}
+		for _, part := range arr {
+			p, ok := part.(map[string]any)
+			if !ok {
+				continue
+			}
+			if p["type"] == "image_url" {
+				imageFound = true
+			}
+		}
+	}
+	if !imageFound {
+		t.Error("image_url content part was lost after sanitize — merge incorrectly dropped the image")
+	}
+}
+
+// TestSanitizeOpenAIMessages_PlainTextConsecutiveStillMerged confirms that the
+// guard added for image messages does NOT regress the existing plain-text merge
+// behaviour: consecutive plain-text user messages must still be merged.
+func TestSanitizeOpenAIMessages_PlainTextConsecutiveStillMerged(t *testing.T) {
+	body := `{
+		"model": "claude-sonnet-4.6",
+		"max_tokens": 1024,
+		"messages": [
+			{"role": "user", "content": "first part"},
+			{"role": "user", "content": "second part"}
+		]
+	}`
+	msgs := messagesFrom(t, mustTranslate(t, body))
+
+	userMsgs := 0
+	for _, m := range msgs {
+		if m["role"] == "user" {
+			userMsgs++
+		}
+	}
+	if userMsgs != 1 {
+		t.Errorf("expected 1 merged user message for plain-text consecutive messages, got %d", userMsgs)
+	}
+
+	// Content must contain both parts.
+	for _, m := range msgs {
+		if m["role"] == "user" {
+			content, ok := m["content"].(string)
+			if !ok {
+				t.Fatalf("merged plain-text content should be string, got %T", m["content"])
+			}
+			if !strings.Contains(content, "first part") || !strings.Contains(content, "second part") {
+				t.Errorf("merged content = %q, want both 'first part' and 'second part'", content)
+			}
+		}
+	}
+}

@@ -110,6 +110,7 @@ func NewGatewayHandler(
 // Messages handles Claude API compatible messages endpoint
 // POST /v1/messages
 func (h *GatewayHandler) Messages(c *gin.Context) {
+	requestStart := time.Now()
 	// 从context获取apiKey和user（ApiKeyAuth中间件已设置）
 	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
 	if !ok {
@@ -243,6 +244,10 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		h.handleStreamingAwareError(c, status, code, message, streamStarted)
 		return
 	}
+
+	// 记录认证鉴权阶段耗时，并准备路由选择计时
+	service.SetOpsLatencyMs(c, service.OpsAuthLatencyMsKey, time.Since(requestStart).Milliseconds())
+	routingStart := time.Now()
 
 	// 计算粘性会话hash
 	parsedReq.SessionContext = &service.SessionContext{
@@ -653,12 +658,28 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			if fs.SwitchCount > 0 {
 				requestCtx = service.WithAccountSwitchCount(requestCtx, fs.SwitchCount, h.metadataBridgeEnabled())
 			}
+			// 记录路由选择阶段耗时（账号选择 + 并发槽位等待结束）
+			service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, time.Since(routingStart).Milliseconds())
+			forwardStart := time.Now()
 			// 记录 Forward 前已写入字节数，Forward 后若增加则说明 SSE 内容已发，禁止 failover
 			writerSizeBeforeForward := c.Writer.Size()
 			if account.Platform == service.PlatformAntigravity && account.Type != service.AccountTypeAPIKey {
 				result, err = h.antigravityGatewayService.Forward(requestCtx, c, account, body, hasBoundSession)
 			} else {
 				result, err = h.gatewayService.Forward(requestCtx, c, account, parsedReq)
+			}
+			forwardDurationMs := time.Since(forwardStart).Milliseconds()
+
+			// 计算上游耗时和响应处理耗时
+			// OpsUpstreamLatencyMsKey 由 service 层在发出请求并收到响应头后设置
+			upstreamLatencyMs, _ := getContextInt64(c, service.OpsUpstreamLatencyMsKey)
+			responseLatencyMs := forwardDurationMs
+			if upstreamLatencyMs > 0 && forwardDurationMs > upstreamLatencyMs {
+				responseLatencyMs = forwardDurationMs - upstreamLatencyMs
+			}
+			service.SetOpsLatencyMs(c, service.OpsResponseLatencyMsKey, responseLatencyMs)
+			if err == nil && result != nil && result.FirstTokenMs != nil {
+				service.SetOpsLatencyMs(c, service.OpsTimeToFirstTokenMsKey, int64(*result.FirstTokenMs))
 			}
 
 			// 兜底释放串行锁（正常情况已通过回调提前释放）
@@ -770,6 +791,12 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			}
 
 			// 使用量记录通过有界 worker 池提交，避免请求热路径创建无界 goroutine。
+			// 在提交任务前捕获阶段耗时（gin.Context 生命周期与请求绑定，异步 goroutine 中不可访问）
+			authLatencyMs := getContextLatencyMsPtr(c, service.OpsAuthLatencyMsKey)
+			routingLatencyMs := getContextLatencyMsPtr(c, service.OpsRoutingLatencyMsKey)
+			upstreamLatencyMsVal := getContextLatencyMsPtr(c, service.OpsUpstreamLatencyMsKey)
+			responseLatencyMsVal := getContextLatencyMsPtr(c, service.OpsResponseLatencyMsKey)
+
 			h.submitUsageRecordTask(func(ctx context.Context) {
 				if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
 					Result:             result,
@@ -785,6 +812,10 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					RequestBodyBytes:   intPtr(len(body)),
 					ForceCacheBilling:  fs.ForceCacheBilling,
 					APIKeyService:      h.apiKeyService,
+					AuthLatencyMs:      authLatencyMs,
+					RoutingLatencyMs:   routingLatencyMs,
+					UpstreamLatencyMs:  upstreamLatencyMsVal,
+					ResponseLatencyMs:  responseLatencyMsVal,
 				}); err != nil {
 					logger.L().With(
 						zap.String("component", "handler.gateway.messages"),
@@ -1701,6 +1732,35 @@ func (h *GatewayHandler) maybeLogCompatibilityFallbackMetrics(reqLog *zap.Logger
 		zap.Float64("session_hash_legacy_read_hit_rate", metrics.SessionHashLegacyReadHitRate),
 		zap.Int64("metadata_legacy_fallback_total", metrics.MetadataLegacyFallbackTotal),
 	)
+}
+
+// getContextLatencyMsPtr 从 gin.Context 中读取阶段耗时（毫秒），返回 *int（与 UsageLog 字段类型一致）。
+func getContextLatencyMsPtr(c *gin.Context, key string) *int {
+	if c == nil {
+		return nil
+	}
+	v, ok := c.Get(key)
+	if !ok {
+		return nil
+	}
+	var ms int64
+	switch t := v.(type) {
+	case int64:
+		ms = t
+	case int:
+		ms = int64(t)
+	case int32:
+		ms = int64(t)
+	case float64:
+		ms = int64(t)
+	default:
+		return nil
+	}
+	if ms < 0 {
+		return nil
+	}
+	i := int(ms)
+	return &i
 }
 
 func (h *GatewayHandler) submitUsageRecordTask(task service.UsageRecordTask) {

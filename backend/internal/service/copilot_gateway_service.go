@@ -152,10 +152,12 @@ func (s *CopilotGatewayService) ForwardChatCompletions(
 	}
 
 	// Send request
+	upstreamStart := time.Now()
 	resp, err := s.httpClient.Do(req) //nolint:gosec // URL is from trusted Copilot API config
 	if err != nil {
 		return nil, fmt.Errorf("copilot: upstream request: %w", err)
 	}
+	SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStart).Milliseconds())
 
 	slog.Debug("copilot upstream response",
 		"account_id", account.ID,
@@ -671,10 +673,12 @@ func (s *CopilotGatewayService) ForwardResponses(
 		}
 	}
 
+	upstreamStartResponses := time.Now()
 	resp, err := s.httpClient.Do(req) //nolint:gosec // URL is from trusted Copilot API config
 	if err != nil {
 		return nil, fmt.Errorf("copilot responses: upstream request: %w", err)
 	}
+	SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStartResponses).Milliseconds())
 
 	slog.Debug("copilot responses upstream response",
 		"account_id", account.ID,
@@ -704,6 +708,40 @@ func (s *CopilotGatewayService) ForwardResponses(
 
 // Anthropic /v1/messages gateway
 // ─────────────────────────────────────────────────────────────────────────────
+
+// containsImageBlock reports whether an Anthropic /v1/messages request body
+// contains at least one top-level "image" content block inside messages[].
+// It is used to set the Copilot-Vision-Request header so that Copilot enables
+// vision capabilities for the request.
+//
+// Only direct "image" blocks are checked (i.e. content blocks whose type is
+// "image").  Images nested inside tool_result content are intentionally
+// excluded from this check; if Copilot requires the Vision header for those
+// too, extend this function to recurse into tool_result.content.
+func containsImageBlock(anthropicBody []byte) bool {
+	var req struct {
+		Messages []struct {
+			Content json.RawMessage `json:"content"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(anthropicBody, &req); err != nil {
+		return false
+	}
+	for _, m := range req.Messages {
+		var blocks []struct {
+			Type string `json:"type"`
+		}
+		if err := json.Unmarshal(m.Content, &blocks); err != nil {
+			continue
+		}
+		for _, b := range blocks {
+			if b.Type == "image" {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 // ForwardMessages receives an Anthropic /v1/messages request, translates it to
 // OpenAI /chat/completions format, forwards it to the Copilot API, and
@@ -781,6 +819,13 @@ func (s *CopilotGatewayService) ForwardMessages(
 	// This mirrors the TypeScript copilot-api reference implementation.
 	initiator := copilotInitiator(openAIBody)
 
+	// Detect whether the original Anthropic request contains any image blocks.
+	// Copilot requires the Copilot-Vision-Request: true header to enable vision
+	// capabilities; without it the model may reject or ignore image content.
+	// We scan the original anthropicBody (before OpenAI translation) because
+	// Anthropic uses {"type":"image"} blocks which map cleanly to this check.
+	isVision := containsImageBlock(anthropicBody)
+
 	// Build upstream request to Copilot /chat/completions.
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/chat/completions", bytes.NewReader(openAIBody))
 	if err != nil {
@@ -788,16 +833,18 @@ func (s *CopilotGatewayService) ForwardMessages(
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
-	for k, vals := range copilot.CopilotHeaders(initiator, false) {
+	for k, vals := range copilot.CopilotHeaders(initiator, isVision) {
 		for _, v := range vals {
 			req.Header.Set(k, v)
 		}
 	}
 
+	upstreamStartMessages := time.Now()
 	resp, err := s.httpClient.Do(req) //nolint:gosec // URL is from trusted Copilot API config
 	if err != nil {
 		return nil, fmt.Errorf("copilot messages: upstream request: %w", err)
 	}
+	SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStartMessages).Milliseconds())
 
 	slog.Debug("copilot messages upstream response",
 		"account_id", account.ID,

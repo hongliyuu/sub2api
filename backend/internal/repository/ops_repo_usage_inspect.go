@@ -40,6 +40,10 @@ SELECT
   ul.stream,
   ul.duration_ms,
   ul.first_token_ms,
+  ul.auth_latency_ms,
+  ul.routing_latency_ms,
+  ul.upstream_latency_ms,
+  ul.response_latency_ms,
   ul.input_tokens,
   ul.output_tokens,
   ul.service_tier,
@@ -61,6 +65,10 @@ LIMIT 1`
 	var groupID sql.NullInt64
 	var durationMs sql.NullInt64
 	var firstTokenMs sql.NullInt64
+	var authLatencyMs sql.NullInt64
+	var routingLatencyMs sql.NullInt64
+	var upstreamLatencyMs sql.NullInt64
+	var responseLatencyMs sql.NullInt64
 	var serviceTier sql.NullString
 	var reasoningEffort sql.NullString
 	var ipAddr sql.NullString
@@ -89,6 +97,10 @@ LIMIT 1`
 		&out.Stream,
 		&durationMs,
 		&firstTokenMs,
+		&authLatencyMs,
+		&routingLatencyMs,
+		&upstreamLatencyMs,
+		&responseLatencyMs,
 		&out.InputTokens,
 		&out.OutputTokens,
 		&serviceTier,
@@ -126,6 +138,22 @@ LIMIT 1`
 	if firstTokenMs.Valid {
 		f := int(firstTokenMs.Int64)
 		out.FirstTokenMs = &f
+	}
+	if authLatencyMs.Valid {
+		v := int(authLatencyMs.Int64)
+		out.AuthLatencyMs = &v
+	}
+	if routingLatencyMs.Valid {
+		v := int(routingLatencyMs.Int64)
+		out.RoutingLatencyMs = &v
+	}
+	if upstreamLatencyMs.Valid {
+		v := int(upstreamLatencyMs.Int64)
+		out.UpstreamLatencyMs = &v
+	}
+	if responseLatencyMs.Valid {
+		v := int(responseLatencyMs.Int64)
+		out.ResponseLatencyMs = &v
 	}
 	if serviceTier.Valid {
 		s := serviceTier.String

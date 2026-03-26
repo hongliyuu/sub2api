@@ -637,3 +637,84 @@ func newCopilotTestToken(token string) copilot.CopilotToken {
 		RefreshAt: time.Now().Add(5 * time.Minute),
 	}
 }
+
+// ── P1-B: containsImageBlock ──────────────────────────────────────────────────
+
+func TestContainsImageBlock(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want bool
+	}{
+		{
+			name: "no messages",
+			body: `{"model":"claude-sonnet-4","messages":[]}`,
+			want: false,
+		},
+		{
+			name: "plain text message",
+			body: `{"model":"claude-sonnet-4","messages":[{"role":"user","content":"hello"}]}`,
+			want: false,
+		},
+		{
+			name: "text block only",
+			body: `{"model":"claude-sonnet-4","messages":[{"role":"user","content":[{"type":"text","text":"hi"}]}]}`,
+			want: false,
+		},
+		{
+			name: "single image block",
+			body: `{"model":"claude-sonnet-4","messages":[{"role":"user","content":[
+				{"type":"image","source":{"type":"base64","media_type":"image/png","data":"abc="}}
+			]}]}`,
+			want: true,
+		},
+		{
+			name: "text + image block",
+			body: `{"model":"claude-sonnet-4","messages":[{"role":"user","content":[
+				{"type":"text","text":"look at this"},
+				{"type":"image","source":{"type":"base64","media_type":"image/jpeg","data":"xyz="}}
+			]}]}`,
+			want: true,
+		},
+		{
+			name: "image in second message",
+			body: `{"model":"claude-sonnet-4","messages":[
+				{"role":"user","content":"first"},
+				{"role":"user","content":[
+					{"type":"image","source":{"type":"base64","media_type":"image/png","data":"abc="}}
+				]}
+			]}`,
+			want: true,
+		},
+		{
+			name: "tool_result only — no direct image block",
+			body: `{"model":"claude-sonnet-4","messages":[{"role":"user","content":[
+				{"type":"tool_result","tool_use_id":"call_1","content":"result text"}
+			]}]}`,
+			want: false,
+		},
+		{
+			name: "invalid json",
+			body: `not-json`,
+			want: false,
+		},
+		{
+			name: "multi-turn no image",
+			body: `{"model":"claude-sonnet-4","messages":[
+				{"role":"user","content":"hello"},
+				{"role":"assistant","content":"hi there"},
+				{"role":"user","content":"how are you?"}
+			]}`,
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := containsImageBlock([]byte(tt.body))
+			if got != tt.want {
+				t.Errorf("containsImageBlock() = %v, want %v\nbody: %s", got, tt.want, tt.body)
+			}
+		})
+	}
+}

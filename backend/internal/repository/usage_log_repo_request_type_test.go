@@ -67,6 +67,10 @@ func TestUsageLogRepositoryCreateSyncRequestTypeAndLegacyFields(t *testing.T) {
 			true,
 			sqlmock.AnyArg(), // duration_ms
 			sqlmock.AnyArg(), // first_token_ms
+			sqlmock.AnyArg(), // auth_latency_ms
+			sqlmock.AnyArg(), // routing_latency_ms
+			sqlmock.AnyArg(), // upstream_latency_ms
+			sqlmock.AnyArg(), // response_latency_ms
 			sqlmock.AnyArg(), // user_agent
 			sqlmock.AnyArg(), // ip_address
 			log.ImageCount,
@@ -137,10 +141,14 @@ func TestUsageLogRepositoryCreate_PersistsServiceTier(t *testing.T) {
 			int16(service.RequestTypeSync),
 			false,
 			false,
-			sqlmock.AnyArg(),
-			sqlmock.AnyArg(),
-			sqlmock.AnyArg(),
-			sqlmock.AnyArg(),
+			sqlmock.AnyArg(), // duration_ms
+			sqlmock.AnyArg(), // first_token_ms
+			sqlmock.AnyArg(), // auth_latency_ms
+			sqlmock.AnyArg(), // routing_latency_ms
+			sqlmock.AnyArg(), // upstream_latency_ms
+			sqlmock.AnyArg(), // response_latency_ms
+			sqlmock.AnyArg(), // user_agent
+			sqlmock.AnyArg(), // ip_address
 			log.ImageCount,
 			sqlmock.AnyArg(),
 			sqlmock.AnyArg(),
@@ -378,10 +386,14 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			int16(service.RequestTypeWSV2),
 			false, // legacy stream
 			false, // legacy openai ws
-			sql.NullInt64{},
-			sql.NullInt64{},
-			sql.NullString{},
-			sql.NullString{},
+			sql.NullInt64{}, // duration_ms
+			sql.NullInt64{}, // first_token_ms
+			sql.NullInt64{}, // auth_latency_ms
+			sql.NullInt64{}, // routing_latency_ms
+			sql.NullInt64{}, // upstream_latency_ms
+			sql.NullInt64{}, // response_latency_ms
+			sql.NullString{}, // user_agent
+			sql.NullString{}, // ip_address
 			0,
 			sql.NullString{},
 			sql.NullString{},
@@ -421,10 +433,14 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			int16(service.RequestTypeUnknown),
 			true,
 			false,
-			sql.NullInt64{},
-			sql.NullInt64{},
-			sql.NullString{},
-			sql.NullString{},
+			sql.NullInt64{}, // duration_ms
+			sql.NullInt64{}, // first_token_ms
+			sql.NullInt64{}, // auth_latency_ms
+			sql.NullInt64{}, // routing_latency_ms
+			sql.NullInt64{}, // upstream_latency_ms
+			sql.NullInt64{}, // response_latency_ms
+			sql.NullString{}, // user_agent
+			sql.NullString{}, // ip_address
 			0,
 			sql.NullString{},
 			sql.NullString{},
@@ -464,10 +480,14 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			int16(service.RequestTypeSync),
 			false,
 			false,
-			sql.NullInt64{},
-			sql.NullInt64{},
-			sql.NullString{},
-			sql.NullString{},
+			sql.NullInt64{}, // duration_ms
+			sql.NullInt64{}, // first_token_ms
+			sql.NullInt64{}, // auth_latency_ms
+			sql.NullInt64{}, // routing_latency_ms
+			sql.NullInt64{}, // upstream_latency_ms
+			sql.NullInt64{}, // response_latency_ms
+			sql.NullString{}, // user_agent
+			sql.NullString{}, // ip_address
 			0,
 			sql.NullString{},
 			sql.NullString{},

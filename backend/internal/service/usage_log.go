@@ -139,8 +139,15 @@ type UsageLog struct {
 	OpenAIWSMode bool
 	DurationMs   *int
 	FirstTokenMs *int
-	UserAgent    *string
-	IPAddress    *string
+
+	// 阶段耗时（精细化排查用）
+	AuthLatencyMs     *int // 认证鉴权阶段耗时
+	RoutingLatencyMs  *int // 路由选择阶段耗时（账号选择 + 并发槽位等待）
+	UpstreamLatencyMs *int // 上游请求阶段耗时（发出请求→收到首字节）
+	ResponseLatencyMs *int // 响应处理阶段耗时（流式传输或读取响应体）
+
+	UserAgent *string
+	IPAddress *string
 
 	// Cache TTL Override 标记（管理员强制替换了缓存 TTL 计费）
 	CacheTTLOverridden bool

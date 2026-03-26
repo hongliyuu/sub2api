@@ -492,6 +492,13 @@ type ForwardResult struct {
 	ReasoningEffort  *string // 推理强度（Responses API 请求，如 "low"/"medium"/"high"）
 	ClientDisconnect bool    // 客户端是否在流式传输过程中断开
 
+	// 阶段耗时（由 handler 层在调用 Forward 前后埋点，通过 RecordUsageInput 传入 RecordUsage）
+	// 注意：这些字段不在 Forward 内部设置，而是由 handler 层从 gin context 读取后填入 RecordUsageInput
+	AuthLatencyMs     *int // 认证鉴权阶段耗时
+	RoutingLatencyMs  *int // 路由选择阶段耗时（账号选择 + 并发槽位等待）
+	UpstreamLatencyMs *int // 上游请求阶段耗时（发出请求→收到首字节）
+	ResponseLatencyMs *int // 响应处理阶段耗时（流式传输或读取响应体）
+
 	// 图片生成计费字段（图片生成模型使用）
 	ImageCount int    // 生成的图片数量
 	ImageSize  string // 图片尺寸 "1K", "2K", "4K"
@@ -4133,7 +4140,9 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		}
 
 		// 发送请求
+		upstreamStart := time.Now()
 		resp, err = s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, account.IsTLSFingerprintEnabled())
+		SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStart).Milliseconds())
 		if err != nil {
 			if resp != nil && resp.Body != nil {
 				_ = resp.Body.Close()
@@ -7198,6 +7207,12 @@ type RecordUsageInput struct {
 	RequestBodyBytes   *int               // 请求体字节数（用于排查大请求导致的 400 等错误）
 	ForceCacheBilling  bool               // 强制缓存计费：将 input_tokens 转为 cache_read 计费（用于粘性会话切换）
 	APIKeyService      APIKeyQuotaUpdater // 可选：用于更新API Key配额
+
+	// 阶段耗时（由 handler 层从 gin context 读取后传入，精确定位性能瓶颈）
+	AuthLatencyMs     *int // 认证鉴权阶段耗时
+	RoutingLatencyMs  *int // 路由选择阶段耗时（账号选择 + 并发槽位等待）
+	UpstreamLatencyMs *int // 上游请求阶段耗时（发出请求→收到首字节）
+	ResponseLatencyMs *int // 响应处理阶段耗时（流式传输或读取响应体）
 }
 
 // APIKeyQuotaUpdater defines the interface for updating API Key quota and rate limit usage
@@ -7612,6 +7627,10 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 		Stream:                result.Stream,
 		DurationMs:            &durationMs,
 		FirstTokenMs:          result.FirstTokenMs,
+		AuthLatencyMs:         input.AuthLatencyMs,
+		RoutingLatencyMs:      input.RoutingLatencyMs,
+		UpstreamLatencyMs:     input.UpstreamLatencyMs,
+		ResponseLatencyMs:     input.ResponseLatencyMs,
 		ImageCount:            result.ImageCount,
 		ImageSize:             imageSize,
 		MediaType:             mediaType,
@@ -7685,6 +7704,12 @@ type RecordUsageLongContextInput struct {
 	LongContextMultiplier float64            // 超出阈值部分的倍率（如 2.0）
 	ForceCacheBilling     bool               // 强制缓存计费：将 input_tokens 转为 cache_read 计费（用于粘性会话切换）
 	APIKeyService         APIKeyQuotaUpdater // API Key 配额服务（可选）
+
+	// 阶段耗时（由 handler 层从 gin context 读取后传入，精确定位性能瓶颈）
+	AuthLatencyMs     *int // 认证鉴权阶段耗时
+	RoutingLatencyMs  *int // 路由选择阶段耗时（账号选择 + 并发槽位等待）
+	UpstreamLatencyMs *int // 上游请求阶段耗时（发出请求→收到首字节）
+	ResponseLatencyMs *int // 响应处理阶段耗时（流式传输或读取响应体）
 }
 
 // RecordUsageWithLongContext 记录使用量并扣费，支持长上下文双倍计费（用于 Gemini）
@@ -7796,6 +7821,10 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 		Stream:                result.Stream,
 		DurationMs:            &durationMs,
 		FirstTokenMs:          result.FirstTokenMs,
+		AuthLatencyMs:         input.AuthLatencyMs,
+		RoutingLatencyMs:      input.RoutingLatencyMs,
+		UpstreamLatencyMs:     input.UpstreamLatencyMs,
+		ResponseLatencyMs:     input.ResponseLatencyMs,
 		ImageCount:            result.ImageCount,
 		ImageSize:             imageSize,
 		CacheTTLOverridden:    cacheTTLOverridden,

@@ -108,6 +108,24 @@ func (UsageLog) Fields() []ent.Field {
 		field.Int("first_token_ms").
 			Optional().
 			Nillable(),
+
+		// 阶段耗时字段（用于精确排查各环节性能瓶颈）
+		// auth_latency_ms: 认证鉴权阶段耗时（从请求进入到认证完成）
+		field.Int("auth_latency_ms").
+			Optional().
+			Nillable(),
+		// routing_latency_ms: 路由选择阶段耗时（账号选择 + 并发槽位等待）
+		field.Int("routing_latency_ms").
+			Optional().
+			Nillable(),
+		// upstream_latency_ms: 上游请求阶段耗时（从发出请求到收到第一个字节）
+		field.Int("upstream_latency_ms").
+			Optional().
+			Nillable(),
+		// response_latency_ms: 响应处理阶段耗时（流式传输或同步读取响应体）
+		field.Int("response_latency_ms").
+			Optional().
+			Nillable(),
 		field.String("user_agent").
 			MaxLen(512).
 			Optional().

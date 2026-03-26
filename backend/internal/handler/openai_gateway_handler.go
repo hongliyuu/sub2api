@@ -197,9 +197,6 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	// Get subscription info (may be nil)
 	subscription, _ := middleware2.GetSubscriptionFromContext(c)
 
-	service.SetOpsLatencyMs(c, service.OpsAuthLatencyMsKey, time.Since(requestStart).Milliseconds())
-	routingStart := time.Now()
-
 	userReleaseFunc, acquired := h.acquireResponsesUserSlot(c, subject.UserID, subject.Concurrency, reqStream, &streamStarted, reqLog)
 	if !acquired {
 		return
@@ -216,6 +213,9 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		h.handleStreamingAwareError(c, status, code, message, streamStarted)
 		return
 	}
+	// 记录认证鉴权阶段耗时（含并发等待 + 二次计费检查，与 gateway_handler 同口径）
+	service.SetOpsLatencyMs(c, service.OpsAuthLatencyMsKey, time.Since(requestStart).Milliseconds())
+	routingStart := time.Now()
 
 	// Generate session hash (header first; fallback to prompt_cache_key)
 	sessionHash := h.gatewayService.GenerateSessionHash(c, sessionHashBody)
@@ -365,6 +365,11 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		requestPayloadHash := service.HashUsageRequestPayload(body)
 
 		// 使用量记录通过有界 worker 池提交，避免请求热路径创建无界 goroutine。
+		authLatencyMs := getContextLatencyMsPtr(c, service.OpsAuthLatencyMsKey)
+		routingLatencyMs := getContextLatencyMsPtr(c, service.OpsRoutingLatencyMsKey)
+		upstreamLatencyMsVal := getContextLatencyMsPtr(c, service.OpsUpstreamLatencyMsKey)
+		responseLatencyMsVal := getContextLatencyMsPtr(c, service.OpsResponseLatencyMsKey)
+
 		h.submitUsageRecordTask(func(ctx context.Context) {
 			if err := h.gatewayService.RecordUsage(ctx, &service.OpenAIRecordUsageInput{
 				Result:             result,
@@ -379,6 +384,10 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 				RequestPayloadHash: requestPayloadHash,
 				RequestBodyBytes:   intPtr(len(body)),
 				APIKeyService:      h.apiKeyService,
+				AuthLatencyMs:      authLatencyMs,
+				RoutingLatencyMs:   routingLatencyMs,
+				UpstreamLatencyMs:  upstreamLatencyMsVal,
+				ResponseLatencyMs:  responseLatencyMsVal,
 			}); err != nil {
 				logger.L().With(
 					zap.String("component", "handler.openai_gateway.responses"),
@@ -554,9 +563,6 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 
 	subscription, _ := middleware2.GetSubscriptionFromContext(c)
 
-	service.SetOpsLatencyMs(c, service.OpsAuthLatencyMsKey, time.Since(requestStart).Milliseconds())
-	routingStart := time.Now()
-
 	userReleaseFunc, acquired := h.acquireResponsesUserSlot(c, subject.UserID, subject.Concurrency, reqStream, &streamStarted, reqLog)
 	if !acquired {
 		return
@@ -571,6 +577,9 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		h.anthropicStreamingAwareError(c, status, code, message, streamStarted)
 		return
 	}
+	// 记录认证鉴权阶段耗时（含并发等待 + 二次计费检查，与 gateway_handler 同口径）
+	service.SetOpsLatencyMs(c, service.OpsAuthLatencyMsKey, time.Since(requestStart).Milliseconds())
+	routingStart := time.Now()
 
 	sessionHash := h.gatewayService.GenerateSessionHash(c, body)
 	promptCacheKey := h.gatewayService.ExtractSessionID(c, body)
@@ -744,6 +753,11 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		clientIP := ip.GetClientIP(c)
 		requestPayloadHash := service.HashUsageRequestPayload(body)
 
+		authLatencyMs := getContextLatencyMsPtr(c, service.OpsAuthLatencyMsKey)
+		routingLatencyMs := getContextLatencyMsPtr(c, service.OpsRoutingLatencyMsKey)
+		upstreamLatencyMsVal := getContextLatencyMsPtr(c, service.OpsUpstreamLatencyMsKey)
+		responseLatencyMsVal := getContextLatencyMsPtr(c, service.OpsResponseLatencyMsKey)
+
 		h.submitUsageRecordTask(func(ctx context.Context) {
 			if err := h.gatewayService.RecordUsage(ctx, &service.OpenAIRecordUsageInput{
 				Result:             result,
@@ -758,6 +772,10 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 				RequestPayloadHash: requestPayloadHash,
 				RequestBodyBytes:   intPtr(len(body)),
 				APIKeyService:      h.apiKeyService,
+				AuthLatencyMs:      authLatencyMs,
+				RoutingLatencyMs:   routingLatencyMs,
+				UpstreamLatencyMs:  upstreamLatencyMsVal,
+				ResponseLatencyMs:  responseLatencyMsVal,
 			}); err != nil {
 				logger.L().With(
 					zap.String("component", "handler.openai_gateway.messages"),
@@ -1009,6 +1027,8 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 	}
 	setOpenAIClientTransportWS(c)
 
+	wsRequestStart := time.Now()
+
 	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
 	if !ok {
 		h.errorResponse(c, http.StatusUnauthorized, "authentication_error", "Invalid API key")
@@ -1132,6 +1152,9 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "billing check failed")
 		return
 	}
+	// 记录认证鉴权阶段耗时（含并发等待 + 二次计费检查，与 HTTP 路径同口径）
+	service.SetOpsLatencyMs(c, service.OpsAuthLatencyMsKey, time.Since(wsRequestStart).Milliseconds())
+	wsRoutingStart := time.Now()
 
 	sessionHash := h.gatewayService.GenerateSessionHashWithFallback(
 		c,
@@ -1195,6 +1218,8 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		closeOpenAIClientWS(wsConn, coderws.StatusInternalError, "failed to get access token")
 		return
 	}
+	// 记录路由选择阶段耗时（账号选择 + 并发槽位获取 + token 获取）
+	service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, time.Since(wsRoutingStart).Milliseconds())
 
 	reqLog.Debug("openai.websocket_account_selected",
 		zap.Int64("account_id", account.ID),
@@ -1244,6 +1269,11 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				h.gatewayService.UpdateCodexUsageSnapshotFromHeaders(ctx, account.ID, result.ResponseHeaders)
 			}
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, true, result.FirstTokenMs)
+			wsAuthLatency := getContextLatencyMsPtr(c, service.OpsAuthLatencyMsKey)
+			wsRoutingLatency := getContextLatencyMsPtr(c, service.OpsRoutingLatencyMsKey)
+			// WS 路径没有 HTTP 层面的 TTFB；用 result.Duration（本轮 turn 的转发总时长）作为上游耗时。
+			turnDurationMs := intPtr(int(result.Duration.Milliseconds()))
+			wsUpstreamLatency := turnDurationMs
 			h.submitUsageRecordTask(func(taskCtx context.Context) {
 				if err := h.gatewayService.RecordUsage(taskCtx, &service.OpenAIRecordUsageInput{
 					Result:             result,
@@ -1258,6 +1288,10 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 					RequestPayloadHash: service.HashUsageRequestPayload(firstMessage),
 					RequestBodyBytes:   intPtr(len(firstMessage)),
 					APIKeyService:      h.apiKeyService,
+					AuthLatencyMs:      wsAuthLatency,
+					RoutingLatencyMs:   wsRoutingLatency,
+					UpstreamLatencyMs:  wsUpstreamLatency,
+					ResponseLatencyMs:  nil, // WS 路径 upstream 即全部转发时间，response 阶段不单独计
 				}); err != nil {
 					reqLog.Error("openai.websocket_record_usage_failed",
 						zap.Int64("account_id", account.ID),
