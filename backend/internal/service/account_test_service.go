@@ -58,7 +58,7 @@ type TestEvent struct {
 }
 
 const (
-	defaultGeminiTextTestPrompt  = "hi"
+	defaultTextTestPrompt        = "hi"
 	defaultGeminiImageTestPrompt = "Generate a cute orange cat astronaut sticker on a clean pastel background."
 )
 
@@ -182,7 +182,7 @@ func (s *AccountTestService) TestAccountConnection(c *gin.Context, accountID int
 
 	// Route to platform-specific test method
 	if account.IsOpenAI() {
-		return s.testOpenAIAccountConnection(c, account, modelID)
+		return s.testOpenAIAccountConnection(c, account, modelID, prompt)
 	}
 
 	if account.IsGemini() {
@@ -426,7 +426,7 @@ func (s *AccountTestService) testBedrockAccountConnection(c *gin.Context, ctx co
 }
 
 // testOpenAIAccountConnection tests an OpenAI account's connection
-func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account *Account, modelID string) error {
+func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account *Account, modelID string, prompt string) error {
 	ctx := c.Request.Context()
 
 	// Default to openai.DefaultTestModel for OpenAI testing
@@ -490,7 +490,7 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 	c.Writer.Flush()
 
 	// Create OpenAI Responses API payload
-	payload := createOpenAITestPayload(testModelID, isOAuth)
+	payload := createOpenAITestPayload(testModelID, prompt, isOAuth)
 	payloadBytes, _ := json.Marshal(payload)
 
 	// Send test_start event
@@ -1500,7 +1500,7 @@ func createGeminiTestPayload(modelID string, prompt string) []byte {
 
 	textPrompt := strings.TrimSpace(prompt)
 	if textPrompt == "" {
-		textPrompt = defaultGeminiTextTestPrompt
+		textPrompt = defaultTextTestPrompt
 	}
 
 	payload := map[string]any{
@@ -1604,7 +1604,12 @@ func (s *AccountTestService) processGeminiStream(c *gin.Context, body io.Reader)
 }
 
 // createOpenAITestPayload creates a test payload for OpenAI Responses API
-func createOpenAITestPayload(modelID string, isOAuth bool) map[string]any {
+func createOpenAITestPayload(modelID string, prompt string, isOAuth bool) map[string]any {
+	testPrompt := strings.TrimSpace(prompt)
+	if testPrompt == "" {
+		testPrompt = defaultTextTestPrompt
+	}
+
 	payload := map[string]any{
 		"model": modelID,
 		"input": []map[string]any{
@@ -1613,7 +1618,7 @@ func createOpenAITestPayload(modelID string, isOAuth bool) map[string]any {
 				"content": []map[string]any{
 					{
 						"type": "input_text",
-						"text": "hi",
+						"text": testPrompt,
 					},
 				},
 			},
