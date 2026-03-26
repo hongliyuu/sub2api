@@ -467,6 +467,11 @@ type GatewayConfig struct {
 	// UserMessageQueue: 用户消息串行队列配置
 	// 对 role:"user" 的真实用户消息实施账号级串行化 + RPM 自适应延迟
 	UserMessageQueue UserMessageQueueConfig `mapstructure:"user_message_queue"`
+
+	// CopilotDefaultMaxBodyKB: Copilot 平台请求体大小默认上限（KB）。
+	// 每个账号可通过 extra["max_body_bytes"] 覆盖此值。
+	// 0 或未配置时使用内置默认值 1048576 KB（1 GB）。
+	CopilotDefaultMaxBodyKB int64 `mapstructure:"copilot_default_max_body_kb"`
 }
 
 // UserMessageQueueConfig 用户消息串行队列配置
@@ -1386,6 +1391,7 @@ func setDefaults() {
 	viper.SetDefault("gateway.upstream_response_read_max_bytes", int64(8*1024*1024))
 	viper.SetDefault("gateway.proxy_probe_response_read_max_bytes", int64(1024*1024))
 	viper.SetDefault("gateway.gemini_debug_response_headers", false)
+	viper.SetDefault("gateway.copilot_default_max_body_kb", int64(1024*1024))
 	viper.SetDefault("gateway.sora_max_body_size", int64(256*1024*1024))
 	viper.SetDefault("gateway.sora_stream_timeout_seconds", 900)
 	viper.SetDefault("gateway.sora_request_timeout_seconds", 180)
