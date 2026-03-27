@@ -1130,12 +1130,14 @@
       <div v-if="form.platform === 'copilot'" class="space-y-3">
         <div>
           <label class="input-label">{{ t('admin.accounts.copilot.planType') }}</label>
-          <div class="mt-2 grid grid-cols-3 gap-2">
+          <div class="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-5">
             <button
               v-for="plan in [
-                { value: 'individual', label: t('admin.accounts.copilot.planTypeIndividual') },
-                { value: 'business',   label: t('admin.accounts.copilot.planTypeBusiness') },
-                { value: 'enterprise', label: t('admin.accounts.copilot.planTypeEnterprise') },
+                { value: 'individual_free',     label: t('admin.accounts.copilot.planTypeIndividualFree') },
+                { value: 'individual_pro',      label: t('admin.accounts.copilot.planTypeIndividualPro') },
+                { value: 'individual_pro_plus', label: t('admin.accounts.copilot.planTypeIndividualProPlus') },
+                { value: 'business',            label: t('admin.accounts.copilot.planTypeBusiness') },
+                { value: 'enterprise',          label: t('admin.accounts.copilot.planTypeEnterprise') },
               ]"
               :key="plan.value"
               type="button"
@@ -3233,7 +3235,7 @@ const apiKeyBaseUrl = ref('https://api.anthropic.com')
 const apiKeyValue = ref('')
 const copilotGithubToken = ref('') // For Copilot: GitHub Personal Access Token
 const copilotAddMethod = ref<'device-oauth' | 'pat'>('device-oauth') // Copilot auth method
-const copilotPlanType = ref('individual') // Copilot plan type: individual / business / enterprise
+const copilotPlanType = ref('individual_pro') // Copilot plan type: individual_free | individual_pro | individual_pro_plus | business | enterprise
 const copilotMaxOutputTokens = ref('')
 const copilotDeviceState = ref<'idle' | 'waiting' | 'success' | 'error'>('idle')
 const copilotDeviceLoading = ref(false)
@@ -3600,7 +3602,7 @@ watch(
       form.type = 'apikey'
       copilotAddMethod.value = 'device-oauth'
       copilotGithubToken.value = ''
-      copilotPlanType.value = 'individual'
+      copilotPlanType.value = 'individual_pro'
       copilotMaxOutputTokens.value = ''
       resetCopilotDeviceFlow()
     }
@@ -4292,7 +4294,7 @@ const handleSubmit = async () => {
 
     const credentials: Record<string, unknown> = {
       github_token: githubToken,
-      plan_type: copilotPlanType.value || 'individual'
+      plan_type: copilotPlanType.value || 'individual_pro'
     }
     const maxOutRaw = copilotMaxOutputTokens.value.trim()
     if (maxOutRaw === '0') {

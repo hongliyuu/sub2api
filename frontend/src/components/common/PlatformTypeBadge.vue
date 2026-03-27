@@ -94,6 +94,15 @@ const planLabel = computed(() => {
   if (!props.planType) return ''
   const lower = props.planType.toLowerCase()
   switch (lower) {
+    case 'individual_free':
+      return 'Free'
+    case 'individual_pro':
+      return 'Pro'
+    case 'individual_pro_plus':
+      return 'Pro+'
+    case 'individual':
+      // 向后兼容旧值，等同于 Pro
+      return 'Pro'
     case 'plus':
       return 'Plus'
     case 'team':

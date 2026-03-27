@@ -2,7 +2,7 @@
   <BaseDialog
     :show="show"
     :title="t('admin.accounts.editAccount')"
-    width="normal"
+    width="wide"
     @close="handleClose"
   >
     <form
@@ -408,12 +408,14 @@
         <!-- Plan type selector -->
         <div>
           <label class="input-label">{{ t('admin.accounts.copilot.planType') }}</label>
-          <div class="mt-2 grid grid-cols-3 gap-2">
+          <div class="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-5">
             <button
               v-for="plan in [
-                { value: 'individual', label: t('admin.accounts.copilot.planTypeIndividual') },
-                { value: 'business',   label: t('admin.accounts.copilot.planTypeBusiness') },
-                { value: 'enterprise', label: t('admin.accounts.copilot.planTypeEnterprise') },
+                { value: 'individual_free',     label: t('admin.accounts.copilot.planTypeIndividualFree') },
+                { value: 'individual_pro',      label: t('admin.accounts.copilot.planTypeIndividualPro') },
+                { value: 'individual_pro_plus', label: t('admin.accounts.copilot.planTypeIndividualProPlus') },
+                { value: 'business',            label: t('admin.accounts.copilot.planTypeBusiness') },
+                { value: 'enterprise',          label: t('admin.accounts.copilot.planTypeEnterprise') },
               ]"
               :key="plan.value"
               type="button"
@@ -1934,7 +1936,7 @@ const submitting = ref(false)
 const editBaseUrl = ref('https://api.anthropic.com')
 const editApiKey = ref('')
 const editGithubToken = ref('')
-const copilotEditPlanType = ref('individual') // individual | business | enterprise
+const copilotEditPlanType = ref('individual_pro') // individual_free | individual_pro | individual_pro_plus | business | enterprise
 /** Copilot Sonnet/Opus max_tokens ceiling; empty = default 8192; "0" = do not clamp */
 const copilotMaxOutputTokens = ref('')
 /** Copilot per-account request body size limit in KB; empty = system default (400 KB) */
@@ -2278,14 +2280,18 @@ const syncFormFromAccount = (newAccount: Account | null) => {
           // Load plan_type (new field); fall back to inferring from legacy base_url
           const savedPlanType = credentials.plan_type as string | undefined
           const legacyBaseUrl = credentials.base_url as string | undefined
-          if (savedPlanType && ['individual', 'business', 'enterprise'].includes(savedPlanType)) {
+          const validPlanTypes = ['individual_free', 'individual_pro', 'individual_pro_plus', 'business', 'enterprise']
+          if (savedPlanType && validPlanTypes.includes(savedPlanType)) {
             copilotEditPlanType.value = savedPlanType
+          } else if (savedPlanType === 'individual') {
+            // 向后兼容：旧的 individual 映射到 individual_pro
+            copilotEditPlanType.value = 'individual_pro'
           } else if (legacyBaseUrl?.includes('business.githubcopilot.com')) {
             copilotEditPlanType.value = 'business'
           } else if (legacyBaseUrl?.includes('enterprise.githubcopilot.com')) {
             copilotEditPlanType.value = 'enterprise'
           } else {
-            copilotEditPlanType.value = 'individual'
+            copilotEditPlanType.value = 'individual_pro'
           }
           editBaseUrl.value = legacyBaseUrl || ''
           editGithubToken.value = '' // never show existing token
@@ -2907,7 +2913,7 @@ const handleSubmit = async () => {
       // Copilot uses github_token instead of api_key
       if (props.account.platform === 'copilot') {
         const newCredentials: Record<string, unknown> = {
-          plan_type: copilotEditPlanType.value || 'individual'
+          plan_type: copilotEditPlanType.value || 'individual_pro'
         }
         // Only persist base_url if the user explicitly filled in a custom URL
         const customBaseUrl = editBaseUrl.value.trim()
