@@ -12,6 +12,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/tidwall/gjson"
 )
 
 // RateLimitService 处理限流和过载状态管理
@@ -172,7 +173,7 @@ func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Acc
 				account.Credentials = make(map[string]any)
 			}
 			account.Credentials["expires_at"] = time.Now().Format(time.RFC3339)
-			if err := s.accountRepo.Update(ctx, account); err != nil {
+			if err := persistAccountCredentials(ctx, s.accountRepo, account, account.Credentials); err != nil {
 				slog.Warn("oauth_401_force_refresh_update_failed", "account_id", account.ID, "error", err)
 			} else {
 				slog.Info("oauth_401_force_refresh_set", "account_id", account.ID, "platform", account.Platform)
@@ -201,6 +202,13 @@ func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Acc
 			shouldDisable = true
 		}
 	case 402:
+		// OpenAI: deactivated_workspace 表示工作区已停用，直接标记 error
+		if account.Platform == PlatformOpenAI && gjson.GetBytes(responseBody, "detail.code").String() == "deactivated_workspace" {
+			msg := "Workspace deactivated (402): workspace has been deactivated"
+			s.handleAuthError(ctx, account, msg)
+			shouldDisable = true
+			break
+		}
 		// 支付要求：余额不足或计费问题，停止调度
 		msg := "Payment required (402): insufficient balance or billing issue"
 		if upstreamMsg != "" {
@@ -251,7 +259,7 @@ func isPermanent401AuthFailure(upstreamCode, upstreamMsg string) bool {
 	msg := strings.ToLower(strings.TrimSpace(upstreamMsg))
 
 	switch code {
-	case "account_deactivated", "organization_deactivated", "account_suspended", "token_invalidated":
+	case "account_deactivated", "organization_deactivated", "account_suspended", "token_invalidated", "token_revoked":
 		return true
 	}
 
@@ -265,6 +273,8 @@ func isPermanent401AuthFailure(upstreamCode, upstreamMsg string) bool {
 		"organization disabled",
 		"authentication token has been invalidated",
 		"token has been invalidated",
+		"token revoked",
+		"token has been revoked",
 	}
 	for _, marker := range permanentMarkers {
 		if strings.Contains(msg, marker) {
