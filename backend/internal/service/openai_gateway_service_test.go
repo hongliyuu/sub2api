@@ -1876,12 +1876,12 @@ func TestHandleOAuthSSEToJSON_ResponseFailedReturnsProtocolError(t *testing.T) {
 
 func TestExtractOpenAIUsageFromJSONBytes(t *testing.T) {
 	tests := []struct {
-		name             string
-		body             string
-		wantInput        int
-		wantOutput       int
-		wantCacheRead    int
-		wantOK           bool
+		name          string
+		body          string
+		wantInput     int
+		wantOutput    int
+		wantCacheRead int
+		wantOK        bool
 	}{
 		{
 			name:      "Anthropic/Responses API format (input_tokens/output_tokens)",
@@ -1933,10 +1933,10 @@ func TestParseSSEUsageBytesStandardChatCompletions(t *testing.T) {
 		wantCacheRead int
 	}{
 		{
-			name:       "OpenAI Responses API terminal event",
-			data:       `{"type":"response.completed","response":{"usage":{"input_tokens":100,"output_tokens":50,"input_tokens_details":{"cached_tokens":10}}}}`,
-			wantInput:  100,
-			wantOutput: 50,
+			name:          "OpenAI Responses API terminal event",
+			data:          `{"type":"response.completed","response":{"usage":{"input_tokens":100,"output_tokens":50,"input_tokens_details":{"cached_tokens":10}}}}`,
+			wantInput:     100,
+			wantOutput:    50,
 			wantCacheRead: 10,
 		},
 		{
@@ -1946,10 +1946,10 @@ func TestParseSSEUsageBytesStandardChatCompletions(t *testing.T) {
 			wantOutput: 80,
 		},
 		{
-			name:       "Standard chat completions chunk with cached tokens",
-			data:       `{"object":"chat.completion.chunk","choices":[],"usage":{"prompt_tokens":300,"completion_tokens":60,"prompt_tokens_details":{"cached_tokens":20}}}`,
-			wantInput:  300,
-			wantOutput: 60,
+			name:          "Standard chat completions chunk with cached tokens",
+			data:          `{"object":"chat.completion.chunk","choices":[],"usage":{"prompt_tokens":300,"completion_tokens":60,"prompt_tokens_details":{"cached_tokens":20}}}`,
+			wantInput:     300,
+			wantOutput:    60,
 			wantCacheRead: 20,
 		},
 		{
