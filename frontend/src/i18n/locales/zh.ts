@@ -3628,9 +3628,9 @@ export default {
         setBudget: '设置告警',
         refreshQuota: '刷新配额',
         budgetDialog: {
-          title: '设置预算告警',
-          threshold: '告警阈值 (USD)',
-          thresholdHint: '月费用超过此值时触发告警',
+          title: '设置配额告警',
+          threshold: '参考月预算 (USD)',
+          thresholdHint: '参考金额，仅供展示，不参与告警计算',
           email: '告警邮箱',
           emailHint: '留空则使用账户默认邮箱',
           enabled: '启用告警',

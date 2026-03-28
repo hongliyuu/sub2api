@@ -28,10 +28,10 @@
           </button>
         </div>
 
-        <!-- Monthly budget -->
+        <!-- Monthly budget (reference only — does not affect alert triggering) -->
         <div>
           <label class="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
-            {{ t('admin.copilot.accounts.budgetDialog.threshold') }}
+            参考月预算 (USD)
           </label>
           <input
             v-model.number="form.monthly_budget"
@@ -40,7 +40,7 @@
             step="1"
             class="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-700 dark:text-white"
           />
-          <p class="mt-1 text-xs text-gray-400">{{ t('admin.copilot.accounts.budgetDialog.thresholdHint') }}</p>
+          <p class="mt-1 text-xs text-gray-400">参考金额，仅供展示，不参与告警计算</p>
         </div>
 
         <!-- Alert threshold % -->

@@ -3467,9 +3467,9 @@ export default {
         setBudget: 'Set Alert',
         refreshQuota: 'Refresh Quota',
         budgetDialog: {
-          title: 'Set Budget Alert',
-          threshold: 'Alert Threshold (USD)',
-          thresholdHint: 'Alert when monthly cost exceeds this value',
+          title: 'Set Quota Alert',
+          threshold: 'Reference Monthly Budget (USD)',
+          thresholdHint: 'Reference only — not used in alert calculation',
           email: 'Alert Email',
           emailHint: 'Leave empty to use account default email',
           enabled: 'Enable Alert',

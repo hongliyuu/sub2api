@@ -55,8 +55,10 @@
     <div v-if="account.budget_alert?.enabled" class="mt-2 border-t border-gray-100 pt-2 dark:border-gray-700">
       <p class="text-xs text-gray-500 dark:text-gray-400">
         {{ t('admin.copilot.accounts.budgetAlert') }}:
-        <span class="font-medium text-gray-700 dark:text-gray-300">${{ account.budget_alert.monthly_budget }}</span>
-        · {{ account.budget_alert.alert_threshold }}% 阈值
+        <span class="font-medium text-gray-700 dark:text-gray-300">配额使用率 {{ account.budget_alert.alert_threshold }}% 触发</span>
+        <template v-if="account.budget_alert.monthly_budget > 0">
+          · 参考预算 ${{ account.budget_alert.monthly_budget }}
+        </template>
       </p>
     </div>
   </div>
