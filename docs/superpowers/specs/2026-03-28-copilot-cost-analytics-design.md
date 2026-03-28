@@ -283,15 +283,16 @@ Response:
       "seat_count": 1,
       "monthly_cost": 39.00,
       "cost_per_premium_request": 0.026,
-      "today_premium_requests": 45,
-      "month_premium_requests": 1200,
+      "system_today_premium_requests": 45,
+      "system_month_premium_requests": 312,
       "quota_snapshot": {
         "entitlement": 1500,
         "remaining": 300,
-        "used": 1200,
+        "github_total_used": 1200,
         "overage": 0,
         "unlimited": false,
-        "snapshot_date": "2026-03-28"
+        "external_used": 888,
+        "cached_at": "2026-03-28T14:20:00Z"
       },
       "budget_alert": {
         "monthly_budget": 39.00,
@@ -331,7 +332,8 @@ Response: 与用户 timeline 格式一致，24个小时桶。
 
 **POST `/api/v1/admin/copilot/accounts/:id/quota-refresh`**
 
-手动触发调用 `FetchQuota()` 并写入 `copilot_quota_snapshots`。
+强制绕过缓存，实时调用 `FetchQuota()` 拉取单个账户最新配额，更新内存缓存并 UPSERT 当天快照。
+返回最新的配额数据（含 `cached_at`）。
 
 **PUT `/api/v1/admin/copilot/accounts/:id/budget`**
 
@@ -344,15 +346,29 @@ Body:
 }
 ```
 
-### 4.4 定时任务
+### 4.4 配额数据策略：按需实时 + 短时缓存
 
-每天 `02:00` 服务器时间执行：
-1. 调用 `FetchAllCopilotQuotas()` 获取所有活跃 Copilot 账户的配额信息
-2. 写入 `copilot_quota_snapshots`（UPSERT，同一天重复执行覆盖）
-3. 检查所有启用了告警的账户：
-   - 配额使用率 ≥ `alert_threshold` → 标记 `alert_status = 'warning'`
-   - 配额使用率 ≥ 95% → 标记 `alert_status = 'critical'`
-   - 写入系统日志（ops error log）
+**无定时任务**。配额数据在用户访问账户成本分析页时实时拉取，原因：
+- 管理员查看时需要看到最新状态，定时任务最多延迟数小时
+- 账户可能在 sub2api 之外被使用（Claude Code、Copilot 插件等），定时快照无法反映实时消耗
+
+**缓存策略**（服务端内存缓存，可用 `sync.Map` 或 `go-cache`）：
+- TTL：**5 分钟**
+- Key：`copilot_quota:{account_id}`
+- 进入账户成本页 → 触发 `FetchAllCopilotQuotas()` 并发拉取所有账户
+- 命中缓存 → 直接返回，并在响应中附带 `cached_at` 时间戳
+- 手动点击"刷新"按钮 → 强制绕过缓存，重新拉取单个账户
+
+**快照持久化**（`copilot_quota_snapshots` 表的新用途）：
+- 每次实时查询成功后，UPSERT 当天的快照记录（同一天多次查询覆盖）
+- 用途：为趋势折线图提供历史数据（每天最后一次查询的结果作为当天快照）
+- 系统重启后前端展示"最后已知状态"，避免页面空白
+
+**告警检查时机**：
+- 每次实时查询成功后（无论是页面加载还是手动刷新）同步检查告警条件
+- 配额使用率 ≥ `alert_threshold` → `alert_status = 'warning'`
+- 配额使用率 ≥ 95% → `alert_status = 'critical'`
+- 写入系统日志（ops error log）
 
 ---
 
@@ -404,10 +420,11 @@ Body:
 ├─────────────────────────────────────────────────────┤
 │  账户卡片列表                                         │
 │  ┌──────────────────────────────────────────────┐   │
-│  │ copilot-pro-plus-01  [Pro+ · $39/月]  [⚠告警]│   │
-│  │ Premium配额: ████████░░  1200 / 1500  (80%)  │   │
-│  │ 今日: 45次  本月: 1200次  单次成本: $0.026    │   │
-│  │ [查看趋势 ▾]  [设置预算]  [刷新配额]           │   │
+│  │ copilot-pro-plus-01  [Pro+ · $39/月]  [⚠告警]  │   │
+│  │ GitHub配额: ████████░░  1200/1500 (80%)        │   │
+│  │ ├ 系统内: 今日45次 / 本月312次                  │   │
+│  │ └ 外部消耗: 888次  单次成本: $0.026             │   │
+│  │ 更新: 14:20  [查看趋势 ▾]  [设置预算]  [刷新]   │   │
 │  └──────────────────────────────────────────────┘   │
 │                                                       │
 │  展开"查看趋势"后：                                   │
@@ -478,9 +495,9 @@ usage_rate = premium_used / monthly_quota × 100
 ### Phase 2：后端 API
 6. Repository 层：`CopilotQuotaSnapshotRepo`、`CopilotBudgetAlertRepo`
 7. Service 层：`CopilotAnalyticsService`（封装统计查询逻辑）
-8. Handler 层：`CopilotAnalyticsHandler`（用户维度 + 账户维度 API）
-9. 路由注册：`/api/v1/admin/copilot/...`
-10. 定时任务：每日 02:00 配额快照 + 告警检查
+8. Service 层：`CopilotQuotaCacheService`（内存缓存，TTL 5分钟，复用 `FetchAllCopilotQuotas()`）
+9. Handler 层：`CopilotAnalyticsHandler`（用户维度 + 账户维度 API）
+10. 路由注册：`/api/v1/admin/copilot/...`
 
 ### Phase 3：前端
 11. API 客户端：新增 Copilot 分析相关接口调用
@@ -507,7 +524,9 @@ usage_rate = premium_used / monthly_quota × 100
 
 ## 9. 风险与注意事项
 
-1. **GitHub API 限流**：`FetchQuota()` 调用有频率限制，定时任务需加并发控制，`FetchAllCopilotQuotas()` 已实现并发处理，直接复用
-2. **历史数据**：`initiator` 字段新增后历史记录默认为 `'user'`，历史统计数据存在偏差，页面应标注"数据从 v0.1.126 起准确"
-3. **层级关联**：时间窗口（30秒）为启发式规则，极端情况下可能不准确，前端标注"近似关联"
-4. **Free 套餐成本**：月费为 $0，单次成本为 $0，页面显示"免费套餐"而非除以零
+1. **GitHub API 限流**：`FetchQuota()` 调用有频率限制，内存缓存 TTL 5分钟可大幅降低调用频率；`FetchAllCopilotQuotas()` 已实现并发处理，直接复用
+2. **缓存冷启动**：服务重启后缓存为空，首次访问会触发全量拉取，耗时较长；前端展示 loading 状态并从 `copilot_quota_snapshots` 读取最后已知状态作为占位数据
+3. **历史数据**：`initiator` 字段新增后历史记录默认为 `'user'`，历史统计数据存在偏差，页面应标注"数据从 v0.1.126 起准确"
+4. **层级关联**：时间窗口（30秒）为启发式规则，极端情况下可能不准确，前端标注"近似关联"
+5. **Free 套餐成本**：月费为 $0，单次成本为 $0，页面显示"免费套餐"而非除以零
+6. **外部消耗计算**：`external_used = github_total_used - system_month_premium_requests`，若系统内统计有遗漏（如请求失败未记录）可能出现负值，前端显示为 0
