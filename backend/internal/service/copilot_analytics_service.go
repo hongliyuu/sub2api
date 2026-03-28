@@ -46,52 +46,52 @@ func NewCopilotAnalyticsService(
 
 // CopilotUserStatEntry holds per-user stats for a given date.
 type CopilotUserStatEntry struct {
-	UserID          int64
-	Username        string
-	PremiumRequests int
-	AgentRequests   int
-	TotalRequests   int
-	Models          []string
-	LastRequestAt   *time.Time
+	UserID          int64      `json:"user_id"`
+	Username        string     `json:"username"`
+	PremiumRequests int        `json:"premium_requests"`
+	AgentRequests   int        `json:"agent_requests"`
+	TotalRequests   int        `json:"total_requests"`
+	Models          []string   `json:"models"`
+	LastRequestAt   *time.Time `json:"last_request_at"`
 }
 
 // CopilotUserStatsResult is the response for the user stats endpoint.
 type CopilotUserStatsResult struct {
-	Date                 string
-	TotalPremiumRequests int
-	TotalAgentRequests   int
-	ActiveUsers          int
-	Users                []CopilotUserStatEntry
+	Date                 string                 `json:"date"`
+	TotalPremiumRequests int                    `json:"total_premium_requests"`
+	TotalAgentRequests   int                    `json:"total_agent_requests"`
+	ActiveUsers          int                    `json:"active_users"`
+	Users                []CopilotUserStatEntry `json:"users"`
 }
 
 // CopilotHourlyBucket is one hour's premium + agent count.
 type CopilotHourlyBucket struct {
-	Hour         int
-	PremiumCount int
-	AgentCount   int
+	Hour         int `json:"hour"`
+	PremiumCount int `json:"premium_count"`
+	AgentCount   int `json:"agent_count"`
 }
 
 // CopilotUserTimelineResult is the response for the per-user hourly timeline.
 type CopilotUserTimelineResult struct {
-	UserID int64
-	Date   string
-	Hourly []CopilotHourlyBucket
+	UserID int64                 `json:"user_id"`
+	Date   string                `json:"date"`
+	Hourly []CopilotHourlyBucket `json:"hourly"`
 }
 
 // CopilotRequestItem represents a single usage log entry with optional sub-requests.
 type CopilotRequestItem struct {
-	RequestID   string
-	Model       string
-	Initiator   string
-	CreatedAt   time.Time
-	DurationMs  *int
-	SubRequests []CopilotRequestItem
+	RequestID   string               `json:"request_id"`
+	Model       string               `json:"model"`
+	Initiator   string               `json:"initiator"`
+	CreatedAt   time.Time            `json:"created_at"`
+	DurationMs  *int                 `json:"duration_ms"`
+	SubRequests []CopilotRequestItem `json:"sub_requests"`
 }
 
 // CopilotUserRequestsResult is the response for the per-user requests list.
 type CopilotUserRequestsResult struct {
-	Total int
-	Items []CopilotRequestItem
+	Total int                  `json:"total"`
+	Items []CopilotRequestItem `json:"items"`
 }
 
 // ─────────────────────────────────────────────
@@ -100,44 +100,44 @@ type CopilotUserRequestsResult struct {
 
 // CopilotAccountOverviewEntry holds one account's summary.
 type CopilotAccountOverviewEntry struct {
-	AccountID                    int64
-	Name                         string
-	PlanType                     string
-	SeatCount                    int
-	MonthlyCost                  float64
-	CostPerPremiumRequest        float64
-	SystemTodayPremiumRequests   int
-	SystemMonthPremiumRequests   int
-	QuotaSnapshot                *CopilotAccountQuotaSnapshot
-	BudgetAlert                  *CopilotAccountBudgetAlertInfo
-	AlertStatus                  string
+	AccountID                  int64                          `json:"account_id"`
+	Name                       string                         `json:"name"`
+	PlanType                   string                         `json:"plan_type"`
+	SeatCount                  int                            `json:"seat_count"`
+	MonthlyCost                float64                        `json:"monthly_cost"`
+	CostPerPremiumRequest      float64                        `json:"cost_per_premium_request"`
+	SystemTodayPremiumRequests int                            `json:"system_today_premium_requests"`
+	SystemMonthPremiumRequests int                            `json:"system_month_premium_requests"`
+	QuotaSnapshot              *CopilotAccountQuotaSnapshot   `json:"quota_snapshot"`
+	BudgetAlert                *CopilotAccountBudgetAlertInfo `json:"budget_alert"`
+	AlertStatus                string                         `json:"alert_status"`
 }
 
 // CopilotAccountQuotaSnapshot is the quota data returned in the overview.
 type CopilotAccountQuotaSnapshot struct {
-	Entitlement     int
-	Remaining       int
-	GitHubTotalUsed int
-	Overage         int
-	Unlimited       bool
-	ExternalUsed    int    // = GitHubTotalUsed - SystemMonthPremiumRequests
-	CachedAt        *time.Time
+	Entitlement     int        `json:"entitlement"`
+	Remaining       int        `json:"remaining"`
+	GitHubTotalUsed int        `json:"github_total_used"`
+	Overage         int        `json:"overage"`
+	Unlimited       bool       `json:"unlimited"`
+	ExternalUsed    int        `json:"external_used"` // = GitHubTotalUsed - SystemMonthPremiumRequests
+	CachedAt        *time.Time `json:"cached_at"`
 }
 
 // CopilotAccountBudgetAlertInfo is the budget alert config returned in the overview.
 type CopilotAccountBudgetAlertInfo struct {
-	MonthlyBudget  float64
-	AlertThreshold int
-	Enabled        bool
+	MonthlyBudget  float64 `json:"monthly_budget"`
+	AlertThreshold int     `json:"alert_threshold"`
+	Enabled        bool    `json:"enabled"`
 }
 
 // CopilotAccountsOverviewResult is the response for the accounts overview endpoint.
 type CopilotAccountsOverviewResult struct {
-	TotalAccounts          int
-	EstimatedMonthlyCost   float64
-	TodayPremiumRequests   int
-	AlertCount             int
-	Accounts               []CopilotAccountOverviewEntry
+	TotalAccounts        int                           `json:"total_accounts"`
+	EstimatedMonthlyCost float64                       `json:"estimated_monthly_cost"`
+	TodayPremiumRequests int                           `json:"today_premium_requests"`
+	AlertCount           int                           `json:"alert_count"`
+	Accounts             []CopilotAccountOverviewEntry `json:"accounts"`
 }
 
 // ─────────────────────────────────────────────
