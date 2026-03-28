@@ -3260,7 +3260,6 @@ func (s *GatewayService) selectAccountWithMixedScheduling(ctx context.Context, g
 		}
 
 		// 2) Select an account from the routed candidates.
-		accounts = s.selectProxyBucketForCurrentGroup(ctx, accounts, sessionHash)
 		var err error
 		accounts, _, err = s.listSchedulableAccounts(ctx, groupID, nativePlatform, false)
 		if err != nil {

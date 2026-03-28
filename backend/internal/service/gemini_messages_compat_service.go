@@ -532,7 +532,7 @@ func (s *GeminiMessagesCompatService) SelectAccountForAIStudioEndpoints(ctx cont
 		return nil, errors.New("no available Gemini accounts")
 	}
 
-	accounts = s.selectProxyBucketForCurrentGroup(ctx, groupID, accounts, "")
+	accounts = s.selectProxyBucketForCurrentGroup(ctx, groupID, accounts, "gemini-ai-studio-endpoints")
 
 	rank := func(a *Account) int {
 		if a == nil {
