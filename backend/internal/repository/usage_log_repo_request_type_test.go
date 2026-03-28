@@ -82,6 +82,7 @@ func TestUsageLogRepositoryCreateSyncRequestTypeAndLegacyFields(t *testing.T) {
 			sqlmock.AnyArg(), // upstream_endpoint
 			log.CacheTTLOverridden,
 			sqlmock.AnyArg(), // request_body_bytes
+			sqlmock.AnyArg(), // initiator
 			createdAt,
 		).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).AddRow(int64(99), createdAt))
@@ -158,6 +159,7 @@ func TestUsageLogRepositoryCreate_PersistsServiceTier(t *testing.T) {
 			sqlmock.AnyArg(), // upstream_endpoint
 			log.CacheTTLOverridden,
 			sqlmock.AnyArg(), // request_body_bytes
+			sqlmock.AnyArg(), // initiator
 			createdAt,
 		).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).AddRow(int64(100), createdAt))
@@ -403,6 +405,7 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},
 			false,
 			sql.NullInt64{}, // request_body_bytes
+			"user",          // initiator
 			now,
 		}})
 		require.NoError(t, err)
@@ -450,6 +453,7 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},
 			false,
 			sql.NullInt64{}, // request_body_bytes
+			"user",          // initiator
 			now,
 		}})
 		require.NoError(t, err)
@@ -497,6 +501,7 @@ func TestScanUsageLogRequestTypeAndLegacyFallback(t *testing.T) {
 			sql.NullString{},
 			false,
 			sql.NullInt64{}, // request_body_bytes
+			"user",          // initiator
 			now,
 		}})
 		require.NoError(t, err)

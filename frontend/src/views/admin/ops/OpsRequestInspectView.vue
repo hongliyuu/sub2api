@@ -295,11 +295,11 @@ async function fetchData() {
     }
     const pf = platform.value.trim()
     if (pf) {
-      ;(params as Record<string, unknown>).platform = pf
+      (params as Record<string, unknown>).platform = pf
     }
     const qq = q.value.trim()
     if (qq) {
-      ;(params as Record<string, unknown>).q = qq
+      (params as Record<string, unknown>).q = qq
     }
     const res = await opsAPI.listRequestDetails(params)
     items.value = res.items || []
