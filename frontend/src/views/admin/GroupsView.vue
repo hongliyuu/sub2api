@@ -754,6 +754,28 @@
           </div>
         </div>
 
+        <div class="border-t border-gray-200 dark:border-dark-400 pt-4 mt-4">
+          <div class="flex items-center justify-between">
+            <label class="text-sm text-gray-600 dark:text-gray-400">{{ t('admin.groups.openaiMessages.proxyBucket') }}</label>
+            <button
+              type="button"
+              @click="createForm.proxy_bucket_load_balance_enabled = !createForm.proxy_bucket_load_balance_enabled"
+              class="relative inline-flex h-6 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
+              :class="
+                createForm.proxy_bucket_load_balance_enabled ? 'bg-primary-500' : 'bg-gray-300 dark:bg-dark-600'
+              "
+            >
+              <span
+                class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                :class="
+                  createForm.proxy_bucket_load_balance_enabled ? 'translate-x-6' : 'translate-x-1'
+                "
+              />
+            </button>
+          </div>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ t('admin.groups.openaiMessages.proxyBucketHint') }}</p>
+        </div>
+
         <!-- OpenAI Messages 调度配置（仅 openai 平台） -->
         <div v-if="createForm.platform === 'openai'" class="border-t border-gray-200 dark:border-dark-400 pt-4 mt-4">
           <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">{{ t('admin.groups.openaiMessages.title') }}</h4>
@@ -778,26 +800,6 @@
             </button>
           </div>
           <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ t('admin.groups.openaiMessages.allowDispatchHint') }}</p>
-
-          <div class="mt-3 flex items-center justify-between">
-            <label class="text-sm text-gray-600 dark:text-gray-400">{{ t('admin.groups.openaiMessages.proxyBucket') }}</label>
-            <button
-              type="button"
-              @click="createForm.proxy_bucket_load_balance_enabled = !createForm.proxy_bucket_load_balance_enabled"
-              class="relative inline-flex h-6 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
-              :class="
-                createForm.proxy_bucket_load_balance_enabled ? 'bg-primary-500' : 'bg-gray-300 dark:bg-dark-600'
-              "
-            >
-              <span
-                class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
-                :class="
-                  createForm.proxy_bucket_load_balance_enabled ? 'translate-x-6' : 'translate-x-1'
-                "
-              />
-            </button>
-          </div>
-          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ t('admin.groups.openaiMessages.proxyBucketHint') }}</p>
 
           <!-- 默认映射模型（仅当开关打开时显示） -->
           <div v-if="createForm.allow_messages_dispatch" class="mt-3">
@@ -1509,6 +1511,28 @@
           </div>
         </div>
 
+        <div class="border-t border-gray-200 dark:border-dark-400 pt-4 mt-4">
+          <div class="flex items-center justify-between">
+            <label class="text-sm text-gray-600 dark:text-gray-400">{{ t('admin.groups.openaiMessages.proxyBucket') }}</label>
+            <button
+              type="button"
+              @click="editForm.proxy_bucket_load_balance_enabled = !editForm.proxy_bucket_load_balance_enabled"
+              class="relative inline-flex h-6 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
+              :class="
+                editForm.proxy_bucket_load_balance_enabled ? 'bg-primary-500' : 'bg-gray-300 dark:bg-dark-600'
+              "
+            >
+              <span
+                class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                :class="
+                  editForm.proxy_bucket_load_balance_enabled ? 'translate-x-6' : 'translate-x-1'
+                "
+              />
+            </button>
+          </div>
+          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ t('admin.groups.openaiMessages.proxyBucketHint') }}</p>
+        </div>
+
         <!-- OpenAI Messages 调度配置（仅 openai 平台） -->
         <div v-if="editForm.platform === 'openai'" class="border-t border-gray-200 dark:border-dark-400 pt-4 mt-4">
           <h4 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">{{ t('admin.groups.openaiMessages.title') }}</h4>
@@ -1533,26 +1557,6 @@
             </button>
           </div>
           <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ t('admin.groups.openaiMessages.allowDispatchHint') }}</p>
-
-          <div class="mt-3 flex items-center justify-between">
-            <label class="text-sm text-gray-600 dark:text-gray-400">{{ t('admin.groups.openaiMessages.proxyBucket') }}</label>
-            <button
-              type="button"
-              @click="editForm.proxy_bucket_load_balance_enabled = !editForm.proxy_bucket_load_balance_enabled"
-              class="relative inline-flex h-6 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
-              :class="
-                editForm.proxy_bucket_load_balance_enabled ? 'bg-primary-500' : 'bg-gray-300 dark:bg-dark-600'
-              "
-            >
-              <span
-                class="pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
-                :class="
-                  editForm.proxy_bucket_load_balance_enabled ? 'translate-x-6' : 'translate-x-1'
-                "
-              />
-            </button>
-          </div>
-          <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">{{ t('admin.groups.openaiMessages.proxyBucketHint') }}</p>
 
           <!-- 默认映射模型（仅当开关打开时显示） -->
           <div v-if="editForm.allow_messages_dispatch" class="mt-3">
