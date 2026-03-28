@@ -2853,6 +2853,8 @@ export default {
         maxBodyBytesLabel: 'Request body limit (KB)',
         maxBodyBytesHint: 'Reject requests exceeding this size and prompt the user to reduce context. Leave empty for system default 400 KB.',
         maxBodyBytesInvalid: 'Request body limit must be a positive integer (KB)',
+        seatCountLabel: 'Seat count (for cost analytics)',
+        seatCountHint: 'Number of Copilot licensed seats for this account, used to calculate monthly plan cost.',
         deviceOAuth: 'GitHub Login (Recommended)',
         deviceOAuthDesc: 'Login via browser, works with org Copilot',
         patMethod: 'Personal Access Token',

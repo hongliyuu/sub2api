@@ -2986,6 +2986,8 @@ export default {
         maxBodyBytesLabel: '请求体大小上限 (KB)',
         maxBodyBytesHint: '单次请求体超过此限制时直接拒绝并提示用户缩减上下文。留空使用系统默认 400 KB。',
         maxBodyBytesInvalid: '请求体限制必须为正整数（KB）',
+        seatCountLabel: '座席数（用于成本统计）',
+        seatCountHint: '此账户的 Copilot 授权座席数量，用于计算月度套餐费用。',
         deviceOAuth: 'GitHub 登录（推荐）',
         deviceOAuthDesc: '通过浏览器登录，支持组织 Copilot',
         patMethod: '个人访问令牌',
