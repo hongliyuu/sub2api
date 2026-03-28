@@ -7,7 +7,7 @@
 -- 非 Copilot 平台统一写 'user'（默认值）
 ALTER TABLE usage_logs ADD COLUMN IF NOT EXISTS initiator TEXT NOT NULL DEFAULT 'user';
 
--- 注：usage_logs 的 CONCURRENTLY 复合索引已移至 079_copilot_analytics_indexes_notx.sql
+-- 注：usage_logs 的复合索引已移至 079_copilot_analytics_indexes_notx.sql（需非事务模式执行）
 
 -- 2. Copilot 配额快照表
 -- 每次实时查询后 UPSERT 当天记录，用于趋势图历史数据
