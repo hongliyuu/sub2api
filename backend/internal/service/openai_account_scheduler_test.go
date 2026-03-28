@@ -594,17 +594,110 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_ProxyBucketPrefersLower
 	}
 }
 
+func TestOpenAIGatewayService_SelectAccountWithScheduler_ProxyBucketPrefersLargerEqualBucket(t *testing.T) {
+	ctx := context.Background()
+	groupID := int64(15)
+	proxy101 := int64(101)
+	proxy202 := int64(202)
+	ctx = context.WithValue(ctx, ctxkey.Group, &Group{
+		ID:                            groupID,
+		Platform:                      PlatformOpenAI,
+		Status:                        StatusActive,
+		Hydrated:                      true,
+		ProxyBucketLoadBalanceEnabled: true,
+	})
+
+	accounts := []Account{
+		{ID: 5201, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 1, ProxyID: &proxy101},
+		{ID: 5202, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 1, ProxyID: &proxy202},
+		{ID: 5203, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 1, ProxyID: &proxy202},
+	}
+	concurrencyCache := stubConcurrencyCache{
+		loadMap: map[int64]*AccountLoadInfo{
+			5201: {AccountID: 5201, LoadRate: 0},
+			5202: {AccountID: 5202, LoadRate: 0},
+			5203: {AccountID: 5203, LoadRate: 0},
+		},
+	}
+
+	svc := &OpenAIGatewayService{
+		accountRepo:        stubOpenAIAccountRepo{accounts: accounts},
+		cache:              &stubGatewayCache{},
+		cfg:                &config.Config{},
+		concurrencyService: NewConcurrencyService(concurrencyCache),
+	}
+
+	selection, decision, err := svc.SelectAccountWithScheduler(ctx, &groupID, "", "capacity-spread", "gpt-5.1", nil, OpenAIUpstreamTransportAny)
+	require.NoError(t, err)
+	require.NotNil(t, selection)
+	require.NotNil(t, selection.Account)
+	require.Contains(t, []int64{5202, 5203}, selection.Account.ID)
+	require.Equal(t, openAIAccountScheduleLayerLoadBalance, decision.Layer)
+	require.Equal(t, 2, decision.CandidateCount)
+	if selection.ReleaseFunc != nil {
+		selection.ReleaseFunc()
+	}
+}
+
+func TestOpenAIGatewayService_SelectAccountWithScheduler_ProxyBucketEqualBucketsSpreadBySession(t *testing.T) {
+	ctx := context.Background()
+	groupID := int64(16)
+	proxy101 := int64(101)
+	proxy202 := int64(202)
+	ctx = context.WithValue(ctx, ctxkey.Group, &Group{
+		ID:                            groupID,
+		Platform:                      PlatformOpenAI,
+		Status:                        StatusActive,
+		Hydrated:                      true,
+		ProxyBucketLoadBalanceEnabled: true,
+	})
+
+	accounts := []Account{
+		{ID: 5301, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 1, ProxyID: &proxy101},
+		{ID: 5302, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 1, ProxyID: &proxy202},
+	}
+	concurrencyCache := stubConcurrencyCache{
+		loadMap: map[int64]*AccountLoadInfo{
+			5301: {AccountID: 5301, LoadRate: 0},
+			5302: {AccountID: 5302, LoadRate: 0},
+		},
+	}
+
+	svc := &OpenAIGatewayService{
+		accountRepo:        stubOpenAIAccountRepo{accounts: accounts},
+		cache:              &stubGatewayCache{},
+		cfg:                &config.Config{},
+		concurrencyService: NewConcurrencyService(concurrencyCache),
+	}
+
+	selectionA, _, err := svc.SelectAccountWithScheduler(ctx, &groupID, "", "session-a", "gpt-5.1", nil, OpenAIUpstreamTransportAny)
+	require.NoError(t, err)
+	selectionB, _, err := svc.SelectAccountWithScheduler(ctx, &groupID, "", "session-b", "gpt-5.1", nil, OpenAIUpstreamTransportAny)
+	require.NoError(t, err)
+	require.NotNil(t, selectionA)
+	require.NotNil(t, selectionB)
+	require.NotNil(t, selectionA.Account)
+	require.NotNil(t, selectionB.Account)
+	require.NotEqual(t, selectionA.Account.ID, selectionB.Account.ID)
+	if selectionA.ReleaseFunc != nil {
+		selectionA.ReleaseFunc()
+	}
+	if selectionB.ReleaseFunc != nil {
+		selectionB.ReleaseFunc()
+	}
+}
+
 func TestOpenAIGatewayService_SelectAccountWithScheduler_ProxyBucketStickyStillWins(t *testing.T) {
 	ctx := context.Background()
 	groupID := int64(14)
 	proxy101 := int64(101)
 	proxy202 := int64(202)
 	ctx = context.WithValue(ctx, ctxkey.Group, &Group{
-		ID:                             groupID,
-		Platform:                       PlatformOpenAI,
-		Status:                         StatusActive,
-		Hydrated:                       true,
-		ProxyBucketLoadBalanceEnabled:  true,
+		ID:                            groupID,
+		Platform:                      PlatformOpenAI,
+		Status:                        StatusActive,
+		Hydrated:                      true,
+		ProxyBucketLoadBalanceEnabled: true,
 	})
 
 	accounts := []Account{

@@ -629,7 +629,7 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 			loadMap[account.ID] = &AccountLoadInfo{AccountID: account.ID}
 		}
 	}
-	selectedProxyCandidates := selectProxyBucketCandidates(proxyGroup, proxyCandidates)
+	selectedProxyCandidates := selectProxyBucketCandidates(proxyGroup, proxyCandidates, req.SessionHash)
 	if len(selectedProxyCandidates) == 0 {
 		return nil, 0, 0, 0, ErrNoAvailableAccounts
 	}

@@ -84,7 +84,7 @@ func NewGeminiMessagesCompatService(
 	}
 }
 
-func (s *GeminiMessagesCompatService) selectProxyBucketForGroup(ctx context.Context, group *Group, accounts []Account) []Account {
+func (s *GeminiMessagesCompatService) selectProxyBucketForGroup(ctx context.Context, group *Group, accounts []Account, spreadKey string) []Account {
 	if !shouldApplyProxyBucketLoadBalance(group) || len(accounts) == 0 {
 		return accounts
 	}
@@ -103,10 +103,10 @@ func (s *GeminiMessagesCompatService) selectProxyBucketForGroup(ctx context.Cont
 		}
 	}
 
-	return selectProxyBucketAccounts(group, accounts, loadMap)
+	return selectProxyBucketAccounts(group, accounts, loadMap, spreadKey)
 }
 
-func (s *GeminiMessagesCompatService) selectProxyBucketForCurrentGroup(ctx context.Context, groupID *int64, accounts []Account) []Account {
+func (s *GeminiMessagesCompatService) selectProxyBucketForCurrentGroup(ctx context.Context, groupID *int64, accounts []Account, spreadKey string) []Account {
 	if len(accounts) == 0 {
 		return accounts
 	}
@@ -127,7 +127,7 @@ func (s *GeminiMessagesCompatService) selectProxyBucketForCurrentGroup(ctx conte
 		return accounts
 	}
 
-	return s.selectProxyBucketForGroup(ctx, group, accounts)
+	return s.selectProxyBucketForGroup(ctx, group, accounts, spreadKey)
 }
 
 func (s *GeminiMessagesCompatService) SelectAccountForModel(ctx context.Context, groupID *int64, sessionHash string, requestedModel string) (*Account, error) {
@@ -169,7 +169,7 @@ func (s *GeminiMessagesCompatService) SelectAccountForModelWithExclusions(ctx co
 
 	// 4. 在 sticky miss 后先做 proxy bucket 缩圈，再按原有优先级 + LRU 逻辑选账号
 	// Apply proxy-bucket narrowing after sticky miss, before legacy account-level selection.
-	accounts = s.selectProxyBucketForGroup(ctx, group, accounts)
+	accounts = s.selectProxyBucketForGroup(ctx, group, accounts, sessionHash)
 
 	// 5. 按优先级 + LRU 选择最佳账号
 	// Select best account by priority + LRU
@@ -532,7 +532,7 @@ func (s *GeminiMessagesCompatService) SelectAccountForAIStudioEndpoints(ctx cont
 		return nil, errors.New("no available Gemini accounts")
 	}
 
-	accounts = s.selectProxyBucketForCurrentGroup(ctx, groupID, accounts)
+	accounts = s.selectProxyBucketForCurrentGroup(ctx, groupID, accounts, "")
 
 	rank := func(a *Account) int {
 		if a == nil {
