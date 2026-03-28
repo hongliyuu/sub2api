@@ -691,7 +691,8 @@ export default {
       copilot: {
         description: '将以下配置添加到对应客户端，通过 /copilot 路径代理 GitHub Copilot 请求。Claude Code 使用 Anthropic 兼容接口，Codex CLI 使用 OpenAI Responses 接口。',
         claudeNote: '这些环境变量将在当前终端会话中生效。如需永久配置，请将其添加到 ~/.bashrc、~/.zshrc 或相应的配置文件中。',
-        codexNote: '请确保配置目录存在。macOS/Linux 用户可运行 mkdir -p ~/.codex 创建目录。'
+        codexNote: '请确保配置目录存在。macOS/Linux 用户可运行 mkdir -p ~/.codex 创建目录。',
+        availableModels: '此 Key 可用的 Copilot 模型'
       }
     },
     customKeyLabel: '自定义密钥',

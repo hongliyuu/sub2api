@@ -117,6 +117,35 @@
             {{ platformNote }}
           </p>
         </div>
+
+        <!-- Copilot Available Models -->
+        <div v-if="platform === 'copilot' && copilotModelGroups.length > 0" class="space-y-3">
+          <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('keys.useKeyModal.copilot.availableModels') }}</p>
+          <div class="space-y-4">
+            <div v-for="group in copilotModelGroups" :key="group.key">
+              <!-- Vendor label -->
+              <p :class="['text-sm font-bold mb-1.5', group.color]">{{ group.label }}</p>
+              <!-- Model rows -->
+              <div class="rounded-lg border border-gray-200 dark:border-dark-600 overflow-hidden">
+                <div
+                  v-for="(modelId, idx) in group.models"
+                  :key="modelId"
+                  :class="[
+                    'group flex items-center justify-between px-3 py-1.5 cursor-pointer transition-colors',
+                    'hover:bg-gray-50 dark:hover:bg-dark-700',
+                    idx !== group.models.length - 1 ? 'border-b border-gray-100 dark:border-dark-700' : ''
+                  ]"
+                  @click="copyModelId(modelId)"
+                >
+                  <span class="text-xs font-mono text-gray-700 dark:text-gray-300">{{ modelId }}</span>
+                  <svg class="w-3.5 h-3.5 text-gray-300 dark:text-gray-600 group-hover:text-gray-500 dark:group-hover:text-gray-400 flex-shrink-0 ml-2 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </template>
     </div>
 
@@ -176,6 +205,11 @@ const copiedIndex = ref<number | null>(null)
 const activeTab = ref<string>('unix')
 const activeClientTab = ref<string>('claude')
 
+// 动态获取的 Copilot Claude 模型角色，null 表示未加载或加载失败（使用 fallback）
+const copilotModels = ref<{ sonnet: string; opus: string; haiku: string } | null>(null)
+// 完整的 Copilot 可用模型列表（用于展示）
+const copilotModelList = ref<string[]>([])
+
 // Reset tabs when platform changes
 const defaultClientTab = computed(() => {
   switch (props.platform) {
@@ -201,6 +235,60 @@ watch(() => props.platform, () => {
 watch(activeClientTab, () => {
   activeTab.value = 'unix'
 })
+
+// 弹窗打开时动态获取 Copilot 模型列表
+watch(() => props.show, (visible) => {
+  if (visible) loadCopilotModels()
+  else copilotModelList.value = []
+})
+
+// 对 Copilot 模型列表排序：Claude → GPT/o- → Gemini → 其他，组内字典序降序（新版本在前）
+function sortCopilotModels(ids: string[]): string[] {
+  const vendorOrder = (id: string): number => {
+    if (id.startsWith('claude-'))  return 0
+    if (id.startsWith('gpt-') || /^o\d/.test(id)) return 1
+    if (id.startsWith('gemini-'))  return 2
+    return 3
+  }
+  return [...ids].sort((a, b) => {
+    const vd = vendorOrder(a) - vendorOrder(b)
+    if (vd !== 0) return vd
+    // 同厂商内：字典序降序（版本号大的排前面）
+    return b.localeCompare(a)
+  })
+}
+
+// 解析模型 ID 列表，识别 sonnet/opus/haiku 角色并取最新版本
+function resolveModelRoles(ids: string[]): { sonnet: string; opus: string; haiku: string } {
+  const claudeIds = ids.filter(id => id.startsWith('claude-'))
+  const pickLatest = (role: string): string | null =>
+    claudeIds.filter(id => id.includes(role)).sort().at(-1) ?? null
+  return {
+    sonnet: pickLatest('sonnet') ?? 'claude-sonnet-4-6',
+    opus:   pickLatest('opus')   ?? 'claude-opus-4-6',
+    haiku:  pickLatest('haiku')  ?? 'claude-haiku-4-5',
+  }
+}
+
+// 从后端 /copilot/v1/models 动态获取当前 group 可用模型，失败时降级为 null（使用 fallback）
+async function loadCopilotModels(): Promise<void> {
+  if (props.platform !== 'copilot' || !props.apiKey) return
+  try {
+    const baseRoot = (props.baseUrl || window.location.origin)
+      .replace(/\/v1\/?$/, '').replace(/\/+$/, '')
+    const res = await fetch(`${baseRoot}/copilot/v1/models`, {
+      headers: { Authorization: `Bearer ${props.apiKey}` },
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const json = await res.json()
+    const ids: string[] = (json.data ?? []).map((m: { id: string }) => m.id)
+    copilotModelList.value = sortCopilotModels(ids)
+    copilotModels.value = resolveModelRoles(ids)
+  } catch {
+    copilotModels.value = null
+  }
+}
 
 // Icon components
 const AppleIcon = {
@@ -371,6 +459,44 @@ const platformNote = computed(() => {
 
 const showPlatformNote = computed(() => activeClientTab.value !== 'opencode')
 
+// Copilot 模型按厂商分组展示
+const VENDOR_LABELS: Record<string, string> = {
+  claude:  'Anthropic Claude',
+  gpt:     'OpenAI GPT',
+  gemini:  'Google Gemini',
+  other:   'Other',
+}
+const VENDOR_COLORS: Record<string, string> = {
+  claude: 'text-orange-500 dark:text-orange-400',
+  gpt:    'text-emerald-600 dark:text-emerald-400',
+  gemini: 'text-blue-600 dark:text-blue-400',
+  other:  'text-gray-500 dark:text-gray-400',
+}
+function vendorKey(id: string): string {
+  if (id.startsWith('claude-')) return 'claude'
+  if (id.startsWith('gpt-') || /^o\d/.test(id)) return 'gpt'
+  if (id.startsWith('gemini-')) return 'gemini'
+  return 'other'
+}
+const copilotModelGroups = computed(() => {
+  const order = ['claude', 'gpt', 'gemini', 'other']
+  const map: Record<string, string[]> = {}
+  for (const id of copilotModelList.value) {
+    const k = vendorKey(id)
+    ;(map[k] ??= []).push(id)
+  }
+  return order.filter(k => map[k]?.length).map(k => ({
+    key: k,
+    label: VENDOR_LABELS[k],
+    color: VENDOR_COLORS[k],
+    models: map[k],
+  }))
+})
+
+async function copyModelId(modelId: string): Promise<void> {
+  await clipboardCopy(modelId, modelId)
+}
+
 const escapeHtml = (value: string) => value
   .replace(/&/g, '&amp;')
   .replace(/</g, '&lt;')
@@ -451,8 +577,8 @@ const currentFiles = computed((): FileConfig[] => {
       if (activeClientTab.value === 'codex') {
         return generateOpenAIFiles(copilotBase, apiKey)
       }
-      // claude tab: use Anthropic-compatible endpoint at /copilot/v1
-      return generateAnthropicFiles(ensureV1(copilotBase), apiKey, true)
+      // claude tab: use Anthropic-compatible endpoint at /copilot (Claude Code appends /v1 automatically)
+      return generateAnthropicFiles(copilotBase, apiKey, true)
     default:
       return generateAnthropicFiles(baseUrl, apiKey)
   }
@@ -492,20 +618,25 @@ $env:CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`
 
   let vscodeContent: string
   if (richSettings) {
+    const models = copilotModels.value ?? {
+      sonnet: 'claude-sonnet-4-6',
+      opus:   'claude-opus-4-6',
+      haiku:  'claude-haiku-4-5',
+    }
     vscodeContent = JSON.stringify({
       "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
       "alwaysThinkingEnabled": true,
       "env": {
         "ANTHROPIC_AUTH_TOKEN": apiKey,
         "ANTHROPIC_BASE_URL": baseUrl,
-        "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-haiku-4-5",
-        "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-4-6",
-        "ANTHROPIC_DEFAULT_SONNET_MODEL": "claude-sonnet-4-6",
-        "ANTHROPIC_MODEL": "claude-sonnet-4-6",
-        "ANTHROPIC_REASONING_MODEL": "claude-opus-4-6"
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL": models.haiku,
+        "ANTHROPIC_DEFAULT_OPUS_MODEL": models.opus,
+        "ANTHROPIC_DEFAULT_SONNET_MODEL": models.sonnet,
+        "ANTHROPIC_MODEL": models.sonnet,
+        "ANTHROPIC_REASONING_MODEL": models.opus,
       },
       "includeCoAuthoredBy": false,
-      "model": "claude-sonnet-4-6",
+      "model": "opusplan",
       "skipDangerousModePermissionPrompt": true
     }, null, 2)
   } else {

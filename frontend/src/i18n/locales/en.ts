@@ -687,6 +687,7 @@ export default {
         description: 'Configure your client to route GitHub Copilot requests through the /copilot path. Claude Code uses the Anthropic-compatible endpoint; Codex CLI uses the OpenAI Responses endpoint.',
         claudeNote: 'These environment variables will be active in the current terminal session. For permanent configuration, add them to ~/.bashrc, ~/.zshrc, or the appropriate configuration file.',
         codexNote: 'Make sure the config directory exists. macOS/Linux users can run mkdir -p ~/.codex to create it.',
+        availableModels: 'Available Copilot models for this key',
       },
     },
     customKeyLabel: 'Custom Key',
