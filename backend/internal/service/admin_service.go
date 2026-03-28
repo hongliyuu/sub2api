@@ -160,8 +160,9 @@ type CreateGroupInput struct {
 	// Sora 存储配额
 	SoraStorageQuotaBytes int64
 	// OpenAI Messages 调度配置（仅 openai 平台使用）
-	AllowMessagesDispatch bool
-	DefaultMappedModel    string
+	AllowMessagesDispatch         bool
+	DefaultMappedModel            string
+	ProxyBucketLoadBalanceEnabled bool
 	// 从指定分组复制账号（创建分组后在同一事务内绑定）
 	CopyAccountsFromGroupIDs []int64
 }
@@ -199,8 +200,9 @@ type UpdateGroupInput struct {
 	// Sora 存储配额
 	SoraStorageQuotaBytes *int64
 	// OpenAI Messages 调度配置（仅 openai 平台使用）
-	AllowMessagesDispatch *bool
-	DefaultMappedModel    *string
+	AllowMessagesDispatch         *bool
+	DefaultMappedModel            *string
+	ProxyBucketLoadBalanceEnabled *bool
 	// 从指定分组复制账号（同步操作：先清空当前分组的账号绑定，再绑定源分组的账号）
 	CopyAccountsFromGroupIDs []int64
 }
@@ -942,6 +944,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		SoraStorageQuotaBytes:           input.SoraStorageQuotaBytes,
 		AllowMessagesDispatch:           input.AllowMessagesDispatch,
 		DefaultMappedModel:              input.DefaultMappedModel,
+		ProxyBucketLoadBalanceEnabled:   input.ProxyBucketLoadBalanceEnabled,
 	}
 	if err := s.groupRepo.Create(ctx, group); err != nil {
 		return nil, err
@@ -1156,6 +1159,9 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	}
 	if input.DefaultMappedModel != nil {
 		group.DefaultMappedModel = *input.DefaultMappedModel
+	}
+	if input.ProxyBucketLoadBalanceEnabled != nil {
+		group.ProxyBucketLoadBalanceEnabled = *input.ProxyBucketLoadBalanceEnabled
 	}
 
 	if err := s.groupRepo.Update(ctx, group); err != nil {

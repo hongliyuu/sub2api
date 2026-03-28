@@ -58,8 +58,9 @@ type Group struct {
 	SortOrder int
 
 	// OpenAI Messages 调度配置（仅 openai 平台使用）
-	AllowMessagesDispatch bool
-	DefaultMappedModel    string
+	AllowMessagesDispatch         bool
+	DefaultMappedModel            string
+	ProxyBucketLoadBalanceEnabled bool
 
 	CreatedAt time.Time
 	UpdatedAt time.Time

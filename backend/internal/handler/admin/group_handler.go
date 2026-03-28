@@ -111,8 +111,9 @@ type CreateGroupRequest struct {
 	// Sora 存储配额
 	SoraStorageQuotaBytes int64 `json:"sora_storage_quota_bytes"`
 	// OpenAI Messages 调度配置（仅 openai 平台使用）
-	AllowMessagesDispatch bool   `json:"allow_messages_dispatch"`
-	DefaultMappedModel    string `json:"default_mapped_model"`
+	AllowMessagesDispatch         bool   `json:"allow_messages_dispatch"`
+	DefaultMappedModel            string `json:"default_mapped_model"`
+	ProxyBucketLoadBalanceEnabled bool   `json:"proxy_bucket_load_balance_enabled"`
 	// 从指定分组复制账号（创建后自动绑定）
 	CopyAccountsFromGroupIDs []int64 `json:"copy_accounts_from_group_ids"`
 }
@@ -149,8 +150,9 @@ type UpdateGroupRequest struct {
 	// Sora 存储配额
 	SoraStorageQuotaBytes *int64 `json:"sora_storage_quota_bytes"`
 	// OpenAI Messages 调度配置（仅 openai 平台使用）
-	AllowMessagesDispatch *bool   `json:"allow_messages_dispatch"`
-	DefaultMappedModel    *string `json:"default_mapped_model"`
+	AllowMessagesDispatch         *bool   `json:"allow_messages_dispatch"`
+	DefaultMappedModel            *string `json:"default_mapped_model"`
+	ProxyBucketLoadBalanceEnabled *bool   `json:"proxy_bucket_load_balance_enabled"`
 	// 从指定分组复制账号（同步操作：先清空当前分组的账号绑定，再绑定源分组的账号）
 	CopyAccountsFromGroupIDs []int64 `json:"copy_accounts_from_group_ids"`
 }
@@ -268,6 +270,7 @@ func (h *GroupHandler) Create(c *gin.Context) {
 		SoraStorageQuotaBytes:           req.SoraStorageQuotaBytes,
 		AllowMessagesDispatch:           req.AllowMessagesDispatch,
 		DefaultMappedModel:              req.DefaultMappedModel,
+		ProxyBucketLoadBalanceEnabled:   req.ProxyBucketLoadBalanceEnabled,
 		CopyAccountsFromGroupIDs:        req.CopyAccountsFromGroupIDs,
 	})
 	if err != nil {
@@ -321,6 +324,7 @@ func (h *GroupHandler) Update(c *gin.Context) {
 		SoraStorageQuotaBytes:           req.SoraStorageQuotaBytes,
 		AllowMessagesDispatch:           req.AllowMessagesDispatch,
 		DefaultMappedModel:              req.DefaultMappedModel,
+		ProxyBucketLoadBalanceEnabled:   req.ProxyBucketLoadBalanceEnabled,
 		CopyAccountsFromGroupIDs:        req.CopyAccountsFromGroupIDs,
 	})
 	if err != nil {

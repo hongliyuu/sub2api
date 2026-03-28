@@ -1745,6 +1745,8 @@ export default {
         title: 'OpenAI Messages 调度配置',
         allowDispatch: '允许 /v1/messages 调度',
         allowDispatchHint: '启用后，此 OpenAI 分组的 API Key 可以通过 /v1/messages 端点调度请求',
+        proxyBucket: '启用 Proxy 分桶调度',
+        proxyBucketHint: '启用后，相关调度路径会在粘性会话未命中后优先按 proxy_id 分桶，优先使用低负载代理桶；若没有可参与分桶的代理账号则自动回退到原逻辑',
         defaultModel: '默认映射模型',
         defaultModelPlaceholder: '例如: gpt-4.1',
         defaultModelHint: '当账号未配置模型映射时，所有请求模型将映射到此模型'

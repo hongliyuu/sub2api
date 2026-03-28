@@ -399,6 +399,7 @@ export interface Group {
   fallback_group_id_on_invalid_request: number | null
   // OpenAI Messages 调度开关（用户侧需要此字段判断是否展示 Claude Code 教程）
   allow_messages_dispatch?: boolean
+  proxy_bucket_load_balance_enabled?: boolean
   created_at: string
   updated_at: string
 }
@@ -423,6 +424,7 @@ export interface AdminGroup extends Group {
 
   // OpenAI Messages 调度配置（仅 openai 平台使用）
   default_mapped_model?: string
+  proxy_bucket_load_balance_enabled?: boolean
 
   // 分组排序
   sort_order: number
@@ -510,7 +512,9 @@ export interface CreateGroupRequest {
   mcp_xml_inject?: boolean
   simulate_claude_max_enabled?: boolean
   supported_model_scopes?: string[]
-  // 从指定分组复制账号
+  allow_messages_dispatch?: boolean
+  default_mapped_model?: string
+  proxy_bucket_load_balance_enabled?: boolean
   copy_accounts_from_group_ids?: number[]
 }
 
@@ -539,6 +543,9 @@ export interface UpdateGroupRequest {
   mcp_xml_inject?: boolean
   simulate_claude_max_enabled?: boolean
   supported_model_scopes?: string[]
+  allow_messages_dispatch?: boolean
+  default_mapped_model?: string
+  proxy_bucket_load_balance_enabled?: boolean
   copy_accounts_from_group_ids?: number[]
 }
 

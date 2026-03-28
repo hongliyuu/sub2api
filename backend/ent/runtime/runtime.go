@@ -464,6 +464,10 @@ func init() {
 	group.DefaultDefaultMappedModel = groupDescDefaultMappedModel.Default.(string)
 	// group.DefaultMappedModelValidator is a validator for the "default_mapped_model" field. It is called by the builders before save.
 	group.DefaultMappedModelValidator = groupDescDefaultMappedModel.Validators[0].(func(string) error)
+	// groupDescProxyBucketLoadBalanceEnabled is the schema descriptor for proxy_bucket_load_balance_enabled field.
+	groupDescProxyBucketLoadBalanceEnabled := groupFields[29].Descriptor()
+	// group.DefaultProxyBucketLoadBalanceEnabled holds the default value on creation for the proxy_bucket_load_balance_enabled field.
+	group.DefaultProxyBucketLoadBalanceEnabled = groupDescProxyBucketLoadBalanceEnabled.Default.(bool)
 	idempotencyrecordMixin := schema.IdempotencyRecord{}.Mixin()
 	idempotencyrecordMixinFields0 := idempotencyrecordMixin[0].Fields()
 	_ = idempotencyrecordMixinFields0

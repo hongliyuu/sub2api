@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/stretchr/testify/require"
 )
 
@@ -543,6 +544,95 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_LoadBalanceTopKFallback
 	require.Equal(t, 3, decision.CandidateCount)
 	require.Equal(t, 2, decision.TopK)
 	require.Greater(t, decision.LoadSkew, 0.0)
+	if selection.ReleaseFunc != nil {
+		selection.ReleaseFunc()
+	}
+}
+
+func TestOpenAIGatewayService_SelectAccountWithScheduler_ProxyBucketPrefersLowerLoad(t *testing.T) {
+	ctx := context.Background()
+	groupID := int64(13)
+	proxy101 := int64(101)
+	proxy202 := int64(202)
+	ctx = context.WithValue(ctx, ctxkey.Group, &Group{
+		ID:                             groupID,
+		Platform:                       PlatformOpenAI,
+		Status:                         StatusActive,
+		Hydrated:                       true,
+		ProxyBucketLoadBalanceEnabled:  true,
+	})
+
+	accounts := []Account{
+		{ID: 5001, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 5, ProxyID: &proxy101},
+		{ID: 5002, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 1, ProxyID: &proxy202},
+		{ID: 5003, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 0},
+	}
+	concurrencyCache := stubConcurrencyCache{
+		loadMap: map[int64]*AccountLoadInfo{
+			5001: {AccountID: 5001, LoadRate: 80},
+			5002: {AccountID: 5002, LoadRate: 10},
+			5003: {AccountID: 5003, LoadRate: 0},
+		},
+	}
+
+	svc := &OpenAIGatewayService{
+		accountRepo:        stubOpenAIAccountRepo{accounts: accounts},
+		cache:              &stubGatewayCache{},
+		cfg:                &config.Config{},
+		concurrencyService: NewConcurrencyService(concurrencyCache),
+	}
+
+	selection, decision, err := svc.SelectAccountWithScheduler(ctx, &groupID, "", "", "gpt-5.1", nil, OpenAIUpstreamTransportAny)
+	require.NoError(t, err)
+	require.NotNil(t, selection)
+	require.NotNil(t, selection.Account)
+	require.Equal(t, int64(5002), selection.Account.ID)
+	require.Equal(t, openAIAccountScheduleLayerLoadBalance, decision.Layer)
+	require.Equal(t, 1, decision.CandidateCount)
+	if selection.ReleaseFunc != nil {
+		selection.ReleaseFunc()
+	}
+}
+
+func TestOpenAIGatewayService_SelectAccountWithScheduler_ProxyBucketStickyStillWins(t *testing.T) {
+	ctx := context.Background()
+	groupID := int64(14)
+	proxy101 := int64(101)
+	proxy202 := int64(202)
+	ctx = context.WithValue(ctx, ctxkey.Group, &Group{
+		ID:                             groupID,
+		Platform:                       PlatformOpenAI,
+		Status:                         StatusActive,
+		Hydrated:                       true,
+		ProxyBucketLoadBalanceEnabled:  true,
+	})
+
+	accounts := []Account{
+		{ID: 5101, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 5, ProxyID: &proxy101},
+		{ID: 5102, Platform: PlatformOpenAI, Type: AccountTypeAPIKey, Status: StatusActive, Schedulable: true, Concurrency: 1, Priority: 1, ProxyID: &proxy202},
+	}
+	cache := &stubGatewayCache{sessionBindings: map[string]int64{"openai:proxy-sticky": 5101}}
+	concurrencyCache := stubConcurrencyCache{
+		loadMap: map[int64]*AccountLoadInfo{
+			5101: {AccountID: 5101, LoadRate: 80},
+			5102: {AccountID: 5102, LoadRate: 10},
+		},
+	}
+
+	svc := &OpenAIGatewayService{
+		accountRepo:        stubOpenAIAccountRepo{accounts: accounts},
+		cache:              cache,
+		cfg:                &config.Config{},
+		concurrencyService: NewConcurrencyService(concurrencyCache),
+	}
+
+	selection, decision, err := svc.SelectAccountWithScheduler(ctx, &groupID, "", "proxy-sticky", "gpt-5.1", nil, OpenAIUpstreamTransportAny)
+	require.NoError(t, err)
+	require.NotNil(t, selection)
+	require.NotNil(t, selection.Account)
+	require.Equal(t, int64(5101), selection.Account.ID)
+	require.Equal(t, openAIAccountScheduleLayerSessionSticky, decision.Layer)
+	require.True(t, decision.StickySessionHit)
 	if selection.ReleaseFunc != nil {
 		selection.ReleaseFunc()
 	}

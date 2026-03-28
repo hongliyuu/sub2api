@@ -452,6 +452,20 @@ func (_c *GroupCreate) SetNillableDefaultMappedModel(v *string) *GroupCreate {
 	return _c
 }
 
+// SetProxyBucketLoadBalanceEnabled sets the "proxy_bucket_load_balance_enabled" field.
+func (_c *GroupCreate) SetProxyBucketLoadBalanceEnabled(v bool) *GroupCreate {
+	_c.mutation.SetProxyBucketLoadBalanceEnabled(v)
+	return _c
+}
+
+// SetNillableProxyBucketLoadBalanceEnabled sets the "proxy_bucket_load_balance_enabled" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableProxyBucketLoadBalanceEnabled(v *bool) *GroupCreate {
+	if v != nil {
+		_c.SetProxyBucketLoadBalanceEnabled(*v)
+	}
+	return _c
+}
+
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
 func (_c *GroupCreate) AddAPIKeyIDs(ids ...int64) *GroupCreate {
 	_c.mutation.AddAPIKeyIDs(ids...)
@@ -649,6 +663,10 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultDefaultMappedModel
 		_c.mutation.SetDefaultMappedModel(v)
 	}
+	if _, ok := _c.mutation.ProxyBucketLoadBalanceEnabled(); !ok {
+		v := group.DefaultProxyBucketLoadBalanceEnabled
+		_c.mutation.SetProxyBucketLoadBalanceEnabled(v)
+	}
 	return nil
 }
 
@@ -729,6 +747,9 @@ func (_c *GroupCreate) check() error {
 		if err := group.DefaultMappedModelValidator(v); err != nil {
 			return &ValidationError{Name: "default_mapped_model", err: fmt.Errorf(`ent: validator failed for field "Group.default_mapped_model": %w`, err)}
 		}
+	}
+	if _, ok := _c.mutation.ProxyBucketLoadBalanceEnabled(); !ok {
+		return &ValidationError{Name: "proxy_bucket_load_balance_enabled", err: errors.New(`ent: missing required field "Group.proxy_bucket_load_balance_enabled"`)}
 	}
 	return nil
 }
@@ -884,6 +905,10 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.DefaultMappedModel(); ok {
 		_spec.SetField(group.FieldDefaultMappedModel, field.TypeString, value)
 		_node.DefaultMappedModel = value
+	}
+	if value, ok := _c.mutation.ProxyBucketLoadBalanceEnabled(); ok {
+		_spec.SetField(group.FieldProxyBucketLoadBalanceEnabled, field.TypeBool, value)
+		_node.ProxyBucketLoadBalanceEnabled = value
 	}
 	if nodes := _c.mutation.APIKeysIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -1599,6 +1624,18 @@ func (u *GroupUpsert) UpdateDefaultMappedModel() *GroupUpsert {
 	return u
 }
 
+// SetProxyBucketLoadBalanceEnabled sets the "proxy_bucket_load_balance_enabled" field.
+func (u *GroupUpsert) SetProxyBucketLoadBalanceEnabled(v bool) *GroupUpsert {
+	u.Set(group.FieldProxyBucketLoadBalanceEnabled, v)
+	return u
+}
+
+// UpdateProxyBucketLoadBalanceEnabled sets the "proxy_bucket_load_balance_enabled" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateProxyBucketLoadBalanceEnabled() *GroupUpsert {
+	u.SetExcluded(group.FieldProxyBucketLoadBalanceEnabled)
+	return u
+}
+
 // UpdateNewValues updates the mutable fields using the new values that were set on create.
 // Using this option is equivalent to using:
 //
@@ -2292,6 +2329,20 @@ func (u *GroupUpsertOne) SetDefaultMappedModel(v string) *GroupUpsertOne {
 func (u *GroupUpsertOne) UpdateDefaultMappedModel() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateDefaultMappedModel()
+	})
+}
+
+// SetProxyBucketLoadBalanceEnabled sets the "proxy_bucket_load_balance_enabled" field.
+func (u *GroupUpsertOne) SetProxyBucketLoadBalanceEnabled(v bool) *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetProxyBucketLoadBalanceEnabled(v)
+	})
+}
+
+// UpdateProxyBucketLoadBalanceEnabled sets the "proxy_bucket_load_balance_enabled" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateProxyBucketLoadBalanceEnabled() *GroupUpsertOne {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateProxyBucketLoadBalanceEnabled()
 	})
 }
 
@@ -3154,6 +3205,20 @@ func (u *GroupUpsertBulk) SetDefaultMappedModel(v string) *GroupUpsertBulk {
 func (u *GroupUpsertBulk) UpdateDefaultMappedModel() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
 		s.UpdateDefaultMappedModel()
+	})
+}
+
+// SetProxyBucketLoadBalanceEnabled sets the "proxy_bucket_load_balance_enabled" field.
+func (u *GroupUpsertBulk) SetProxyBucketLoadBalanceEnabled(v bool) *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.SetProxyBucketLoadBalanceEnabled(v)
+	})
+}
+
+// UpdateProxyBucketLoadBalanceEnabled sets the "proxy_bucket_load_balance_enabled" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateProxyBucketLoadBalanceEnabled() *GroupUpsertBulk {
+	return u.Update(func(s *GroupUpsert) {
+		s.UpdateProxyBucketLoadBalanceEnabled()
 	})
 }
 
