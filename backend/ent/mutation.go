@@ -18290,6 +18290,7 @@ type UsageLogMutation struct {
 	image_size                  *string
 	media_type                  *string
 	cache_ttl_overridden        *bool
+	initiator                   *string
 	created_at                  *time.Time
 	clearedFields               map[string]struct{}
 	user                        *int64
@@ -20330,6 +20331,42 @@ func (m *UsageLogMutation) ResetCacheTTLOverridden() {
 	m.cache_ttl_overridden = nil
 }
 
+// SetInitiator sets the "initiator" field.
+func (m *UsageLogMutation) SetInitiator(s string) {
+	m.initiator = &s
+}
+
+// Initiator returns the value of the "initiator" field in the mutation.
+func (m *UsageLogMutation) Initiator() (r string, exists bool) {
+	v := m.initiator
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInitiator returns the old "initiator" field's value of the UsageLog entity.
+// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageLogMutation) OldInitiator(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInitiator is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInitiator requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInitiator: %w", err)
+	}
+	return oldValue.Initiator, nil
+}
+
+// ResetInitiator resets all changes to the "initiator" field.
+func (m *UsageLogMutation) ResetInitiator() {
+	m.initiator = nil
+}
+
 // SetCreatedAt sets the "created_at" field.
 func (m *UsageLogMutation) SetCreatedAt(t time.Time) {
 	m.created_at = &t
@@ -20535,7 +20572,7 @@ func (m *UsageLogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UsageLogMutation) Fields() []string {
-	fields := make([]string, 0, 37)
+	fields := make([]string, 0, 38)
 	if m.user != nil {
 		fields = append(fields, usagelog.FieldUserID)
 	}
@@ -20644,6 +20681,9 @@ func (m *UsageLogMutation) Fields() []string {
 	if m.cache_ttl_overridden != nil {
 		fields = append(fields, usagelog.FieldCacheTTLOverridden)
 	}
+	if m.initiator != nil {
+		fields = append(fields, usagelog.FieldInitiator)
+	}
 	if m.created_at != nil {
 		fields = append(fields, usagelog.FieldCreatedAt)
 	}
@@ -20727,6 +20767,8 @@ func (m *UsageLogMutation) Field(name string) (ent.Value, bool) {
 		return m.MediaType()
 	case usagelog.FieldCacheTTLOverridden:
 		return m.CacheTTLOverridden()
+	case usagelog.FieldInitiator:
+		return m.Initiator()
 	case usagelog.FieldCreatedAt:
 		return m.CreatedAt()
 	}
@@ -20810,6 +20852,8 @@ func (m *UsageLogMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldMediaType(ctx)
 	case usagelog.FieldCacheTTLOverridden:
 		return m.OldCacheTTLOverridden(ctx)
+	case usagelog.FieldInitiator:
+		return m.OldInitiator(ctx)
 	case usagelog.FieldCreatedAt:
 		return m.OldCreatedAt(ctx)
 	}
@@ -21072,6 +21116,13 @@ func (m *UsageLogMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetCacheTTLOverridden(v)
+		return nil
+	case usagelog.FieldInitiator:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInitiator(v)
 		return nil
 	case usagelog.FieldCreatedAt:
 		v, ok := value.(time.Time)
@@ -21590,6 +21641,9 @@ func (m *UsageLogMutation) ResetField(name string) error {
 		return nil
 	case usagelog.FieldCacheTTLOverridden:
 		m.ResetCacheTTLOverridden()
+		return nil
+	case usagelog.FieldInitiator:
+		m.ResetInitiator()
 		return nil
 	case usagelog.FieldCreatedAt:
 		m.ResetCreatedAt()
