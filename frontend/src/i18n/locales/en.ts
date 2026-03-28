@@ -341,6 +341,8 @@ export default {
     redeemCodes: 'Redeem Codes',
     ops: 'Ops',
     opsRequestInspect: 'Request inspect',
+    copilotUsers: 'Copilot User Requests',
+    copilotAccounts: 'Copilot Account Costs',
     promoCodes: 'Promo Codes',
     settings: 'Settings',
     myAccount: 'My Account',
@@ -3425,6 +3427,18 @@ export default {
           canceled: 'Canceled'
         }
       }
+    },
+
+    // Copilot Analytics
+    copilot: {
+      users: {
+        title: 'Copilot User Requests',
+        description: 'View per-user Copilot premium request and sub-request statistics',
+      },
+      accounts: {
+        title: 'Copilot Account Costs',
+        description: 'View Copilot account quota usage, plan costs, and budget alerts',
+      },
     },
 
     // Ops Monitoring

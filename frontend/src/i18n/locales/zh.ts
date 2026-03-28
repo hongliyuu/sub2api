@@ -342,6 +342,8 @@ export default {
     redeemCodes: '兑换码',
     ops: '运维监控',
     opsRequestInspect: '请求排查',
+    copilotUsers: 'Copilot 用户请求',
+    copilotAccounts: 'Copilot 账户成本',
     promoCodes: '优惠码',
     settings: '系统设置',
     myAccount: '我的账户',
@@ -3586,6 +3588,18 @@ export default {
           canceled: '已取消'
         }
       }
+    },
+
+    // Copilot Analytics
+    copilot: {
+      users: {
+        title: 'Copilot 用户请求分析',
+        description: '查看各用户的 Copilot Premium 请求与子请求统计',
+      },
+      accounts: {
+        title: 'Copilot 账户成本分析',
+        description: '查看 Copilot 账户配额消耗、套餐费用与预算告警',
+      },
     },
 
     // Ops Monitoring
