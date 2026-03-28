@@ -136,4 +136,4 @@ aicodex
 output/
 
 backend/logs/*
-.ccb/*
+.ccb/*.worktrees/
