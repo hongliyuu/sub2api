@@ -413,6 +413,7 @@ func (h *SoraGatewayHandler) ChatCompletions(c *gin.Context) {
 		capturedResult := result
 		capturedReqBody := body
 		capturedAccount := account
+		capturedUpstreamReqBody, capturedUpstreamRespBody := service.GetOpsUpstreamBodies(c)
 
 		// 使用量记录通过有界 worker 池提交，避免请求热路径创建无界 goroutine。
 		h.submitUsageRecordTask(func(ctx context.Context) {
@@ -451,12 +452,14 @@ func (h *SoraGatewayHandler) ChatCompletions(c *gin.Context) {
 					capturedResult.Duration.Milliseconds(),
 					200,
 					&service.RequestLogInput{
-						RequestID:   capturedResult.RequestID,
-						UserID:      &userID,
-						APIKeyID:    &apiKeyID,
-						AccountID:   &accountID,
-						GroupID:     apiKey.GroupID,
-						RequestBody: capturedReqBody,
+						RequestID:            capturedResult.RequestID,
+						UserID:               &userID,
+						APIKeyID:             &apiKeyID,
+						AccountID:            &accountID,
+						GroupID:              apiKey.GroupID,
+						RequestBody:          capturedReqBody,
+						UpstreamRequestBody:  capturedUpstreamReqBody,
+						UpstreamResponseBody: capturedUpstreamRespBody,
 					},
 				)
 			}

@@ -21,6 +21,11 @@ const (
 	// This value is sanitized+trimmed before being persisted.
 	OpsUpstreamRequestBodyKey = "ops_upstream_request_body"
 
+	// Best-effort capture of the upstream response body (non-streaming only).
+	// Only set when the full response body can be read before forwarding to the client.
+	// Streaming responses are not captured here as they are flushed in real time.
+	OpsUpstreamResponseBodyKey = "ops_upstream_response_body"
+
 	// Optional stage latencies (milliseconds) for troubleshooting and alerting.
 	OpsAuthLatencyMsKey      = "ops_auth_latency_ms"
 	OpsRoutingLatencyMsKey   = "ops_routing_latency_ms"
@@ -44,6 +49,47 @@ func setOpsUpstreamRequestBody(c *gin.Context, body []byte) {
 	}
 	// 热路径避免 string(body) 额外分配，按需在落库前再转换。
 	c.Set(OpsUpstreamRequestBodyKey, body)
+}
+
+// setOpsUpstreamResponseBody stores the upstream response body on the gin context
+// for ops anomaly capture.  Only called for non-streaming responses where the full
+// body is available before being forwarded to the client.
+func setOpsUpstreamResponseBody(c *gin.Context, body []byte) {
+	if c == nil || len(body) == 0 {
+		return
+	}
+	c.Set(OpsUpstreamResponseBodyKey, body)
+}
+
+// GetOpsUpstreamBodies reads the upstream request and response bodies from the gin
+// context.  Both may be nil if not set (e.g. streaming responses, or when the
+// gateway did not record the upstream body).  Safe to call from handler goroutines
+// after capturing the values from the gin.Context before entering the goroutine.
+func GetOpsUpstreamBodies(c *gin.Context) (upstreamReqBody, upstreamRespBody []byte) {
+	if c == nil {
+		return nil, nil
+	}
+	if v, ok := c.Get(OpsUpstreamRequestBodyKey); ok {
+		switch raw := v.(type) {
+		case []byte:
+			upstreamReqBody = raw
+		case string:
+			if raw != "" {
+				upstreamReqBody = []byte(raw)
+			}
+		}
+	}
+	if v, ok := c.Get(OpsUpstreamResponseBodyKey); ok {
+		switch raw := v.(type) {
+		case []byte:
+			upstreamRespBody = raw
+		case string:
+			if raw != "" {
+				upstreamRespBody = []byte(raw)
+			}
+		}
+	}
+	return upstreamReqBody, upstreamRespBody
 }
 
 func SetOpsLatencyMs(c *gin.Context, key string, value int64) {

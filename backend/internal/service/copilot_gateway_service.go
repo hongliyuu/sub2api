@@ -151,6 +151,9 @@ func (s *CopilotGatewayService) ForwardChatCompletions(
 		}
 	}
 
+	// Store the upstream request body (post-rewrite) for ops anomaly capture.
+	setOpsUpstreamRequestBody(c, body)
+
 	// Send request
 	upstreamStart := time.Now()
 	resp, err := s.httpClient.Do(req) //nolint:gosec // URL is from trusted Copilot API config
@@ -283,6 +286,9 @@ func (s *CopilotGatewayService) handleNonStreamingResponse(
 
 	// Extract usage
 	usage := s.parseNonStreamUsage(body)
+
+	// Store upstream response body for ops anomaly capture (best-effort).
+	setOpsUpstreamResponseBody(c, body)
 
 	// Forward only safe, client-relevant headers (whitelist).
 	// Forwarding all upstream headers would leak internal routing details
@@ -685,6 +691,9 @@ func (s *CopilotGatewayService) ForwardResponses(
 		}
 	}
 
+	// Store the upstream request body for ops anomaly capture.
+	setOpsUpstreamRequestBody(c, body)
+
 	upstreamStartResponses := time.Now()
 	resp, err := s.httpClient.Do(req) //nolint:gosec // URL is from trusted Copilot API config
 	if err != nil {
@@ -850,6 +859,9 @@ func (s *CopilotGatewayService) ForwardMessages(
 			req.Header.Set(k, v)
 		}
 	}
+
+	// Store the upstream request body (translated to OpenAI format) for ops anomaly capture.
+	setOpsUpstreamRequestBody(c, openAIBody)
 
 	upstreamStartMessages := time.Now()
 	resp, err := s.httpClient.Do(req) //nolint:gosec // URL is from trusted Copilot API config

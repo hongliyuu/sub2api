@@ -317,6 +317,7 @@ func (h *CopilotGatewayHandler) ChatCompletions(c *gin.Context) {
 			// Capture request-scoped values before entering goroutine (gin.Context not safe across goroutines).
 			capturedRequestID := c.GetHeader("X-Request-ID")
 			capturedReqBody := body
+			capturedUpstreamReqBody, capturedUpstreamRespBody := service.GetOpsUpstreamBodies(c)
 			go func() {
 				recordCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
@@ -363,12 +364,14 @@ func (h *CopilotGatewayHandler) ChatCompletions(c *gin.Context) {
 						capturedResult.Duration.Milliseconds(),
 						200,
 						&service.RequestLogInput{
-							RequestID:   capturedRequestID,
-							UserID:      &userID,
-							APIKeyID:    &apiKeyID,
-							AccountID:   &accountID,
-							GroupID:     apiKey.GroupID,
-							RequestBody: capturedReqBody,
+							RequestID:            capturedRequestID,
+							UserID:               &userID,
+							APIKeyID:             &apiKeyID,
+							AccountID:            &accountID,
+							GroupID:              apiKey.GroupID,
+							RequestBody:          capturedReqBody,
+							UpstreamRequestBody:  capturedUpstreamReqBody,
+							UpstreamResponseBody: capturedUpstreamRespBody,
 						},
 					)
 				}
@@ -714,6 +717,7 @@ func (h *CopilotGatewayHandler) Responses(c *gin.Context) {
 			// Capture request-scoped values before entering goroutine (gin.Context not safe across goroutines).
 			capturedRequestID := c.GetHeader("X-Request-ID")
 			capturedReqBody := body
+			capturedUpstreamReqBodyResp, capturedUpstreamRespBodyResp := service.GetOpsUpstreamBodies(c)
 			go func() {
 				recordCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
@@ -761,12 +765,14 @@ func (h *CopilotGatewayHandler) Responses(c *gin.Context) {
 						capturedResult.Duration.Milliseconds(),
 						200,
 						&service.RequestLogInput{
-							RequestID:   capturedRequestID,
-							UserID:      &userID,
-							APIKeyID:    &apiKeyID,
-							AccountID:   &accountID,
-							GroupID:     apiKey.GroupID,
-							RequestBody: capturedReqBody,
+							RequestID:            capturedRequestID,
+							UserID:               &userID,
+							APIKeyID:             &apiKeyID,
+							AccountID:            &accountID,
+							GroupID:              apiKey.GroupID,
+							RequestBody:          capturedReqBody,
+							UpstreamRequestBody:  capturedUpstreamReqBodyResp,
+							UpstreamResponseBody: capturedUpstreamRespBodyResp,
 						},
 					)
 				}
