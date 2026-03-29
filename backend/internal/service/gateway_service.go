@@ -7323,6 +7323,9 @@ type RecordUsageInput struct {
 	RequestPayloadHash string             // 请求体语义哈希，用于降低 request_id 误复用时的静默误去重风险
 	ForceCacheBilling  bool               // 强制缓存计费：将 input_tokens 转为 cache_read 计费（用于粘性会话切换）
 	APIKeyService      APIKeyQuotaUpdater // 可选：用于更新API Key配额
+	SessionHash        string             // 粘性会话哈希（用于 access log / usage log 关联）
+	ClientRequestID    string             // 客户端请求唯一标识
+	Platform           string             // 上游平台标识（anthropic / gemini / antigravity / sora）
 }
 
 // APIKeyQuotaUpdater defines the interface for updating API Key quota and rate limit usage
@@ -7756,6 +7759,17 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 		usageLog.IPAddress = &input.IPAddress
 	}
 
+	// 添加会话追踪字段
+	if input.SessionHash != "" {
+		usageLog.SessionHash = &input.SessionHash
+	}
+	if input.ClientRequestID != "" {
+		usageLog.ClientRequestID = &input.ClientRequestID
+	}
+	if input.Platform != "" {
+		usageLog.Platform = &input.Platform
+	}
+
 	// 添加分组和订阅关联
 	if apiKey.GroupID != nil {
 		usageLog.GroupID = apiKey.GroupID
@@ -7810,6 +7824,9 @@ type RecordUsageLongContextInput struct {
 	LongContextMultiplier float64            // 超出阈值部分的倍率（如 2.0）
 	ForceCacheBilling     bool               // 强制缓存计费：将 input_tokens 转为 cache_read 计费（用于粘性会话切换）
 	APIKeyService         APIKeyQuotaUpdater // API Key 配额服务（可选）
+	SessionHash           string             // 粘性会话哈希（用于 access log / usage log 关联）
+	ClientRequestID       string             // 客户端请求唯一标识
+	Platform              string             // 上游平台标识（gemini / antigravity）
 }
 
 // RecordUsageWithLongContext 记录使用量并扣费，支持长上下文双倍计费（用于 Gemini）
@@ -7937,6 +7954,17 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 	// 添加 IPAddress
 	if input.IPAddress != "" {
 		usageLog.IPAddress = &input.IPAddress
+	}
+
+	// 添加会话追踪字段
+	if input.SessionHash != "" {
+		usageLog.SessionHash = &input.SessionHash
+	}
+	if input.ClientRequestID != "" {
+		usageLog.ClientRequestID = &input.ClientRequestID
+	}
+	if input.Platform != "" {
+		usageLog.Platform = &input.Platform
 	}
 
 	// 添加分组和订阅关联

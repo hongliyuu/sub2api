@@ -4110,6 +4110,9 @@ type OpenAIRecordUsageInput struct {
 	IPAddress          string // 请求的客户端 IP 地址
 	RequestPayloadHash string
 	APIKeyService      APIKeyQuotaUpdater
+	SessionHash        string // 粘性会话哈希（用于 access log / usage log 关联）
+	ClientRequestID    string // 客户端请求唯一标识
+	Platform           string // 上游平台标识（openai）
 }
 
 // RecordUsage records usage and deducts balance
@@ -4215,6 +4218,17 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	// 添加 IPAddress
 	if input.IPAddress != "" {
 		usageLog.IPAddress = &input.IPAddress
+	}
+
+	// 添加会话追踪字段
+	if input.SessionHash != "" {
+		usageLog.SessionHash = &input.SessionHash
+	}
+	if input.ClientRequestID != "" {
+		usageLog.ClientRequestID = &input.ClientRequestID
+	}
+	if input.Platform != "" {
+		usageLog.Platform = &input.Platform
 	}
 
 	if apiKey.GroupID != nil {

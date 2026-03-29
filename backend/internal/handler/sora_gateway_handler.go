@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
@@ -41,6 +42,7 @@ type SoraGatewayHandler struct {
 	soraTLSEnabled        bool
 	soraMediaSigningKey   string
 	soraMediaRoot         string
+	accessLogger          *logger.AccessLogger
 }
 
 // NewSoraGatewayHandler creates a new SoraGatewayHandler
@@ -51,6 +53,7 @@ func NewSoraGatewayHandler(
 	billingCacheService *service.BillingCacheService,
 	usageRecordWorkerPool *service.UsageRecordWorkerPool,
 	cfg *config.Config,
+	accessLogger *logger.AccessLogger,
 ) *SoraGatewayHandler {
 	pingInterval := time.Duration(0)
 	maxAccountSwitches := 3
@@ -83,11 +86,31 @@ func NewSoraGatewayHandler(
 		soraTLSEnabled:        soraTLSEnabled,
 		soraMediaSigningKey:   signKey,
 		soraMediaRoot:         mediaRoot,
+		accessLogger:          accessLogger,
 	}
 }
 
 // ChatCompletions handles Sora /v1/chat/completions endpoint
 func (h *SoraGatewayHandler) ChatCompletions(c *gin.Context) {
+	requestStart := time.Now()
+	var reqModel string
+	var sessionHash string
+	if h.accessLogger != nil {
+		defer func() {
+			params := CollectAccessLogParamsFromContext(c)
+			params.SessionHash = sessionHash
+			params.Platform = "sora"
+			params.Model = reqModel
+			params.Stream = true // Sora always uses streaming
+			params.DurationMs = int(time.Since(requestStart).Milliseconds())
+			params.StatusCode = c.Writer.Status()
+			params.UserAgent = c.GetHeader("User-Agent")
+			params.ClientIP = c.ClientIP()
+			params.InboundEndpoint = c.Request.URL.Path
+			h.accessLogger.Emit(BuildAccessLogEntry(params))
+		}()
+	}
+
 	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
 	if !ok {
 		h.errorResponse(c, http.StatusUnauthorized, "authentication_error", "Invalid API key")
@@ -135,7 +158,7 @@ func (h *SoraGatewayHandler) ChatCompletions(c *gin.Context) {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "model is required")
 		return
 	}
-	reqModel := modelResult.String()
+	reqModel = modelResult.String()
 
 	msgsResult := gjson.GetBytes(body, "messages")
 	if !msgsResult.IsArray() || len(msgsResult.Array()) == 0 {
@@ -216,7 +239,7 @@ func (h *SoraGatewayHandler) ChatCompletions(c *gin.Context) {
 		return
 	}
 
-	sessionHash := generateOpenAISessionHash(c, body)
+	sessionHash = generateOpenAISessionHash(c, body)
 
 	maxAccountSwitches := h.maxAccountSwitches
 	switchCount := 0
@@ -403,6 +426,7 @@ func (h *SoraGatewayHandler) ChatCompletions(c *gin.Context) {
 		requestPayloadHash := service.HashUsageRequestPayload(body)
 		inboundEndpoint := GetInboundEndpoint(c)
 		upstreamEndpoint := GetUpstreamEndpoint(c, account.Platform)
+		clientRequestID, _ := c.Request.Context().Value(ctxkey.ClientRequestID).(string)
 
 		// 使用量记录通过有界 worker 池提交，避免请求热路径创建无界 goroutine。
 		h.submitUsageRecordTask(func(ctx context.Context) {
@@ -417,6 +441,9 @@ func (h *SoraGatewayHandler) ChatCompletions(c *gin.Context) {
 				UserAgent:          userAgent,
 				IPAddress:          clientIP,
 				RequestPayloadHash: requestPayloadHash,
+				SessionHash:        sessionHash,
+				ClientRequestID:    clientRequestID,
+				Platform:           "sora",
 			}); err != nil {
 				logger.L().With(
 					zap.String("component", "handler.sora_gateway.chat_completions"),

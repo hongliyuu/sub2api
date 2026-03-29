@@ -86,6 +86,12 @@ type UsageLog struct {
 	ImageSize *string `json:"image_size,omitempty"`
 	// MediaType holds the value of the "media_type" field.
 	MediaType *string `json:"media_type,omitempty"`
+	// Sticky session hash for conversation-level tracing
+	SessionHash *string `json:"session_hash,omitempty"`
+	// Server-generated UUID for end-to-end request correlation
+	ClientRequestID *string `json:"client_request_id,omitempty"`
+	// Upstream provider platform: anthropic/openai/gemini/antigravity/sora
+	Platform *string `json:"platform,omitempty"`
 	// CacheTTLOverridden holds the value of the "cache_ttl_overridden" field.
 	CacheTTLOverridden bool `json:"cache_ttl_overridden,omitempty"`
 	// CreatedAt holds the value of the "created_at" field.
@@ -179,7 +185,7 @@ func (*UsageLog) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullFloat64)
 		case usagelog.FieldID, usagelog.FieldUserID, usagelog.FieldAPIKeyID, usagelog.FieldAccountID, usagelog.FieldGroupID, usagelog.FieldSubscriptionID, usagelog.FieldInputTokens, usagelog.FieldOutputTokens, usagelog.FieldCacheCreationTokens, usagelog.FieldCacheReadTokens, usagelog.FieldCacheCreation5mTokens, usagelog.FieldCacheCreation1hTokens, usagelog.FieldBillingType, usagelog.FieldDurationMs, usagelog.FieldFirstTokenMs, usagelog.FieldImageCount:
 			values[i] = new(sql.NullInt64)
-		case usagelog.FieldRequestID, usagelog.FieldModel, usagelog.FieldRequestedModel, usagelog.FieldUpstreamModel, usagelog.FieldUserAgent, usagelog.FieldIPAddress, usagelog.FieldImageSize, usagelog.FieldMediaType:
+		case usagelog.FieldRequestID, usagelog.FieldModel, usagelog.FieldRequestedModel, usagelog.FieldUpstreamModel, usagelog.FieldUserAgent, usagelog.FieldIPAddress, usagelog.FieldImageSize, usagelog.FieldMediaType, usagelog.FieldSessionHash, usagelog.FieldClientRequestID, usagelog.FieldPlatform:
 			values[i] = new(sql.NullString)
 		case usagelog.FieldCreatedAt:
 			values[i] = new(sql.NullTime)
@@ -407,6 +413,27 @@ func (_m *UsageLog) assignValues(columns []string, values []any) error {
 				_m.MediaType = new(string)
 				*_m.MediaType = value.String
 			}
+		case usagelog.FieldSessionHash:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field session_hash", values[i])
+			} else if value.Valid {
+				_m.SessionHash = new(string)
+				*_m.SessionHash = value.String
+			}
+		case usagelog.FieldClientRequestID:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field client_request_id", values[i])
+			} else if value.Valid {
+				_m.ClientRequestID = new(string)
+				*_m.ClientRequestID = value.String
+			}
+		case usagelog.FieldPlatform:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field platform", values[i])
+			} else if value.Valid {
+				_m.Platform = new(string)
+				*_m.Platform = value.String
+			}
 		case usagelog.FieldCacheTTLOverridden:
 			if value, ok := values[i].(*sql.NullBool); !ok {
 				return fmt.Errorf("unexpected type %T for field cache_ttl_overridden", values[i])
@@ -595,6 +622,21 @@ func (_m *UsageLog) String() string {
 	builder.WriteString(", ")
 	if v := _m.MediaType; v != nil {
 		builder.WriteString("media_type=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.SessionHash; v != nil {
+		builder.WriteString("session_hash=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.ClientRequestID; v != nil {
+		builder.WriteString("client_request_id=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.Platform; v != nil {
+		builder.WriteString("platform=")
 		builder.WriteString(*v)
 	}
 	builder.WriteString(", ")

@@ -947,12 +947,16 @@ func init() {
 	usagelogDescMediaType := usagelogFields[31].Descriptor()
 	// usagelog.MediaTypeValidator is a validator for the "media_type" field. It is called by the builders before save.
 	usagelog.MediaTypeValidator = usagelogDescMediaType.Validators[0].(func(string) error)
+	// usagelogDescPlatform is the schema descriptor for platform field.
+	usagelogDescPlatform := usagelogFields[34].Descriptor()
+	// usagelog.PlatformValidator is a validator for the "platform" field. It is called by the builders before save.
+	usagelog.PlatformValidator = usagelogDescPlatform.Validators[0].(func(string) error)
 	// usagelogDescCacheTTLOverridden is the schema descriptor for cache_ttl_overridden field.
-	usagelogDescCacheTTLOverridden := usagelogFields[32].Descriptor()
+	usagelogDescCacheTTLOverridden := usagelogFields[35].Descriptor()
 	// usagelog.DefaultCacheTTLOverridden holds the default value on creation for the cache_ttl_overridden field.
 	usagelog.DefaultCacheTTLOverridden = usagelogDescCacheTTLOverridden.Default.(bool)
 	// usagelogDescCreatedAt is the schema descriptor for created_at field.
-	usagelogDescCreatedAt := usagelogFields[33].Descriptor()
+	usagelogDescCreatedAt := usagelogFields[36].Descriptor()
 	// usagelog.DefaultCreatedAt holds the default value on creation for the created_at field.
 	usagelog.DefaultCreatedAt = usagelogDescCreatedAt.Default.(func() time.Time)
 	userMixin := schema.User{}.Mixin()

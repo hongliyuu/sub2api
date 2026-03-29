@@ -672,6 +672,66 @@ func (_u *UsageLogUpdate) ClearMediaType() *UsageLogUpdate {
 	return _u
 }
 
+// SetSessionHash sets the "session_hash" field.
+func (_u *UsageLogUpdate) SetSessionHash(v string) *UsageLogUpdate {
+	_u.mutation.SetSessionHash(v)
+	return _u
+}
+
+// SetNillableSessionHash sets the "session_hash" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableSessionHash(v *string) *UsageLogUpdate {
+	if v != nil {
+		_u.SetSessionHash(*v)
+	}
+	return _u
+}
+
+// ClearSessionHash clears the value of the "session_hash" field.
+func (_u *UsageLogUpdate) ClearSessionHash() *UsageLogUpdate {
+	_u.mutation.ClearSessionHash()
+	return _u
+}
+
+// SetClientRequestID sets the "client_request_id" field.
+func (_u *UsageLogUpdate) SetClientRequestID(v string) *UsageLogUpdate {
+	_u.mutation.SetClientRequestID(v)
+	return _u
+}
+
+// SetNillableClientRequestID sets the "client_request_id" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillableClientRequestID(v *string) *UsageLogUpdate {
+	if v != nil {
+		_u.SetClientRequestID(*v)
+	}
+	return _u
+}
+
+// ClearClientRequestID clears the value of the "client_request_id" field.
+func (_u *UsageLogUpdate) ClearClientRequestID() *UsageLogUpdate {
+	_u.mutation.ClearClientRequestID()
+	return _u
+}
+
+// SetPlatform sets the "platform" field.
+func (_u *UsageLogUpdate) SetPlatform(v string) *UsageLogUpdate {
+	_u.mutation.SetPlatform(v)
+	return _u
+}
+
+// SetNillablePlatform sets the "platform" field if the given value is not nil.
+func (_u *UsageLogUpdate) SetNillablePlatform(v *string) *UsageLogUpdate {
+	if v != nil {
+		_u.SetPlatform(*v)
+	}
+	return _u
+}
+
+// ClearPlatform clears the value of the "platform" field.
+func (_u *UsageLogUpdate) ClearPlatform() *UsageLogUpdate {
+	_u.mutation.ClearPlatform()
+	return _u
+}
+
 // SetCacheTTLOverridden sets the "cache_ttl_overridden" field.
 func (_u *UsageLogUpdate) SetCacheTTLOverridden(v bool) *UsageLogUpdate {
 	_u.mutation.SetCacheTTLOverridden(v)
@@ -813,6 +873,11 @@ func (_u *UsageLogUpdate) check() error {
 	if v, ok := _u.mutation.MediaType(); ok {
 		if err := usagelog.MediaTypeValidator(v); err != nil {
 			return &ValidationError{Name: "media_type", err: fmt.Errorf(`ent: validator failed for field "UsageLog.media_type": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Platform(); ok {
+		if err := usagelog.PlatformValidator(v); err != nil {
+			return &ValidationError{Name: "platform", err: fmt.Errorf(`ent: validator failed for field "UsageLog.platform": %w`, err)}
 		}
 	}
 	if _u.mutation.UserCleared() && len(_u.mutation.UserIDs()) > 0 {
@@ -1000,6 +1065,24 @@ func (_u *UsageLogUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if _u.mutation.MediaTypeCleared() {
 		_spec.ClearField(usagelog.FieldMediaType, field.TypeString)
+	}
+	if value, ok := _u.mutation.SessionHash(); ok {
+		_spec.SetField(usagelog.FieldSessionHash, field.TypeString, value)
+	}
+	if _u.mutation.SessionHashCleared() {
+		_spec.ClearField(usagelog.FieldSessionHash, field.TypeString)
+	}
+	if value, ok := _u.mutation.ClientRequestID(); ok {
+		_spec.SetField(usagelog.FieldClientRequestID, field.TypeString, value)
+	}
+	if _u.mutation.ClientRequestIDCleared() {
+		_spec.ClearField(usagelog.FieldClientRequestID, field.TypeString)
+	}
+	if value, ok := _u.mutation.Platform(); ok {
+		_spec.SetField(usagelog.FieldPlatform, field.TypeString, value)
+	}
+	if _u.mutation.PlatformCleared() {
+		_spec.ClearField(usagelog.FieldPlatform, field.TypeString)
 	}
 	if value, ok := _u.mutation.CacheTTLOverridden(); ok {
 		_spec.SetField(usagelog.FieldCacheTTLOverridden, field.TypeBool, value)
@@ -1809,6 +1892,66 @@ func (_u *UsageLogUpdateOne) ClearMediaType() *UsageLogUpdateOne {
 	return _u
 }
 
+// SetSessionHash sets the "session_hash" field.
+func (_u *UsageLogUpdateOne) SetSessionHash(v string) *UsageLogUpdateOne {
+	_u.mutation.SetSessionHash(v)
+	return _u
+}
+
+// SetNillableSessionHash sets the "session_hash" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableSessionHash(v *string) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetSessionHash(*v)
+	}
+	return _u
+}
+
+// ClearSessionHash clears the value of the "session_hash" field.
+func (_u *UsageLogUpdateOne) ClearSessionHash() *UsageLogUpdateOne {
+	_u.mutation.ClearSessionHash()
+	return _u
+}
+
+// SetClientRequestID sets the "client_request_id" field.
+func (_u *UsageLogUpdateOne) SetClientRequestID(v string) *UsageLogUpdateOne {
+	_u.mutation.SetClientRequestID(v)
+	return _u
+}
+
+// SetNillableClientRequestID sets the "client_request_id" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillableClientRequestID(v *string) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetClientRequestID(*v)
+	}
+	return _u
+}
+
+// ClearClientRequestID clears the value of the "client_request_id" field.
+func (_u *UsageLogUpdateOne) ClearClientRequestID() *UsageLogUpdateOne {
+	_u.mutation.ClearClientRequestID()
+	return _u
+}
+
+// SetPlatform sets the "platform" field.
+func (_u *UsageLogUpdateOne) SetPlatform(v string) *UsageLogUpdateOne {
+	_u.mutation.SetPlatform(v)
+	return _u
+}
+
+// SetNillablePlatform sets the "platform" field if the given value is not nil.
+func (_u *UsageLogUpdateOne) SetNillablePlatform(v *string) *UsageLogUpdateOne {
+	if v != nil {
+		_u.SetPlatform(*v)
+	}
+	return _u
+}
+
+// ClearPlatform clears the value of the "platform" field.
+func (_u *UsageLogUpdateOne) ClearPlatform() *UsageLogUpdateOne {
+	_u.mutation.ClearPlatform()
+	return _u
+}
+
 // SetCacheTTLOverridden sets the "cache_ttl_overridden" field.
 func (_u *UsageLogUpdateOne) SetCacheTTLOverridden(v bool) *UsageLogUpdateOne {
 	_u.mutation.SetCacheTTLOverridden(v)
@@ -1963,6 +2106,11 @@ func (_u *UsageLogUpdateOne) check() error {
 	if v, ok := _u.mutation.MediaType(); ok {
 		if err := usagelog.MediaTypeValidator(v); err != nil {
 			return &ValidationError{Name: "media_type", err: fmt.Errorf(`ent: validator failed for field "UsageLog.media_type": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.Platform(); ok {
+		if err := usagelog.PlatformValidator(v); err != nil {
+			return &ValidationError{Name: "platform", err: fmt.Errorf(`ent: validator failed for field "UsageLog.platform": %w`, err)}
 		}
 	}
 	if _u.mutation.UserCleared() && len(_u.mutation.UserIDs()) > 0 {
@@ -2167,6 +2315,24 @@ func (_u *UsageLogUpdateOne) sqlSave(ctx context.Context) (_node *UsageLog, err 
 	}
 	if _u.mutation.MediaTypeCleared() {
 		_spec.ClearField(usagelog.FieldMediaType, field.TypeString)
+	}
+	if value, ok := _u.mutation.SessionHash(); ok {
+		_spec.SetField(usagelog.FieldSessionHash, field.TypeString, value)
+	}
+	if _u.mutation.SessionHashCleared() {
+		_spec.ClearField(usagelog.FieldSessionHash, field.TypeString)
+	}
+	if value, ok := _u.mutation.ClientRequestID(); ok {
+		_spec.SetField(usagelog.FieldClientRequestID, field.TypeString, value)
+	}
+	if _u.mutation.ClientRequestIDCleared() {
+		_spec.ClearField(usagelog.FieldClientRequestID, field.TypeString)
+	}
+	if value, ok := _u.mutation.Platform(); ok {
+		_spec.SetField(usagelog.FieldPlatform, field.TypeString, value)
+	}
+	if _u.mutation.PlatformCleared() {
+		_spec.ClearField(usagelog.FieldPlatform, field.TypeString)
 	}
 	if value, ok := _u.mutation.CacheTTLOverridden(); ok {
 		_spec.SetField(usagelog.FieldCacheTTLOverridden, field.TypeBool, value)

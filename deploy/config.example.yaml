@@ -993,3 +993,21 @@ update:
   # Leave empty for direct connection (recommended for overseas servers)
   # 留空表示直连（适用于海外服务器）
   proxy_url: ""
+
+# =============================================================================
+# Access Log Configuration (LLM Request Lifecycle Logging)
+# LLM 请求生命周期日志配置
+# =============================================================================
+access_log:
+  # Enable structured JSON access log for all LLM gateway requests
+  # 启用所有 LLM 网关请求的结构化 JSON 访问日志
+  enabled: false
+  # Log file path (default: $DATA_DIR/logs/access.log)
+  # 日志文件路径（默认：$DATA_DIR/logs/access.log）
+  file_path: ""
+  # Include truncated request/response bodies (default: false)
+  # 包含截断的请求/响应体（默认：false）
+  include_body: false
+  # Max body bytes to capture (default: 10240)
+  # 最大捕获体字节数（默认：10240）
+  max_body_bytes: 10240

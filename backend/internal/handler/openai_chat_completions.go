@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
@@ -23,6 +24,24 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 	defer h.recoverResponsesPanic(c, &streamStarted)
 
 	requestStart := time.Now()
+	var reqModel string
+	var reqStream bool
+	var sessionHash string
+	if h.accessLogger != nil {
+		defer func() {
+			params := CollectAccessLogParamsFromContext(c)
+			params.SessionHash = sessionHash
+			params.Platform = "openai"
+			params.Model = reqModel
+			params.Stream = reqStream
+			params.DurationMs = int(time.Since(requestStart).Milliseconds())
+			params.StatusCode = c.Writer.Status()
+			params.UserAgent = c.GetHeader("User-Agent")
+			params.ClientIP = c.ClientIP()
+			params.InboundEndpoint = c.Request.URL.Path
+			h.accessLogger.Emit(BuildAccessLogEntry(params))
+		}()
+	}
 
 	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
 	if !ok {
@@ -71,8 +90,8 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "model is required")
 		return
 	}
-	reqModel := modelResult.String()
-	reqStream := gjson.GetBytes(body, "stream").Bool()
+	reqModel = modelResult.String()
+	reqStream = gjson.GetBytes(body, "stream").Bool()
 
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
 
@@ -103,7 +122,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 		return
 	}
 
-	sessionHash := h.gatewayService.GenerateSessionHash(c, body)
+	sessionHash = h.gatewayService.GenerateSessionHash(c, body)
 	promptCacheKey := h.gatewayService.ExtractSessionID(c, body)
 
 	maxAccountSwitches := h.maxAccountSwitches
@@ -254,6 +273,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 
 		userAgent := c.GetHeader("User-Agent")
 		clientIP := ip.GetClientIP(c)
+		clientRequestID, _ := c.Request.Context().Value(ctxkey.ClientRequestID).(string)
 
 		h.submitUsageRecordTask(func(ctx context.Context) {
 			if err := h.gatewayService.RecordUsage(ctx, &service.OpenAIRecordUsageInput{
@@ -267,6 +287,9 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 				UserAgent:        userAgent,
 				IPAddress:        clientIP,
 				APIKeyService:    h.apiKeyService,
+				SessionHash:      sessionHash,
+				ClientRequestID:  clientRequestID,
+				Platform:         "openai",
 			}); err != nil {
 				logger.L().With(
 					zap.String("component", "handler.openai_gateway.chat_completions"),

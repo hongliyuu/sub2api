@@ -10,9 +10,11 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/gemini"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/googleapi"
 	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
@@ -132,6 +134,26 @@ func (h *GatewayHandler) GeminiV1BetaGetModel(c *gin.Context) {
 // POST /v1beta/models/{model}:generateContent
 // POST /v1beta/models/{model}:streamGenerateContent?alt=sse
 func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
+	requestStart := time.Now()
+	var geminiModel string
+	var geminiStream bool
+	var geminiSessionHash string
+	if h.accessLogger != nil {
+		defer func() {
+			params := CollectAccessLogParamsFromContext(c)
+			params.SessionHash = geminiSessionHash
+			params.Platform = "gemini"
+			params.Model = geminiModel
+			params.Stream = geminiStream
+			params.DurationMs = int(time.Since(requestStart).Milliseconds())
+			params.StatusCode = c.Writer.Status()
+			params.UserAgent = c.GetHeader("User-Agent")
+			params.ClientIP = c.ClientIP()
+			params.InboundEndpoint = c.Request.URL.Path
+			h.accessLogger.Emit(BuildAccessLogEntry(params))
+		}()
+	}
+
 	apiKey, ok := middleware.GetAPIKeyFromContext(c)
 	if !ok || apiKey == nil {
 		googleError(c, http.StatusUnauthorized, "Invalid API key")
@@ -165,6 +187,8 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	}
 
 	stream := action == "streamGenerateContent"
+	geminiModel = modelName
+	geminiStream = stream
 	reqLog = reqLog.With(zap.String("model", modelName), zap.String("action", action), zap.Bool("stream", stream))
 
 	body, err := pkghttputil.ReadRequestBodyWithPrealloc(c.Request)
@@ -254,6 +278,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		}
 		sessionHash = h.gatewayService.GenerateSessionHash(parsedReq)
 	}
+	geminiSessionHash = sessionHash
 	sessionKey := sessionHash
 	if sessionHash != "" {
 		sessionKey = "gemini:" + sessionHash
@@ -507,6 +532,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		requestPayloadHash := service.HashUsageRequestPayload(body)
 		inboundEndpoint := GetInboundEndpoint(c)
 		upstreamEndpoint := GetUpstreamEndpoint(c, account.Platform)
+		clientRequestID, _ := c.Request.Context().Value(ctxkey.ClientRequestID).(string)
 		h.submitUsageRecordTask(func(ctx context.Context) {
 			if err := h.gatewayService.RecordUsageWithLongContext(ctx, &service.RecordUsageLongContextInput{
 				Result:                result,
@@ -523,6 +549,9 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 				LongContextMultiplier: 2.0,    // 超出部分双倍计费
 				ForceCacheBilling:     fs.ForceCacheBilling,
 				APIKeyService:         h.apiKeyService,
+				SessionHash:           geminiSessionHash,
+				ClientRequestID:       clientRequestID,
+				Platform:              account.Platform,
 			}); err != nil {
 				logger.L().With(
 					zap.String("component", "handler.gemini_v1beta.models"),

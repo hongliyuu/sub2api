@@ -1,11 +1,36 @@
 package handler
 
 import (
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler/admin"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/google/wire"
 )
+
+// ProvideAccessLogger creates an AccessLogger from config, or nil when disabled.
+func ProvideAccessLogger(cfg *config.Config) *logger.AccessLogger {
+	if !cfg.AccessLog.Enabled {
+		return nil
+	}
+	opts := logger.AccessLogOptions{
+		FilePath:     cfg.AccessLog.FilePath,
+		IncludeBody:  cfg.AccessLog.IncludeBody,
+		MaxBodyBytes: cfg.AccessLog.MaxBodyBytes,
+	}
+	if cfg.AccessLog.Rotation.MaxSizeMB > 0 {
+		opts.MaxSizeMB = cfg.AccessLog.Rotation.MaxSizeMB
+	}
+	if cfg.AccessLog.Rotation.MaxBackups > 0 {
+		opts.MaxBackups = cfg.AccessLog.Rotation.MaxBackups
+	}
+	if cfg.AccessLog.Rotation.MaxAgeDays > 0 {
+		opts.MaxAgeDays = cfg.AccessLog.Rotation.MaxAgeDays
+	}
+	opts.Compress = cfg.AccessLog.Rotation.Compress
+	return logger.NewAccessLogger(opts)
+}
 
 // ProvideAdminHandlers creates the AdminHandlers struct
 func ProvideAdminHandlers(
@@ -111,6 +136,9 @@ func ProvideHandlers(
 
 // ProviderSet is the Wire provider set for all handlers
 var ProviderSet = wire.NewSet(
+	// Access logger provider
+	ProvideAccessLogger,
+
 	// Top-level handlers
 	NewAuthHandler,
 	NewUserHandler,

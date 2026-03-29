@@ -114,6 +114,16 @@ type UsageLog struct {
 	InboundEndpoint *string
 	// UpstreamEndpoint is the normalized upstream endpoint path, e.g. /v1/responses.
 	UpstreamEndpoint *string
+	// SessionHash is the sticky session hash used for conversation-level routing.
+	// Derived from metadata.user_id (Claude Code session_id), cache_control content,
+	// or message digest fallback. Empty string means no session affinity was established.
+	SessionHash *string
+	// ClientRequestID is the server-generated UUID for end-to-end request correlation.
+	// Matches the client_request_id in ops_error_logs and structured logs.
+	ClientRequestID *string
+	// Platform identifies which upstream provider handled this request.
+	// Values: "anthropic", "openai", "gemini", "antigravity", "sora"
+	Platform *string
 
 	GroupID        *int64
 	SubscriptionID *int64

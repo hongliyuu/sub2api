@@ -51,6 +51,7 @@ type GatewayHandler struct {
 	maxAccountSwitchesGemini  int
 	cfg                       *config.Config
 	settingService            *service.SettingService
+	accessLogger              *logger.AccessLogger
 }
 
 // NewGatewayHandler creates a new GatewayHandler
@@ -68,6 +69,7 @@ func NewGatewayHandler(
 	userMsgQueueService *service.UserMessageQueueService,
 	cfg *config.Config,
 	settingService *service.SettingService,
+	accessLogger *logger.AccessLogger,
 ) *GatewayHandler {
 	pingInterval := time.Duration(0)
 	maxAccountSwitches := 10
@@ -104,12 +106,33 @@ func NewGatewayHandler(
 		maxAccountSwitchesGemini:  maxAccountSwitchesGemini,
 		cfg:                       cfg,
 		settingService:            settingService,
+		accessLogger:              accessLogger,
 	}
 }
 
 // Messages handles Claude API compatible messages endpoint
 // POST /v1/messages
 func (h *GatewayHandler) Messages(c *gin.Context) {
+	requestStart := time.Now()
+	var reqModel string
+	var reqStream bool
+	var sessionHash string
+	if h.accessLogger != nil {
+		defer func() {
+			params := CollectAccessLogParamsFromContext(c)
+			params.SessionHash = sessionHash
+			params.Platform = "anthropic"
+			params.Model = reqModel
+			params.Stream = reqStream
+			params.DurationMs = int(time.Since(requestStart).Milliseconds())
+			params.StatusCode = c.Writer.Status()
+			params.UserAgent = c.GetHeader("User-Agent")
+			params.ClientIP = c.ClientIP()
+			params.InboundEndpoint = c.Request.URL.Path
+			h.accessLogger.Emit(BuildAccessLogEntry(params))
+		}()
+	}
+
 	// 从context获取apiKey和user（ApiKeyAuth中间件已设置）
 	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
 	if !ok {
@@ -154,8 +177,8 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "Failed to parse request body")
 		return
 	}
-	reqModel := parsedReq.Model
-	reqStream := parsedReq.Stream
+	reqModel = parsedReq.Model
+	reqStream = parsedReq.Stream
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
 
 	// 设置 max_tokens=1 + haiku 探测请求标识到 context 中
@@ -251,7 +274,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		UserAgent: c.GetHeader("User-Agent"),
 		APIKeyID:  apiKey.ID,
 	}
-	sessionHash := h.gatewayService.GenerateSessionHash(parsedReq)
+	sessionHash = h.gatewayService.GenerateSessionHash(parsedReq)
 
 	// 获取平台：优先使用强制平台（/antigravity 路由，中间件已设置 request.Context），否则使用分组平台
 	platform := ""
@@ -458,6 +481,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			requestPayloadHash := service.HashUsageRequestPayload(body)
 			inboundEndpoint := GetInboundEndpoint(c)
 			upstreamEndpoint := GetUpstreamEndpoint(c, account.Platform)
+			clientRequestID, _ := c.Request.Context().Value(ctxkey.ClientRequestID).(string)
 
 			if result.ReasoningEffort == nil {
 				result.ReasoningEffort = service.NormalizeClaudeOutputEffort(parsedReq.OutputEffort)
@@ -478,6 +502,9 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					RequestPayloadHash: requestPayloadHash,
 					ForceCacheBilling:  fs.ForceCacheBilling,
 					APIKeyService:      h.apiKeyService,
+					SessionHash:        sessionHash,
+					ClientRequestID:    clientRequestID,
+					Platform:           account.Platform,
 				}); err != nil {
 					logger.L().With(
 						zap.String("component", "handler.gateway.messages"),
@@ -790,6 +817,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			requestPayloadHash := service.HashUsageRequestPayload(body)
 			inboundEndpoint := GetInboundEndpoint(c)
 			upstreamEndpoint := GetUpstreamEndpoint(c, account.Platform)
+			clientRequestID, _ := c.Request.Context().Value(ctxkey.ClientRequestID).(string)
 
 			if result.ReasoningEffort == nil {
 				result.ReasoningEffort = service.NormalizeClaudeOutputEffort(parsedReq.OutputEffort)
@@ -810,6 +838,9 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					RequestPayloadHash: requestPayloadHash,
 					ForceCacheBilling:  fs.ForceCacheBilling,
 					APIKeyService:      h.apiKeyService,
+					SessionHash:        sessionHash,
+					ClientRequestID:    clientRequestID,
+					Platform:           account.Platform,
 				}); err != nil {
 					logger.L().With(
 						zap.String("component", "handler.gateway.messages"),

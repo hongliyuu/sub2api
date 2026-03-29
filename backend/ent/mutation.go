@@ -19658,6 +19658,9 @@ type UsageLogMutation struct {
 	addimage_count              *int
 	image_size                  *string
 	media_type                  *string
+	session_hash                *string
+	client_request_id           *string
+	platform                    *string
 	cache_ttl_overridden        *bool
 	created_at                  *time.Time
 	clearedFields               map[string]struct{}
@@ -21432,6 +21435,153 @@ func (m *UsageLogMutation) ResetMediaType() {
 	delete(m.clearedFields, usagelog.FieldMediaType)
 }
 
+// SetSessionHash sets the "session_hash" field.
+func (m *UsageLogMutation) SetSessionHash(s string) {
+	m.session_hash = &s
+}
+
+// SessionHash returns the value of the "session_hash" field in the mutation.
+func (m *UsageLogMutation) SessionHash() (r string, exists bool) {
+	v := m.session_hash
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSessionHash returns the old "session_hash" field's value of the UsageLog entity.
+// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageLogMutation) OldSessionHash(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSessionHash is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSessionHash requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSessionHash: %w", err)
+	}
+	return oldValue.SessionHash, nil
+}
+
+// ClearSessionHash clears the value of the "session_hash" field.
+func (m *UsageLogMutation) ClearSessionHash() {
+	m.session_hash = nil
+	m.clearedFields[usagelog.FieldSessionHash] = struct{}{}
+}
+
+// SessionHashCleared returns if the "session_hash" field was cleared in this mutation.
+func (m *UsageLogMutation) SessionHashCleared() bool {
+	_, ok := m.clearedFields[usagelog.FieldSessionHash]
+	return ok
+}
+
+// ResetSessionHash resets all changes to the "session_hash" field.
+func (m *UsageLogMutation) ResetSessionHash() {
+	m.session_hash = nil
+	delete(m.clearedFields, usagelog.FieldSessionHash)
+}
+
+// SetClientRequestID sets the "client_request_id" field.
+func (m *UsageLogMutation) SetClientRequestID(s string) {
+	m.client_request_id = &s
+}
+
+// ClientRequestID returns the value of the "client_request_id" field in the mutation.
+func (m *UsageLogMutation) ClientRequestID() (r string, exists bool) {
+	v := m.client_request_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldClientRequestID returns the old "client_request_id" field's value of the UsageLog entity.
+// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageLogMutation) OldClientRequestID(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldClientRequestID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldClientRequestID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldClientRequestID: %w", err)
+	}
+	return oldValue.ClientRequestID, nil
+}
+
+// ClearClientRequestID clears the value of the "client_request_id" field.
+func (m *UsageLogMutation) ClearClientRequestID() {
+	m.client_request_id = nil
+	m.clearedFields[usagelog.FieldClientRequestID] = struct{}{}
+}
+
+// ClientRequestIDCleared returns if the "client_request_id" field was cleared in this mutation.
+func (m *UsageLogMutation) ClientRequestIDCleared() bool {
+	_, ok := m.clearedFields[usagelog.FieldClientRequestID]
+	return ok
+}
+
+// ResetClientRequestID resets all changes to the "client_request_id" field.
+func (m *UsageLogMutation) ResetClientRequestID() {
+	m.client_request_id = nil
+	delete(m.clearedFields, usagelog.FieldClientRequestID)
+}
+
+// SetPlatform sets the "platform" field.
+func (m *UsageLogMutation) SetPlatform(s string) {
+	m.platform = &s
+}
+
+// Platform returns the value of the "platform" field in the mutation.
+func (m *UsageLogMutation) Platform() (r string, exists bool) {
+	v := m.platform
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPlatform returns the old "platform" field's value of the UsageLog entity.
+// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageLogMutation) OldPlatform(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPlatform is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPlatform requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPlatform: %w", err)
+	}
+	return oldValue.Platform, nil
+}
+
+// ClearPlatform clears the value of the "platform" field.
+func (m *UsageLogMutation) ClearPlatform() {
+	m.platform = nil
+	m.clearedFields[usagelog.FieldPlatform] = struct{}{}
+}
+
+// PlatformCleared returns if the "platform" field was cleared in this mutation.
+func (m *UsageLogMutation) PlatformCleared() bool {
+	_, ok := m.clearedFields[usagelog.FieldPlatform]
+	return ok
+}
+
+// ResetPlatform resets all changes to the "platform" field.
+func (m *UsageLogMutation) ResetPlatform() {
+	m.platform = nil
+	delete(m.clearedFields, usagelog.FieldPlatform)
+}
+
 // SetCacheTTLOverridden sets the "cache_ttl_overridden" field.
 func (m *UsageLogMutation) SetCacheTTLOverridden(b bool) {
 	m.cache_ttl_overridden = &b
@@ -21673,7 +21823,7 @@ func (m *UsageLogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UsageLogMutation) Fields() []string {
-	fields := make([]string, 0, 34)
+	fields := make([]string, 0, 37)
 	if m.user != nil {
 		fields = append(fields, usagelog.FieldUserID)
 	}
@@ -21770,6 +21920,15 @@ func (m *UsageLogMutation) Fields() []string {
 	if m.media_type != nil {
 		fields = append(fields, usagelog.FieldMediaType)
 	}
+	if m.session_hash != nil {
+		fields = append(fields, usagelog.FieldSessionHash)
+	}
+	if m.client_request_id != nil {
+		fields = append(fields, usagelog.FieldClientRequestID)
+	}
+	if m.platform != nil {
+		fields = append(fields, usagelog.FieldPlatform)
+	}
 	if m.cache_ttl_overridden != nil {
 		fields = append(fields, usagelog.FieldCacheTTLOverridden)
 	}
@@ -21848,6 +22007,12 @@ func (m *UsageLogMutation) Field(name string) (ent.Value, bool) {
 		return m.ImageSize()
 	case usagelog.FieldMediaType:
 		return m.MediaType()
+	case usagelog.FieldSessionHash:
+		return m.SessionHash()
+	case usagelog.FieldClientRequestID:
+		return m.ClientRequestID()
+	case usagelog.FieldPlatform:
+		return m.Platform()
 	case usagelog.FieldCacheTTLOverridden:
 		return m.CacheTTLOverridden()
 	case usagelog.FieldCreatedAt:
@@ -21925,6 +22090,12 @@ func (m *UsageLogMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldImageSize(ctx)
 	case usagelog.FieldMediaType:
 		return m.OldMediaType(ctx)
+	case usagelog.FieldSessionHash:
+		return m.OldSessionHash(ctx)
+	case usagelog.FieldClientRequestID:
+		return m.OldClientRequestID(ctx)
+	case usagelog.FieldPlatform:
+		return m.OldPlatform(ctx)
 	case usagelog.FieldCacheTTLOverridden:
 		return m.OldCacheTTLOverridden(ctx)
 	case usagelog.FieldCreatedAt:
@@ -22161,6 +22332,27 @@ func (m *UsageLogMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetMediaType(v)
+		return nil
+	case usagelog.FieldSessionHash:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSessionHash(v)
+		return nil
+	case usagelog.FieldClientRequestID:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetClientRequestID(v)
+		return nil
+	case usagelog.FieldPlatform:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPlatform(v)
 		return nil
 	case usagelog.FieldCacheTTLOverridden:
 		v, ok := value.(bool)
@@ -22458,6 +22650,15 @@ func (m *UsageLogMutation) ClearedFields() []string {
 	if m.FieldCleared(usagelog.FieldMediaType) {
 		fields = append(fields, usagelog.FieldMediaType)
 	}
+	if m.FieldCleared(usagelog.FieldSessionHash) {
+		fields = append(fields, usagelog.FieldSessionHash)
+	}
+	if m.FieldCleared(usagelog.FieldClientRequestID) {
+		fields = append(fields, usagelog.FieldClientRequestID)
+	}
+	if m.FieldCleared(usagelog.FieldPlatform) {
+		fields = append(fields, usagelog.FieldPlatform)
+	}
 	return fields
 }
 
@@ -22504,6 +22705,15 @@ func (m *UsageLogMutation) ClearField(name string) error {
 		return nil
 	case usagelog.FieldMediaType:
 		m.ClearMediaType()
+		return nil
+	case usagelog.FieldSessionHash:
+		m.ClearSessionHash()
+		return nil
+	case usagelog.FieldClientRequestID:
+		m.ClearClientRequestID()
+		return nil
+	case usagelog.FieldPlatform:
+		m.ClearPlatform()
 		return nil
 	}
 	return fmt.Errorf("unknown UsageLog nullable field %s", name)
@@ -22608,6 +22818,15 @@ func (m *UsageLogMutation) ResetField(name string) error {
 		return nil
 	case usagelog.FieldMediaType:
 		m.ResetMediaType()
+		return nil
+	case usagelog.FieldSessionHash:
+		m.ResetSessionHash()
+		return nil
+	case usagelog.FieldClientRequestID:
+		m.ResetClientRequestID()
+		return nil
+	case usagelog.FieldPlatform:
+		m.ResetPlatform()
 		return nil
 	case usagelog.FieldCacheTTLOverridden:
 		m.ResetCacheTTLOverridden()

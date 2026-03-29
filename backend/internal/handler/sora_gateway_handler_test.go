@@ -470,7 +470,7 @@ func TestSoraGatewayHandler_ChatCompletions(t *testing.T) {
 	soraClient := &stubSoraClient{imageURLs: []string{"https://example.com/a.png"}}
 	soraGatewayService := service.NewSoraGatewayService(soraClient, nil, nil, cfg)
 
-	handler := NewSoraGatewayHandler(gatewayService, soraGatewayService, concurrencyService, billingCacheService, nil, cfg)
+	handler := NewSoraGatewayHandler(gatewayService, soraGatewayService, concurrencyService, billingCacheService, nil, cfg, nil)
 
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)

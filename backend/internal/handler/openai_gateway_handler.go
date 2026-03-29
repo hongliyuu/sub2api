@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
@@ -35,6 +36,7 @@ type OpenAIGatewayHandler struct {
 	concurrencyHelper       *ConcurrencyHelper
 	maxAccountSwitches      int
 	cfg                     *config.Config
+	accessLogger            *logger.AccessLogger
 }
 
 func resolveOpenAIForwardDefaultMappedModel(apiKey *service.APIKey, fallbackModel string) string {
@@ -56,6 +58,7 @@ func NewOpenAIGatewayHandler(
 	usageRecordWorkerPool *service.UsageRecordWorkerPool,
 	errorPassthroughService *service.ErrorPassthroughService,
 	cfg *config.Config,
+	accessLogger *logger.AccessLogger,
 ) *OpenAIGatewayHandler {
 	pingInterval := time.Duration(0)
 	maxAccountSwitches := 3
@@ -74,6 +77,7 @@ func NewOpenAIGatewayHandler(
 		concurrencyHelper:       NewConcurrencyHelper(concurrencyService, SSEPingFormatComment, pingInterval),
 		maxAccountSwitches:      maxAccountSwitches,
 		cfg:                     cfg,
+		accessLogger:            accessLogger,
 	}
 }
 
@@ -88,6 +92,24 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	setOpenAIClientTransportHTTP(c)
 
 	requestStart := time.Now()
+	var reqModel string
+	var reqStream bool
+	var sessionHash string
+	if h.accessLogger != nil {
+		defer func() {
+			params := CollectAccessLogParamsFromContext(c)
+			params.SessionHash = sessionHash
+			params.Platform = "openai"
+			params.Model = reqModel
+			params.Stream = reqStream
+			params.DurationMs = int(time.Since(requestStart).Milliseconds())
+			params.StatusCode = c.Writer.Status()
+			params.UserAgent = c.GetHeader("User-Agent")
+			params.ClientIP = c.ClientIP()
+			params.InboundEndpoint = c.Request.URL.Path
+			h.accessLogger.Emit(BuildAccessLogEntry(params))
+		}()
+	}
 
 	// Get apiKey and user from context (set by ApiKeyAuth middleware)
 	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
@@ -156,14 +178,14 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "model is required")
 		return
 	}
-	reqModel := modelResult.String()
+	reqModel = modelResult.String()
 
 	streamResult := gjson.GetBytes(body, "stream")
 	if streamResult.Exists() && streamResult.Type != gjson.True && streamResult.Type != gjson.False {
 		h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", "invalid stream field type")
 		return
 	}
-	reqStream := streamResult.Bool()
+	reqStream = streamResult.Bool()
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
 	previousResponseID := strings.TrimSpace(gjson.GetBytes(body, "previous_response_id").String())
 	if previousResponseID != "" {
@@ -219,7 +241,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	}
 
 	// Generate session hash (header first; fallback to prompt_cache_key)
-	sessionHash := h.gatewayService.GenerateSessionHash(c, sessionHashBody)
+	sessionHash = h.gatewayService.GenerateSessionHash(c, sessionHashBody)
 
 	maxAccountSwitches := h.maxAccountSwitches
 	switchCount := 0
@@ -364,6 +386,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		userAgent := c.GetHeader("User-Agent")
 		clientIP := ip.GetClientIP(c)
 		requestPayloadHash := service.HashUsageRequestPayload(body)
+		clientRequestID, _ := c.Request.Context().Value(ctxkey.ClientRequestID).(string)
 
 		// 使用量记录通过有界 worker 池提交，避免请求热路径创建无界 goroutine。
 		h.submitUsageRecordTask(func(ctx context.Context) {
@@ -379,6 +402,9 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 				IPAddress:          clientIP,
 				RequestPayloadHash: requestPayloadHash,
 				APIKeyService:      h.apiKeyService,
+				SessionHash:        sessionHash,
+				ClientRequestID:    clientRequestID,
+				Platform:           "openai",
 			}); err != nil {
 				logger.L().With(
 					zap.String("component", "handler.openai_gateway.responses"),

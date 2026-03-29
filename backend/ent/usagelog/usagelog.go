@@ -78,6 +78,12 @@ const (
 	FieldImageSize = "image_size"
 	// FieldMediaType holds the string denoting the media_type field in the database.
 	FieldMediaType = "media_type"
+	// FieldSessionHash holds the string denoting the session_hash field in the database.
+	FieldSessionHash = "session_hash"
+	// FieldClientRequestID holds the string denoting the client_request_id field in the database.
+	FieldClientRequestID = "client_request_id"
+	// FieldPlatform holds the string denoting the platform field in the database.
+	FieldPlatform = "platform"
 	// FieldCacheTTLOverridden holds the string denoting the cache_ttl_overridden field in the database.
 	FieldCacheTTLOverridden = "cache_ttl_overridden"
 	// FieldCreatedAt holds the string denoting the created_at field in the database.
@@ -166,6 +172,9 @@ var Columns = []string{
 	FieldImageCount,
 	FieldImageSize,
 	FieldMediaType,
+	FieldSessionHash,
+	FieldClientRequestID,
+	FieldPlatform,
 	FieldCacheTTLOverridden,
 	FieldCreatedAt,
 }
@@ -229,6 +238,8 @@ var (
 	ImageSizeValidator func(string) error
 	// MediaTypeValidator is a validator for the "media_type" field. It is called by the builders before save.
 	MediaTypeValidator func(string) error
+	// PlatformValidator is a validator for the "platform" field. It is called by the builders before save.
+	PlatformValidator func(string) error
 	// DefaultCacheTTLOverridden holds the default value on creation for the "cache_ttl_overridden" field.
 	DefaultCacheTTLOverridden bool
 	// DefaultCreatedAt holds the default value on creation for the "created_at" field.
@@ -401,6 +412,21 @@ func ByImageSize(opts ...sql.OrderTermOption) OrderOption {
 // ByMediaType orders the results by the media_type field.
 func ByMediaType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldMediaType, opts...).ToFunc()
+}
+
+// BySessionHash orders the results by the session_hash field.
+func BySessionHash(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSessionHash, opts...).ToFunc()
+}
+
+// ByClientRequestID orders the results by the client_request_id field.
+func ByClientRequestID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldClientRequestID, opts...).ToFunc()
+}
+
+// ByPlatform orders the results by the platform field.
+func ByPlatform(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPlatform, opts...).ToFunc()
 }
 
 // ByCacheTTLOverridden orders the results by the cache_ttl_overridden field.

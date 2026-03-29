@@ -136,6 +136,20 @@ func (UsageLog) Fields() []ent.Field {
 			Optional().
 			Nillable(),
 
+		field.String("session_hash").
+			Optional().
+			Nillable().
+			Comment("Sticky session hash for conversation-level tracing"),
+		field.String("client_request_id").
+			Optional().
+			Nillable().
+			Comment("Server-generated UUID for end-to-end request correlation"),
+		field.String("platform").
+			Optional().
+			Nillable().
+			MaxLen(20).
+			Comment("Upstream provider platform: anthropic/openai/gemini/antigravity/sora"),
+
 		// Cache TTL Override 标记（管理员强制替换了缓存 TTL 计费）
 		field.Bool("cache_ttl_overridden").
 			Default(false),

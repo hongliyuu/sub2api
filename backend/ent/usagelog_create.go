@@ -435,6 +435,48 @@ func (_c *UsageLogCreate) SetNillableMediaType(v *string) *UsageLogCreate {
 	return _c
 }
 
+// SetSessionHash sets the "session_hash" field.
+func (_c *UsageLogCreate) SetSessionHash(v string) *UsageLogCreate {
+	_c.mutation.SetSessionHash(v)
+	return _c
+}
+
+// SetNillableSessionHash sets the "session_hash" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableSessionHash(v *string) *UsageLogCreate {
+	if v != nil {
+		_c.SetSessionHash(*v)
+	}
+	return _c
+}
+
+// SetClientRequestID sets the "client_request_id" field.
+func (_c *UsageLogCreate) SetClientRequestID(v string) *UsageLogCreate {
+	_c.mutation.SetClientRequestID(v)
+	return _c
+}
+
+// SetNillableClientRequestID sets the "client_request_id" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableClientRequestID(v *string) *UsageLogCreate {
+	if v != nil {
+		_c.SetClientRequestID(*v)
+	}
+	return _c
+}
+
+// SetPlatform sets the "platform" field.
+func (_c *UsageLogCreate) SetPlatform(v string) *UsageLogCreate {
+	_c.mutation.SetPlatform(v)
+	return _c
+}
+
+// SetNillablePlatform sets the "platform" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillablePlatform(v *string) *UsageLogCreate {
+	if v != nil {
+		_c.SetPlatform(*v)
+	}
+	return _c
+}
+
 // SetCacheTTLOverridden sets the "cache_ttl_overridden" field.
 func (_c *UsageLogCreate) SetCacheTTLOverridden(v bool) *UsageLogCreate {
 	_c.mutation.SetCacheTTLOverridden(v)
@@ -702,6 +744,11 @@ func (_c *UsageLogCreate) check() error {
 			return &ValidationError{Name: "media_type", err: fmt.Errorf(`ent: validator failed for field "UsageLog.media_type": %w`, err)}
 		}
 	}
+	if v, ok := _c.mutation.Platform(); ok {
+		if err := usagelog.PlatformValidator(v); err != nil {
+			return &ValidationError{Name: "platform", err: fmt.Errorf(`ent: validator failed for field "UsageLog.platform": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.CacheTTLOverridden(); !ok {
 		return &ValidationError{Name: "cache_ttl_overridden", err: errors.New(`ent: missing required field "UsageLog.cache_ttl_overridden"`)}
 	}
@@ -851,6 +898,18 @@ func (_c *UsageLogCreate) createSpec() (*UsageLog, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.MediaType(); ok {
 		_spec.SetField(usagelog.FieldMediaType, field.TypeString, value)
 		_node.MediaType = &value
+	}
+	if value, ok := _c.mutation.SessionHash(); ok {
+		_spec.SetField(usagelog.FieldSessionHash, field.TypeString, value)
+		_node.SessionHash = &value
+	}
+	if value, ok := _c.mutation.ClientRequestID(); ok {
+		_spec.SetField(usagelog.FieldClientRequestID, field.TypeString, value)
+		_node.ClientRequestID = &value
+	}
+	if value, ok := _c.mutation.Platform(); ok {
+		_spec.SetField(usagelog.FieldPlatform, field.TypeString, value)
+		_node.Platform = &value
 	}
 	if value, ok := _c.mutation.CacheTTLOverridden(); ok {
 		_spec.SetField(usagelog.FieldCacheTTLOverridden, field.TypeBool, value)
@@ -1552,6 +1611,60 @@ func (u *UsageLogUpsert) UpdateMediaType() *UsageLogUpsert {
 // ClearMediaType clears the value of the "media_type" field.
 func (u *UsageLogUpsert) ClearMediaType() *UsageLogUpsert {
 	u.SetNull(usagelog.FieldMediaType)
+	return u
+}
+
+// SetSessionHash sets the "session_hash" field.
+func (u *UsageLogUpsert) SetSessionHash(v string) *UsageLogUpsert {
+	u.Set(usagelog.FieldSessionHash, v)
+	return u
+}
+
+// UpdateSessionHash sets the "session_hash" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateSessionHash() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldSessionHash)
+	return u
+}
+
+// ClearSessionHash clears the value of the "session_hash" field.
+func (u *UsageLogUpsert) ClearSessionHash() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldSessionHash)
+	return u
+}
+
+// SetClientRequestID sets the "client_request_id" field.
+func (u *UsageLogUpsert) SetClientRequestID(v string) *UsageLogUpsert {
+	u.Set(usagelog.FieldClientRequestID, v)
+	return u
+}
+
+// UpdateClientRequestID sets the "client_request_id" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateClientRequestID() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldClientRequestID)
+	return u
+}
+
+// ClearClientRequestID clears the value of the "client_request_id" field.
+func (u *UsageLogUpsert) ClearClientRequestID() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldClientRequestID)
+	return u
+}
+
+// SetPlatform sets the "platform" field.
+func (u *UsageLogUpsert) SetPlatform(v string) *UsageLogUpsert {
+	u.Set(usagelog.FieldPlatform, v)
+	return u
+}
+
+// UpdatePlatform sets the "platform" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdatePlatform() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldPlatform)
+	return u
+}
+
+// ClearPlatform clears the value of the "platform" field.
+func (u *UsageLogUpsert) ClearPlatform() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldPlatform)
 	return u
 }
 
@@ -2260,6 +2373,69 @@ func (u *UsageLogUpsertOne) UpdateMediaType() *UsageLogUpsertOne {
 func (u *UsageLogUpsertOne) ClearMediaType() *UsageLogUpsertOne {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearMediaType()
+	})
+}
+
+// SetSessionHash sets the "session_hash" field.
+func (u *UsageLogUpsertOne) SetSessionHash(v string) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetSessionHash(v)
+	})
+}
+
+// UpdateSessionHash sets the "session_hash" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateSessionHash() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateSessionHash()
+	})
+}
+
+// ClearSessionHash clears the value of the "session_hash" field.
+func (u *UsageLogUpsertOne) ClearSessionHash() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearSessionHash()
+	})
+}
+
+// SetClientRequestID sets the "client_request_id" field.
+func (u *UsageLogUpsertOne) SetClientRequestID(v string) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetClientRequestID(v)
+	})
+}
+
+// UpdateClientRequestID sets the "client_request_id" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateClientRequestID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateClientRequestID()
+	})
+}
+
+// ClearClientRequestID clears the value of the "client_request_id" field.
+func (u *UsageLogUpsertOne) ClearClientRequestID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearClientRequestID()
+	})
+}
+
+// SetPlatform sets the "platform" field.
+func (u *UsageLogUpsertOne) SetPlatform(v string) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetPlatform(v)
+	})
+}
+
+// UpdatePlatform sets the "platform" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdatePlatform() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdatePlatform()
+	})
+}
+
+// ClearPlatform clears the value of the "platform" field.
+func (u *UsageLogUpsertOne) ClearPlatform() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearPlatform()
 	})
 }
 
@@ -3136,6 +3312,69 @@ func (u *UsageLogUpsertBulk) UpdateMediaType() *UsageLogUpsertBulk {
 func (u *UsageLogUpsertBulk) ClearMediaType() *UsageLogUpsertBulk {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearMediaType()
+	})
+}
+
+// SetSessionHash sets the "session_hash" field.
+func (u *UsageLogUpsertBulk) SetSessionHash(v string) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetSessionHash(v)
+	})
+}
+
+// UpdateSessionHash sets the "session_hash" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateSessionHash() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateSessionHash()
+	})
+}
+
+// ClearSessionHash clears the value of the "session_hash" field.
+func (u *UsageLogUpsertBulk) ClearSessionHash() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearSessionHash()
+	})
+}
+
+// SetClientRequestID sets the "client_request_id" field.
+func (u *UsageLogUpsertBulk) SetClientRequestID(v string) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetClientRequestID(v)
+	})
+}
+
+// UpdateClientRequestID sets the "client_request_id" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateClientRequestID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateClientRequestID()
+	})
+}
+
+// ClearClientRequestID clears the value of the "client_request_id" field.
+func (u *UsageLogUpsertBulk) ClearClientRequestID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearClientRequestID()
+	})
+}
+
+// SetPlatform sets the "platform" field.
+func (u *UsageLogUpsertBulk) SetPlatform(v string) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetPlatform(v)
+	})
+}
+
+// UpdatePlatform sets the "platform" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdatePlatform() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdatePlatform()
+	})
+}
+
+// ClearPlatform clears the value of the "platform" field.
+func (u *UsageLogUpsertBulk) ClearPlatform() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearPlatform()
 	})
 }
 

@@ -83,6 +83,7 @@ type Config struct {
 	Gemini                  GeminiConfig                  `mapstructure:"gemini"`
 	Update                  UpdateConfig                  `mapstructure:"update"`
 	Idempotency             IdempotencyConfig             `mapstructure:"idempotency"`
+	AccessLog               AccessLogConfig               `mapstructure:"access_log"`
 }
 
 type LogConfig struct {
@@ -115,6 +116,20 @@ type LogSamplingConfig struct {
 	Enabled    bool `mapstructure:"enabled"`
 	Initial    int  `mapstructure:"initial"`
 	Thereafter int  `mapstructure:"thereafter"`
+}
+
+// AccessLogConfig configures the per-request LLM access log.
+type AccessLogConfig struct {
+	// Enabled enables the structured JSON access log for LLM gateway requests.
+	Enabled bool `mapstructure:"enabled"`
+	// FilePath is the output file path. Defaults to $DATA_DIR/logs/access.log.
+	FilePath string `mapstructure:"file_path"`
+	// IncludeBody enables truncated request/response body capture (default: false).
+	IncludeBody bool `mapstructure:"include_body"`
+	// MaxBodyBytes is the max body bytes to capture when IncludeBody is true (default: 10240).
+	MaxBodyBytes int `mapstructure:"max_body_bytes"`
+	// Rotation settings (uses same defaults as main log if unset).
+	Rotation LogRotationConfig `mapstructure:"rotation"`
 }
 
 type GeminiConfig struct {
@@ -1160,6 +1175,11 @@ func setDefaults() {
 	viper.SetDefault("log.sampling.enabled", false)
 	viper.SetDefault("log.sampling.initial", 100)
 	viper.SetDefault("log.sampling.thereafter", 100)
+
+	// Access Log
+	viper.SetDefault("access_log.enabled", false)
+	viper.SetDefault("access_log.include_body", false)
+	viper.SetDefault("access_log.max_body_bytes", 10240)
 
 	// CORS
 	viper.SetDefault("cors.allowed_origins", []string{})
