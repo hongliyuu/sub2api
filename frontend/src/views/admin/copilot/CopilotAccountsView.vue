@@ -12,7 +12,7 @@
           </p>
         </div>
         <button
-          class="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+          class="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:border-gray-500"
           :disabled="loading"
           @click="loadOverview"
         >
@@ -289,13 +289,23 @@
                     <span v-else class="text-xs text-gray-400">—</span>
                   </td>
 
-                  <!-- Monthly Cost — plan-aware display -->
+                  <!-- Monthly Cost — plan-aware display with sparkbar -->
                   <td class="px-4 py-4 text-right">
-                    <span class="text-sm font-bold text-gray-900 dark:text-white">${{ formatCost(account.monthly_cost) }}</span>
+                    <span class="text-sm font-bold text-gray-900 dark:text-white">
+                      ${{ formatCost(account.monthly_cost) }}
+                    </span>
                     <p class="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
                       {{ planCostBreakdown(account.plan_type, account.seat_count) }}
                     </p>
-                    <p v-if="account.budget_alert?.enabled && account.budget_alert.monthly_budget > 0" class="text-xs text-gray-400">
+                    <!-- Sparkbar -->
+                    <div class="mt-1.5 h-1 w-24 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-700 ml-auto">
+                      <div
+                        class="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                        :style="{ width: `${Math.round((account.monthly_cost / maxMonthlyCost) * 100)}%` }"
+                      />
+                    </div>
+                    <p v-if="account.budget_alert?.enabled && account.budget_alert.monthly_budget > 0"
+                       class="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
                       / ${{ account.budget_alert.monthly_budget }} 预算
                     </p>
                   </td>
@@ -602,6 +612,10 @@ const AVATAR_COLORS = [
 function accountAvatarColor(id: number): string {
   return AVATAR_COLORS[id % AVATAR_COLORS.length]
 }
+
+const maxMonthlyCost = computed(() =>
+  Math.max(1, ...(overview.value?.accounts ?? []).map(a => a.monthly_cost))
+)
 
 // ── Plan Helpers ──────────────────────────────────────────────────────────────
 
