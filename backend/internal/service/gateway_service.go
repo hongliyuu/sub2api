@@ -7275,7 +7275,7 @@ func postUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *bill
 	}
 
 	// 2. API Key 配额
-	if cost.ActualCost > 0 && p.APIKey.Quota > 0 && p.APIKeyService != nil {
+	if cost.ActualCost > 0 && p.APIKeyService != nil {
 		if err := p.APIKeyService.UpdateQuotaUsed(billingCtx, p.APIKey.ID, cost.ActualCost); err != nil {
 			slog.Error("update api key quota failed", "api_key_id", p.APIKey.ID, "error", err)
 		}
@@ -7380,7 +7380,7 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 		cmd.BalanceCost = p.Cost.ActualCost
 	}
 
-	if p.Cost.ActualCost > 0 && p.APIKey.Quota > 0 && p.APIKeyService != nil {
+	if p.Cost.ActualCost > 0 && p.APIKeyService != nil {
 		cmd.APIKeyQuotaCost = p.Cost.ActualCost
 	}
 	if p.Cost.ActualCost > 0 && p.APIKey.HasRateLimits() && p.APIKeyService != nil {

@@ -54,6 +54,7 @@ type CopilotGatewayHandler struct {
 	gatewayService        *service.GatewayService
 	copilotGatewayService *service.CopilotGatewayService
 	billingCacheService   *service.BillingCacheService
+	apiKeyService         *service.APIKeyService
 	concurrencyHelper     *ConcurrencyHelper
 	maxAccountSwitches    int
 	// defaultMaxBodyBytes is the system-level body size limit for Copilot requests.
@@ -75,6 +76,7 @@ func NewCopilotGatewayHandler(
 	copilotGatewayService *service.CopilotGatewayService,
 	concurrencyService *service.ConcurrencyService,
 	billingCacheService *service.BillingCacheService,
+	apiKeyService *service.APIKeyService,
 	cfg *config.Config,
 ) *CopilotGatewayHandler {
 	pingInterval := time.Duration(0)
@@ -93,6 +95,7 @@ func NewCopilotGatewayHandler(
 		gatewayService:        gatewayService,
 		copilotGatewayService: copilotGatewayService,
 		billingCacheService:   billingCacheService,
+		apiKeyService:         apiKeyService,
 		concurrencyHelper:     NewConcurrencyHelper(concurrencyService, SSEPingFormatComment, pingInterval),
 		maxAccountSwitches:    maxAccountSwitches,
 		defaultMaxBodyBytes:   defaultMaxBodyBytes,
@@ -333,7 +336,7 @@ func (h *CopilotGatewayHandler) ChatCompletions(c *gin.Context) {
 					UserAgent:         userAgent,
 					IPAddress:         clientIP,
 					RequestBodyBytes:  intPtr(len(body)),
-					APIKeyService:     nil,
+					APIKeyService:     h.apiKeyService,
 					AuthLatencyMs:     authLatencyMs,
 					RoutingLatencyMs:  routingLatencyMs,
 					UpstreamLatencyMs: upstreamLatencyMsVal,
@@ -707,7 +710,7 @@ func (h *CopilotGatewayHandler) Responses(c *gin.Context) {
 					UserAgent:         userAgent,
 					IPAddress:         clientIP,
 					RequestBodyBytes:  intPtr(len(body)),
-					APIKeyService:     nil,
+					APIKeyService:     h.apiKeyService,
 					AuthLatencyMs:     authLatencyMsResp,
 					RoutingLatencyMs:  routingLatencyMsResp,
 					UpstreamLatencyMs: upstreamLatencyMsRespVal,
@@ -1047,7 +1050,7 @@ func (h *CopilotGatewayHandler) Messages(c *gin.Context) {
 					UserAgent:         userAgent,
 					IPAddress:         clientIP,
 					RequestBodyBytes:  intPtr(len(body)),
-					APIKeyService:     nil,
+					APIKeyService:     h.apiKeyService,
 					AuthLatencyMs:     authLatencyMsMsg,
 					RoutingLatencyMs:  routingLatencyMsMsg,
 					UpstreamLatencyMs: upstreamLatencyMsMsgVal,

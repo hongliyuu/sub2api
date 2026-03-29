@@ -34,6 +34,7 @@ type SoraGatewayHandler struct {
 	gatewayService        *service.GatewayService
 	soraGatewayService    *service.SoraGatewayService
 	billingCacheService   *service.BillingCacheService
+	apiKeyService         *service.APIKeyService
 	usageRecordWorkerPool *service.UsageRecordWorkerPool
 	concurrencyHelper     *ConcurrencyHelper
 	maxAccountSwitches    int
@@ -50,6 +51,7 @@ func NewSoraGatewayHandler(
 	concurrencyService *service.ConcurrencyService,
 	billingCacheService *service.BillingCacheService,
 	usageRecordWorkerPool *service.UsageRecordWorkerPool,
+	apiKeyService *service.APIKeyService,
 	cfg *config.Config,
 ) *SoraGatewayHandler {
 	pingInterval := time.Duration(0)
@@ -76,6 +78,7 @@ func NewSoraGatewayHandler(
 		gatewayService:        gatewayService,
 		soraGatewayService:    soraGatewayService,
 		billingCacheService:   billingCacheService,
+		apiKeyService:         apiKeyService,
 		usageRecordWorkerPool: usageRecordWorkerPool,
 		concurrencyHelper:     NewConcurrencyHelper(concurrencyService, SSEPingFormatComment, pingInterval),
 		maxAccountSwitches:    maxAccountSwitches,
@@ -417,6 +420,7 @@ func (h *SoraGatewayHandler) ChatCompletions(c *gin.Context) {
 				IPAddress:          clientIP,
 				RequestPayloadHash: requestPayloadHash,
 				RequestBodyBytes:   intPtr(len(body)),
+				APIKeyService:      h.apiKeyService,
 			}); err != nil {
 				logger.L().With(
 					zap.String("component", "handler.sora_gateway.chat_completions"),

@@ -42,14 +42,14 @@ func TestNewCopilotGatewayHandler_DefaultMaxBodyBytes(t *testing.T) {
 			cfg := &config.Config{}
 			cfg.Gateway.CopilotDefaultMaxBodyKB = tc.copilotDefaultMaxKB
 
-			h := NewCopilotGatewayHandler(nil, nil, nil, nil, cfg)
+			h := NewCopilotGatewayHandler(nil, nil, nil, nil, nil, cfg)
 			require.Equal(t, tc.wantBytes, h.defaultMaxBodyBytes)
 		})
 	}
 }
 
 func TestNewCopilotGatewayHandler_NilConfig(t *testing.T) {
-	h := NewCopilotGatewayHandler(nil, nil, nil, nil, nil)
+	h := NewCopilotGatewayHandler(nil, nil, nil, nil, nil, nil)
 	require.Equal(t, fallbackCopilotMaxBodyBytes, h.defaultMaxBodyBytes,
 		"nil config should fall back to built-in default")
 }
