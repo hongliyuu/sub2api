@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
@@ -51,6 +52,15 @@ type OpsRequestDetail struct {
 	RoutingLatencyMs  *int `json:"routing_latency_ms,omitempty"`
 	UpstreamLatencyMs *int `json:"upstream_latency_ms,omitempty"`
 	ResponseLatencyMs *int `json:"response_latency_ms,omitempty"`
+
+	// Identity fields — populated via JOIN with users and api_keys tables.
+	UserName    *string `json:"user_name,omitempty"`
+	APIKeyLabel *string `json:"api_key_label,omitempty"` // masked: "***" + last 4 chars of key
+	GroupName   *string `json:"group_name,omitempty"`
+	AccountName *string `json:"account_name,omitempty"`
+
+	// AnomalyTypes is dynamically computed at query layer from duration_ms and token fields.
+	AnomalyTypes []string `json:"anomaly_types,omitempty"`
 }
 
 type OpsRequestDetailFilter struct {
@@ -73,6 +83,14 @@ type OpsRequestDetailFilter struct {
 
 	MinDurationMs *int
 	MaxDurationMs *int
+
+	// AnomalyTypes filters rows matching any of the given anomaly types (OR logic).
+	// Computed dynamically at the SQL layer — no dependency on request_logs.
+	AnomalyTypes []string
+
+	// AnomalySettingsForFilter holds thresholds used to compute anomaly conditions
+	// in the SQL WHERE clause. Populated by the handler from AnomalyService.GetSettings.
+	AnomalySettingsForFilter *AnomalySettings
 
 	// Sort: created_at_desc (default) or duration_desc.
 	Sort string
@@ -156,6 +174,16 @@ type OpsUsageInspectDetail struct {
 	ServiceTier     *string `json:"service_tier,omitempty"`
 	ReasoningEffort *string `json:"reasoning_effort,omitempty"`
 	IPAddress       *string `json:"ip_address,omitempty"`
+
+	// Identity fields — populated via JOIN.
+	UserName    *string `json:"user_name,omitempty"`
+	APIKeyLabel *string `json:"api_key_label,omitempty"`
+
+	// Anomaly data — from request_logs table.
+	AnomalyTypes         []string        `json:"anomaly_types,omitempty"`
+	RequestBody          json.RawMessage `json:"request_body,omitempty"`
+	UpstreamRequestBody  json.RawMessage `json:"upstream_request_body,omitempty"`
+	UpstreamResponseBody json.RawMessage `json:"upstream_response_body,omitempty"`
 }
 
 func (s *OpsService) ListRequestDetails(ctx context.Context, filter *OpsRequestDetailFilter) (*OpsRequestDetailList, error) {
