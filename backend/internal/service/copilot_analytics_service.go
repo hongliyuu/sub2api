@@ -95,6 +95,44 @@ type CopilotUserRequestsResult struct {
 	Items []CopilotRequestItem `json:"items"`
 }
 
+// CopilotUserDailyUserInfo holds minimal user metadata for the chart legend.
+type CopilotUserDailyUserInfo struct {
+	UserID   int64  `json:"user_id"`
+	Username string `json:"username"`
+}
+
+// CopilotUserDailyEntry holds one user's daily premium + agent request counts.
+type CopilotUserDailyEntry struct {
+	UserID       int64  `json:"user_id"`
+	Date         string `json:"date"`
+	PremiumCount int    `json:"premium_count"`
+	AgentCount   int    `json:"agent_count"`
+}
+
+// CopilotUsersDailyStatsResult is the response for the all-users daily stats endpoint.
+type CopilotUsersDailyStatsResult struct {
+	Users []CopilotUserDailyUserInfo `json:"users"`
+	Days  []CopilotUserDailyEntry    `json:"days"`
+}
+
+// CopilotUserModelStat holds per-model request counts and percentage for one user.
+type CopilotUserModelStat struct {
+	Model      string  `json:"model"`
+	Count      int     `json:"count"`
+	Percentage float64 `json:"percentage"`
+}
+
+// CopilotUserSummaryResult is the response for a single user's all-time Copilot summary.
+type CopilotUserSummaryResult struct {
+	UserID               int64                  `json:"user_id"`
+	Username             string                 `json:"username"`
+	TotalPremiumRequests int                    `json:"total_premium_requests"`
+	TotalAgentRequests   int                    `json:"total_agent_requests"`
+	FirstRequestAt       *time.Time             `json:"first_request_at"`
+	LastRequestAt        *time.Time             `json:"last_request_at"`
+	TopModels            []CopilotUserModelStat `json:"top_models"`
+}
+
 // ─────────────────────────────────────────────
 // 账户维度数据类型
 // ─────────────────────────────────────────────
@@ -380,6 +418,140 @@ func buildRequestHierarchy(rows []CopilotRequestItem) []CopilotRequestItem {
 		result = append(result, r)
 	}
 	return result
+}
+
+// GetUsersDailyStats returns daily premium + agent request counts for all active Copilot users
+// over the past [days] days (default 30, max 90).
+// Each row in Days is (user_id, date, premium_count, agent_count).
+// Users slice contains deduplicated user metadata ordered by first appearance in results.
+func (s *CopilotAnalyticsService) GetUsersDailyStats(ctx context.Context, days int) (*CopilotUsersDailyStatsResult, error) {
+	if days <= 0 {
+		days = 30
+	}
+	if days > 90 {
+		days = 90
+	}
+
+	now := time.Now()
+	rangeStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local).AddDate(0, 0, -(days - 1))
+
+	query := `
+SELECT
+    ul.user_id,
+    COALESCE(u.username, ul.user_id::text) AS username,
+    DATE(ul.created_at AT TIME ZONE 'UTC' AT TIME ZONE current_setting('TIMEZONE')) AS req_date,
+    COUNT(*) FILTER (WHERE ul.initiator = 'user')  AS premium_count,
+    COUNT(*) FILTER (WHERE ul.initiator = 'agent') AS agent_count
+FROM usage_logs ul
+LEFT JOIN users u ON u.id = ul.user_id
+WHERE ul.created_at >= $1
+  AND ul.account_id IN (SELECT id FROM accounts WHERE platform = 'copilot')
+GROUP BY ul.user_id, u.username, req_date
+ORDER BY ul.user_id, req_date
+`
+	rows, err := s.db.QueryContext(ctx, query, rangeStart)
+	if err != nil {
+		return nil, fmt.Errorf("copilot analytics: users daily stats query: %w", err)
+	}
+	defer rows.Close()
+
+	// seenUsers tracks insertion order so that the Users slice is stable.
+	seenUsers := make(map[int64]struct{})
+	users := make([]CopilotUserDailyUserInfo, 0)
+	entries := make([]CopilotUserDailyEntry, 0)
+
+	for rows.Next() {
+		var userID int64
+		var username string
+		var date time.Time
+		var premiumCount, agentCount int
+		if err := rows.Scan(&userID, &username, &date, &premiumCount, &agentCount); err != nil {
+			return nil, fmt.Errorf("copilot analytics: scan users daily stats row: %w", err)
+		}
+		if _, ok := seenUsers[userID]; !ok {
+			seenUsers[userID] = struct{}{}
+			users = append(users, CopilotUserDailyUserInfo{UserID: userID, Username: username})
+		}
+		entries = append(entries, CopilotUserDailyEntry{
+			UserID:       userID,
+			Date:         date.Format("2006-01-02"),
+			PremiumCount: premiumCount,
+			AgentCount:   agentCount,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("copilot analytics: users daily stats rows: %w", err)
+	}
+
+	return &CopilotUsersDailyStatsResult{
+		Users: users,
+		Days:  entries,
+	}, nil
+}
+
+// GetUserSummary returns a single user's all-time Copilot usage summary,
+// including total request counts, activity window, and top model distribution.
+func (s *CopilotAnalyticsService) GetUserSummary(ctx context.Context, userID int64) (*CopilotUserSummaryResult, error) {
+	summaryQuery := `
+SELECT
+    ul.user_id,
+    COALESCE(u.username, ul.user_id::text) AS username,
+    COUNT(*) FILTER (WHERE ul.initiator = 'user')  AS total_premium_requests,
+    COUNT(*) FILTER (WHERE ul.initiator = 'agent') AS total_agent_requests,
+    MIN(ul.created_at) AS first_request_at,
+    MAX(ul.created_at) AS last_request_at
+FROM usage_logs ul
+LEFT JOIN users u ON u.id = ul.user_id
+WHERE ul.user_id = $1
+  AND ul.account_id IN (SELECT id FROM accounts WHERE platform = 'copilot')
+GROUP BY ul.user_id, u.username
+`
+	var result CopilotUserSummaryResult
+	if err := s.db.QueryRowContext(ctx, summaryQuery, userID).Scan(
+		&result.UserID,
+		&result.Username,
+		&result.TotalPremiumRequests,
+		&result.TotalAgentRequests,
+		&result.FirstRequestAt,
+		&result.LastRequestAt,
+	); err != nil {
+		return nil, fmt.Errorf("copilot analytics: user summary query: %w", err)
+	}
+
+	modelQuery := `
+SELECT
+    ul.model,
+    COUNT(*) AS cnt
+FROM usage_logs ul
+WHERE ul.user_id = $1
+  AND ul.account_id IN (SELECT id FROM accounts WHERE platform = 'copilot')
+GROUP BY ul.model
+ORDER BY cnt DESC, ul.model ASC
+LIMIT 10
+`
+	rows, err := s.db.QueryContext(ctx, modelQuery, userID)
+	if err != nil {
+		return nil, fmt.Errorf("copilot analytics: user summary models query: %w", err)
+	}
+	defer rows.Close()
+
+	totalRequests := result.TotalPremiumRequests + result.TotalAgentRequests
+	result.TopModels = make([]CopilotUserModelStat, 0)
+	for rows.Next() {
+		var stat CopilotUserModelStat
+		if err := rows.Scan(&stat.Model, &stat.Count); err != nil {
+			return nil, fmt.Errorf("copilot analytics: scan user model stat row: %w", err)
+		}
+		if totalRequests > 0 {
+			stat.Percentage = math.Round(float64(stat.Count)*1000/float64(totalRequests)) / 10
+		}
+		result.TopModels = append(result.TopModels, stat)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("copilot analytics: user summary model rows: %w", err)
+	}
+
+	return &result, nil
 }
 
 // ─────────────────────────────────────────────

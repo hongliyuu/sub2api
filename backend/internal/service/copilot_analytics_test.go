@@ -3,6 +3,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -300,4 +301,18 @@ func TestCopilotPlanConfigs_MonthlyCostMultiSeat(t *testing.T) {
 	seats := 50
 	totalCost := cfg.MonthlyCostPerSeat * float64(seats)
 	require.Equal(t, 1950.0, totalCost)
+}
+
+// ─────────────────────────────────────────────
+// Signature checks — GetUsersDailyStats & GetUserSummary
+// ─────────────────────────────────────────────
+
+func TestGetUsersDailyStats_SignatureCheck(t *testing.T) {
+	svc := &CopilotAnalyticsService{}
+	var _ func(context.Context, int) (*CopilotUsersDailyStatsResult, error) = svc.GetUsersDailyStats
+}
+
+func TestGetUserSummary_SignatureCheck(t *testing.T) {
+	svc := &CopilotAnalyticsService{}
+	var _ func(context.Context, int64) (*CopilotUserSummaryResult, error) = svc.GetUserSummary
 }
