@@ -129,6 +129,8 @@ vite.config.js
 docs/*
 !docs/reports/
 !docs/reports/**
+!docs/superpowers/
+!docs/superpowers/**
 .serena/
 .codex/
 frontend/coverage/
