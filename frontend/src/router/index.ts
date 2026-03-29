@@ -290,6 +290,17 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/admin/copilot/users/:id',
+    name: 'AdminCopilotUserDetail',
+    component: () => import('@/views/admin/copilot/CopilotUserDetailView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: true,
+      title: 'Copilot User Detail',
+      titleKey: 'admin.copilot.users.detail.title',
+    },
+  },
+  {
     path: '/admin/copilot/accounts',
     name: 'AdminCopilotAccounts',
     component: () => import('@/views/admin/copilot/CopilotAccountsView.vue'),
