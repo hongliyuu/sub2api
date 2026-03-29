@@ -63,6 +63,43 @@ export interface CopilotUserRequestsResult {
 }
 
 // ─────────────────────────────────────────────
+// 用户维度 — 日趋势 & 汇总类型
+// ─────────────────────────────────────────────
+
+export interface CopilotUserDailyUserInfo {
+  user_id: number
+  username: string
+}
+
+export interface CopilotUserDailyEntry {
+  user_id: number
+  date: string
+  premium_count: number
+  agent_count: number
+}
+
+export interface CopilotUsersDailyStatsResult {
+  users: CopilotUserDailyUserInfo[]
+  days: CopilotUserDailyEntry[]
+}
+
+export interface CopilotUserModelStat {
+  model: string
+  count: number
+  percentage: number
+}
+
+export interface CopilotUserSummaryResult {
+  user_id: number
+  username: string
+  total_premium_requests: number
+  total_agent_requests: number
+  first_request_at: string | null
+  last_request_at: string | null
+  top_models: CopilotUserModelStat[]
+}
+
+// ─────────────────────────────────────────────
 // 账户维度类型
 // ─────────────────────────────────────────────
 
@@ -165,6 +202,20 @@ export async function getCopilotUserRequests(
   params: { date?: string; page?: number; page_size?: number },
 ): Promise<CopilotUserRequestsResult> {
   const { data } = await apiClient.get(`${BASE}/users/${userId}/requests`, { params })
+  return data
+}
+
+export async function getCopilotUsersDailyStats(
+  params: { days?: number } = {},
+): Promise<CopilotUsersDailyStatsResult> {
+  const { data } = await apiClient.get(`${BASE}/users/daily-stats`, { params })
+  return data
+}
+
+export async function getCopilotUserSummary(
+  userId: number,
+): Promise<CopilotUserSummaryResult> {
+  const { data } = await apiClient.get(`${BASE}/users/${userId}/summary`)
   return data
 }
 
