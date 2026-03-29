@@ -311,7 +311,7 @@ func (h *CopilotAnalyticsHandler) GetUserSummary(c *gin.Context) {
 		return
 	}
 	if result == nil {
-		response.Error(c, 404, "user has no copilot usage records")
+		response.Error(c, http.StatusNotFound, "user has no copilot usage records")
 		return
 	}
 	response.Success(c, result)
