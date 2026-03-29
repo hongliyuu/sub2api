@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	copilotpkg "github.com/Wei-Shaw/sub2api/internal/pkg/copilot"
@@ -428,7 +429,33 @@ func (s *CopilotAnalyticsService) GetAccountsOverview(ctx context.Context) (*Cop
 	var alertCount int
 
 	for _, acc := range accounts {
+		// hasExplicitPlanType mirrors the acceptance criteria in extractCopilotPlan:
+		// the field must exist AND be a non-empty string. Non-string values or blank
+		// strings are treated the same as absent, so the GitHub quota override can
+		// still kick in for misconfigured accounts.
+		hasExplicitPlanType := false
+		if acc.Extra != nil {
+			if v, exists := acc.Extra["copilot_plan_type"]; exists {
+				if s, ok := v.(string); ok && strings.TrimSpace(s) != "" {
+					hasExplicitPlanType = true
+				}
+			}
+		}
+
 		planType, seatCount := extractCopilotPlan(&acc)
+
+		// If the account has no explicit plan_type in Extra, try to derive it from
+		// the live GitHub quota info (Plan field returned by the GitHub API).
+		// This ensures correct pricing for accounts that were added without manually
+		// setting copilot_plan_type in Extra.
+		if !hasExplicitPlanType {
+			if cq, hasCached := quotaByAccount[acc.ID]; hasCached && cq.QuotaInfo != nil && cq.QuotaInfo.Plan != "" {
+				if derived := planTypeFromGitHubPlan(cq.QuotaInfo.Plan); derived != "" {
+					planType = derived
+				}
+			}
+		}
+
 		planCfg, ok := CopilotPlanConfigs[planType]
 		if !ok {
 			planCfg = CopilotPlanConfigs["individual_pro"]
@@ -692,6 +719,35 @@ GROUP BY account_id
 		month[accountID] = monthCount
 	}
 	return today, month, rows.Err()
+}
+
+// planTypeFromGitHubPlan maps the plan string returned by the GitHub Copilot quota
+// API (the "copilot_plan" JSON field) to the internal plan_type values used in
+// CopilotPlanConfigs. The GitHub API has historically returned both short-form
+// values ("business", "enterprise") and long-form values ("copilot_business",
+// "copilot_enterprise"), so both are handled here.
+// Returns an empty string if the value is unrecognised.
+func planTypeFromGitHubPlan(githubPlan string) string {
+	switch githubPlan {
+	// Short-form values (current GitHub API format observed in production).
+	case "business":
+		return "business"
+	case "enterprise":
+		return "enterprise"
+	case "individual", "individual_pro":
+		return "individual_pro"
+	case "individual_pro_plus":
+		return "individual_pro_plus"
+	// Long-form values (older / alternate GitHub API format).
+	case "copilot_business":
+		return "business"
+	case "copilot_enterprise":
+		return "enterprise"
+	case "copilot_for_individuals", "copilot_individual":
+		return "individual_pro"
+	default:
+		return ""
+	}
 }
 
 // extractCopilotPlan reads plan type and seat count from the account's extra JSONB field.

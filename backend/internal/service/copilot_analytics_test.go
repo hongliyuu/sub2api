@@ -10,6 +10,35 @@ import (
 )
 
 // ─────────────────────────────────────────────
+// planTypeFromGitHubPlan
+// ─────────────────────────────────────────────
+
+func TestPlanTypeFromGitHubPlan(t *testing.T) {
+	cases := []struct {
+		githubPlan string
+		want       string
+	}{
+		// Short-form (current GitHub API format observed in production)
+		{"business", "business"},
+		{"enterprise", "enterprise"},
+		{"individual", "individual_pro"},
+		{"individual_pro", "individual_pro"},
+		{"individual_pro_plus", "individual_pro_plus"},
+		// Long-form (older / alternate GitHub API format)
+		{"copilot_business", "business"},
+		{"copilot_enterprise", "enterprise"},
+		{"copilot_for_individuals", "individual_pro"},
+		{"copilot_individual", "individual_pro"},
+		// Unknown / empty → empty string
+		{"copilot_unknown_future", ""},
+		{"", ""},
+	}
+	for _, tc := range cases {
+		require.Equal(t, tc.want, planTypeFromGitHubPlan(tc.githubPlan), "input: %q", tc.githubPlan)
+	}
+}
+
+// ─────────────────────────────────────────────
 // extractCopilotPlan
 // ─────────────────────────────────────────────
 
