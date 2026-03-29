@@ -141,4 +141,4 @@ backend/logs/*
 .ccb/*.worktrees/
 .ccb/.claude-session
 .ccb/.codex-session
-EXPLORATION_COMPLETE.txt
+EXPLORATION_COMPLETE.txt.worktrees/
