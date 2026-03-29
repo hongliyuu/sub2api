@@ -474,6 +474,7 @@ import type {
   CopilotAccountOverviewEntry,
   CopilotAccountBudgetAlertInfo,
   CopilotAlertStatus,
+  CopilotAccountQuotaSnapshot,
 } from '@/api/admin/copilotAnalytics'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
@@ -721,9 +722,30 @@ async function loadOverview() {
 async function doRefresh(account: CopilotAccountOverviewEntry) {
   refreshing.value.add(account.account_id)
   try {
-    await refreshCopilotAccountQuota(account.account_id)
+    const updated = await refreshCopilotAccountQuota(account.account_id)
+    // Patch only the affected row — avoids a full table re-render
+    if (overview.value) {
+      const idx = overview.value.accounts.findIndex(a => a.account_id === account.account_id)
+      if (idx !== -1) {
+        const pi = updated.QuotaInfo?.premium_interactions ?? null
+        const newSnapshot: CopilotAccountQuotaSnapshot | null = pi
+          ? {
+              entitlement: pi.entitlement,
+              remaining: pi.remaining,
+              github_total_used: pi.used,
+              overage: pi.overage_count,
+              unlimited: pi.unlimited,
+              external_used: Math.max(0, pi.used - account.system_month_premium_requests),
+              cached_at: updated.CachedAt,
+            }
+          : null
+        overview.value.accounts[idx] = {
+          ...overview.value.accounts[idx],
+          quota_snapshot: newSnapshot,
+        }
+      }
+    }
     showToast('success', t('admin.copilot.accounts.refreshSuccess'))
-    await loadOverview()
   } catch {
     showToast('error', t('admin.copilot.accounts.refreshFailed'))
   } finally {

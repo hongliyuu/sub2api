@@ -173,6 +173,23 @@ export interface BudgetAlertUpsertRequest {
   enabled: boolean
 }
 
+// Returned by POST /accounts/:id/quota-refresh
+// Mirrors the Go CopilotCachedQuota struct (no json tags → PascalCase keys)
+// with CopilotQuotaInfo nested inside.
+export interface RefreshedQuotaResult {
+  AccountID: number
+  QuotaInfo: {
+    premium_interactions: {
+      entitlement: number
+      remaining: number
+      used: number
+      unlimited: boolean
+      overage_count: number
+    } | null
+  } | null
+  CachedAt: string
+}
+
 // ─────────────────────────────────────────────
 // API 调用函数
 // ─────────────────────────────────────────────
@@ -265,7 +282,7 @@ export async function getCopilotAccountHourlyStats(
   return data
 }
 
-export async function refreshCopilotAccountQuota(accountId: number): Promise<unknown> {
+export async function refreshCopilotAccountQuota(accountId: number): Promise<RefreshedQuotaResult> {
   const { data } = await apiClient.post(`${BASE}/accounts/${accountId}/quota-refresh`)
   return data
 }
