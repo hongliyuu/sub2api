@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -507,15 +508,19 @@ WHERE ul.user_id = $1
 GROUP BY ul.user_id, u.username
 `
 	var result CopilotUserSummaryResult
-	if err := s.db.QueryRowContext(ctx, summaryQuery, userID).Scan(
+	scanErr := s.db.QueryRowContext(ctx, summaryQuery, userID).Scan(
 		&result.UserID,
 		&result.Username,
 		&result.TotalPremiumRequests,
 		&result.TotalAgentRequests,
 		&result.FirstRequestAt,
 		&result.LastRequestAt,
-	); err != nil {
-		return nil, fmt.Errorf("copilot analytics: user summary query: %w", err)
+	)
+	if errors.Is(scanErr, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if scanErr != nil {
+		return nil, fmt.Errorf("copilot analytics: user summary query: %w", scanErr)
 	}
 
 	modelQuery := `
