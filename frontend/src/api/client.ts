@@ -280,4 +280,18 @@ apiClient.interceptors.response.use(
   }
 )
 
+/**
+ * Extract a human-readable error message from any thrown value.
+ * Axios interceptors in this project reject with plain objects like
+ * { status, code, message } instead of Error instances, so a naive
+ * `String(e)` produces "[object Object]".
+ */
+export function extractErrorMessage(e: unknown): string {
+  if (e instanceof Error) return e.message
+  if (e && typeof e === 'object' && 'message' in e) {
+    return String((e as Record<string, unknown>).message)
+  }
+  return String(e)
+}
+
 export default apiClient

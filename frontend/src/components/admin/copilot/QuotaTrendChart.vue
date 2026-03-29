@@ -27,6 +27,7 @@ import {
 } from 'chart.js'
 import { getCopilotAccountQuotaTrend } from '@/api/admin/copilotAnalytics'
 import type { CopilotAccountQuotaTrendResult } from '@/api/admin/copilotAnalytics'
+import { extractErrorMessage } from '@/api/client'
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler)
 
@@ -42,7 +43,7 @@ async function load() {
   try {
     data.value = await getCopilotAccountQuotaTrend(props.accountId, { days: props.days ?? 30 })
   } catch (e: unknown) {
-    loadError.value = e instanceof Error ? e.message : String(e)
+    loadError.value = extractErrorMessage(e)
   } finally {
     loading.value = false
   }

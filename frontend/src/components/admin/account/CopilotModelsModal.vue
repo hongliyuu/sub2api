@@ -113,6 +113,7 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import { Icon } from '@/components/icons'
 import { adminAPI } from '@/api/admin'
+import { extractErrorMessage } from '@/api/client'
 import type { Account } from '@/types'
 
 interface CopilotModel {
@@ -143,7 +144,7 @@ const loadModels = async () => {
     list.sort((a, b) => a.id.localeCompare(b.id))
     models.value = list
   } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : String(e)
+    error.value = extractErrorMessage(e)
   } finally {
     loading.value = false
   }

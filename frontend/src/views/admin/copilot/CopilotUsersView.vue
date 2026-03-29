@@ -137,6 +137,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { getCopilotUserStats } from '@/api/admin/copilotAnalytics'
 import type { CopilotUserStatsResult } from '@/api/admin/copilotAnalytics'
+import { extractErrorMessage } from '@/api/client'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import SummaryCard from '@/components/admin/copilot/CopilotSummaryCard.vue'
@@ -173,7 +174,7 @@ async function loadStats() {
   try {
     stats.value = await getCopilotUserStats({ date: selectedDate.value })
   } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : String(e)
+    error.value = extractErrorMessage(e)
   } finally {
     loading.value = false
   }

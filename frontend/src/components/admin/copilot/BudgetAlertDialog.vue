@@ -84,6 +84,7 @@ import { ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { upsertCopilotBudgetAlert } from '@/api/admin/copilotAnalytics'
 import type { CopilotAccountBudgetAlertInfo } from '@/api/admin/copilotAnalytics'
+import { extractErrorMessage } from '@/api/client'
 
 const { t } = useI18n()
 
@@ -125,7 +126,7 @@ async function save() {
     await upsertCopilotBudgetAlert(props.accountId, form.value)
     emit('saved')
   } catch (e: unknown) {
-    emit('error', e instanceof Error ? e.message : String(e))
+    emit('error', extractErrorMessage(e))
   } finally {
     saving.value = false
   }
