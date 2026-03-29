@@ -18,9 +18,9 @@ import (
 
 // CopilotAnalyticsService 封装 Copilot 分析所需的统计查询逻辑。
 type CopilotAnalyticsService struct {
-	db        *sql.DB
-	quotaCache *CopilotQuotaCacheService
-	adminSvc  AdminService
+	db           *sql.DB
+	quotaCache   *CopilotQuotaCacheService
+	adminSvc     AdminService
 	snapshotRepo CopilotQuotaSnapshotRepository
 	alertRepo    CopilotBudgetAlertRepository
 }
@@ -228,7 +228,7 @@ ORDER BY premium_requests DESC, total_requests DESC
 	if err != nil {
 		return nil, fmt.Errorf("copilot analytics: user stats query: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var users []CopilotUserStatEntry
 	var totalPremium, totalAgent int
@@ -287,7 +287,7 @@ ORDER BY hour
 	if err != nil {
 		return nil, fmt.Errorf("copilot analytics: user timeline query: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	// Initialise all 24 buckets to zero.
 	hourly := make([]CopilotHourlyBucket, 24)
@@ -363,7 +363,7 @@ LIMIT $4 OFFSET $5
 	if err != nil {
 		return nil, fmt.Errorf("copilot analytics: user requests query: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var allRows []CopilotRequestItem
 	for rows.Next() {
@@ -394,7 +394,7 @@ func buildRequestHierarchy(rows []CopilotRequestItem) []CopilotRequestItem {
 	const windowSecs = 30
 
 	var result []CopilotRequestItem
-	var lastUserIdx int = -1
+	var lastUserIdx = -1
 
 	for _, row := range rows {
 		r := row

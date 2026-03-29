@@ -41,8 +41,8 @@ func (CopilotQuotaSnapshot) Fields() []ent.Field {
 			Nillable(),
 		field.Int("premium_entitlement").Default(0), // 月配额总量
 		field.Int("premium_remaining").Default(0),   // 当前剩余量
-		field.Int("premium_used").Default(0),         // 已使用量（全渠道，entitlement - remaining + overage）
-		field.Int("premium_overage").Default(0),      // 超额使用量
+		field.Int("premium_used").Default(0),        // 已使用量（全渠道，entitlement - remaining + overage）
+		field.Int("premium_overage").Default(0),     // 超额使用量
 		field.Bool("unlimited").Default(false),
 		field.Time("created_at").
 			Default(time.Now).

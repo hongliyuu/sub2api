@@ -700,7 +700,7 @@ func (h *OpsHandler) ListRequestDetails(c *gin.Context) {
 			string(service.AnomalyZeroToken):   {},
 			string(service.AnomalySlowRequest): {},
 			string(service.AnomalyTimeout):     {},
-			string(service.AnomalyError):        {},
+			string(service.AnomalyError):       {},
 		}
 		parts := strings.Split(v, ",")
 		types := make([]string, 0, len(parts))

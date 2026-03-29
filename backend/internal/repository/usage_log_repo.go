@@ -74,7 +74,7 @@ var usageLogInsertArgTypes = [...]string{
 	"text",
 	"boolean",
 	"integer",
-	"text",       // initiator
+	"text", // initiator
 	"timestamptz",
 }
 
