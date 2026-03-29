@@ -3874,6 +3874,7 @@ export default {
           bodySize: 'Req Size',
           status: 'Status',
           requestId: 'Request ID',
+          anomaly: 'Anomaly',
           actions: 'Actions'
         },
         detail: {
@@ -3884,6 +3885,42 @@ export default {
           severity: 'Severity',
           message: 'Message',
           errorInfo: 'Error Info'
+        }
+      },
+      anomaly: {
+        types: {
+          zero_token: 'Zero Token',
+          slow_request: 'Slow Request',
+          timeout: 'Timeout',
+          error: 'Error'
+        },
+        clearFilter: 'Clear filter'
+      },
+      rawData: {
+        title: 'Raw Data',
+        description: 'Only saved for requests with detected anomalies',
+        clientRequest: 'Client Request Body',
+        upstreamRequest: 'Upstream Request Body',
+        upstreamResponse: 'Upstream Response Body',
+        truncated: 'Body was truncated (exceeds 1 MB limit)',
+        available: 'Available'
+      },
+      anomalySettings: {
+        title: 'Anomaly Detection Settings',
+        slowRequestMs: 'Slow Request Threshold (ms)',
+        slowRequestMsHint: 'Requests exceeding this duration are marked as slow',
+        timeoutMs: 'Timeout Threshold (ms)',
+        timeoutMsHint: 'Requests exceeding this duration are marked as timed out',
+        detectZeroToken: 'Detect Zero-Token Requests',
+        detectZeroTokenHint: 'Requests with both input and output tokens equal to 0 are flagged as anomalies',
+        saveRawData: 'Save Raw Request/Response Bodies',
+        saveRawDataHint: 'Save full request bodies (up to 1 MB) only for requests with detected anomalies',
+        loadFailed: 'Failed to load anomaly detection settings',
+        saveSuccess: 'Anomaly detection settings saved',
+        saveFailed: 'Failed to save anomaly detection settings',
+        validation: {
+          nonNegative: 'Must be a non-negative integer',
+          timeoutGeSlow: 'Timeout threshold must be ≥ slow request threshold'
         }
       },
       requestInspect: {

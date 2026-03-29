@@ -6,14 +6,26 @@
       </div>
 
       <template v-else>
-        <div>
-          <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
-            {{ t('admin.ops.requestInspect.title') }}
-          </h1>
-          <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {{ t('admin.ops.requestInspect.description') }}
-          </p>
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">
+              {{ t('admin.ops.requestInspect.title') }}
+            </h1>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {{ t('admin.ops.requestInspect.description') }}
+            </p>
+          </div>
+          <button
+            type="button"
+            class="btn btn-secondary btn-sm flex-shrink-0"
+            @click="showAnomalySettings = true"
+          >
+            {{ t('admin.ops.anomalySettings.title') }}
+          </button>
         </div>
+
+        <!-- Anomaly filter chips -->
+        <AnomalyFilterChips v-model="anomalyTypes" />
 
         <div class="card flex flex-col gap-4 p-4 lg:flex-row lg:flex-wrap lg:items-end">
           <div class="min-w-[140px]">
@@ -101,7 +113,8 @@
                       v-for="row in items"
                       :key="rowKey(row)"
                       :class="[
-                        'group cursor-pointer transition-colors hover:bg-gray-50/80 dark:hover:bg-dark-800/50',
+                        'group cursor-pointer transition-colors',
+                        anomalyRowClass(row),
                         selectedRow && rowKey(selectedRow) === rowKey(row)
                           ? 'bg-primary-50/70 dark:bg-primary-900/10'
                           : ''
@@ -160,6 +173,18 @@
                       <td class="whitespace-nowrap px-4 py-2 text-xs text-gray-600 dark:text-gray-300">
                         {{ displayListStatusCode(row) }}
                       </td>
+                      <!-- 异常标签列 -->
+                      <td class="whitespace-nowrap px-4 py-2">
+                        <div v-if="row.anomaly_types && row.anomaly_types.length > 0" class="flex flex-wrap gap-1">
+                          <AnomalyBadge
+                            v-for="type in row.anomaly_types"
+                            :key="type"
+                            :type="type"
+                            small
+                          />
+                        </div>
+                        <span v-else class="text-xs text-gray-400">—</span>
+                      </td>
                     </tr>
                   </tbody>
                 </table>
@@ -197,6 +222,9 @@
         </div>
       </template>
     </div>
+
+    <!-- Anomaly settings modal -->
+    <AnomalySettingsModal v-model:show="showAnomalySettings" />
   </AppLayout>
 </template>
 
@@ -206,11 +234,14 @@ import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import { useAdminSettingsStore } from '@/stores'
-import { opsAPI, type OpsRequestDetail, type OpsRequestDetailsKind } from '@/api/admin/ops'
+import { opsAPI, type AnomalyType, type OpsRequestDetail, type OpsRequestDetailsKind } from '@/api/admin/ops'
 import { formatDateTime, parseTimeRangeMinutes } from './utils/opsFormatters'
 import { formatBytes } from '@/utils/format'
 import OpsRequestDetailPanel from './components/OpsRequestDetailPanel.vue'
 import DurationBadge from './components/DurationBadge.vue'
+import AnomalyBadge from './components/AnomalyBadge.vue'
+import AnomalyFilterChips from './components/AnomalyFilterChips.vue'
+import AnomalySettingsModal from './components/AnomalySettingsModal.vue'
 
 const { t } = useI18n()
 const adminSettingsStore = useAdminSettingsStore()
@@ -221,6 +252,8 @@ const timeRange = ref('24h')
 const kind = ref<OpsRequestDetailsKind>('all')
 const platform = ref('')
 const q = ref('')
+const anomalyTypes = ref<AnomalyType[]>([])
+const showAnomalySettings = ref(false)
 
 const loading = ref(false)
 const items = ref<OpsRequestDetail[]>([])
@@ -240,7 +273,8 @@ const tableCols = computed(() => [
   t('admin.ops.requestDetails.table.upstreamLatency'),
   t('admin.ops.requestDetails.table.responseLatency'),
   t('admin.ops.requestDetails.table.bodySize'),
-  t('admin.ops.requestDetails.table.status')
+  t('admin.ops.requestDetails.table.status'),
+  t('admin.ops.requestDetails.table.anomaly')
 ])
 
 const inspectWindow = computed(() => {
@@ -260,6 +294,25 @@ function rowKey(row: OpsRequestDetail) {
 function kindBadgeClass(kindVal: string) {
   if (kindVal === 'error') return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
   return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+}
+
+/** Returns a subtle background tint for rows with anomalies */
+function anomalyRowClass(row: OpsRequestDetail): string {
+  if (!row.anomaly_types || row.anomaly_types.length === 0) {
+    return 'hover:bg-gray-50/80 dark:hover:bg-dark-800/50'
+  }
+  // Prioritize: timeout > slow_request > zero_token > error
+  if (row.anomaly_types.includes('timeout')) {
+    return 'bg-red-50/40 hover:bg-red-50/70 dark:bg-red-950/10 dark:hover:bg-red-950/20'
+  }
+  if (row.anomaly_types.includes('slow_request')) {
+    return 'bg-orange-50/40 hover:bg-orange-50/70 dark:bg-orange-950/10 dark:hover:bg-orange-950/20'
+  }
+  if (row.anomaly_types.includes('zero_token')) {
+    return 'bg-amber-50/40 hover:bg-amber-50/70 dark:bg-amber-950/10 dark:hover:bg-amber-950/20'
+  }
+  // error anomaly
+  return 'bg-rose-50/40 hover:bg-rose-50/70 dark:bg-rose-950/10 dark:hover:bg-rose-950/20'
 }
 
 /** 成功行历史上可能无 status_code；与列表 SQL 中 success=200 对齐 */
@@ -285,7 +338,7 @@ async function fetchData() {
   loading.value = true
   try {
     const w = inspectWindow.value
-    const params = {
+    const params: Parameters<typeof opsAPI.listRequestDetails>[0] = {
       start_time: w.start_time,
       end_time: w.end_time,
       page: page.value,
@@ -300,6 +353,9 @@ async function fetchData() {
     const qq = q.value.trim()
     if (qq) {
       (params as Record<string, unknown>).q = qq
+    }
+    if (anomalyTypes.value.length > 0) {
+      params.anomaly_types = anomalyTypes.value
     }
     const res = await opsAPI.listRequestDetails(params)
     items.value = res.items || []
@@ -331,7 +387,7 @@ function handlePageSizeChange(next: number) {
   fetchData()
 }
 
-watch([timeRange, kind], () => {
+watch([timeRange, kind, anomalyTypes], () => {
   page.value = 1
   fetchData()
 })

@@ -41,6 +41,41 @@
         </div>
       </div>
 
+      <!-- Identity chain block (shown when any identity field is present) -->
+      <div
+        v-if="hasIdentity"
+        class="grid grid-cols-1 gap-3 rounded-xl border border-gray-200 p-4 dark:border-dark-700 sm:grid-cols-2"
+      >
+        <div v-if="row.user_name" class="space-y-0.5">
+          <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+            {{ t('admin.ops.requestDetails.detail.user') }}
+          </div>
+          <div class="truncate text-sm font-medium text-gray-900 dark:text-white" :title="row.user_name">
+            {{ row.user_name }}
+          </div>
+        </div>
+        <div v-if="row.api_key_label" class="space-y-0.5">
+          <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400">API Key</div>
+          <div class="truncate font-mono text-sm font-medium text-gray-900 dark:text-white" :title="row.api_key_label">
+            {{ row.api_key_label }}
+          </div>
+        </div>
+        <div v-if="row.group_name" class="space-y-0.5">
+          <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+            {{ t('admin.ops.requestDetails.detail.group') }}
+          </div>
+          <div class="truncate text-sm font-medium text-gray-900 dark:text-white" :title="row.group_name">
+            {{ row.group_name }}
+          </div>
+        </div>
+        <div v-if="row.account_name" class="space-y-0.5">
+          <div class="text-[10px] font-bold uppercase tracking-wider text-gray-400">Account</div>
+          <div class="truncate text-sm font-medium text-gray-900 dark:text-white" :title="row.account_name">
+            {{ row.account_name }}
+          </div>
+        </div>
+      </div>
+
       <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
           <div class="text-xs font-bold uppercase tracking-wider text-gray-400">
@@ -100,6 +135,15 @@
               {{ displayStatusCode }}
             </span>
             <span v-else class="text-sm font-medium text-gray-400">—</span>
+          </div>
+        </div>
+        <!-- Anomaly types (only when present) -->
+        <div v-if="row.anomaly_types && row.anomaly_types.length > 0" class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
+          <div class="text-xs font-bold uppercase tracking-wider text-gray-400">
+            {{ t('admin.ops.requestDetails.table.anomaly') }}
+          </div>
+          <div class="mt-2 flex flex-wrap gap-1.5">
+            <AnomalyBadge v-for="type in row.anomaly_types" :key="type" :type="type" />
           </div>
         </div>
       </div>
@@ -171,6 +215,15 @@
         v-if="row.kind === 'success' && usageInspect && !usageInspectLoading"
         :detail="usageInspect"
       />
+
+      <!-- Raw data accordion (success rows with anomalies that have saved bodies) -->
+      <RawDataAccordion
+        v-if="row.kind === 'success' && usageInspect && !usageInspectLoading"
+        :request-body="usageInspect.request_body"
+        :upstream-request-body="usageInspect.upstream_request_body"
+        :upstream-response-body="usageInspect.upstream_response_body"
+        :anomaly-types="usageInspect.anomaly_types"
+      />
     </div>
   </div>
 </template>
@@ -185,6 +238,8 @@ import { formatDateTime } from '../utils/opsFormatters'
 import { formatBytes } from '@/utils/format'
 import OpsErrorDetailPanel from './OpsErrorDetailPanel.vue'
 import OpsLatencyBreakdownCard from './OpsLatencyBreakdownCard.vue'
+import AnomalyBadge from './AnomalyBadge.vue'
+import RawDataAccordion from './RawDataAccordion.vue'
 
 interface Props {
   row: OpsRequestDetail | null
@@ -204,6 +259,11 @@ const { copyToClipboard } = useClipboard()
 const usageInspect = ref<OpsUsageInspectDetail | null>(null)
 const usageInspectLoading = ref(false)
 const usageInspectNote = ref<string | null>(null)
+
+const hasIdentity = computed(() => {
+  const r = props.row
+  return !!(r?.user_name || r?.api_key_label || r?.group_name || r?.account_name)
+})
 
 async function handleCopy(text: string) {
   const ok = await copyToClipboard(text, t('admin.ops.requestDetails.requestIdCopied'))

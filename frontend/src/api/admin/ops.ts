@@ -165,6 +165,17 @@ export type OpsRequestKind = 'success' | 'error'
 export type OpsRequestDetailsKind = OpsRequestKind | 'all'
 export type OpsRequestDetailsSort = 'created_at_desc' | 'duration_desc'
 
+/** Anomaly type identifiers matching backend AnomalyType constants. */
+export type AnomalyType = 'zero_token' | 'slow_request' | 'timeout' | 'error'
+
+/** Admin-configurable thresholds for anomaly detection. */
+export interface AnomalySettings {
+  slow_request_threshold_ms: number
+  timeout_threshold_ms: number
+  detect_zero_token: boolean
+  save_raw_data: boolean
+}
+
 export interface OpsRequestDetail {
   kind: OpsRequestKind
   created_at: string
@@ -184,6 +195,15 @@ export interface OpsRequestDetail {
   api_key_id?: number | null
   account_id?: number | null
   group_id?: number | null
+
+  /** Masked API key label, e.g. "***abcd". */
+  api_key_label?: string | null
+  user_name?: string | null
+  group_name?: string | null
+  account_name?: string | null
+
+  /** Dynamically computed anomaly types for this request. */
+  anomaly_types?: AnomalyType[] | null
 
   stream?: boolean
 
@@ -216,6 +236,9 @@ export interface OpsRequestDetailsParams {
 
   min_duration_ms?: number
   max_duration_ms?: number
+
+  /** Multi-select anomaly type filter (OR logic). */
+  anomaly_types?: AnomalyType[]
 
   sort?: OpsRequestDetailsSort
 
@@ -257,6 +280,18 @@ export interface OpsUsageInspectDetail {
   service_tier?: string | null
   reasoning_effort?: string | null
   ip_address?: string | null
+
+  /** Identity chain fields (populated when available). */
+  user_name?: string | null
+  api_key_label?: string | null
+
+  /** Anomaly types detected for this request. */
+  anomaly_types?: AnomalyType[] | null
+
+  /** Raw bodies — only present when anomaly was detected and save_raw_data is enabled. */
+  request_body?: unknown | null
+  upstream_request_body?: unknown | null
+  upstream_response_body?: unknown | null
 }
 
 export interface OpsLatencyHistogramBucket {
@@ -1262,7 +1297,14 @@ export async function listRequestErrorUpstreamErrors(
 }
 
 export async function listRequestDetails(params: OpsRequestDetailsParams): Promise<OpsRequestDetailsResponse> {
-  const { data } = await apiClient.get<OpsRequestDetailsResponse>('/admin/ops/requests', { params })
+  const query: Record<string, any> = { ...params }
+  // Serialize anomaly_types array to comma-separated string for query param.
+  if (Array.isArray(params.anomaly_types) && params.anomaly_types.length > 0) {
+    query.anomaly_types = params.anomaly_types.join(',')
+  } else {
+    delete query.anomaly_types
+  }
+  const { data } = await apiClient.get<OpsRequestDetailsResponse>('/admin/ops/requests', { params: query })
   return data
 }
 
@@ -1275,6 +1317,16 @@ export async function getUsageInspectByRequestId(
     signal: options.signal
   })
   return data
+}
+
+// Anomaly settings
+export async function getAnomalySettings(): Promise<AnomalySettings> {
+  const { data } = await apiClient.get<AnomalySettings>('/admin/ops/settings/anomaly')
+  return data
+}
+
+export async function updateAnomalySettings(settings: AnomalySettings): Promise<void> {
+  await apiClient.put('/admin/ops/settings/anomaly', settings)
 }
 
 // Alert rules
@@ -1445,6 +1497,8 @@ export const opsAPI = {
 
   listRequestDetails,
   getUsageInspectByRequestId,
+  getAnomalySettings,
+  updateAnomalySettings,
   listAlertRules,
   createAlertRule,
   updateAlertRule,

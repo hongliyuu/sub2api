@@ -4041,6 +4041,7 @@ export default {
           bodySize: '请求大小',
           status: '状态码',
           requestId: '请求ID',
+          anomaly: '异常',
           actions: '操作'
         },
         detail: {
@@ -4051,6 +4052,42 @@ export default {
           severity: '级别',
           message: '错误信息',
           errorInfo: '错误信息'
+        }
+      },
+      anomaly: {
+        types: {
+          zero_token: '零 Token',
+          slow_request: '慢请求',
+          timeout: '超时',
+          error: '错误'
+        },
+        clearFilter: '清除筛选'
+      },
+      rawData: {
+        title: '原始数据',
+        description: '仅对检测到异常的请求保存',
+        clientRequest: '客户端请求体',
+        upstreamRequest: '上游请求体',
+        upstreamResponse: '上游响应体',
+        truncated: '请求体已截断（超过 1MB 限制）',
+        available: '有数据'
+      },
+      anomalySettings: {
+        title: '异常检测设置',
+        slowRequestMs: '慢请求阈值（ms）',
+        slowRequestMsHint: '请求耗时超过此值时标记为慢请求',
+        timeoutMs: '超时阈值（ms）',
+        timeoutMsHint: '请求耗时超过此值时标记为超时',
+        detectZeroToken: '检测零 Token 请求',
+        detectZeroTokenHint: '输入和输出 token 均为 0 的请求将被标记为异常',
+        saveRawData: '保存原始请求/响应体',
+        saveRawDataHint: '仅对检测到异常的请求保存完整请求体（最大 1MB）',
+        loadFailed: '加载异常检测设置失败',
+        saveSuccess: '异常检测设置已保存',
+        saveFailed: '保存异常检测设置失败',
+        validation: {
+          nonNegative: '必须为非负整数',
+          timeoutGeSlow: '超时阈值必须 ≥ 慢请求阈值'
         }
       },
       requestInspect: {
