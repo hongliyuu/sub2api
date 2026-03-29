@@ -37,6 +37,7 @@ type SoraGatewayHandler struct {
 	apiKeyService         *service.APIKeyService
 	usageRecordWorkerPool *service.UsageRecordWorkerPool
 	concurrencyHelper     *ConcurrencyHelper
+	anomalyService        *service.AnomalyService
 	maxAccountSwitches    int
 	streamMode            string
 	soraTLSEnabled        bool
@@ -53,6 +54,7 @@ func NewSoraGatewayHandler(
 	usageRecordWorkerPool *service.UsageRecordWorkerPool,
 	apiKeyService *service.APIKeyService,
 	cfg *config.Config,
+	anomalyService *service.AnomalyService,
 ) *SoraGatewayHandler {
 	pingInterval := time.Duration(0)
 	maxAccountSwitches := 3
@@ -81,6 +83,7 @@ func NewSoraGatewayHandler(
 		apiKeyService:         apiKeyService,
 		usageRecordWorkerPool: usageRecordWorkerPool,
 		concurrencyHelper:     NewConcurrencyHelper(concurrencyService, SSEPingFormatComment, pingInterval),
+		anomalyService:        anomalyService,
 		maxAccountSwitches:    maxAccountSwitches,
 		streamMode:            strings.ToLower(streamMode),
 		soraTLSEnabled:        soraTLSEnabled,
@@ -406,20 +409,25 @@ func (h *SoraGatewayHandler) ChatCompletions(c *gin.Context) {
 		inboundEndpoint := GetInboundEndpoint(c)
 		upstreamEndpoint := GetUpstreamEndpoint(c, account.Platform)
 
+		// Capture request-scoped values before submitting task (gin.Context not safe across goroutines).
+		capturedResult := result
+		capturedReqBody := body
+		capturedAccount := account
+
 		// 使用量记录通过有界 worker 池提交，避免请求热路径创建无界 goroutine。
 		h.submitUsageRecordTask(func(ctx context.Context) {
 			if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
-				Result:             result,
+				Result:             capturedResult,
 				APIKey:             apiKey,
 				User:               apiKey.User,
-				Account:            account,
+				Account:            capturedAccount,
 				Subscription:       subscription,
 				InboundEndpoint:    inboundEndpoint,
 				UpstreamEndpoint:   upstreamEndpoint,
 				UserAgent:          userAgent,
 				IPAddress:          clientIP,
 				RequestPayloadHash: requestPayloadHash,
-				RequestBodyBytes:   intPtr(len(body)),
+				RequestBodyBytes:   intPtr(len(capturedReqBody)),
 				APIKeyService:      h.apiKeyService,
 			}); err != nil {
 				logger.L().With(
@@ -428,8 +436,29 @@ func (h *SoraGatewayHandler) ChatCompletions(c *gin.Context) {
 					zap.Int64("api_key_id", apiKey.ID),
 					zap.Any("group_id", apiKey.GroupID),
 					zap.String("model", reqModel),
-					zap.Int64("account_id", account.ID),
+					zap.Int64("account_id", capturedAccount.ID),
 				).Error("sora.record_usage_failed", zap.Error(err))
+			}
+			// Async anomaly detection — already inside worker pool task, no extra goroutine needed.
+			if h.anomalyService != nil {
+				userID := apiKey.UserID
+				apiKeyID := apiKey.ID
+				accountID := capturedAccount.ID
+				h.anomalyService.WriteAnomalyLog(
+					ctx,
+					capturedResult.Usage.InputTokens,
+					capturedResult.Usage.OutputTokens,
+					capturedResult.Duration.Milliseconds(),
+					200,
+					&service.RequestLogInput{
+						RequestID:   capturedResult.RequestID,
+						UserID:      &userID,
+						APIKeyID:    &apiKeyID,
+						AccountID:   &accountID,
+						GroupID:     apiKey.GroupID,
+						RequestBody: capturedReqBody,
+					},
+				)
 			}
 		})
 		reqLog.Debug("sora.request_completed",

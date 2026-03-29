@@ -175,6 +175,10 @@ func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		ops.GET("/requests", h.Admin.Ops.ListRequestDetails)
 		ops.GET("/usage-inspect", h.Admin.Ops.GetUsageInspectByRequestID)
 
+		// Anomaly detection settings
+		ops.GET("/settings/anomaly", h.Admin.Ops.GetAnomalySettings)
+		ops.PUT("/settings/anomaly", h.Admin.Ops.UpdateAnomalySettings)
+
 		// Indexed system logs
 		ops.GET("/system-logs", h.Admin.Ops.ListSystemLogs)
 		ops.POST("/system-logs/cleanup", h.Admin.Ops.CleanupSystemLogs)

@@ -35,6 +35,13 @@ var defaultAnomalySettings = AnomalySettings{
 	SaveRawData:            true,
 }
 
+// DefaultAnomalySettings returns a copy of the built-in default settings.
+// Useful when anomalyService is nil (e.g. during handler init).
+func DefaultAnomalySettings() *AnomalySettings {
+	cp := defaultAnomalySettings
+	return &cp
+}
+
 const (
 	settingKeySlowRequestMs   = "ops.anomaly.slow_request_threshold_ms"
 	settingKeyTimeoutMs       = "ops.anomaly.timeout_threshold_ms"
@@ -130,12 +137,12 @@ func (s *AnomalyService) loadFromDB(ctx context.Context) *AnomalySettings {
 	}
 	out := defaultAnomalySettings
 	if v, ok := vals[settingKeySlowRequestMs]; ok && v != "" {
-		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n >= 0 {
 			out.SlowRequestThresholdMs = n
 		}
 	}
 	if v, ok := vals[settingKeyTimeoutMs]; ok && v != "" {
-		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n >= 0 {
 			out.TimeoutThresholdMs = n
 		}
 	}

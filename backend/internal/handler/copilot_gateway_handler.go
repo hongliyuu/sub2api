@@ -56,6 +56,7 @@ type CopilotGatewayHandler struct {
 	billingCacheService   *service.BillingCacheService
 	apiKeyService         *service.APIKeyService
 	concurrencyHelper     *ConcurrencyHelper
+	anomalyService        *service.AnomalyService
 	maxAccountSwitches    int
 	// defaultMaxBodyBytes is the system-level body size limit for Copilot requests.
 	// It is read from gateway.copilot_default_max_body_kb at startup and falls back
@@ -78,6 +79,7 @@ func NewCopilotGatewayHandler(
 	billingCacheService *service.BillingCacheService,
 	apiKeyService *service.APIKeyService,
 	cfg *config.Config,
+	anomalyService *service.AnomalyService,
 ) *CopilotGatewayHandler {
 	pingInterval := time.Duration(0)
 	maxAccountSwitches := 3
@@ -97,6 +99,7 @@ func NewCopilotGatewayHandler(
 		billingCacheService:   billingCacheService,
 		apiKeyService:         apiKeyService,
 		concurrencyHelper:     NewConcurrencyHelper(concurrencyService, SSEPingFormatComment, pingInterval),
+		anomalyService:        anomalyService,
 		maxAccountSwitches:    maxAccountSwitches,
 		defaultMaxBodyBytes:   defaultMaxBodyBytes,
 		modelCache:            make(map[int64]*copilotModelCacheEntry),
@@ -311,6 +314,9 @@ func (h *CopilotGatewayHandler) ChatCompletions(c *gin.Context) {
 			upstreamLatencyMsVal := getContextLatencyMsPtr(c, service.OpsUpstreamLatencyMsKey)
 			responseLatencyMsVal := getContextLatencyMsPtr(c, service.OpsResponseLatencyMsKey)
 			capturedInitiator := service.CopilotInitiatorFromBody(body)
+			// Capture request-scoped values before entering goroutine (gin.Context not safe across goroutines).
+			capturedRequestID := c.GetHeader("X-Request-ID")
+			capturedReqBody := body
 			go func() {
 				recordCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
@@ -344,6 +350,27 @@ func (h *CopilotGatewayHandler) ChatCompletions(c *gin.Context) {
 					Initiator:         capturedInitiator,
 				}); err != nil {
 					reqLog.Error("copilot.record_usage_failed", zap.Error(err))
+				}
+				// Async anomaly detection — already in a goroutine, no extra go needed.
+				if h.anomalyService != nil {
+					userID := apiKey.UserID
+					apiKeyID := apiKey.ID
+					accountID := capturedAccount.ID
+					h.anomalyService.WriteAnomalyLog(
+						recordCtx,
+						capturedResult.Usage.PromptTokens,
+						capturedResult.Usage.CompletionTokens,
+						capturedResult.Duration.Milliseconds(),
+						200,
+						&service.RequestLogInput{
+							RequestID:   capturedRequestID,
+							UserID:      &userID,
+							APIKeyID:    &apiKeyID,
+							AccountID:   &accountID,
+							GroupID:     apiKey.GroupID,
+							RequestBody: capturedReqBody,
+						},
+					)
 				}
 			}()
 		}
@@ -684,6 +711,9 @@ func (h *CopilotGatewayHandler) Responses(c *gin.Context) {
 			upstreamLatencyMsRespVal := getContextLatencyMsPtr(c, service.OpsUpstreamLatencyMsKey)
 			responseLatencyMsRespVal := getContextLatencyMsPtr(c, service.OpsResponseLatencyMsKey)
 			capturedInitiatorResp := service.CopilotInitiatorFromBody(body)
+			// Capture request-scoped values before entering goroutine (gin.Context not safe across goroutines).
+			capturedRequestID := c.GetHeader("X-Request-ID")
+			capturedReqBody := body
 			go func() {
 				recordCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
@@ -718,6 +748,27 @@ func (h *CopilotGatewayHandler) Responses(c *gin.Context) {
 					Initiator:         capturedInitiatorResp,
 				}); err != nil {
 					reqLog.Error("copilot.responses.record_usage_failed", zap.Error(err))
+				}
+				// Async anomaly detection — already in a goroutine, no extra go needed.
+				if h.anomalyService != nil {
+					userID := apiKey.UserID
+					apiKeyID := apiKey.ID
+					accountID := capturedAccount.ID
+					h.anomalyService.WriteAnomalyLog(
+						recordCtx,
+						capturedResult.Usage.PromptTokens,
+						capturedResult.Usage.CompletionTokens,
+						capturedResult.Duration.Milliseconds(),
+						200,
+						&service.RequestLogInput{
+							RequestID:   capturedRequestID,
+							UserID:      &userID,
+							APIKeyID:    &apiKeyID,
+							AccountID:   &accountID,
+							GroupID:     apiKey.GroupID,
+							RequestBody: capturedReqBody,
+						},
+					)
 				}
 			}()
 		}

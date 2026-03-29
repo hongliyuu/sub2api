@@ -16,7 +16,8 @@ import (
 )
 
 type OpsHandler struct {
-	opsService *service.OpsService
+	opsService     *service.OpsService
+	anomalyService *service.AnomalyService
 }
 
 // GetErrorLogByID returns ops error log detail.
@@ -70,8 +71,8 @@ func parseOpsViewParam(c *gin.Context) string {
 	}
 }
 
-func NewOpsHandler(opsService *service.OpsService) *OpsHandler {
-	return &OpsHandler{opsService: opsService}
+func NewOpsHandler(opsService *service.OpsService, anomalyService *service.AnomalyService) *OpsHandler {
+	return &OpsHandler{opsService: opsService, anomalyService: anomalyService}
 }
 
 // GetErrorLogs lists ops error logs.
@@ -692,6 +693,39 @@ func (h *OpsHandler) ListRequestDetails(c *gin.Context) {
 		filter.MaxDurationMs = &parsed
 	}
 
+	// Anomaly type multi-select filter (OR logic).
+	// Query format: ?anomaly_types=slow_request,zero_token
+	if v := strings.TrimSpace(c.Query("anomaly_types")); v != "" {
+		var validAnomalyTypes = map[string]struct{}{
+			string(service.AnomalyZeroToken):   {},
+			string(service.AnomalySlowRequest): {},
+			string(service.AnomalyTimeout):     {},
+			string(service.AnomalyError):        {},
+		}
+		parts := strings.Split(v, ",")
+		types := make([]string, 0, len(parts))
+		for _, p := range parts {
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			if _, ok := validAnomalyTypes[p]; !ok {
+				response.BadRequest(c, "Invalid anomaly_types value: "+p)
+				return
+			}
+			types = append(types, p)
+		}
+		if len(types) > 0 {
+			filter.AnomalyTypes = types
+			if h.anomalyService != nil {
+				settings := h.anomalyService.GetSettings(c.Request.Context())
+				filter.AnomalySettingsForFilter = settings
+			} else {
+				filter.AnomalySettingsForFilter = service.DefaultAnomalySettings()
+			}
+		}
+	}
+
 	out, err := h.opsService.ListRequestDetails(c.Request.Context(), filter)
 	if err != nil {
 		// Invalid sort/kind/platform etc should be a bad request; keep it simple.
@@ -870,6 +904,69 @@ func (h *OpsHandler) UpdateErrorResolution(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	response.Success(c, gin.H{"ok": true})
+}
+
+// GetAnomalySettings returns the current anomaly detection settings.
+// GET /api/v1/admin/ops/settings/anomaly
+func (h *OpsHandler) GetAnomalySettings(c *gin.Context) {
+	if h.opsService == nil {
+		response.Error(c, http.StatusServiceUnavailable, "Ops service not available")
+		return
+	}
+	if err := h.opsService.RequireMonitoringEnabled(c.Request.Context()); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	if h.anomalyService == nil {
+		response.Error(c, http.StatusServiceUnavailable, "Anomaly service not available")
+		return
+	}
+	settings := h.anomalyService.GetSettings(c.Request.Context())
+	response.Success(c, settings)
+}
+
+// UpdateAnomalySettings persists new anomaly detection settings.
+// PUT /api/v1/admin/ops/settings/anomaly
+func (h *OpsHandler) UpdateAnomalySettings(c *gin.Context) {
+	if h.opsService == nil {
+		response.Error(c, http.StatusServiceUnavailable, "Ops service not available")
+		return
+	}
+	if err := h.opsService.RequireMonitoringEnabled(c.Request.Context()); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	if h.anomalyService == nil {
+		response.Error(c, http.StatusServiceUnavailable, "Anomaly service not available")
+		return
+	}
+
+	var req service.AnomalySettings
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	// Basic validation: thresholds must be non-negative and logically ordered.
+	if req.SlowRequestThresholdMs < 0 {
+		response.BadRequest(c, "slow_request_threshold_ms must be >= 0")
+		return
+	}
+	if req.TimeoutThresholdMs < 0 {
+		response.BadRequest(c, "timeout_threshold_ms must be >= 0")
+		return
+	}
+	if req.TimeoutThresholdMs > 0 && req.SlowRequestThresholdMs > 0 && req.TimeoutThresholdMs < req.SlowRequestThresholdMs {
+		response.BadRequest(c, "timeout_threshold_ms must be >= slow_request_threshold_ms")
+		return
+	}
+
+	if err := h.anomalyService.UpdateSettings(c.Request.Context(), &req); err != nil {
+		response.Error(c, http.StatusInternalServerError, "Failed to update anomaly settings")
+		return
+	}
+
 	response.Success(c, gin.H{"ok": true})
 }
 
