@@ -136,14 +136,14 @@
           <table class="min-w-full divide-y divide-gray-100 dark:divide-gray-700">
             <thead class="bg-gray-50 dark:bg-gray-900/40">
               <tr>
-                <th class="w-12 px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">#</th>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">用户</th>
-                <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Premium</th>
-                <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500">Agent</th>
-                <th class="hidden px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 md:table-cell">
+                <th class="w-12 px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">#</th>
+                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">用户</th>
+                <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Premium</th>
+                <th class="px-4 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Agent</th>
+                <th class="hidden px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400 md:table-cell">
                   7 日趋势
                 </th>
-                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500">Top 模型</th>
+                <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Top 模型</th>
                 <th class="px-4 py-3" />
               </tr>
             </thead>

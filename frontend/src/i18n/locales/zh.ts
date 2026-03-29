@@ -3597,6 +3597,9 @@ export default {
       users: {
         title: 'Copilot 用户请求分析',
         description: '查看各用户的 Copilot Premium 请求与子请求统计',
+        detail: {
+          title: 'Copilot 用户详情',
+        },
         premiumRequests: 'Premium 请求总数',
         agentRequests: 'Agent 子请求总数',
         activeUsers: '活跃用户数',

@@ -96,6 +96,11 @@ async function buildChart() {
     loading.value = false
     await nextTick()
 
+    const dark = document.documentElement.classList.contains('dark')
+    const tickColor = dark ? '#9ca3af' : '#6b7280'
+    const gridColor = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'
+    const legendColor = dark ? '#d1d5db' : '#374151'
+
     chart?.destroy()
     if (!chartRef.value) return
     chart = new Chart(chartRef.value, {
@@ -108,7 +113,7 @@ async function buildChart() {
         plugins: {
           legend: {
             position: 'bottom',
-            labels: { boxWidth: 12, padding: 16, font: { size: 12 } },
+            labels: { boxWidth: 12, padding: 16, font: { size: 12 }, color: legendColor },
           },
           tooltip: {
             callbacks: {
@@ -120,12 +125,12 @@ async function buildChart() {
         scales: {
           x: {
             grid: { display: false },
-            ticks: { maxTicksLimit: 10, font: { size: 11 } },
+            ticks: { maxTicksLimit: 10, font: { size: 11 }, color: tickColor },
           },
           y: {
             beginAtZero: true,
-            grid: { color: 'rgba(0,0,0,0.06)' },
-            ticks: { font: { size: 11 } },
+            grid: { color: gridColor },
+            ticks: { font: { size: 11 }, color: tickColor },
           },
         },
       },

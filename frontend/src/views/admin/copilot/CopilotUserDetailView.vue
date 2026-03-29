@@ -54,15 +54,15 @@
               <div class="flex gap-6">
                 <div class="text-center">
                   <p class="text-2xl font-bold text-green-600 dark:text-green-400">{{ summary.total_premium_requests.toLocaleString() }}</p>
-                  <p class="text-xs text-gray-500">Premium</p>
+                  <p class="text-xs text-gray-500 dark:text-gray-400">Premium</p>
                 </div>
                 <div class="text-center">
                   <p class="text-2xl font-bold text-blue-600 dark:text-blue-400">{{ summary.total_agent_requests.toLocaleString() }}</p>
-                  <p class="text-xs text-gray-500">Agent</p>
+                  <p class="text-xs text-gray-500 dark:text-gray-400">Agent</p>
                 </div>
                 <div class="text-center">
                   <p class="text-2xl font-bold text-gray-700 dark:text-gray-200">{{ totalRequests.toLocaleString() }}</p>
-                  <p class="text-xs text-gray-500">总量</p>
+                  <p class="text-xs text-gray-500 dark:text-gray-400">总量</p>
                 </div>
               </div>
             </div>
@@ -255,6 +255,11 @@ function formatDate(iso: string | null): string {
 function buildBarChart() {
   if (!barChartRef.value || !dailyStats.value || !userId.value) return
 
+  const dark = document.documentElement.classList.contains('dark')
+  const tickColor = dark ? '#9ca3af' : '#6b7280'
+  const gridColor = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'
+  const legendColor = dark ? '#d1d5db' : '#374151'
+
   // Build date labels for the last BAR_DAYS days
   const dates: string[] = Array.from({ length: BAR_DAYS }, (_, i) => localDateStr(-(BAR_DAYS - 1 - i)))
   const labels = dates.map(d => d.slice(5)) // MM-DD
@@ -292,7 +297,10 @@ function buildBarChart() {
       maintainAspectRatio: false,
       interaction: { mode: 'index' },
       plugins: {
-        legend: { position: 'bottom', labels: { boxWidth: 12, padding: 16 } },
+        legend: {
+          position: 'bottom',
+          labels: { boxWidth: 12, padding: 16, color: legendColor },
+        },
         tooltip: {
           callbacks: {
             label: ctx => ` ${ctx.dataset.label}: ${ctx.parsed.y} 次`,
@@ -300,8 +308,17 @@ function buildBarChart() {
         },
       },
       scales: {
-        x: { stacked: true, grid: { display: false }, ticks: { maxTicksLimit: 10, font: { size: 10 } } },
-        y: { stacked: true, beginAtZero: true, ticks: { precision: 0, font: { size: 10 } } },
+        x: {
+          stacked: true,
+          grid: { display: false },
+          ticks: { maxTicksLimit: 10, font: { size: 10 }, color: tickColor },
+        },
+        y: {
+          stacked: true,
+          beginAtZero: true,
+          grid: { color: gridColor },
+          ticks: { precision: 0, font: { size: 10 }, color: tickColor },
+        },
       },
     },
   })
@@ -309,6 +326,9 @@ function buildBarChart() {
 
 function buildDonutChart() {
   if (!donutChartRef.value || !topModels.value.length) return
+
+  const dark = document.documentElement.classList.contains('dark')
+  const borderColor = dark ? '#1f2937' : '#ffffff'
 
   donutChart?.destroy()
   donutChart = new Chart(donutChartRef.value, {
@@ -318,6 +338,7 @@ function buildDonutChart() {
       datasets: [{
         data: topModels.value.map(m => m.count),
         backgroundColor: MODEL_COLORS.slice(0, topModels.value.length),
+        borderColor,
         borderWidth: 2,
         hoverOffset: 8,
       }],

@@ -26,11 +26,11 @@
         </div>
         <!-- Sub-requests -->
         <ul v-if="item.sub_requests && item.sub_requests.length" class="ml-6 mt-0.5 space-y-0.5">
-          <li v-for="sub in item.sub_requests" :key="sub.request_id" class="flex items-center gap-2 text-gray-500 dark:text-gray-400">
-            <span class="rounded bg-blue-50 px-1 py-0.5 text-xs font-mono text-blue-600 dark:bg-blue-900/20 dark:text-blue-400">agent</span>
-            <span>{{ sub.model }}</span>
-            <span>{{ formatTime(sub.created_at) }}</span>
-            <span v-if="sub.duration_ms">{{ sub.duration_ms }}ms</span>
+          <li v-for="sub in item.sub_requests" :key="sub.request_id" class="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+            <span class="rounded bg-blue-100 px-1 py-0.5 text-xs font-mono text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">agent</span>
+            <span class="font-medium">{{ sub.model }}</span>
+            <span class="text-gray-400 dark:text-gray-500">{{ formatTime(sub.created_at) }}</span>
+            <span v-if="sub.duration_ms" class="text-gray-400 dark:text-gray-500">{{ sub.duration_ms }}ms</span>
           </li>
         </ul>
       </li>

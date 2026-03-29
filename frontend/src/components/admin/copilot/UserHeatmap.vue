@@ -59,7 +59,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch, onMounted } from 'vue'
+import { ref, reactive, watch, onMounted, onUnmounted } from 'vue'
 import { getCopilotUserTimeline } from '@/api/admin/copilotAnalytics'
 import { extractErrorMessage } from '@/api/client'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
@@ -78,6 +78,10 @@ const rows = ref<HeatRow[]>([])
 const maxCount = ref(1)
 const legendSteps = [0, 1, 2, 3, 4, 5]
 
+// Track dark mode reactively via MutationObserver
+const isDark = ref(document.documentElement.classList.contains('dark'))
+let darkObserver: MutationObserver | null = null
+
 const tooltip = reactive({
   visible: false,
   x: 0,
@@ -89,7 +93,6 @@ const tooltip = reactive({
 
 function showTooltip(event: MouseEvent, date: string, cell: HeatCell) {
   const rect = (event.target as HTMLElement).getBoundingClientRect()
-  // Position tooltip above the cell, centered
   tooltip.x = rect.left + rect.width / 2 - 70
   tooltip.y = rect.top - 60
   tooltip.date = date
@@ -109,7 +112,9 @@ function localDateStr(offset: number): string {
 }
 
 function heatColor(count: number, max: number): string {
-  if (count === 0 || max === 0) return '#e5e7eb'
+  if (count === 0 || max === 0) {
+    return isDark.value ? '#374151' : '#e5e7eb'
+  }
   const ratio = Math.min(count / max, 1)
   const r = Math.round(219 - ratio * 170)
   const g = Math.round(234 - ratio * 130)
@@ -147,6 +152,17 @@ async function load() {
   }
 }
 
-onMounted(load)
+onMounted(() => {
+  darkObserver = new MutationObserver(() => {
+    isDark.value = document.documentElement.classList.contains('dark')
+  })
+  darkObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+  load()
+})
+
+onUnmounted(() => {
+  darkObserver?.disconnect()
+})
+
 watch(() => [props.userId, props.days], load)
 </script>

@@ -3436,6 +3436,9 @@ export default {
       users: {
         title: 'Copilot User Requests',
         description: 'View per-user Copilot premium request and sub-request statistics',
+        detail: {
+          title: 'Copilot User Detail',
+        },
         premiumRequests: 'Total Premium Requests',
         agentRequests: 'Total Agent Sub-Requests',
         activeUsers: 'Active Users',
