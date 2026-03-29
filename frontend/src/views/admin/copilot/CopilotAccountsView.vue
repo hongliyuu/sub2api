@@ -298,10 +298,10 @@
                       {{ planCostBreakdown(account.plan_type, account.seat_count) }}
                     </p>
                     <!-- Sparkbar -->
-                    <div class="mt-1.5 h-1 w-24 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-700 ml-auto">
+                    <div aria-hidden="true" class="mt-1.5 h-1 w-24 overflow-hidden rounded-full bg-gray-100 dark:bg-gray-700 ml-auto">
                       <div
                         class="h-full rounded-full bg-emerald-500 transition-all duration-500"
-                        :style="{ width: `${Math.round((account.monthly_cost / maxMonthlyCost) * 100)}%` }"
+                        :style="{ width: `${Math.min(100, Math.round((account.monthly_cost / maxMonthlyCost) * 100))}%` }"
                       />
                     </div>
                     <p v-if="account.budget_alert?.enabled && account.budget_alert.monthly_budget > 0"
