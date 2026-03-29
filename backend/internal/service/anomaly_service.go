@@ -208,22 +208,24 @@ func (s *AnomalyService) WriteAnomalyLog(
 		return
 	}
 
-	input.AnomalyTypes = make([]string, len(anomalies))
+	// Work on a copy to avoid mutating the caller's struct.
+	logInput := *input
+	logInput.AnomalyTypes = make([]string, len(anomalies))
 	for i, a := range anomalies {
-		input.AnomalyTypes[i] = string(a)
+		logInput.AnomalyTypes[i] = string(a)
 	}
 
 	if !settings.SaveRawData {
-		input.RequestBody = nil
-		input.UpstreamRequestBody = nil
-		input.UpstreamResponseBody = nil
+		logInput.RequestBody = nil
+		logInput.UpstreamRequestBody = nil
+		logInput.UpstreamResponseBody = nil
 	}
 
 	if s.requestLogRepo == nil {
 		return
 	}
 
-	if err := s.requestLogRepo.Save(bgCtx, input); err != nil {
-		slog.Error("failed to write anomaly request log", "request_id", input.RequestID, "error", err)
+	if err := s.requestLogRepo.Save(bgCtx, &logInput); err != nil {
+		slog.Error("failed to write anomaly request log", "request_id", logInput.RequestID, "error", err)
 	}
 }
