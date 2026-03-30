@@ -126,6 +126,11 @@ backend/cmd/server/server
 deploy/docker-compose.override.yml
 .gocache/
 vite.config.js
+
+# AI agent 临时探索产物
+COPILOT_*.md
+EXPLORATION_*.txt
+QUOTA_LIMIT_ANALYSIS.md
 docs/*
 !docs/reports/
 !docs/reports/**
@@ -133,12 +138,11 @@ docs/*
 !docs/superpowers/**
 .serena/
 .codex/
+.superpowers/
+.worktrees/
 frontend/coverage/
 aicodex
 output/
 
 backend/logs/*
-.ccb/*.worktrees/
-.ccb/.claude-session
-.ccb/.codex-session
-EXPLORATION_COMPLETE.txt.worktrees/
+.ccb/
