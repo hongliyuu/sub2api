@@ -24,9 +24,6 @@
           </button>
         </div>
 
-        <!-- Anomaly filter chips -->
-        <AnomalyFilterChips v-model="anomalyTypes" />
-
         <div class="card flex flex-col gap-4 p-4 lg:flex-row lg:flex-wrap lg:items-end">
           <div class="min-w-[140px]">
             <label class="mb-1 block text-xs font-bold uppercase tracking-wide text-gray-400">
@@ -49,6 +46,94 @@
               <option value="success">{{ t('admin.ops.requestDetails.kind.success') }}</option>
               <option value="error">{{ t('admin.ops.requestDetails.kind.error') }}</option>
             </select>
+          </div>
+          <!-- User search filter -->
+          <div ref="userFilterRef" class="relative min-w-[200px] flex-1">
+            <label class="mb-1 block text-xs font-bold uppercase tracking-wide text-gray-400">
+              {{ t('admin.ops.requestInspect.userFilter') }}
+            </label>
+            <div class="relative">
+              <input
+                v-model="userKeyword"
+                type="text"
+                class="input w-full pr-8 text-sm"
+                :placeholder="t('admin.ops.requestInspect.userPlaceholder')"
+                @input="handleUserInput"
+                @focus="handleUserFocus"
+              />
+              <button
+                v-if="userKeyword || userId != null"
+                type="button"
+                class="absolute inset-y-0 right-2 flex items-center text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-gray-200"
+                @click="clearUser"
+              >
+                <Icon name="x" size="xs" />
+              </button>
+            </div>
+            <div
+              v-if="showUserDropdown && (userResults.length > 0 || userKeyword.trim())"
+              class="absolute z-50 mt-1 max-h-60 w-full overflow-auto rounded-xl border border-gray-200 bg-white py-1 shadow-lg dark:border-dark-700 dark:bg-dark-800"
+            >
+              <button
+                v-for="user in userResults"
+                :key="user.id"
+                type="button"
+                class="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-dark-700"
+                @click="selectUser(user)"
+              >
+                <span class="truncate text-sm text-gray-800 dark:text-gray-100" :title="user.email">{{ user.email }}</span>
+                <span class="flex-shrink-0 font-mono text-xs text-gray-400">#{{ user.id }}</span>
+              </button>
+              <div
+                v-if="userResults.length === 0"
+                class="px-3 py-2 text-sm text-gray-400"
+              >
+                {{ t('common.noOptionsFound') }}
+              </div>
+            </div>
+          </div>
+          <!-- Anomaly type multi-select dropdown -->
+          <div ref="anomalyFilterRef" class="relative min-w-[200px]">
+            <label class="mb-1 block text-xs font-bold uppercase tracking-wide text-gray-400">
+              {{ t('admin.ops.requestInspect.anomalyFilter') }}
+            </label>
+            <button
+              type="button"
+              class="input flex w-full items-center justify-between gap-2 text-left"
+              @click="showAnomalyDropdown = !showAnomalyDropdown"
+            >
+              <span class="truncate text-sm" :class="anomalyTypes.length > 0 ? 'text-gray-900 dark:text-gray-100' : 'text-gray-400'">
+                {{ selectedAnomalyText }}
+              </span>
+              <Icon name="chevronDown" size="xs" :class="['flex-shrink-0 text-gray-400 transition-transform', showAnomalyDropdown ? 'rotate-180' : '']" />
+            </button>
+            <div
+              v-if="showAnomalyDropdown"
+              class="absolute z-50 mt-1 w-full min-w-[200px] rounded-xl border border-gray-200 bg-white p-2 shadow-lg dark:border-dark-700 dark:bg-dark-800"
+            >
+              <label
+                v-for="type in ALL_ANOMALY_TYPES"
+                :key="type"
+                class="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-2 hover:bg-gray-50 dark:hover:bg-dark-700"
+              >
+                <input
+                  type="checkbox"
+                  class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                  :checked="anomalyTypes.includes(type)"
+                  @change="toggleAnomalyType(type)"
+                />
+                <span class="text-sm text-gray-700 dark:text-gray-200">{{ t(`admin.ops.anomaly.types.${type}`) }}</span>
+              </label>
+              <div v-if="anomalyTypes.length > 0" class="mt-1 border-t border-gray-100 px-2 pt-2 dark:border-dark-700">
+                <button
+                  type="button"
+                  class="text-xs font-semibold text-gray-500 underline-offset-4 hover:text-gray-700 hover:underline dark:text-gray-400 dark:hover:text-gray-200"
+                  @click="clearAnomalyTypes"
+                >
+                  {{ t('admin.ops.anomaly.clearFilter') }}
+                </button>
+              </div>
+            </div>
           </div>
           <div class="min-w-[160px] flex-1">
             <label class="mb-1 block text-xs font-bold uppercase tracking-wide text-gray-400">
@@ -261,18 +346,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Pagination from '@/components/common/Pagination.vue'
+import Icon from '@/components/icons/Icon.vue'
 import { useAdminSettingsStore } from '@/stores'
 import { opsAPI, type AnomalyType, type OpsRequestDetail, type OpsRequestDetailsKind } from '@/api/admin/ops'
+import { searchUsers, type SimpleUser } from '@/api/admin/usage'
 import { formatDateTime, parseTimeRangeMinutes } from './utils/opsFormatters'
 import { formatBytes } from '@/utils/format'
 import OpsRequestDetailPanel from './components/OpsRequestDetailPanel.vue'
 import DurationBadge from './components/DurationBadge.vue'
 import AnomalyBadge from './components/AnomalyBadge.vue'
-import AnomalyFilterChips from './components/AnomalyFilterChips.vue'
 import AnomalySettingsModal from './components/AnomalySettingsModal.vue'
 
 const { t } = useI18n()
@@ -284,7 +370,27 @@ const timeRange = ref('24h')
 const kind = ref<OpsRequestDetailsKind>('all')
 const platform = ref('')
 const q = ref('')
+
+// User search filter state
+const userFilterRef = ref<HTMLElement | null>(null)
+const userId = ref<number | undefined>(undefined)
+const userKeyword = ref('')
+const selectedUser = ref<SimpleUser | null>(null)
+const userResults = ref<SimpleUser[]>([])
+const showUserDropdown = ref(false)
+let userSearchTimeout: ReturnType<typeof setTimeout> | null = null
+
+// Anomaly type multi-select dropdown state
+const ALL_ANOMALY_TYPES: AnomalyType[] = ['zero_token', 'slow_request', 'timeout', 'error']
+const anomalyFilterRef = ref<HTMLElement | null>(null)
 const anomalyTypes = ref<AnomalyType[]>([])
+const showAnomalyDropdown = ref(false)
+const selectedAnomalyText = computed(() =>
+  anomalyTypes.value.length > 0
+    ? ALL_ANOMALY_TYPES.filter((at) => anomalyTypes.value.includes(at)).map((at) => t(`admin.ops.anomaly.types.${at}`)).join(' / ')
+    : t('admin.ops.requestInspect.anomalyPlaceholder')
+)
+
 const showAnomalySettings = ref(false)
 
 const loading = ref(false)
@@ -367,6 +473,97 @@ function syncSelectedRow() {
   selectedRow.value = items.value.length > 0 ? items.value[0] : null
 }
 
+// ---------- User search filter ----------
+
+function debounceUserSearch() {
+  if (userSearchTimeout) {
+    clearTimeout(userSearchTimeout)
+  }
+  userSearchTimeout = setTimeout(async () => {
+    const keyword = userKeyword.value.trim()
+    if (!keyword) {
+      userResults.value = []
+      return
+    }
+    try {
+      const results = await searchUsers(keyword)
+      // Only apply results if keyword hasn't changed during the async call
+      if (userKeyword.value.trim() === keyword) {
+        userResults.value = results
+      }
+    } catch {
+      if (userKeyword.value.trim() === keyword) {
+        userResults.value = []
+      }
+    }
+  }, 300)
+}
+
+function handleUserInput() {
+  showUserDropdown.value = true
+  // If user types something different from selected user, clear the selection and refresh list
+  if (selectedUser.value && userKeyword.value.trim() !== selectedUser.value.email) {
+    selectedUser.value = null
+    userId.value = undefined
+    refresh()
+  }
+  debounceUserSearch()
+}
+
+function handleUserFocus() {
+  showUserDropdown.value = true
+  if (userKeyword.value.trim()) {
+    debounceUserSearch()
+  }
+}
+
+function selectUser(user: SimpleUser) {
+  selectedUser.value = user
+  userId.value = user.id
+  userKeyword.value = user.email
+  userResults.value = []
+  showUserDropdown.value = false
+  refresh()
+}
+
+function clearUser() {
+  selectedUser.value = null
+  userId.value = undefined
+  userKeyword.value = ''
+  userResults.value = []
+  showUserDropdown.value = false
+  refresh()
+}
+
+// ---------- Anomaly multi-select ----------
+
+function toggleAnomalyType(type: AnomalyType) {
+  const next = new Set(anomalyTypes.value)
+  if (next.has(type)) {
+    next.delete(type)
+  } else {
+    next.add(type)
+  }
+  anomalyTypes.value = ALL_ANOMALY_TYPES.filter((item) => next.has(item))
+}
+
+function clearAnomalyTypes() {
+  anomalyTypes.value = []
+}
+
+// ---------- Click outside to close dropdowns ----------
+
+function onDocumentClick(event: MouseEvent) {
+  const target = event.target as Node | null
+  if (!target) return
+  if (userFilterRef.value && !userFilterRef.value.contains(target)) {
+    showUserDropdown.value = false
+  }
+  if (anomalyFilterRef.value && !anomalyFilterRef.value.contains(target)) {
+    showAnomalyDropdown.value = false
+  }
+}
+
 async function fetchData() {
   if (!opsEnabled.value) return
   loading.value = true
@@ -387,6 +584,9 @@ async function fetchData() {
     const qq = q.value.trim()
     if (qq) {
       (params as Record<string, unknown>).q = qq
+    }
+    if (typeof userId.value === 'number') {
+      params.user_id = userId.value
     }
     if (anomalyTypes.value.length > 0) {
       params.anomaly_types = anomalyTypes.value
@@ -427,9 +627,18 @@ watch([timeRange, kind, anomalyTypes], () => {
 })
 
 onMounted(async () => {
+  document.addEventListener('click', onDocumentClick)
   await adminSettingsStore.fetch()
   if (opsEnabled.value) {
     fetchData()
+  }
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', onDocumentClick)
+  if (userSearchTimeout) {
+    clearTimeout(userSearchTimeout)
+    userSearchTimeout = null
   }
 })
 </script>
