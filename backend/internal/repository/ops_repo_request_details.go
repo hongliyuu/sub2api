@@ -147,12 +147,19 @@ WITH combined AS (
     COALESCE(ul.input_tokens, 0) AS input_tokens,
     COALESCE(ul.output_tokens, 0) AS output_tokens,
     ul.spans::TEXT AS spans_json
-  FROM usage_logs ul
+  FROM (
+    -- De-duplicate: keep only the latest row per request_id within the time window.
+    -- Failover retries can produce multiple usage_logs rows with the same request_id;
+    -- only the final successful row has complete latency fields.
+    SELECT DISTINCT ON (request_id) *
+    FROM usage_logs
+    WHERE created_at >= $1 AND created_at < $2
+    ORDER BY request_id, created_at DESC
+  ) ul
   LEFT JOIN groups g ON g.id = ul.group_id
   LEFT JOIN accounts a ON a.id = ul.account_id
   LEFT JOIN users u ON u.id = ul.user_id
   LEFT JOIN api_keys ak ON ak.id = ul.api_key_id
-  WHERE ul.created_at >= $1 AND ul.created_at < $2
 
   UNION ALL
 
