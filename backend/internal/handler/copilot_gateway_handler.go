@@ -30,6 +30,10 @@ import (
 // gateway.copilot_default_max_body_kb is not set in the configuration.
 const fallbackCopilotMaxBodyBytes = 1024 * 1024 * 1024 // 1 GB
 
+// StatusClientClosedRequest is the HTTP status code used when the client
+// disconnects before the upstream response is received (nginx convention 499).
+const StatusClientClosedRequest = 499
+
 const (
 	// copilotModelCacheTTL is the TTL for model list entries fetched from the
 	// upstream Copilot /models endpoint.  One hour is intentionally long because
@@ -210,7 +214,10 @@ func (h *CopilotGatewayHandler) ChatCompletions(c *gin.Context) {
 			failedAccountIDs,
 		)
 		if err != nil || account == nil {
-			if len(failedAccountIDs) == 0 {
+			if ctx.Err() == context.Canceled {
+				reqLog.Info("copilot.client_disconnected", zap.Error(err))
+				h.errorResponse(c, StatusClientClosedRequest, "client_closed", "Client disconnected")
+			} else if len(failedAccountIDs) == 0 {
 				reqLog.Warn("copilot.account_select_failed", zap.Error(err))
 				h.errorResponse(c, http.StatusServiceUnavailable, "api_error", "No available Copilot accounts")
 			} else {
@@ -242,6 +249,15 @@ func (h *CopilotGatewayHandler) ChatCompletions(c *gin.Context) {
 			service.SetOpsLatencyMs(c, service.OpsResponseLatencyMsKey, responseMs)
 		}
 		if fwdErr != nil {
+			// Client disconnected — skip failover, no one is listening.
+			if ctx.Err() == context.Canceled {
+				reqLog.Info("copilot.client_disconnected",
+					zap.Int64("account_id", account.ID),
+					zap.Int("switch_count", switchCount),
+					zap.Error(fwdErr))
+				h.errorResponse(c, StatusClientClosedRequest, "client_closed", "Client disconnected before upstream response")
+				return
+			}
 			failedAccountIDs[account.ID] = struct{}{}
 			switchCount++
 			if switchCount >= h.maxAccountSwitches {
@@ -614,7 +630,10 @@ func (h *CopilotGatewayHandler) Responses(c *gin.Context) {
 			failedAccountIDs,
 		)
 		if err != nil || account == nil {
-			if len(failedAccountIDs) == 0 {
+			if ctx.Err() == context.Canceled {
+				reqLog.Info("copilot.responses.client_disconnected", zap.Error(err))
+				h.errorResponse(c, StatusClientClosedRequest, "client_closed", "Client disconnected")
+			} else if len(failedAccountIDs) == 0 {
 				reqLog.Warn("copilot.responses.account_select_failed", zap.Error(err))
 				h.errorResponse(c, http.StatusServiceUnavailable, "api_error", "No available Copilot accounts")
 			} else {
@@ -645,6 +664,15 @@ func (h *CopilotGatewayHandler) Responses(c *gin.Context) {
 			service.SetOpsLatencyMs(c, service.OpsResponseLatencyMsKey, responseMsResp)
 		}
 		if fwdErr != nil {
+			// Client disconnected — skip failover, no one is listening.
+			if ctx.Err() == context.Canceled {
+				reqLog.Info("copilot.responses.client_disconnected",
+					zap.Int64("account_id", account.ID),
+					zap.Int("switch_count", switchCount),
+					zap.Error(fwdErr))
+				h.errorResponse(c, StatusClientClosedRequest, "client_closed", "Client disconnected before upstream response")
+				return
+			}
 			failedAccountIDs[account.ID] = struct{}{}
 			switchCount++
 			if switchCount >= h.maxAccountSwitches {
@@ -944,7 +972,10 @@ func (h *CopilotGatewayHandler) Messages(c *gin.Context) {
 			failedAccountIDs,
 		)
 		if err != nil || account == nil {
-			if len(failedAccountIDs) == 0 {
+			if ctx.Err() == context.Canceled {
+				reqLog.Info("copilot.messages.client_disconnected", zap.Error(err))
+				h.anthropicErrorResponse(c, StatusClientClosedRequest, "client_closed", "Client disconnected")
+			} else if len(failedAccountIDs) == 0 {
 				reqLog.Warn("copilot.messages.account_select_failed", zap.Error(err))
 				h.anthropicErrorResponse(c, http.StatusServiceUnavailable, "api_error", "No available Copilot accounts")
 			} else {
@@ -1012,6 +1043,15 @@ func (h *CopilotGatewayHandler) Messages(c *gin.Context) {
 			service.SetOpsLatencyMs(c, service.OpsResponseLatencyMsKey, responseMsMsg)
 		}
 		if fwdErr != nil {
+			// Client disconnected — skip failover, no one is listening.
+			if ctx.Err() == context.Canceled {
+				reqLog.Info("copilot.messages.client_disconnected",
+					zap.Int64("account_id", account.ID),
+					zap.Int("switch_count", switchCount),
+					zap.Error(fwdErr))
+				h.anthropicErrorResponse(c, StatusClientClosedRequest, "client_closed", "Client disconnected before upstream response")
+				return
+			}
 			failedAccountIDs[account.ID] = struct{}{}
 			switchCount++
 			if switchCount >= h.maxAccountSwitches {
