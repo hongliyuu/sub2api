@@ -104,6 +104,12 @@ type OpsInsertErrorLogInput struct {
 	// UpstreamErrorsJSON is the sanitized JSON string stored into ops_error_logs.upstream_errors.
 	// It is set by OpsService.RecordError before persisting.
 	UpstreamErrorsJSON *string
+	// Spans captures per-phase timing events for request diagnosis.
+	// Populated from gin context key OpsSpansKey during handler middleware.
+	Spans []*OpsSpan
+	// SpansJSON is the marshalled JSON stored into ops_error_logs.spans.
+	// Set by OpsService.RecordError before persisting.
+	SpansJSON *string
 
 	AuthLatencyMs      *int64
 	RoutingLatencyMs   *int64

@@ -249,6 +249,10 @@ func (s *OpsService) prepareErrorLogInput(ctx context.Context, entry *OpsInsertE
 		return nil, false, err
 	}
 
+	if len(entry.Spans) > 0 {
+		entry.SpansJSON = MarshalOpsSpans(entry.Spans)
+	}
+
 	return entry, true, nil
 }
 

@@ -76,6 +76,7 @@ var usageLogInsertArgTypes = [...]string{
 	"integer",
 	"text", // initiator
 	"timestamptz",
+	"jsonb", // spans
 }
 
 // dateFormatWhitelist 将 granularity 参数映射为 PostgreSQL TO_CHAR 格式字符串，防止外部输入直接拼入 SQL
@@ -323,14 +324,15 @@ func (r *usageLogRepository) createSingle(ctx context.Context, sqlq sqlExecutor,
 			cache_ttl_overridden,
 			request_body_bytes,
 			initiator,
-			created_at
+			created_at,
+			spans
 		) VALUES (
 			$1, $2, $3, $4, $5, $6,
 			$7, $8,
 			$9, $10, $11, $12,
 			$13, $14,
 			$15, $16, $17, $18, $19, $20,
-			$21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45
+			$21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46
 		)
 		ON CONFLICT (request_id, api_key_id) DO NOTHING
 		RETURNING id, created_at
@@ -760,10 +762,11 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 			cache_ttl_overridden,
 			request_body_bytes,
 			initiator,
-			created_at
+			created_at,
+			spans
 		) AS (VALUES `)
 
-	args := make([]any, 0, len(keys)*41)
+	args := make([]any, 0, len(keys)*46)
 	argPos := 1
 	for idx, key := range keys {
 		if idx > 0 {
@@ -835,7 +838,8 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 				upstream_endpoint,
 				cache_ttl_overridden,
 				request_body_bytes,
-				created_at
+				created_at,
+				spans
 			)
 			SELECT
 				user_id,
@@ -881,7 +885,8 @@ func buildUsageLogBatchInsertQuery(keys []string, preparedByKey map[string]usage
 				upstream_endpoint,
 				cache_ttl_overridden,
 				request_body_bytes,
-				created_at
+				created_at,
+				spans
 			FROM input
 			ON CONFLICT (request_id, api_key_id) DO NOTHING
 			RETURNING request_id, api_key_id, id, created_at
@@ -968,7 +973,8 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			cache_ttl_overridden,
 			request_body_bytes,
 			initiator,
-			created_at
+			created_at,
+			spans
 		) AS (VALUES `)
 
 	args := make([]any, 0, len(preparedList)*40)
@@ -1041,7 +1047,8 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			cache_ttl_overridden,
 			request_body_bytes,
 			initiator,
-			created_at
+			created_at,
+			spans
 		)
 		SELECT
 			user_id,
@@ -1088,7 +1095,8 @@ func buildUsageLogBestEffortInsertQuery(preparedList []usageLogInsertPrepared) (
 			cache_ttl_overridden,
 			request_body_bytes,
 			initiator,
-			created_at
+			created_at,
+			spans
 		FROM input
 		ON CONFLICT (request_id, api_key_id) DO NOTHING
 	`)
@@ -1143,14 +1151,15 @@ func execUsageLogInsertNoResult(ctx context.Context, sqlq sqlExecutor, prepared 
 			cache_ttl_overridden,
 			request_body_bytes,
 			initiator,
-			created_at
+			created_at,
+			spans
 		) VALUES (
 			$1, $2, $3, $4, $5, $6,
 			$7, $8,
 			$9, $10, $11, $12,
 			$13, $14,
 			$15, $16, $17, $18, $19, $20,
-			$21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45
+			$21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46
 		)
 		ON CONFLICT (request_id, api_key_id) DO NOTHING
 	`, prepared.args...)
@@ -1244,6 +1253,12 @@ func prepareUsageLogInsert(log *service.UsageLog) usageLogInsertPrepared {
 			nullInt(log.RequestBodyBytes),
 			log.Initiator,
 			createdAt,
+			func() interface{} {
+				if log.Spans == nil {
+					return nil
+				}
+				return *log.Spans
+			}(),
 		},
 	}
 }

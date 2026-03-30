@@ -910,6 +910,8 @@ func applyOpsLatencyFieldsFromContext(c *gin.Context, entry *service.OpsInsertEr
 	entry.UpstreamLatencyMs = getContextLatencyMs(c, service.OpsUpstreamLatencyMsKey)
 	entry.ResponseLatencyMs = getContextLatencyMs(c, service.OpsResponseLatencyMsKey)
 	entry.TimeToFirstTokenMs = getContextLatencyMs(c, service.OpsTimeToFirstTokenMsKey)
+	// Attach span trace for request diagnosis
+	entry.Spans = service.GetOpsSpans(c)
 }
 
 func getContextLatencyMs(c *gin.Context, key string) *int64 {

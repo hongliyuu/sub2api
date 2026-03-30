@@ -146,6 +146,9 @@ type UsageLog struct {
 	UpstreamLatencyMs *int // 上游请求阶段耗时（发出请求→收到首字节）
 	ResponseLatencyMs *int // 响应处理阶段耗时（流式传输或读取响应体）
 
+	// Spans holds per-phase timing events as a serialised JSON string.
+	Spans *string
+
 	UserAgent *string
 	IPAddress *string
 
