@@ -259,8 +259,9 @@ func (s *OpenAIOAuthService) RefreshTokenWithClientID(ctx context.Context, refre
 		tokenInfo.PlanType = userInfo.PlanType
 	}
 
-	// id_token 中缺少 plan_type 时（如 Mobile RT），尝试通过 ChatGPT backend-api 补全
-	if tokenInfo.PlanType == "" && tokenInfo.AccessToken != "" && s.privacyClientFactory != nil {
+	// 通过 ChatGPT backend-api 获取实时 plan_type，因为 id_token 中的 chatgpt_plan_type 可能是缓存的旧值
+	// （例如：账号从 free 升级到 plus 后，id_token 仍返回 "free"）
+	if tokenInfo.AccessToken != "" && s.privacyClientFactory != nil {
 		// 从 access_token JWT 中提取 orgID（poid），用于匹配正确的账号
 		orgID := tokenInfo.OrganizationID
 		if orgID == "" {
@@ -269,7 +270,8 @@ func (s *OpenAIOAuthService) RefreshTokenWithClientID(ctx context.Context, refre
 			}
 		}
 		if info := fetchChatGPTAccountInfo(ctx, s.privacyClientFactory, tokenInfo.AccessToken, proxyURL, orgID); info != nil {
-			if tokenInfo.PlanType == "" && info.PlanType != "" {
+			// 优先使用 accounts/check 的实时结果，而非 id_token 中可能过期的值
+			if info.PlanType != "" {
 				tokenInfo.PlanType = info.PlanType
 			}
 			if tokenInfo.Email == "" && info.Email != "" {
