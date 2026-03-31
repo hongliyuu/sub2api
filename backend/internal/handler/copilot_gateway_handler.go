@@ -351,6 +351,7 @@ func (h *CopilotGatewayHandler) ChatCompletions(c *gin.Context) {
 			// Capture request-scoped values before entering goroutine (gin.Context not safe across goroutines).
 			capturedReqBody := body
 			capturedUpstreamReqBody, capturedUpstreamRespBody := service.GetOpsUpstreamBodies(c)
+			capturedSpans := service.GetOpsSpans(c)
 			go func() {
 				recordCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
@@ -382,6 +383,7 @@ func (h *CopilotGatewayHandler) ChatCompletions(c *gin.Context) {
 					UpstreamLatencyMs: upstreamLatencyMsVal,
 					ResponseLatencyMs: responseLatencyMsVal,
 					Initiator:         capturedInitiator,
+					Spans:             capturedSpans,
 				})
 				if err != nil {
 					reqLog.Error("copilot.record_usage_failed", zap.Error(err))
@@ -786,6 +788,7 @@ func (h *CopilotGatewayHandler) Responses(c *gin.Context) {
 			// Capture request-scoped values before entering goroutine (gin.Context not safe across goroutines).
 			capturedReqBody := body
 			capturedUpstreamReqBodyResp, capturedUpstreamRespBodyResp := service.GetOpsUpstreamBodies(c)
+			capturedSpansResp := service.GetOpsSpans(c)
 			go func() {
 				recordCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
@@ -818,6 +821,7 @@ func (h *CopilotGatewayHandler) Responses(c *gin.Context) {
 					UpstreamLatencyMs: upstreamLatencyMsRespVal,
 					ResponseLatencyMs: responseLatencyMsRespVal,
 					Initiator:         capturedInitiatorResp,
+					Spans:             capturedSpansResp,
 				})
 				if err != nil {
 					reqLog.Error("copilot.responses.record_usage_failed", zap.Error(err))
@@ -1189,6 +1193,7 @@ func (h *CopilotGatewayHandler) Messages(c *gin.Context) {
 			// Capture request-scoped values before entering goroutine (gin.Context not safe across goroutines).
 			capturedReqBodyMsg := body
 			capturedUpstreamReqBodyMsg, capturedUpstreamRespBodyMsg := service.GetOpsUpstreamBodies(c)
+			capturedSpansMsg := service.GetOpsSpans(c)
 			go func() {
 				recordCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				defer cancel()
@@ -1220,6 +1225,7 @@ func (h *CopilotGatewayHandler) Messages(c *gin.Context) {
 					UpstreamLatencyMs: upstreamLatencyMsMsgVal,
 					ResponseLatencyMs: responseLatencyMsMsgVal,
 					Initiator:         capturedInitiatorMsg,
+					Spans:             capturedSpansMsg,
 				})
 				if err != nil {
 					reqLog.Error("copilot.messages.record_usage_failed", zap.Error(err))

@@ -7217,6 +7217,9 @@ type RecordUsageInput struct {
 	// Initiator: Copilot 请求发起类型，'user'（Premium 配额）或 'agent'（标准配额子请求）。
 	// 非 Copilot 平台传空字符串，RecordUsage 内默认为 'user'。
 	Initiator string
+
+	// Spans: Copilot 请求阶段链路追踪，序列化后持久化到 usage_logs.spans。
+	Spans []*OpsSpan
 }
 
 // APIKeyQuotaUpdater defines the interface for updating API Key quota and rate limit usage
@@ -7650,6 +7653,7 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 		CacheTTLOverridden:    cacheTTLOverridden,
 		Initiator:             resolveInitiator(input.Initiator),
 		RequestBodyBytes:      input.RequestBodyBytes,
+		Spans:                 MarshalOpsSpans(input.Spans),
 		CreatedAt:             time.Now(),
 	}
 
@@ -7728,6 +7732,9 @@ type RecordUsageLongContextInput struct {
 	// Initiator: Copilot 请求发起类型，'user'（Premium 配额）或 'agent'（标准配额子请求）。
 	// 非 Copilot 平台统一写 'user'。
 	Initiator string
+
+	// Spans: Copilot 请求阶段链路追踪，序列化后持久化到 usage_logs.spans。
+	Spans []*OpsSpan
 }
 
 // RecordUsageWithLongContext 记录使用量并扣费，支持长上下文双倍计费（用于 Gemini）
@@ -7848,6 +7855,7 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 		CacheTTLOverridden:    cacheTTLOverridden,
 		Initiator:             resolveInitiator(input.Initiator),
 		RequestBodyBytes:      input.RequestBodyBytes,
+		Spans:                 MarshalOpsSpans(input.Spans),
 		CreatedAt:             time.Now(),
 	}
 
