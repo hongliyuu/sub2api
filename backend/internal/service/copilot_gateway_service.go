@@ -1003,6 +1003,10 @@ func (s *CopilotGatewayService) ForwardMessages(
 	// we can reassemble the chunks into a non-streaming Anthropic response
 	// when the client requested stream=false.
 	openAIBody = forceStreamTrue(openAIBody)
+	// Inject stream_options.include_usage=true after forceStreamTrue has set stream=true.
+	// This ensures Copilot appends a usage-summary SSE chunk so token counts are recorded.
+	// Must be before the upstream request is built in forwardMessagesViaChatCompletions.
+	openAIBody = ensureStreamIncludeUsage(openAIBody)
 
 	openAIBody, _ = rewriteCopilotUpstreamModel(openAIBody, account)
 

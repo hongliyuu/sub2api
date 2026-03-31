@@ -883,3 +883,61 @@ func TestForwardChatCompletions_UsageChunkForwardedWhenClientRequested(t *testin
 		t.Errorf("want usage chunk forwarded to client; got: %s", respBody)
 	}
 }
+
+// ── Task 3: ForwardMessages injects stream_options.include_usage ─────────────
+
+func TestForwardMessages_UpstreamBodyHasStreamIncludeUsage(t *testing.T) {
+	var capturedBody []byte
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedBody, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		// Minimal OpenAI SSE chat/completions stream.
+		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n\n")
+		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n")
+		fmt.Fprint(w, "data: {\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":3,\"total_tokens\":13}}\n\n")
+		fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer srv.Close()
+
+	provider := NewCopilotTokenProvider()
+	tok := newCopilotTestToken("copilot-token-abc")
+	provider.tokens[1] = &tok
+
+	svc := NewCopilotGatewayService(provider)
+	svc.httpClient = srv.Client()
+
+	account := &Account{
+		ID: 1, Platform: PlatformCopilot, Type: AccountTypeAPIKey,
+		Credentials: map[string]any{"github_token": "ghp_test", "base_url": srv.URL},
+	}
+
+	// Force /chat/completions route for "gpt-4o" (no model mapping on this account).
+	// Endpoint value must be "/chat/completions" (with leading slash) to match shouldUseResponsesEndpoint.
+	svc.setModelEndpointsCache(account.ID, map[string][]string{
+		"gpt-4o": {"/chat/completions"},
+	}, false)
+
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+
+	anthropicBody := []byte(`{"model":"gpt-4o","stream":false,"max_tokens":100,"messages":[{"role":"user","content":"hi"}]}`)
+	result, err := svc.ForwardMessages(context.Background(), c, account, anthropicBody)
+	if err != nil {
+		t.Fatalf("ForwardMessages: %v", err)
+	}
+
+	// Upstream body: stream=true (from forceStreamTrue) AND include_usage=true.
+	if !gjson.GetBytes(capturedBody, "stream").Bool() {
+		t.Errorf("want stream=true in upstream body; got %s", capturedBody)
+	}
+	if !gjson.GetBytes(capturedBody, "stream_options.include_usage").Bool() {
+		t.Errorf("want stream_options.include_usage=true in upstream body; got %s", capturedBody)
+	}
+	// Token counts must be non-zero.
+	if result == nil || result.Usage == nil || result.Usage.PromptTokens == 0 {
+		t.Errorf("want non-zero PromptTokens; result=%+v", result)
+	}
+}
