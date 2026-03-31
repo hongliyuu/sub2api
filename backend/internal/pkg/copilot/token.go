@@ -1,6 +1,7 @@
 package copilot
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -8,16 +9,14 @@ import (
 	"time"
 )
 
-// ExchangeToken exchanges a GitHub personal access token for a short-lived Copilot API token.
-//
-// The returned CopilotToken typically expires in ~30 minutes. Callers should use
-// RefreshIn to schedule proactive refresh.
-func ExchangeToken(httpClient *http.Client, githubToken string) (*CopilotToken, error) {
+// ExchangeTokenWithContext exchanges a GitHub personal access token for a short-lived
+// Copilot API token, honouring the provided context for cancellation and deadlines.
+func ExchangeTokenWithContext(ctx context.Context, httpClient *http.Client, githubToken string) (*CopilotToken, error) {
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 30 * time.Second}
 	}
 
-	req, err := http.NewRequest(http.MethodGet, TokenExchangeURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, TokenExchangeURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("copilot token exchange: build request: %w", err)
 	}
@@ -81,3 +80,14 @@ func ExchangeToken(httpClient *http.Client, githubToken string) (*CopilotToken, 
 		RefreshAt: refreshAt,
 	}, nil
 }
+
+// ExchangeToken exchanges a GitHub personal access token for a short-lived Copilot API token.
+//
+// The returned CopilotToken typically expires in ~30 minutes. Callers should use
+// RefreshIn to schedule proactive refresh.
+//
+// Deprecated: prefer ExchangeTokenWithContext for proper context propagation.
+func ExchangeToken(httpClient *http.Client, githubToken string) (*CopilotToken, error) {
+	return ExchangeTokenWithContext(context.Background(), httpClient, githubToken)
+}
+

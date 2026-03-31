@@ -15,6 +15,11 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/copilot"
 )
 
+// tokenExchanger is the function type used to exchange a GitHub token for a
+// short-lived Copilot token. Injecting it as a dependency makes the provider
+// testable without real HTTP calls.
+type tokenExchanger func(ctx context.Context, httpClient *http.Client, githubToken string) (*copilot.CopilotToken, error)
+
 // CopilotTokenProvider manages Copilot API tokens for GitHub Copilot accounts.
 //
 // GitHub Copilot uses a two-step token flow:
@@ -33,6 +38,7 @@ import (
 //     exchange returns, NOT during the HTTP I/O itself.
 type CopilotTokenProvider struct {
 	httpClient *http.Client
+	exchange   tokenExchanger
 
 	mu     sync.RWMutex
 	tokens map[int64]*copilot.CopilotToken // accountID → cached token
@@ -41,12 +47,19 @@ type CopilotTokenProvider struct {
 	sfGroup singleflight.Group
 }
 
-// NewCopilotTokenProvider creates a new CopilotTokenProvider.
-func NewCopilotTokenProvider() *CopilotTokenProvider {
+// newCopilotTokenProviderWithExchanger creates a CopilotTokenProvider with a
+// custom token exchanger function — used in tests to inject a mock.
+func newCopilotTokenProviderWithExchanger(ex tokenExchanger) *CopilotTokenProvider {
 	return &CopilotTokenProvider{
 		httpClient: &http.Client{Timeout: 30 * time.Second},
+		exchange:   ex,
 		tokens:     make(map[int64]*copilot.CopilotToken),
 	}
+}
+
+// NewCopilotTokenProvider creates a new CopilotTokenProvider.
+func NewCopilotTokenProvider() *CopilotTokenProvider {
+	return newCopilotTokenProviderWithExchanger(copilot.ExchangeTokenWithContext)
 }
 
 // GetAccessToken returns a valid Copilot API token for the given account.
@@ -98,7 +111,11 @@ func (p *CopilotTokenProvider) GetAccessToken(ctx context.Context, account *Acco
 		}
 
 		// Exchange GitHub token for Copilot token — no lock held during I/O.
-		newToken, err := copilot.ExchangeToken(p.httpClient, githubToken)
+		// Use a bounded context so a slow GitHub API doesn't block indefinitely.
+		// We derive from the caller's context so cancellation propagates.
+		exchangeCtx, exchangeCancel := context.WithTimeout(ctx, 20*time.Second)
+		defer exchangeCancel()
+		newToken, err := p.exchange(exchangeCtx, p.httpClient, githubToken)
 		if err != nil {
 			slog.Error("copilot token exchange failed",
 				"account_id", account.ID,
