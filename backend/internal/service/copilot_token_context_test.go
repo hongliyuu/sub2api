@@ -3,9 +3,12 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -55,5 +58,39 @@ func TestCopilotTokenProvider_ContextCancellation(t *testing.T) {
 	_, err := provider.GetAccessToken(ctx, account)
 	if err == nil {
 		t.Fatal("expected error on context cancellation, got nil")
+	}
+}
+
+// TestCopilotTokenProvider_LogsExchangeMs verifies that a successful token exchange
+// logs "exchange_ms" at the debug level for observability.
+func TestCopilotTokenProvider_LogsExchangeMs(t *testing.T) {
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	origLogger := slog.Default()
+	slog.SetDefault(logger)
+	t.Cleanup(func() { slog.SetDefault(origLogger) })
+
+	exchanger := func(ctx context.Context, httpClient *http.Client, githubToken string) (*copilot.CopilotToken, error) {
+		return &copilot.CopilotToken{
+			Token:     "ghs_test",
+			ExpiresAt: time.Now().Add(30 * time.Minute),
+			RefreshAt: time.Now().Add(5 * time.Minute),
+		}, nil
+	}
+	provider := newCopilotTokenProviderWithExchanger(exchanger)
+
+	tok, err := provider.GetAccessToken(context.Background(), &Account{
+		ID:       100,
+		Platform: PlatformCopilot,
+		Type:     AccountTypeAPIKey,
+		Credentials: map[string]any{
+			"github_token": "ghp_logtest",
+		},
+	})
+	if err != nil || tok == "" {
+		t.Fatalf("GetAccessToken: err=%v tok=%q", err, tok)
+	}
+	if !strings.Contains(logBuf.String(), "exchange_ms") {
+		t.Errorf("expected exchange_ms in debug log; got: %s", logBuf.String())
 	}
 }

@@ -115,10 +115,13 @@ func (p *CopilotTokenProvider) GetAccessToken(ctx context.Context, account *Acco
 		// We derive from the caller's context so cancellation propagates.
 		exchangeCtx, exchangeCancel := context.WithTimeout(ctx, 20*time.Second)
 		defer exchangeCancel()
+		exchangeStart := time.Now()
 		newToken, err := p.exchange(exchangeCtx, p.httpClient, githubToken)
+		exchangeMs := time.Since(exchangeStart).Milliseconds()
 		if err != nil {
 			slog.Error("copilot token exchange failed",
 				"account_id", account.ID,
+				"exchange_ms", exchangeMs,
 				"error", err)
 			if fallbackToken != "" {
 				return fallbackToken, nil
@@ -133,6 +136,7 @@ func (p *CopilotTokenProvider) GetAccessToken(ctx context.Context, account *Acco
 
 		slog.Debug("copilot token refreshed",
 			"account_id", account.ID,
+			"exchange_ms", exchangeMs,
 			"expires_at", newToken.ExpiresAt.Format(time.RFC3339))
 
 		return newToken.Token, nil
