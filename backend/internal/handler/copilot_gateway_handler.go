@@ -413,6 +413,7 @@ func (h *CopilotGatewayHandler) ChatCompletions(c *gin.Context) {
 							RequestBody:          capturedReqBody,
 							UpstreamRequestBody:  capturedUpstreamReqBody,
 							UpstreamResponseBody: capturedUpstreamRespBody,
+							UpstreamLatencyMs:    upstreamLatencyMsVal,
 						},
 					)
 				}
@@ -851,6 +852,7 @@ func (h *CopilotGatewayHandler) Responses(c *gin.Context) {
 							RequestBody:          capturedReqBody,
 							UpstreamRequestBody:  capturedUpstreamReqBodyResp,
 							UpstreamResponseBody: capturedUpstreamRespBodyResp,
+							UpstreamLatencyMs:    upstreamLatencyMsRespVal,
 						},
 					)
 				}
@@ -1255,6 +1257,7 @@ func (h *CopilotGatewayHandler) Messages(c *gin.Context) {
 							RequestBody:          capturedReqBodyMsg,
 							UpstreamRequestBody:  capturedUpstreamReqBodyMsg,
 							UpstreamResponseBody: capturedUpstreamRespBodyMsg,
+							UpstreamLatencyMs:    upstreamLatencyMsMsgVal,
 						},
 					)
 				}

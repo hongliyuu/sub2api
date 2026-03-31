@@ -13,10 +13,11 @@ import (
 type AnomalyType string
 
 const (
-	AnomalyZeroToken   AnomalyType = "zero_token"
-	AnomalySlowRequest AnomalyType = "slow_request"
-	AnomalyTimeout     AnomalyType = "timeout"
-	AnomalyError       AnomalyType = "error"
+	AnomalyZeroToken                AnomalyType = "zero_token"
+	AnomalySlowRequest              AnomalyType = "slow_request"
+	AnomalyTimeout                  AnomalyType = "timeout"
+	AnomalyError                    AnomalyType = "error"
+	AnomalyQuotaExhaustionSuspected AnomalyType = "quota_exhaustion_suspected"
 )
 
 // AnomalySettings holds admin-configurable thresholds for anomaly detection.
@@ -62,6 +63,7 @@ type RequestLogInput struct {
 	RequestBody          []byte
 	UpstreamRequestBody  []byte
 	UpstreamResponseBody []byte
+	UpstreamLatencyMs    *int // upstream request phase latency, for anomaly context
 }
 
 // RequestLogData is what the repository returns when reading a request log.
@@ -172,21 +174,39 @@ func (s *AnomalyService) UpdateSettings(ctx context.Context, settings *AnomalySe
 	return nil
 }
 
+// AnomalySignal bundles the observable values used for anomaly detection.
+// Using a struct keeps detectAnomalies extensible without touching its callers.
+type AnomalySignal struct {
+	InputTokens       int
+	OutputTokens      int
+	DurationMs        int64
+	UpstreamLatencyMs *int // nil when not measured
+	StatusCode        int
+}
+
 // detectAnomalies is a pure function that computes which anomaly types apply for a completed request.
-func detectAnomalies(inputTokens, outputTokens int, durationMs int64, statusCode int, settings *AnomalySettings) []AnomalyType {
+func detectAnomalies(sig AnomalySignal, settings *AnomalySettings) []AnomalyType {
 	var types []AnomalyType
 
-	if settings.DetectZeroToken && inputTokens == 0 && outputTokens == 0 {
+	zeroTokens := sig.InputTokens == 0 && sig.OutputTokens == 0
+
+	// Quota exhaustion: zero tokens returned very quickly (no compute occurred).
+	// Treat as a distinct signal — more actionable than a generic zero_token.
+	if settings.DetectZeroToken && zeroTokens &&
+		sig.UpstreamLatencyMs != nil && int64(*sig.UpstreamLatencyMs) < 1000 {
+		types = append(types, AnomalyQuotaExhaustionSuspected)
+		// Skip zero_token: it is a consequence of the same root cause.
+	} else if settings.DetectZeroToken && zeroTokens {
 		types = append(types, AnomalyZeroToken)
 	}
 
-	if durationMs > settings.TimeoutThresholdMs {
+	if sig.DurationMs > settings.TimeoutThresholdMs {
 		types = append(types, AnomalyTimeout)
-	} else if durationMs > settings.SlowRequestThresholdMs {
+	} else if sig.DurationMs > settings.SlowRequestThresholdMs {
 		types = append(types, AnomalySlowRequest)
 	}
 
-	if statusCode >= 500 {
+	if sig.StatusCode >= 500 {
 		types = append(types, AnomalyError)
 	}
 
@@ -210,7 +230,14 @@ func (s *AnomalyService) WriteAnomalyLog(
 	defer cancel()
 
 	settings := s.GetSettings(bgCtx)
-	anomalies := detectAnomalies(inputTokens, outputTokens, durationMs, statusCode, settings)
+	sig := AnomalySignal{
+		InputTokens:       inputTokens,
+		OutputTokens:      outputTokens,
+		DurationMs:        durationMs,
+		UpstreamLatencyMs: input.UpstreamLatencyMs,
+		StatusCode:        statusCode,
+	}
+	anomalies := detectAnomalies(sig, settings)
 	if len(anomalies) == 0 {
 		return
 	}

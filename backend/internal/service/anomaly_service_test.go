@@ -12,7 +12,7 @@ func TestDetectAnomalies_ZeroToken(t *testing.T) {
 		TimeoutThresholdMs:     60000,
 		DetectZeroToken:        true,
 	}
-	types := detectAnomalies(0, 0, 5000, 200, settings)
+	types := detectAnomalies(AnomalySignal{InputTokens: 0, OutputTokens: 0, DurationMs: 5000, StatusCode: 200}, settings)
 	if len(types) != 1 || types[0] != AnomalyZeroToken {
 		t.Errorf("expected [zero_token], got %v", types)
 	}
@@ -24,7 +24,7 @@ func TestDetectAnomalies_SlowRequest(t *testing.T) {
 		TimeoutThresholdMs:     60000,
 		DetectZeroToken:        true,
 	}
-	types := detectAnomalies(100, 200, 25000, 200, settings)
+	types := detectAnomalies(AnomalySignal{InputTokens: 100, OutputTokens: 200, DurationMs: 25000, StatusCode: 200}, settings)
 	if len(types) != 1 || types[0] != AnomalySlowRequest {
 		t.Errorf("expected [slow_request], got %v", types)
 	}
@@ -36,7 +36,7 @@ func TestDetectAnomalies_Timeout(t *testing.T) {
 		TimeoutThresholdMs:     60000,
 		DetectZeroToken:        true,
 	}
-	types := detectAnomalies(0, 0, 70000, 200, settings)
+	types := detectAnomalies(AnomalySignal{InputTokens: 0, OutputTokens: 0, DurationMs: 70000, StatusCode: 200}, settings)
 	found := map[string]bool{}
 	for _, at := range types {
 		found[string(at)] = true
@@ -48,7 +48,7 @@ func TestDetectAnomalies_Timeout(t *testing.T) {
 
 func TestDetectAnomalies_Error(t *testing.T) {
 	settings := &AnomalySettings{SlowRequestThresholdMs: 20000, TimeoutThresholdMs: 60000}
-	types := detectAnomalies(100, 200, 1000, 500, settings)
+	types := detectAnomalies(AnomalySignal{InputTokens: 100, OutputTokens: 200, DurationMs: 1000, StatusCode: 500}, settings)
 	if len(types) != 1 || types[0] != AnomalyError {
 		t.Errorf("expected [error], got %v", types)
 	}
@@ -56,7 +56,7 @@ func TestDetectAnomalies_Error(t *testing.T) {
 
 func TestDetectAnomalies_Normal(t *testing.T) {
 	settings := &AnomalySettings{SlowRequestThresholdMs: 20000, TimeoutThresholdMs: 60000, DetectZeroToken: true}
-	types := detectAnomalies(100, 200, 5000, 200, settings)
+	types := detectAnomalies(AnomalySignal{InputTokens: 100, OutputTokens: 200, DurationMs: 5000, StatusCode: 200}, settings)
 	if len(types) != 0 {
 		t.Errorf("expected no anomalies, got %v", types)
 	}
@@ -64,7 +64,7 @@ func TestDetectAnomalies_Normal(t *testing.T) {
 
 func TestDetectAnomalies_ZeroTokenDisabled(t *testing.T) {
 	settings := &AnomalySettings{SlowRequestThresholdMs: 20000, TimeoutThresholdMs: 60000, DetectZeroToken: false}
-	types := detectAnomalies(0, 0, 5000, 200, settings)
+	types := detectAnomalies(AnomalySignal{InputTokens: 0, OutputTokens: 0, DurationMs: 5000, StatusCode: 200}, settings)
 	if len(types) != 0 {
 		t.Errorf("expected no anomalies when detect_zero_token=false, got %v", types)
 	}
@@ -77,12 +77,12 @@ func TestDetectAnomalies_ExactSlowThreshold(t *testing.T) {
 		DetectZeroToken:        true,
 	}
 	// Exactly at threshold should NOT trigger (strictly greater-than)
-	types := detectAnomalies(100, 200, 20000, 200, settings)
+	types := detectAnomalies(AnomalySignal{InputTokens: 100, OutputTokens: 200, DurationMs: 20000, StatusCode: 200}, settings)
 	if len(types) != 0 {
 		t.Errorf("duration exactly at slow threshold should not trigger, got %v", types)
 	}
 	// One ms over should trigger
-	types = detectAnomalies(100, 200, 20001, 200, settings)
+	types = detectAnomalies(AnomalySignal{InputTokens: 100, OutputTokens: 200, DurationMs: 20001, StatusCode: 200}, settings)
 	if len(types) != 1 || types[0] != AnomalySlowRequest {
 		t.Errorf("duration 1ms over threshold should trigger slow_request, got %v", types)
 	}
