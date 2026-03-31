@@ -140,7 +140,6 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	schedulerSnapshotService := service.ProvideSchedulerSnapshotService(schedulerCache, schedulerOutboxRepository, accountRepository, groupRepository, configConfig, settingService, hotPoolService)
 	accountFailurePolicyService := service.NewAccountFailurePolicyService(accountRepository, settingService, hotPoolService, schedulerSnapshotService)
 	rateLimitService.SetAccountFailurePolicy(accountFailurePolicyService)
-	accountUsageService.SetAccountFailurePolicy(accountFailurePolicyService)
 	antigravityTokenProvider := service.ProvideAntigravityTokenProvider(accountRepository, geminiTokenCache, antigravityOAuthService, oauthRefreshAPI, tempUnschedCache)
 	internal500CounterCache := repository.NewInternal500CounterCache(redisClient)
 	antigravityGatewayService := service.NewAntigravityGatewayService(accountRepository, gatewayCache, schedulerSnapshotService, antigravityTokenProvider, rateLimitService, httpUpstream, settingService, internal500CounterCache)
