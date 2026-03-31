@@ -126,6 +126,14 @@ func (s *CopilotGatewayService) ForwardChatCompletions(
 
 	body, logModel := rewriteCopilotUpstreamModel(body, account)
 	body = clampCopilotUpstreamMaxTokens(body, account)
+
+	// Remember whether the client originally requested usage in the stream,
+	// before ensureStreamIncludeUsage may add it.
+	clientWantsUsageChunk := gjson.GetBytes(body, "stream_options.include_usage").Bool()
+	// Inject stream_options.include_usage=true so Copilot appends a usage-summary
+	// SSE chunk. Must be called before http.NewRequestWithContext builds the request.
+	body = ensureStreamIncludeUsage(body)
+
 	upstreamSent := strings.TrimSpace(extractModelFromBody(body))
 	AppendOpsSpan(c, OpsSpan{
 		Name:        "translate.req",
@@ -233,7 +241,7 @@ func (s *CopilotGatewayService) ForwardChatCompletions(
 
 	// Handle streaming response
 	if isStream {
-		return s.handleStreamingResponse(c, resp, model, upstreamSent, startTime)
+		return s.handleStreamingResponse(c, resp, model, upstreamSent, startTime, clientWantsUsageChunk)
 	}
 
 	// Handle non-streaming response
@@ -241,12 +249,20 @@ func (s *CopilotGatewayService) ForwardChatCompletions(
 }
 
 // handleStreamingResponse proxies SSE streaming from Copilot API to the client.
+//
+// forwardUsageChunk controls whether a Copilot-injected usage-summary chunk
+// (appended when stream_options.include_usage=true is set upstream) is forwarded
+// to the downstream client. Set to true only when the original client request
+// contained stream_options.include_usage=true; otherwise the extra chunk is
+// consumed internally for token tracking and filtered out to preserve protocol
+// fidelity for clients that did not request it.
 func (s *CopilotGatewayService) handleStreamingResponse(
 	c *gin.Context,
 	resp *http.Response,
 	model string,
 	upstreamModel string,
 	startTime time.Time,
+	forwardUsageChunk bool,
 ) (*CopilotForwardResult, error) {
 	defer func() { _ = resp.Body.Close() }()
 
@@ -299,6 +315,12 @@ func (s *CopilotGatewayService) handleStreamingResponse(
 				firstTokenMs = &ms
 			}
 			s.parseStreamUsage(data, usage)
+
+			// Filter the upstream-injected usage-only chunk when the client did not
+			// request it. Still parsed above so token counts are always recorded.
+			if !forwardUsageChunk && isUsageOnlyChunk(data) {
+				continue
+			}
 		}
 
 		// Forward line to client
@@ -898,7 +920,9 @@ func (s *CopilotGatewayService) ForwardResponses(
 	var result *CopilotForwardResult
 	var fwdErr error
 	if isStream {
-		result, fwdErr = s.handleStreamingResponse(c, resp, model, upstreamSent, startTime)
+		// ForwardResponses: usage comes from response.completed terminal event, not
+		// stream_options.include_usage. forwardUsageChunk=false: no usage SSE chunk expected.
+		result, fwdErr = s.handleStreamingResponse(c, resp, model, upstreamSent, startTime, false)
 	} else {
 		result, fwdErr = s.handleNonStreamingResponse(c, resp, model, upstreamSent, startTime)
 	}

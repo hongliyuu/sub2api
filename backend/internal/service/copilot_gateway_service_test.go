@@ -1,8 +1,10 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -386,7 +388,7 @@ func TestCopilotGatewayService_HandleStreamingResponse(t *testing.T) {
 		c, _ := gin.CreateTestContext(w)
 		c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
 
-		result, err := svc.handleStreamingResponse(c, resp, "gpt-4o", "gpt-4o", time.Now())
+		result, err := svc.handleStreamingResponse(c, resp, "gpt-4o", "gpt-4o", time.Now(), false)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -779,5 +781,105 @@ func TestIsUsageOnlyChunk(t *testing.T) {
 				t.Errorf("isUsageOnlyChunk(%q) = %v, want %v", tc.data, got, tc.want)
 			}
 		})
+	}
+}
+
+// ── Task 2: ForwardChatCompletions usage chunk filtering ─────────────────────
+
+func TestForwardChatCompletions_UsageChunkFilteredWhenClientDidNotRequest(t *testing.T) {
+	var capturedBody []byte
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedBody, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"hello\"}}]}\n\n")
+		// Copilot-injected usage-only chunk.
+		fmt.Fprint(w, "data: {\"usage\":{\"prompt_tokens\":8,\"completion_tokens\":3,\"total_tokens\":11}}\n\n")
+		fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer srv.Close()
+
+	provider := NewCopilotTokenProvider()
+	tok := newCopilotTestToken("copilot-token-xyz")
+	provider.tokens[1] = &tok
+
+	svc := NewCopilotGatewayService(provider)
+	svc.httpClient = srv.Client()
+
+	account := &Account{
+		ID: 1, Platform: PlatformCopilot, Type: AccountTypeAPIKey,
+		Credentials: map[string]any{"github_token": "ghp_test", "base_url": srv.URL},
+	}
+
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/copilot/v1/chat/completions", nil)
+
+	// Client sends stream=true WITHOUT stream_options.include_usage.
+	clientBody := []byte(`{"model":"gpt-4o","stream":true,"messages":[{"role":"user","content":"hi"}]}`)
+	result, err := svc.ForwardChatCompletions(context.Background(), c, account, clientBody)
+	if err != nil {
+		t.Fatalf("ForwardChatCompletions: %v", err)
+	}
+
+	// Root-cause check: upstream must have include_usage injected.
+	if !gjson.GetBytes(capturedBody, "stream_options.include_usage").Bool() {
+		t.Errorf("want stream_options.include_usage=true in upstream body; got %s", capturedBody)
+	}
+	// Token counts must be non-zero (parsed from usage chunk internally).
+	if result.Usage == nil || result.Usage.PromptTokens == 0 {
+		t.Errorf("want non-zero PromptTokens; got %+v", result.Usage)
+	}
+	// Client must NOT receive the usage-only chunk.
+	respBody := w.Body.String()
+	if strings.Contains(respBody, `"prompt_tokens"`) {
+		t.Errorf("usage-only chunk must be filtered from client response; got: %s", respBody)
+	}
+	if !strings.Contains(respBody, "hello") {
+		t.Errorf("content chunk must be forwarded to client; got: %s", respBody)
+	}
+}
+
+func TestForwardChatCompletions_UsageChunkForwardedWhenClientRequested(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n")
+		fmt.Fprint(w, "data: {\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":2,\"total_tokens\":7}}\n\n")
+		fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer srv.Close()
+
+	provider := NewCopilotTokenProvider()
+	tok := newCopilotTestToken("copilot-token-xyz2")
+	provider.tokens[1] = &tok
+
+	svc := NewCopilotGatewayService(provider)
+	svc.httpClient = srv.Client()
+
+	account := &Account{
+		ID: 1, Platform: PlatformCopilot, Type: AccountTypeAPIKey,
+		Credentials: map[string]any{"github_token": "ghp_test", "base_url": srv.URL},
+	}
+
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/copilot/v1/chat/completions", nil)
+
+	// Client explicitly requests include_usage — usage chunk must be forwarded.
+	clientBody := []byte(`{"model":"gpt-4o","stream":true,"stream_options":{"include_usage":true},"messages":[{"role":"user","content":"hi"}]}`)
+	result, err := svc.ForwardChatCompletions(context.Background(), c, account, clientBody)
+	if err != nil {
+		t.Fatalf("ForwardChatCompletions: %v", err)
+	}
+	if result.Usage == nil || result.Usage.PromptTokens == 0 {
+		t.Errorf("want non-zero PromptTokens; got %+v", result.Usage)
+	}
+	// Client SHOULD receive the usage chunk.
+	respBody := w.Body.String()
+	if !strings.Contains(respBody, `"prompt_tokens"`) {
+		t.Errorf("want usage chunk forwarded to client; got: %s", respBody)
 	}
 }
