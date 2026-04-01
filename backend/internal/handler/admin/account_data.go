@@ -610,7 +610,10 @@ func enrichCredentialsFromIDToken(item *DataAccount) {
 	}
 
 	setIfMissing("email", userInfo.Email)
-	setIfMissing("plan_type", userInfo.PlanType)
+	// plan_type 是可变的（如 free → plus），始终用最新值覆盖
+	if userInfo.PlanType != "" {
+		item.Credentials["plan_type"] = userInfo.PlanType
+	}
 	setIfMissing("chatgpt_account_id", userInfo.ChatGPTAccountID)
 	setIfMissing("chatgpt_user_id", userInfo.ChatGPTUserID)
 	setIfMissing("organization_id", userInfo.OrganizationID)
