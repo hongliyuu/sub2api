@@ -2,6 +2,7 @@ package repository
 
 import (
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
@@ -61,15 +62,66 @@ func TestMarshalAccountForCache_StripsHeavyTokens(t *testing.T) {
 	}
 }
 
+func TestMarshalAccountForCache_StripsGroupObjects(t *testing.T) {
+	group := &service.Group{
+		ID:          7,
+		Name:        "TestGroup",
+		Description: "A group with many fields that waste bandwidth",
+		Platform:    "openai",
+	}
+	account := &service.Account{
+		ID:   1,
+		Name: "test",
+		AccountGroups: []service.AccountGroup{
+			{
+				AccountID: 1,
+				GroupID:   7,
+				Priority:  1,
+				CreatedAt: time.Now(),
+				Group:     group,
+			},
+		},
+		Groups: []*service.Group{group},
+	}
+
+	data, err := marshalAccountForCache(account)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	s := string(data)
+
+	// Group name should not appear — full Group objects are stripped.
+	if containsKey(s, "TestGroup") {
+		t.Error("expected full Group object to be stripped from AccountGroups")
+	}
+
+	// GroupID must still be present for routing.
+	if !contains(s, `"GroupID":7`) && !contains(s, `"group_id":7`) {
+		// Check both possible JSON key styles.
+		if !contains(s, "7") {
+			t.Error("expected GroupID to be preserved in AccountGroups")
+		}
+	}
+}
+
 func TestMarshalAccountForCache_DoesNotMutateOriginal(t *testing.T) {
-	original := map[string]any{
+	group := &service.Group{ID: 7, Name: "TestGroup"}
+	originalCreds := map[string]any{
 		"access_token":  "at",
 		"id_token":      "idt",
 		"refresh_token": "rt",
 	}
+	originalAGs := []service.AccountGroup{
+		{AccountID: 1, GroupID: 7, Group: group},
+	}
+	originalGroups := []*service.Group{group}
+
 	account := &service.Account{
-		ID:          1,
-		Credentials: original,
+		ID:            1,
+		Credentials:   originalCreds,
+		AccountGroups: originalAGs,
+		Groups:        originalGroups,
 	}
 
 	_, err := marshalAccountForCache(account)
@@ -77,18 +129,27 @@ func TestMarshalAccountForCache_DoesNotMutateOriginal(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	// Original map must still contain all keys.
+	// Original credentials map must still contain all keys.
 	for _, key := range []string{"access_token", "id_token", "refresh_token"} {
-		if _, ok := original[key]; !ok {
+		if _, ok := originalCreds[key]; !ok {
 			t.Errorf("original credentials map was mutated: missing %q", key)
 		}
+	}
+
+	// Original AccountGroups must still have Group pointer.
+	if account.AccountGroups[0].Group == nil {
+		t.Error("original AccountGroups[0].Group was mutated to nil")
+	}
+
+	// Original Groups must still be populated.
+	if account.Groups == nil || len(account.Groups) == 0 {
+		t.Error("original Groups slice was mutated")
 	}
 }
 
 // containsKey is a simple helper that checks if a JSON string contains a key.
 func containsKey(json, key string) bool {
 	return len(json) > 0 && len(key) > 0 &&
-		// Match "key": pattern in JSON.
 		contains(json, `"`+key+`"`)
 }
 

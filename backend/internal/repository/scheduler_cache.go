@@ -267,24 +267,52 @@ func ptrTime(t time.Time) *time.Time {
 var schedulerCacheCredentialDenyList = []string{"id_token", "refresh_token"}
 
 // marshalAccountForCache serialises an Account for the scheduler cache while
-// stripping large credential fields that are not needed for scheduling or
-// request forwarding. The caller's Account is never mutated.
+// stripping large fields that are not needed for scheduling or request
+// forwarding. The caller's Account is never mutated.
+//
+// Stripped fields:
+//   - Credentials: id_token, refresh_token (only access_token/api_key needed)
+//   - AccountGroups[].Group: full Group objects (only GroupID needed for routing)
+//   - AccountGroups[].Account: back-reference to parent (circular/redundant)
+//   - Groups: duplicate of AccountGroups[].Group (ops-only, not used in gateway)
 func marshalAccountForCache(account *service.Account) ([]byte, error) {
 	if account == nil {
 		return nil, nil
 	}
-	if len(account.Credentials) == 0 {
-		return json.Marshal(account)
-	}
 	stripped := *account
-	creds := make(map[string]any, len(stripped.Credentials))
-	for k, v := range stripped.Credentials {
-		creds[k] = v
+
+	// Strip heavy credential fields.
+	if len(stripped.Credentials) > 0 {
+		creds := make(map[string]any, len(stripped.Credentials))
+		for k, v := range stripped.Credentials {
+			creds[k] = v
+		}
+		for _, key := range schedulerCacheCredentialDenyList {
+			delete(creds, key)
+		}
+		stripped.Credentials = creds
 	}
-	for _, key := range schedulerCacheCredentialDenyList {
-		delete(creds, key)
+
+	// Strip full Group objects from AccountGroups — the gateway only reads
+	// AccountGroup.GroupID via isAccountInGroup(). Keep the slice itself
+	// (for length checks and GroupID iteration) but nil out the heavy pointers.
+	if len(stripped.AccountGroups) > 0 {
+		slim := make([]service.AccountGroup, len(stripped.AccountGroups))
+		for i, ag := range stripped.AccountGroups {
+			slim[i] = service.AccountGroup{
+				AccountID: ag.AccountID,
+				GroupID:   ag.GroupID,
+				Priority:  ag.Priority,
+				CreatedAt: ag.CreatedAt,
+			}
+		}
+		stripped.AccountGroups = slim
 	}
-	stripped.Credentials = creds
+
+	// Groups is only consumed by ops services (account availability, concurrency
+	// dashboards) which are disabled on non-primary instances. Nil it out.
+	stripped.Groups = nil
+
 	return json.Marshal(&stripped)
 }
 
