@@ -350,9 +350,8 @@ function buildTransportOptions(endpoint, proxyCfg, timeoutMs) {
     const endpointProtocol = new URL(endpoint).protocol;
     const connectAgent = createHttpConnectAgent(proxyCfg, endpointProtocol, timeoutMs);
     return {
-      proxy: proxyCfg,
-      proxyAgent: connectAgent,
       nodeAgentKind: endpointProtocol === 'https:' ? 'httpsAgent' : 'httpAgent',
+      [endpointProtocol === 'https:' ? 'httpsAgent' : 'httpAgent']: connectAgent,
     };
   }
   const endpointProtocol = new URL(endpoint).protocol;
@@ -380,13 +379,28 @@ function requestWithNodeHttp(input) {
       servername: endpoint.hostname,
     }, (res) => {
       const chunks = [];
+      let idleTimer;
+      const resetIdleTimer = () => {
+        if (!(input.timeoutMs > 0)) return;
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => {
+          req.destroy(new Error('stream idle timeout'));
+        }, input.timeoutMs);
+      };
+      resetIdleTimer();
+      res.on('data', () => resetIdleTimer());
       res.on('data', (c) => chunks.push(c));
       res.on('end', () => {
+        clearTimeout(idleTimer);
         resolve({
           status: res.statusCode || 0,
           headers: normalizeResponseHeaders(res.headers || {}),
           body: Buffer.concat(chunks),
         });
+      });
+      res.on('error', (err) => {
+        clearTimeout(idleTimer);
+        reject(err);
       });
     });
     req.on('timeout', () => req.destroy(new Error('request timeout')));
@@ -425,17 +439,29 @@ function requestWithNodeHttpStream(input) {
       timeout: input.timeoutMs > 0 ? input.timeoutMs : undefined,
       servername: endpoint.hostname,
     }, async (res) => {
+      let idleTimer;
+      const resetIdleTimer = () => {
+        if (!(input.timeoutMs > 0)) return;
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => {
+          req.destroy(new Error('stream idle timeout'));
+        }, input.timeoutMs);
+      };
       try {
+        resetIdleTimer();
         const meta = JSON.stringify({
           status: res.statusCode || 0,
           headers: normalizeResponseHeaders(res.headers || {}),
         }) + '\n';
         await writeStdoutChunk(meta);
         for await (const chunk of res) {
+          resetIdleTimer();
           await writeStdoutChunk(chunk);
         }
+        clearTimeout(idleTimer);
         resolve();
       } catch (err) {
+        clearTimeout(idleTimer);
         reject(err);
       }
     });
@@ -449,7 +475,6 @@ function requestWithNodeHttpStream(input) {
 async function main() {
   const raw = await readStdin();
   const input = JSON.parse(raw);
-  const axios = await loadAxios();
   const headers = sanitizeHeaders(input.headers);
   const payload = Buffer.from(input.payload_base64 ?? '', 'base64');
   const method = typeof input.method === 'string' && input.method !== '' ? input.method : 'POST';
@@ -470,37 +495,6 @@ async function main() {
       timeoutMs,
       agent: nodeAgent,
     });
-    return;
-  }
-
-  if (axios) {
-    const response = await axios.request({
-      method,
-      url: input.endpoint,
-      data: payload,
-      timeout: timeoutMs,
-      headers,
-      ...transportOptions,
-      validateStatus: acceptNon2xx ? () => true : undefined,
-      responseType: returnRawBytes ? 'arraybuffer' : undefined,
-      transformResponse: returnRawBytes ? [(data) => data] : undefined,
-    });
-
-    const rawBody = returnRawBytes
-      ? Buffer.from(response.data ?? [])
-      : Buffer.from(
-          typeof response.data === 'string'
-            ? response.data
-            : JSON.stringify(response.data ?? null),
-          'utf8',
-        );
-
-    process.stdout.write(JSON.stringify({
-      status: response.status,
-      data: returnRawBytes ? undefined : response.data,
-      headers: normalizeResponseHeaders(response.headers ?? {}),
-      body_base64: rawBody.toString('base64'),
-    }));
     return;
   }
 

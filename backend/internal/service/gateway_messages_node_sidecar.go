@@ -30,6 +30,35 @@ type messagesNodeSidecarResponse struct {
 	BodyBase64 string              `json:"body_base64"`
 }
 
+type tailBuffer struct {
+	buf   []byte
+	limit int
+}
+
+func newTailBuffer(limit int) *tailBuffer {
+	return &tailBuffer{limit: limit}
+}
+
+func (b *tailBuffer) Write(p []byte) (int, error) {
+	if b.limit <= 0 {
+		return len(p), nil
+	}
+	if len(p) >= b.limit {
+		b.buf = append(b.buf[:0], p[len(p)-b.limit:]...)
+		return len(p), nil
+	}
+	if len(b.buf)+len(p) > b.limit {
+		drop := len(b.buf) + len(p) - b.limit
+		b.buf = append(b.buf[:0], b.buf[drop:]...)
+	}
+	b.buf = append(b.buf, p...)
+	return len(p), nil
+}
+
+func (b *tailBuffer) String() string {
+	return string(b.buf)
+}
+
 type messagesNodeSidecarStreamBody struct {
 	reader  *bufio.Reader
 	stdout  io.Closer
@@ -202,16 +231,11 @@ func (s *GatewayService) doMessagesRequestWithNodeSidecar(
 	}
 
 	payload, err := json.Marshal(map[string]any{
-		"method":         req.Method,
-		"endpoint":       req.URL.String(),
-		"headers":        cloneHeaderValues(req.Header),
-		"payload_base64": base64.StdEncoding.EncodeToString(requestBody),
-		"timeout_ms": func() int {
-			if reqStream {
-				return 0
-			}
-			return int(timeout / time.Millisecond)
-		}(),
+		"method":           req.Method,
+		"endpoint":         req.URL.String(),
+		"headers":          cloneHeaderValues(req.Header),
+		"payload_base64":   base64.StdEncoding.EncodeToString(requestBody),
+		"timeout_ms":       int(timeout / time.Millisecond),
 		"accept_non_2xx":   true,
 		"return_raw_bytes": true,
 		"proxy_url":        strings.TrimSpace(proxyURL),
@@ -307,7 +331,7 @@ func (s *GatewayService) doStreamingMessagesRequestWithNodeSidecar(
 		return nil, fmt.Errorf("start messages sidecar: %w", err)
 	}
 
-	stderrBuf := new(bytes.Buffer)
+	stderrBuf := newTailBuffer(16 * 1024)
 	stderrDone := make(chan struct{})
 	go func() {
 		_, _ = io.Copy(stderrBuf, stderr)
@@ -358,8 +382,9 @@ func (s *GatewayService) doStreamingMessagesRequestWithNodeSidecar(
 	}
 
 	resp := &http.Response{
-		StatusCode: decoded.Status,
-		Header:     make(http.Header),
+		StatusCode:    decoded.Status,
+		Header:        make(http.Header),
+		ContentLength: -1,
 		Body: &messagesNodeSidecarStreamBody{
 			reader: reader,
 			stdout: stdout,
