@@ -4226,6 +4226,19 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 
 	// 解析 TLS 指纹 profile（同一请求生命周期内不变，避免重试循环中重复解析）
 	tlsProfile := s.tlsFPProfileService.ResolveTLSProfile(account)
+	doUpstream := func(upstreamReq *http.Request) (*http.Response, error) {
+		if s.shouldUseMessagesNodeSidecar(account, reqStream) {
+			sidecarResp, sidecarErr := s.doMessagesRequestWithNodeSidecar(ctx, upstreamReq, s.messagesNodeSidecarTimeout(), proxyURL)
+			if sidecarErr == nil {
+				return sidecarResp, nil
+			}
+			if !s.messagesNodeSidecarAllowGoFallback() {
+				return nil, sidecarErr
+			}
+			s.logMessagesSidecarFallback(account, sidecarErr)
+		}
+		return s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, tlsProfile)
+	}
 
 	// 调试日志：记录即将转发的账号信息
 	logger.LegacyPrintf("service.gateway", "[Forward] Using account: ID=%d Name=%s Platform=%s Type=%s TLSFingerprint=%v Proxy=%s",
@@ -4249,7 +4262,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		}
 
 		// 发送请求
-		resp, err = s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, tlsProfile)
+		resp, err = doUpstream(upstreamReq)
 		if err != nil {
 			if resp != nil && resp.Body != nil {
 				_ = resp.Body.Close()
@@ -4327,7 +4340,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 					retryReq, buildErr := s.buildUpstreamRequest(retryCtx, c, account, filteredBody, token, tokenType, reqModel, reqStream, shouldMimicClaudeCode)
 					releaseRetryCtx()
 					if buildErr == nil {
-						retryResp, retryErr := s.httpUpstream.DoWithTLS(retryReq, proxyURL, account.ID, account.Concurrency, tlsProfile)
+						retryResp, retryErr := doUpstream(retryReq)
 						if retryErr == nil {
 							if retryResp.StatusCode < 400 {
 								logger.LegacyPrintf("service.gateway", "Account %d: thinking block retry succeeded (blocks downgraded)", account.ID)
@@ -4362,7 +4375,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 									retryReq2, buildErr2 := s.buildUpstreamRequest(retryCtx2, c, account, filteredBody2, token, tokenType, reqModel, reqStream, shouldMimicClaudeCode)
 									releaseRetryCtx2()
 									if buildErr2 == nil {
-										retryResp2, retryErr2 := s.httpUpstream.DoWithTLS(retryReq2, proxyURL, account.ID, account.Concurrency, tlsProfile)
+										retryResp2, retryErr2 := doUpstream(retryReq2)
 										if retryErr2 == nil {
 											resp = retryResp2
 											break
@@ -4433,7 +4446,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 						budgetRetryReq, buildErr := s.buildUpstreamRequest(budgetRetryCtx, c, account, rectifiedBody, token, tokenType, reqModel, reqStream, shouldMimicClaudeCode)
 						releaseBudgetRetryCtx()
 						if buildErr == nil {
-							budgetRetryResp, retryErr := s.httpUpstream.DoWithTLS(budgetRetryReq, proxyURL, account.ID, account.Concurrency, tlsProfile)
+							budgetRetryResp, retryErr := doUpstream(budgetRetryReq)
 							if retryErr == nil {
 								resp = budgetRetryResp
 								break
