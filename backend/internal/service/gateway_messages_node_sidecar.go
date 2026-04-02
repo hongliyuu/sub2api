@@ -231,6 +231,7 @@ func (s *GatewayService) doMessagesRequestWithNodeSidecar(
 	}
 
 	payload, err := json.Marshal(map[string]any{
+		"client_mode":      "messages",
 		"method":           req.Method,
 		"endpoint":         req.URL.String(),
 		"headers":          cloneHeaderValues(req.Header),

@@ -1,4 +1,5 @@
-import { fileURLToPath, pathToFileURL } from 'url';
+import { createRequire } from 'module';
+import { fileURLToPath, pathToFileURL, URL as NodeURL } from 'url';
 import fs from 'fs/promises';
 import path from 'path';
 import net from 'net';
@@ -7,6 +8,26 @@ import dns from 'dns/promises';
 import { once } from 'events';
 import http from 'http';
 import https from 'https';
+
+async function loadUndici() {
+  const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    path.resolve(scriptDir, '../../restored-src/node_modules/undici/index.js'),
+    path.resolve(scriptDir, '../frontend/node_modules/undici/index.js'),
+  ];
+
+  for (const candidate of candidates) {
+    try {
+      await fs.access(candidate);
+      const mod = await import(pathToFileURL(candidate).href);
+      return mod.default ?? mod;
+    } catch {
+      // try next
+    }
+  }
+
+  return null;
+}
 
 async function loadAxios() {
   const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -18,7 +39,8 @@ async function loadAxios() {
   for (const candidate of candidates) {
     try {
       await fs.access(candidate);
-      const mod = await import(pathToFileURL(candidate).href);
+      const requireFromCandidate = createRequire(pathToFileURL(candidate));
+      const mod = requireFromCandidate(candidate);
       return mod.default ?? mod;
     } catch {
       // try next
@@ -344,69 +366,27 @@ function createHttpConnectAgent(proxy, endpointProtocol, timeoutMs) {
   });
 }
 
-function buildTransportOptions(endpoint, proxyCfg, timeoutMs) {
-  if (!proxyCfg) return {};
-  if (proxyCfg.protocol === 'http' || proxyCfg.protocol === 'https') {
-    const endpointProtocol = new URL(endpoint).protocol;
-    const connectAgent = createHttpConnectAgent(proxyCfg, endpointProtocol, timeoutMs);
-    return {
-      nodeAgentKind: endpointProtocol === 'https:' ? 'httpsAgent' : 'httpAgent',
-      [endpointProtocol === 'https:' ? 'httpsAgent' : 'httpAgent']: connectAgent,
-    };
-  }
-  const endpointProtocol = new URL(endpoint).protocol;
-  const agent = createSocksAgent(proxyCfg, endpointProtocol, timeoutMs);
-  if (endpointProtocol === 'https:') {
-    return { proxy: false, httpsAgent: agent, nodeAgentKind: 'httpsAgent' };
-  }
-  return { proxy: false, httpAgent: agent, nodeAgentKind: 'httpAgent' };
-}
-
-function requestWithNodeHttp(input) {
-  return new Promise((resolve, reject) => {
-    const endpoint = new URL(input.endpoint);
-    const isHttps = endpoint.protocol === 'https:';
-    const lib = isHttps ? https : http;
-    const req = lib.request({
-      protocol: endpoint.protocol,
-      hostname: endpoint.hostname,
-      port: endpoint.port || (isHttps ? 443 : 80),
-      path: `${endpoint.pathname}${endpoint.search}`,
-      method: input.method,
-      headers: input.headers,
-      agent: input.agent,
-      timeout: input.timeoutMs,
-      servername: endpoint.hostname,
-    }, (res) => {
-      const chunks = [];
-      let idleTimer;
-      const resetIdleTimer = () => {
-        if (!(input.timeoutMs > 0)) return;
-        clearTimeout(idleTimer);
-        idleTimer = setTimeout(() => {
-          req.destroy(new Error('stream idle timeout'));
-        }, input.timeoutMs);
-      };
-      resetIdleTimer();
-      res.on('data', () => resetIdleTimer());
-      res.on('data', (c) => chunks.push(c));
-      res.on('end', () => {
-        clearTimeout(idleTimer);
-        resolve({
-          status: res.statusCode || 0,
-          headers: normalizeResponseHeaders(res.headers || {}),
-          body: Buffer.concat(chunks),
+function createSocksUndiciDispatcher(undici, proxy, timeoutMs) {
+  return new undici.Agent({
+    connect: (opts, callback) => {
+      (async () => {
+        const targetHost = opts.hostname || opts.host;
+        const targetPort = Number(opts.port || (opts.protocol === 'https:' ? 443 : 80));
+        const rawSocket = await dialViaSocks5(proxy, targetHost, targetPort, timeoutMs);
+        if (opts.protocol !== 'https:') {
+          callback(null, rawSocket);
+          return rawSocket;
+        }
+        const tlsSocket = tls.connect({
+          socket: rawSocket,
+          servername: opts.servername || targetHost,
+          ALPNProtocols: ['http/1.1'],
         });
-      });
-      res.on('error', (err) => {
-        clearTimeout(idleTimer);
-        reject(err);
-      });
-    });
-    req.on('timeout', () => req.destroy(new Error('request timeout')));
-    req.on('error', reject);
-    if (input.payload && input.payload.length > 0) req.write(input.payload);
-    req.end();
+        tlsSocket.once('secureConnect', () => callback(null, tlsSocket));
+        tlsSocket.once('error', (err) => callback(err));
+        return tlsSocket;
+      })().catch((err) => callback(err));
+    },
   });
 }
 
@@ -423,94 +403,131 @@ function writeStdoutChunk(chunk) {
   });
 }
 
-function requestWithNodeHttpStream(input) {
-  return new Promise((resolve, reject) => {
-    const endpoint = new URL(input.endpoint);
-    const isHttps = endpoint.protocol === 'https:';
-    const lib = isHttps ? https : http;
-    const req = lib.request({
-      protocol: endpoint.protocol,
-      hostname: endpoint.hostname,
-      port: endpoint.port || (isHttps ? 443 : 80),
-      path: `${endpoint.pathname}${endpoint.search}`,
-      method: input.method,
-      headers: input.headers,
-      agent: input.agent,
-      timeout: input.timeoutMs > 0 ? input.timeoutMs : undefined,
-      servername: endpoint.hostname,
-    }, async (res) => {
-      let idleTimer;
-      const resetIdleTimer = () => {
-        if (!(input.timeoutMs > 0)) return;
-        clearTimeout(idleTimer);
-        idleTimer = setTimeout(() => {
-          req.destroy(new Error('stream idle timeout'));
-        }, input.timeoutMs);
-      };
-      try {
-        resetIdleTimer();
-        const meta = JSON.stringify({
-          status: res.statusCode || 0,
-          headers: normalizeResponseHeaders(res.headers || {}),
-        }) + '\n';
-        await writeStdoutChunk(meta);
-        for await (const chunk of res) {
-          resetIdleTimer();
-          await writeStdoutChunk(chunk);
+function buildFetchOptions(undici, endpoint, proxyCfg, timeoutMs) {
+  if (!proxyCfg) return {};
+  if (proxyCfg.protocol === 'http' || proxyCfg.protocol === 'https') {
+    const uri = new NodeURL(`${proxyCfg.protocol}://${proxyCfg.host}:${proxyCfg.port}`);
+    if (proxyCfg.auth?.username || proxyCfg.auth?.password) {
+      uri.username = proxyCfg.auth?.username ?? '';
+      uri.password = proxyCfg.auth?.password ?? '';
+    }
+    return { dispatcher: new undici.ProxyAgent({ uri: uri.toString() }) };
+  }
+  return { dispatcher: createSocksUndiciDispatcher(undici, proxyCfg, timeoutMs) };
+}
+
+function createTimeoutController(timeoutMs) {
+  const controller = new AbortController();
+  let timer;
+  if (timeoutMs > 0) {
+    timer = setTimeout(() => controller.abort(new Error('request timeout')), timeoutMs);
+  }
+  return {
+    signal: controller.signal,
+    cancel(reason) {
+      clearTimeout(timer);
+      if (reason) {
+        try {
+          controller.abort(reason);
+        } catch {
+          controller.abort();
         }
-        clearTimeout(idleTimer);
-        resolve();
-      } catch (err) {
-        clearTimeout(idleTimer);
-        reject(err);
       }
-    });
-    req.on('timeout', () => req.destroy(new Error('request timeout')));
-    req.on('error', reject);
-    if (input.payload && input.payload.length > 0) req.write(input.payload);
-    req.end();
-  });
+    },
+    clear() {
+      clearTimeout(timer);
+    },
+    refreshIdle() {
+      if (!(timeoutMs > 0)) return;
+      clearTimeout(timer);
+      timer = setTimeout(() => controller.abort(new Error('stream idle timeout')), timeoutMs);
+    },
+  };
 }
 
 async function main() {
   const raw = await readStdin();
   const input = JSON.parse(raw);
+  const clientMode = typeof input.client_mode === 'string' ? input.client_mode : 'messages';
+  const undici = await loadUndici();
+  if (!undici || typeof undici.fetch !== 'function') {
+    throw new Error('undici runtime not found for telemetry sidecar');
+  }
+  const axios = clientMode === 'telemetry' ? await loadAxios() : null;
   const headers = sanitizeHeaders(input.headers);
   const payload = Buffer.from(input.payload_base64 ?? '', 'base64');
   const method = typeof input.method === 'string' && input.method !== '' ? input.method : 'POST';
-  const acceptNon2xx = input.accept_non_2xx === true;
   const returnRawBytes = input.return_raw_bytes === true;
   const streamResponse = input.stream_response === true;
   const proxyCfg = parseProxyURL(input.proxy_url);
   const timeoutMs = input.timeout_ms ?? 10000;
-  const transportOptions = buildTransportOptions(input.endpoint, proxyCfg, timeoutMs);
-  const nodeAgent = transportOptions.nodeAgentKind ? transportOptions[transportOptions.nodeAgentKind] : undefined;
+  const timeoutCtl = createTimeoutController(timeoutMs);
+  const fetchOptions = buildFetchOptions(undici, input.endpoint, proxyCfg, timeoutMs);
 
-  if (streamResponse) {
-    await requestWithNodeHttpStream({
+  if (clientMode === 'telemetry') {
+    if (!axios) {
+      throw new Error('axios runtime not found for telemetry sidecar');
+    }
+    const response = await axios.request({
       method,
-      endpoint: input.endpoint,
+      url: input.endpoint,
+      data: payload,
+      timeout: timeoutMs,
       headers,
-      payload,
-      timeoutMs,
-      agent: nodeAgent,
+      validateStatus: () => true,
     });
+    const rawBody = returnRawBytes
+      ? Buffer.from(response.data ?? [])
+      : Buffer.from(
+          typeof response.data === 'string'
+            ? response.data
+            : JSON.stringify(response.data ?? null),
+          'utf8',
+        );
+    process.stdout.write(JSON.stringify({
+      status: response.status,
+      data: returnRawBytes ? undefined : response.data,
+      headers: normalizeResponseHeaders(response.headers ?? {}),
+      body_base64: rawBody.toString('base64'),
+    }));
     return;
   }
 
-  const nodeResp = await requestWithNodeHttp({
+  const response = await undici.fetch(input.endpoint, {
     method,
-    endpoint: input.endpoint,
     headers,
-    payload,
-    timeoutMs,
-    agent: nodeAgent,
+    body: payload,
+    signal: timeoutCtl.signal,
+    ...fetchOptions,
   });
+
+  if (streamResponse) {
+    try {
+      const meta = JSON.stringify({
+        status: response.status || 0,
+        headers: normalizeResponseHeaders(Object.fromEntries(response.headers.entries())),
+      }) + '\n';
+      await writeStdoutChunk(meta);
+      timeoutCtl.refreshIdle();
+      for await (const chunk of response.body ?? []) {
+        timeoutCtl.refreshIdle();
+        await writeStdoutChunk(Buffer.from(chunk));
+      }
+      timeoutCtl.clear();
+      return;
+    } catch (err) {
+      timeoutCtl.cancel(err);
+      throw err;
+    }
+  }
+
+  const rawBody = Buffer.from(await response.arrayBuffer());
+  timeoutCtl.clear();
   process.stdout.write(JSON.stringify({
-    status: nodeResp.status,
-    data: returnRawBytes ? undefined : nodeResp.body.toString('utf8'),
-    headers: nodeResp.headers,
-    body_base64: nodeResp.body.toString('base64'),
+    status: response.status,
+    data: returnRawBytes ? undefined : rawBody.toString('utf8'),
+    headers: normalizeResponseHeaders(Object.fromEntries(response.headers.entries())),
+    body_base64: rawBody.toString('base64'),
   }));
 }
 

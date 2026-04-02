@@ -568,7 +568,8 @@ func (s *TelemetryService) forwardWithNodeSidecar(cleanedBody []byte, originalAu
 	}
 
 	requestPayload, err := json.Marshal(map[string]any{
-		"endpoint": endpoint,
+		"client_mode": "telemetry",
+		"endpoint":    endpoint,
 		"headers": map[string]string{
 			"Content-Type":   "application/json",
 			"User-Agent":     telemetryUserAgent(version),
