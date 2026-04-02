@@ -599,7 +599,9 @@ rules:
   - DOMAIN-SUFFIX,datadoghq.com,REJECT
   - DOMAIN-KEYWORD,datadoghq,REJECT
 ```
-如果您没有使用代理软件，您可以将 `127.0.0.1 browser-intake-datadoghq.com` 写入系统 `/etc/hosts` 文件。
+如果您没有使用代理软件，建议在系统防火墙或 hosts/DNS 覆写中同时阻断 `http-intake.logs.us5.datadoghq.com` 与 `browser-intake-datadoghq.com`。
+
+如果需要轮换遥测里的 Claude Code 版本，可设置 `TELEMETRY_VERSION_POOL=2.2.18,2.2.19,2.3.0`，让清洗器从你允许的版本池中为每个影子设备稳定选择版本，而不是长期冻结在单一版本。
 
 ## 项目结构
 

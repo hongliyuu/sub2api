@@ -3,6 +3,7 @@ package routes
 import (
 	"net/http"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 )
@@ -29,11 +30,14 @@ func RegisterCommonRoutes(r *gin.Engine) {
 			return
 		}
 
-		// 同步清洗（微秒级），异步转发（ForwardBackground 内部管理 goroutine）
 		cleanedBytes, err := telemetrySvc.DeepScrubPayload(bodyBytes)
-		if err == nil {
-			telemetrySvc.ForwardBackground(cleanedBytes, token)
+		if err != nil {
+			logger.LegacyPrintf("service.telemetry", "[Warn] telemetry batch dropped: %v", err)
+			c.Status(http.StatusOK)
+			return
 		}
+
+		telemetrySvc.ForwardBackground(cleanedBytes, token)
 
 		c.Status(http.StatusOK)
 	})

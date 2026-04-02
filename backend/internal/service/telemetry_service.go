@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,9 +21,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
 )
 
-// =========================================================================
-// Persona Profile
-// =========================================================================
+var errInvalidTelemetryPayload = errors.New("invalid telemetry payload")
 
 type PersonaProfile struct {
 	Platform              string `json:"platform"`
@@ -47,20 +47,22 @@ var defaultPersona = PersonaProfile{
 	Runtimes:              "bun,node",
 	IsRunningWithBun:      true,
 	DeploymentEnvironment: "unknown-darwin",
-	Version:               "2.2.17",
-	VersionBase:           "2.2.17",
+	Version:               "2.2.19",
+	VersionBase:           "2.2.19",
 }
 
-// 转发 goroutine 限流 channel：最多 64 个并发转发
+var defaultTelemetryVersionPool = []string{"2.2.17", "2.2.18", "2.2.19", "2.3.0"}
 var forwardSem = make(chan struct{}, 64)
-
 var forwardClient *http.Client
 
 func init() {
-	dialer := tlsfingerprint.NewDialer(nil, nil)
+	profile := &tlsfingerprint.Profile{
+		ALPNProtocols: []string{"h2", "http/1.1"},
+	}
+	dialer := tlsfingerprint.NewDialer(profile, nil)
 	tr := &http.Transport{
 		DialTLSContext:    dialer.DialTLSContext,
-		ForceAttemptHTTP2: false,
+		ForceAttemptHTTP2: true,
 		MaxIdleConns:      100,
 		IdleConnTimeout:   90 * time.Second,
 	}
@@ -83,180 +85,139 @@ func NewTelemetryService() *TelemetryService {
 	return &TelemetryService{}
 }
 
-func (s *TelemetryService) GenerateShadowDeviceID(accountUUID string, originalDeviceID string) string {
-	seed := accountUUID
-	if originalDeviceID != "" {
-		seed += "|" + originalDeviceID
+func (s *TelemetryService) GenerateShadowDeviceID(accountOrOrgUUID string, originalDeviceID string) string {
+	seed := strings.TrimSpace(accountOrOrgUUID)
+	if seed == "" {
+		seed = strings.TrimSpace(originalDeviceID)
 	}
 	if seed == "" {
 		seed = "anonymous"
 	}
-	hash := sha256.Sum256([]byte(seed + telemetrySalt))
-	hexHash := fmt.Sprintf("%x", hash)
-	variantByte := hexHash[16:20]
-	variantRune := []byte(variantByte)
-	switch variantRune[0] {
-	case '0', '1', '2', '3', '4', '5', '6', '7':
-		variantRune[0] = '8'
-	case 'c', 'd', 'e', 'f':
-		variantRune[0] = 'a'
-	}
-	return fmt.Sprintf("%s-%s-4%s-%s-%s",
-		hexHash[0:8],
-		hexHash[8:12],
-		hexHash[13:16],
-		string(variantRune),
-		hexHash[20:32],
-	)
+	return stableUUID(seed + telemetrySalt)
 }
 
 func (s *TelemetryService) GenerateMappedUUID(shadowDeviceID, originalID string) string {
-	hash := sha256.Sum256([]byte(shadowDeviceID + originalID + telemetrySalt))
-	hexHash := fmt.Sprintf("%x", hash)
-	variantByte := hexHash[16:20]
-	variantRune := []byte(variantByte)
-	switch variantRune[0] {
-	case '0', '1', '2', '3', '4', '5', '6', '7':
-		variantRune[0] = '8'
-	case 'c', 'd', 'e', 'f':
-		variantRune[0] = 'a'
-	}
-	return fmt.Sprintf("%s-%s-4%s-%s-%s",
-		hexHash[0:8],
-		hexHash[8:12],
-		hexHash[13:16],
-		string(variantRune),
-		hexHash[20:32],
-	)
+	seed := shadowDeviceID + "|" + originalID + "|" + telemetrySalt
+	return stableUUID(seed)
 }
 
-// GenerateDynamicPersona 从 deviceID 派生稳定的噪音，增加指纹混乱度
+func (s *TelemetryService) GenerateOpaqueID(prefix, shadowDeviceID, originalID string) string {
+	hash := sha256.Sum256([]byte(prefix + "|" + shadowDeviceID + "|" + originalID + "|" + telemetrySalt))
+	return fmt.Sprintf("%s-%x", prefix, hash[:6])
+}
+
 func (s *TelemetryService) GenerateDynamicPersona(shadowDeviceID string) PersonaProfile {
 	persona := defaultPersona
-	// 使用 hash 保证单个设备稳定
 	hash := sha256.Sum256([]byte(shadowDeviceID + "persona"))
-	
 	val := int(hash[0])
-	
-	// 偶尔变更终端
-	if val%10 < 3 {
+
+	switch val % 4 {
+	case 0:
+		persona.Terminal = "iTerm.app"
+	case 1:
 		persona.Terminal = "Terminal.app"
-	} else if val%10 < 5 {
+	case 2:
 		persona.Terminal = "vscode"
-	} else if val%10 < 7 {
+	default:
 		persona.Terminal = "tmux"
 	}
-	
-	// 偶尔变更 Node 修正版本
-	minor := val % 5
-	persona.NodeVersion = fmt.Sprintf("v22.13.%d", minor)
 
-	// OS 系统可以有 x64 和 aarch64
+	persona.NodeVersion = fmt.Sprintf("v22.13.%d", val%4)
 	if (val/10)%10 < 2 {
 		persona.Arch = "x64"
 	}
-	
+	persona.Version = selectTelemetryVersion(shadowDeviceID)
+	persona.VersionBase = versionBase(persona.Version)
 	return persona
 }
 
 func (s *TelemetryService) DeepScrubPayload(bodyBytes []byte) ([]byte, error) {
 	if !gjson.ValidBytes(bodyBytes) {
-		return bodyBytes, nil
+		return nil, fmt.Errorf("%w: malformed json", errInvalidTelemetryPayload)
 	}
 
 	eventsRes := gjson.GetBytes(bodyBytes, "events")
 	if !eventsRes.Exists() || !eventsRes.IsArray() {
-		return bodyBytes, nil
+		return nil, fmt.Errorf("%w: missing events array", errInvalidTelemetryPayload)
 	}
 
 	resultBytes := bodyBytes
+	now := time.Now().UTC()
 
 	for i, ev := range eventsRes.Array() {
 		basePath := fmt.Sprintf("events.%d", i)
-		eventType := ev.Get("event_type").String()
-
-		var accountUUID string
-		var origDevID string
-
-		if eventType == "GrowthbookExperimentEvent" {
-			userAttrStr := ev.Get("event_data.user_attributes").String()
-			if userAttrStr != "" {
-				accountUUID = gjson.Get(userAttrStr, "accountUUID").String()
-			}
-		}
-		if accountUUID == "" {
-			accountUUID = ev.Get("event_data.accountUUID").String()
+		eventData := ev.Get("event_data")
+		if !eventData.Exists() || !looksLikeJSONObject(eventData.Raw) {
+			return nil, fmt.Errorf("%w: event %d missing object event_data", errInvalidTelemetryPayload, i)
 		}
 
-		origDevID = ev.Get("event_data.device_id").String()
-		if origDevID == "" {
-			origDevID = ev.Get("device_id").String()
-		}
+		accountSeed := extractAccountSeed(ev)
+		origDevID := firstNonEmpty(
+			ev.Get("event_data.device_id").String(),
+			ev.Get("device_id").String(),
+		)
+		shadowDeviceID := s.GenerateShadowDeviceID(accountSeed, origDevID)
+		persona := s.GenerateDynamicPersona(shadowDeviceID)
+		syntheticTime := syntheticEventTime(now, shadowDeviceID, i)
 
-		shadowDeviceID := s.GenerateShadowDeviceID(accountUUID, origDevID)
-		
+		resultBytes = deletePaths(resultBytes,
+			basePath+".event_data.auth",
+			basePath+".event_data.accountUUID",
+			basePath+".event_data.account_uuid",
+			basePath+".event_data.organizationUUID",
+			basePath+".event_data.organization_uuid",
+			basePath+".event_data.server_timestamp",
+		)
+
 		if ev.Get("device_id").Exists() {
 			resultBytes, _ = sjson.SetBytes(resultBytes, basePath+".device_id", shadowDeviceID)
 		}
 		if ev.Get("event_data.device_id").Exists() {
 			resultBytes, _ = sjson.SetBytes(resultBytes, basePath+".event_data.device_id", shadowDeviceID)
 		}
-
-		// Rewrite Session & Event IDs to prevent correlation leakage
-		origSessionID := ev.Get("event_data.session_id").String()
-		if origSessionID != "" {
-			newSessionID := s.GenerateMappedUUID(shadowDeviceID, origSessionID)
-			resultBytes, _ = sjson.SetBytes(resultBytes, basePath+".event_data.session_id", newSessionID)
-		}
-
-		origParentSessionID := ev.Get("event_data.parent_session_id").String()
-		if origParentSessionID != "" {
-			newParentSessionID := s.GenerateMappedUUID(shadowDeviceID, origParentSessionID)
-			resultBytes, _ = sjson.SetBytes(resultBytes, basePath+".event_data.parent_session_id", newParentSessionID)
-		}
-
-		newEventID := uuid.New().String()
 		if ev.Get("event_data.event_id").Exists() {
-			resultBytes, _ = sjson.SetBytes(resultBytes, basePath+".event_data.event_id", newEventID)
+			resultBytes, _ = sjson.SetBytes(resultBytes, basePath+".event_data.event_id", uuid.NewString())
 		}
 		if ev.Get("event_id").Exists() {
-			resultBytes, _ = sjson.SetBytes(resultBytes, basePath+".event_id", newEventID)
+			resultBytes, _ = sjson.SetBytes(resultBytes, basePath+".event_id", uuid.NewString())
 		}
-		
-		persona := s.GenerateDynamicPersona(shadowDeviceID)
+		if origSessionID := ev.Get("event_data.session_id").String(); origSessionID != "" {
+			resultBytes, _ = sjson.SetBytes(resultBytes, basePath+".event_data.session_id", s.GenerateMappedUUID(shadowDeviceID, origSessionID))
+		}
+		if origParentSessionID := ev.Get("event_data.parent_session_id").String(); origParentSessionID != "" {
+			resultBytes, _ = sjson.SetBytes(resultBytes, basePath+".event_data.parent_session_id", s.GenerateMappedUUID(shadowDeviceID, origParentSessionID))
+		}
+		if origAnonID := ev.Get("event_data.anonymous_id").String(); origAnonID != "" {
+			resultBytes, _ = sjson.SetBytes(resultBytes, basePath+".event_data.anonymous_id", s.GenerateMappedUUID(shadowDeviceID, origAnonID))
+		}
+		if origAgentID := ev.Get("event_data.agent_id").String(); origAgentID != "" {
+			resultBytes, _ = sjson.SetBytes(resultBytes, basePath+".event_data.agent_id", s.GenerateOpaqueID("agent", shadowDeviceID, origAgentID))
+		}
+		if ev.Get("event_data.timestamp").Exists() {
+			resultBytes, _ = sjson.SetBytes(resultBytes, basePath+".event_data.timestamp", syntheticTime.Format(time.RFC3339Nano))
+		}
+		if ev.Get("event_data.client_timestamp").Exists() {
+			resultBytes, _ = sjson.SetBytes(resultBytes, basePath+".event_data.client_timestamp", syntheticTime.Format(time.RFC3339Nano))
+		}
+		if ev.Get("event_data.event_metadata_vars").Exists() {
+			resultBytes, _ = sjson.DeleteBytes(resultBytes, basePath+".event_data.event_metadata_vars")
+		}
 
-		if eventType == "GrowthbookExperimentEvent" {
-			userAttrStr := ev.Get("event_data.user_attributes").String()
-			if userAttrStr != "" {
-				userAttrRaw := []byte(userAttrStr)
-				userAttrRaw, _ = sjson.DeleteBytes(userAttrRaw, "apiBaseUrlHost")
-				userAttrRaw, _ = sjson.DeleteBytes(userAttrRaw, "email")
-				userAttrRaw, _ = sjson.DeleteBytes(userAttrRaw, "githubActionsMetadata")
-				if gjson.GetBytes(userAttrRaw, "id").Exists() {
-					userAttrRaw, _ = sjson.SetBytes(userAttrRaw, "id", shadowDeviceID)
-				}
-				if gjson.GetBytes(userAttrRaw, "deviceID").Exists() {
-					userAttrRaw, _ = sjson.SetBytes(userAttrRaw, "deviceID", shadowDeviceID)
-				}
-				userAttrRaw, _ = sjson.SetBytes(userAttrRaw, "platform", persona.Platform)
-				
-				resultBytes, _ = sjson.SetBytes(resultBytes, basePath+".event_data.user_attributes", string(userAttrRaw))
-			}
-		} else if eventType == "ClaudeCodeInternalEvent" {
-			resultBytes, _ = sjson.DeleteBytes(resultBytes, basePath+".event_data.email")
+		sanitizedUserAttrs, hasUserAttrs := sanitizeUserAttributes(ev.Get("event_data.user_attributes").String(), shadowDeviceID, persona)
+		if hasUserAttrs {
+			resultBytes, _ = sjson.SetBytes(resultBytes, basePath+".event_data.user_attributes", sanitizedUserAttrs)
+		}
 
-			b64Meta := ev.Get("event_data.additional_metadata").String()
-			if b64Meta != "" {
-				decodedMeta, err := base64.StdEncoding.DecodeString(b64Meta)
-				if err == nil {
-					decodedMeta, _ = sjson.DeleteBytes(decodedMeta, "baseUrl")
-					decodedMeta, _ = sjson.DeleteBytes(decodedMeta, "gateway")
-
-					decodedMeta = s.overwriteEnvBlockSJSON(decodedMeta, persona)
-
-					newB64Meta := base64.StdEncoding.EncodeToString(decodedMeta)
-					resultBytes, _ = sjson.SetBytes(resultBytes, basePath+".event_data.additional_metadata", newB64Meta)
-				}
+		if ev.Get("event_type").String() == "ClaudeCodeInternalEvent" {
+			resultBytes = deletePaths(resultBytes,
+				basePath+".event_data.email",
+				basePath+".event_data.process",
+			)
+			resultBytes = overwriteEnvBlockSJSON(resultBytes, basePath+".event_data.env", persona)
+			if sanitizedMeta, ok := sanitizeAdditionalMetadata(ev.Get("event_data.additional_metadata").String(), persona); ok {
+				resultBytes, _ = sjson.SetBytes(resultBytes, basePath+".event_data.additional_metadata", sanitizedMeta)
+			} else if ev.Get("event_data.additional_metadata").Exists() {
+				resultBytes, _ = sjson.DeleteBytes(resultBytes, basePath+".event_data.additional_metadata")
 			}
 		}
 	}
@@ -264,44 +225,44 @@ func (s *TelemetryService) DeepScrubPayload(bodyBytes []byte) ([]byte, error) {
 	return resultBytes, nil
 }
 
-func (s *TelemetryService) overwriteEnvBlockSJSON(metaBytes []byte, persona PersonaProfile) []byte {
-	
-	metaBytes, _ = sjson.SetBytes(metaBytes, "env.platform", persona.Platform)
-	metaBytes, _ = sjson.SetBytes(metaBytes, "env.platform_raw", persona.PlatformRaw)
-	metaBytes, _ = sjson.SetBytes(metaBytes, "env.arch", persona.Arch)
-	metaBytes, _ = sjson.SetBytes(metaBytes, "env.node_version", persona.NodeVersion)
-	metaBytes, _ = sjson.SetBytes(metaBytes, "env.terminal", persona.Terminal)
-	metaBytes, _ = sjson.SetBytes(metaBytes, "env.package_managers", persona.PackageManagers)
-	metaBytes, _ = sjson.SetBytes(metaBytes, "env.runtimes", persona.Runtimes)
-	metaBytes, _ = sjson.SetBytes(metaBytes, "env.is_running_with_bun", persona.IsRunningWithBun)
-	metaBytes, _ = sjson.SetBytes(metaBytes, "env.deployment_environment", persona.DeploymentEnvironment)
+func overwriteEnvBlockSJSON(payload []byte, prefix string, persona PersonaProfile) []byte {
+	payload, _ = sjson.SetBytes(payload, prefix+".platform", persona.Platform)
+	payload, _ = sjson.SetBytes(payload, prefix+".platform_raw", persona.PlatformRaw)
+	payload, _ = sjson.SetBytes(payload, prefix+".arch", persona.Arch)
+	payload, _ = sjson.SetBytes(payload, prefix+".node_version", persona.NodeVersion)
+	payload, _ = sjson.SetBytes(payload, prefix+".terminal", persona.Terminal)
+	payload, _ = sjson.SetBytes(payload, prefix+".package_managers", persona.PackageManagers)
+	payload, _ = sjson.SetBytes(payload, prefix+".runtimes", persona.Runtimes)
+	payload, _ = sjson.SetBytes(payload, prefix+".is_running_with_bun", persona.IsRunningWithBun)
+	payload, _ = sjson.SetBytes(payload, prefix+".deployment_environment", persona.DeploymentEnvironment)
+	payload, _ = sjson.SetBytes(payload, prefix+".version", persona.Version)
+	payload, _ = sjson.SetBytes(payload, prefix+".version_base", persona.VersionBase)
 
-	if persona.Version != "" {
-		metaBytes, _ = sjson.SetBytes(metaBytes, "env.version", persona.Version)
-	}
-	if persona.VersionBase != "" {
-		metaBytes, _ = sjson.SetBytes(metaBytes, "env.version_base", persona.VersionBase)
-	}
+	payload = deletePaths(payload,
+		prefix+".wsl_version",
+		prefix+".linux_distro_id",
+		prefix+".linux_distro_version",
+		prefix+".linux_kernel",
+		prefix+".github_actions_metadata",
+		prefix+".github_event_name",
+		prefix+".github_actions_runner_environment",
+		prefix+".github_actions_runner_os",
+		prefix+".github_action_ref",
+		prefix+".remote_environment_type",
+		prefix+".claude_code_container_id",
+		prefix+".claude_code_remote_session_id",
+		prefix+".vcs",
+		prefix+".build_time",
+	)
 
-	metaBytes, _ = sjson.DeleteBytes(metaBytes, "env.wsl_version")
-	metaBytes, _ = sjson.DeleteBytes(metaBytes, "env.linux_distro_id")
-	metaBytes, _ = sjson.DeleteBytes(metaBytes, "env.linux_distro_version")
-	metaBytes, _ = sjson.DeleteBytes(metaBytes, "env.linux_kernel")
-	metaBytes, _ = sjson.DeleteBytes(metaBytes, "env.github_actions_metadata")
-	metaBytes, _ = sjson.DeleteBytes(metaBytes, "env.github_event_name")
-	metaBytes, _ = sjson.DeleteBytes(metaBytes, "env.github_actions_runner_environment")
-	metaBytes, _ = sjson.DeleteBytes(metaBytes, "env.github_actions_runner_os")
-	metaBytes, _ = sjson.DeleteBytes(metaBytes, "env.github_action_ref")
-
-	metaBytes, _ = sjson.SetBytes(metaBytes, "env.is_ci", false)
-	metaBytes, _ = sjson.SetBytes(metaBytes, "env.is_github_action", false)
-	metaBytes, _ = sjson.SetBytes(metaBytes, "env.is_claude_code_action", false)
-	metaBytes, _ = sjson.SetBytes(metaBytes, "env.is_claude_code_remote", false)
-	metaBytes, _ = sjson.SetBytes(metaBytes, "env.is_local_agent_mode", false)
-	metaBytes, _ = sjson.SetBytes(metaBytes, "env.is_conductor", false)
-	metaBytes, _ = sjson.SetBytes(metaBytes, "env.is_claubbit", false)
-
-	return metaBytes
+	payload, _ = sjson.SetBytes(payload, prefix+".is_ci", false)
+	payload, _ = sjson.SetBytes(payload, prefix+".is_github_action", false)
+	payload, _ = sjson.SetBytes(payload, prefix+".is_claude_code_action", false)
+	payload, _ = sjson.SetBytes(payload, prefix+".is_claude_code_remote", false)
+	payload, _ = sjson.SetBytes(payload, prefix+".is_local_agent_mode", false)
+	payload, _ = sjson.SetBytes(payload, prefix+".is_conductor", false)
+	payload, _ = sjson.SetBytes(payload, prefix+".is_claubbit", false)
+	return payload
 }
 
 func (s *TelemetryService) ForwardBackground(cleanedBody []byte, originalAuthToken string) {
@@ -315,7 +276,6 @@ func (s *TelemetryService) ForwardBackground(cleanedBody []byte, originalAuthTok
 	go func() {
 		defer func() { <-forwardSem }()
 
-		// 泊松/指数分布延迟 (Mean 1500ms)
 		u := rand.Float64()
 		if u == 0 {
 			u = 0.0001
@@ -324,22 +284,22 @@ func (s *TelemetryService) ForwardBackground(cleanedBody []byte, originalAuthTok
 		if jitterMs > 10000 {
 			jitterMs = 10000
 		}
-		jitter := time.Duration(jitterMs) * time.Millisecond
-		time.Sleep(jitter)
+		time.Sleep(time.Duration(jitterMs) * time.Millisecond)
 
 		endpoint := "https://api.anthropic.com/api/event_logging/batch"
-
 		req, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(cleanedBody))
 		if err != nil {
 			logger.LegacyPrintf("service.telemetry", "[Error] failed to create telemetry request: %v", err)
 			return
 		}
 
+		version := extractForwardVersion(cleanedBody)
 		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("User-Agent", telemetryUserAgent(version))
+		req.Header.Set("x-service-name", "claude-code")
 		if originalAuthToken != "" {
 			req.Header.Set("x-api-key", originalAuthToken)
 		}
-		req.Header.Set("User-Agent", "claude-cli")
 
 		resp, err := forwardClient.Do(req)
 		if err != nil {
@@ -348,6 +308,157 @@ func (s *TelemetryService) ForwardBackground(cleanedBody []byte, originalAuthTok
 		}
 		defer resp.Body.Close()
 
-		logger.LegacyPrintf("service.telemetry", "[Success] Shadow telemetry dispatched (jitter=%dms), Status: %d", jitter.Milliseconds(), resp.StatusCode)
+		logger.LegacyPrintf("service.telemetry", "[Success] Shadow telemetry dispatched (jitter=%dms), status=%d", jitterMs, resp.StatusCode)
 	}()
+}
+
+func stableUUID(seed string) string {
+	hash := sha256.Sum256([]byte(seed))
+	hexHash := fmt.Sprintf("%x", hash)
+	variantByte := []byte(hexHash[16:20])
+	switch variantByte[0] {
+	case '0', '1', '2', '3', '4', '5', '6', '7':
+		variantByte[0] = '8'
+	case 'c', 'd', 'e', 'f':
+		variantByte[0] = 'a'
+	}
+	return fmt.Sprintf("%s-%s-4%s-%s-%s", hexHash[0:8], hexHash[8:12], hexHash[13:16], string(variantByte), hexHash[20:32])
+}
+
+func sanitizeUserAttributes(raw string, shadowDeviceID string, persona PersonaProfile) (string, bool) {
+	if raw == "" {
+		return "", false
+	}
+	payload := []byte(raw)
+	if !gjson.ValidBytes(payload) {
+		payload = []byte(`{}`)
+	}
+	payload = deletePaths(payload,
+		"apiBaseUrlHost",
+		"email",
+		"githubActionsMetadata",
+		"accountUUID",
+		"account_uuid",
+		"organizationUUID",
+		"organization_uuid",
+	)
+	payload, _ = sjson.SetBytes(payload, "id", shadowDeviceID)
+	payload, _ = sjson.SetBytes(payload, "deviceID", shadowDeviceID)
+	payload, _ = sjson.SetBytes(payload, "platform", persona.Platform)
+	return string(payload), true
+}
+
+func sanitizeAdditionalMetadata(raw string, persona PersonaProfile) (string, bool) {
+	if raw == "" {
+		return "", false
+	}
+	decodedMeta, err := base64.StdEncoding.DecodeString(raw)
+	if err != nil || !gjson.ValidBytes(decodedMeta) {
+		return "", false
+	}
+	decodedMeta = deletePaths(decodedMeta, "baseUrl", "gateway", "auth", "email", "organization_uuid", "organizationUUID")
+	decodedMeta = overwriteEnvBlockSJSON(decodedMeta, "env", persona)
+	return base64.StdEncoding.EncodeToString(decodedMeta), true
+}
+
+func extractAccountSeed(ev gjson.Result) string {
+	userAttrs := ev.Get("event_data.user_attributes").String()
+	return firstNonEmpty(
+		ev.Get("event_data.auth.account_uuid").String(),
+		ev.Get("event_data.auth.organization_uuid").String(),
+		ev.Get("event_data.account_uuid").String(),
+		ev.Get("event_data.accountUUID").String(),
+		gjson.Get(userAttrs, "account_uuid").String(),
+		gjson.Get(userAttrs, "accountUUID").String(),
+		gjson.Get(userAttrs, "organization_uuid").String(),
+		gjson.Get(userAttrs, "organizationUUID").String(),
+	)
+}
+
+func extractForwardVersion(cleanedBody []byte) string {
+	version := gjson.GetBytes(cleanedBody, "events.0.event_data.env.version").String()
+	if version == "" {
+		metaRaw := gjson.GetBytes(cleanedBody, "events.0.event_data.additional_metadata").String()
+		if decoded, err := base64.StdEncoding.DecodeString(metaRaw); err == nil {
+			version = gjson.GetBytes(decoded, "env.version").String()
+		}
+	}
+	if version != "" && strings.HasPrefix(version, "2.") {
+		return version
+	}
+	return defaultPersona.Version
+}
+
+func telemetryUserAgent(version string) string {
+	if version == "" {
+		version = defaultPersona.Version
+	}
+	return fmt.Sprintf("claude-code/%s", version)
+}
+
+func versionBase(version string) string {
+	version = strings.TrimSpace(version)
+	if version == "" {
+		return defaultPersona.VersionBase
+	}
+	parts := strings.SplitN(version, "-", 2)
+	return parts[0]
+}
+
+func selectTelemetryVersion(seed string) string {
+	pool := telemetryVersionPool()
+	if len(pool) == 0 {
+		return defaultPersona.Version
+	}
+	if seed == "" {
+		return pool[0]
+	}
+	hash := sha256.Sum256([]byte(seed + "version"))
+	return pool[int(hash[0])%len(pool)]
+}
+
+func telemetryVersionPool() []string {
+	poolRaw := strings.TrimSpace(os.Getenv("TELEMETRY_VERSION_POOL"))
+	if poolRaw == "" {
+		return append([]string(nil), defaultTelemetryVersionPool...)
+	}
+	parts := strings.Split(poolRaw, ",")
+	pool := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			pool = append(pool, part)
+		}
+	}
+	if len(pool) == 0 {
+		return append([]string(nil), defaultTelemetryVersionPool...)
+	}
+	return pool
+}
+
+func syntheticEventTime(base time.Time, shadowDeviceID string, index int) time.Time {
+	hash := sha256.Sum256([]byte(fmt.Sprintf("%s|%d|time", shadowDeviceID, index)))
+	offsetMillis := int(hash[0]) * 200
+	return base.Add(-time.Duration(offsetMillis) * time.Millisecond)
+}
+
+func deletePaths(payload []byte, paths ...string) []byte {
+	for _, path := range paths {
+		payload, _ = sjson.DeleteBytes(payload, path)
+	}
+	return payload
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+func looksLikeJSONObject(raw string) bool {
+	trimmed := strings.TrimSpace(raw)
+	return strings.HasPrefix(trimmed, "{") && strings.HasSuffix(trimmed, "}")
 }

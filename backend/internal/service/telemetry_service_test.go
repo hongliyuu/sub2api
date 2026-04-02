@@ -5,17 +5,13 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/tidwall/gjson"
 )
 
-// TestDeepScrubPayload_FullPersona 综合测试：
-// 模拟 10 个不同用户（不同 OS、不同 email、不同 device_id）使用同一个底层账号 accountUUID，
-// 验证经过清洗后：
-//  1. 所有人的 device_id 都收敛为同一个影子 ID（因为 accountUUID 相同）
-//  2. 所有人的环境指纹都被统一涂抹为 defaultPersona（darwin/arm64）
-//  3. 所有致命 PII 被彻底切除
-//  4. accountUUID 被安全保留
-func TestDeepScrubPayload_FullPersona(t *testing.T) {
-	// 构造深层 Base64 嵌套：模拟 Linux 用户的 additional_metadata
+func TestDeepScrubPayload_RealSchema(t *testing.T) {
+	svc := NewTelemetryService()
 	rawMeta := `{
 		"baseUrl":"http://sub2api.local:8080/v1/messages",
 		"gateway":"sub2api",
@@ -41,255 +37,200 @@ func TestDeepScrubPayload_FullPersona(t *testing.T) {
 	}`
 	encodedMeta := base64.StdEncoding.EncodeToString([]byte(rawMeta))
 
-	// 模拟两种事件类型，来自不同 OS 的用户，但共用同一个 accountUUID
-	mockPayload := `{
+	payload := `{
 		"events": [
 			{
 				"event_type": "GrowthbookExperimentEvent",
 				"event_data": {
+					"event_id": "growth-event-1",
+					"timestamp": "2026-04-02T08:00:00Z",
 					"device_id": "windows_device_aaa",
-					"user_attributes": "{\"id\":\"windows_device_aaa\",\"deviceID\":\"windows_device_aaa\",\"apiBaseUrlHost\":\"sub2api.local:8080\",\"email\":\"user1@gmail.com\",\"githubActionsMetadata\":{\"repo\":\"secret\"},\"accountUUID\":\"shared-account-uuid-001\",\"platform\":\"win32\",\"subscriptionType\":\"pro\"}"
-				}
-			},
-			{
-				"event_type": "GrowthbookExperimentEvent",
-				"event_data": {
-					"device_id": "linux_device_bbb",
-					"user_attributes": "{\"id\":\"linux_device_bbb\",\"deviceID\":\"linux_device_bbb\",\"apiBaseUrlHost\":\"192.168.1.100:3000\",\"email\":\"user2@company.org\",\"accountUUID\":\"shared-account-uuid-001\",\"platform\":\"linux\"}"
+					"session_id": "growth-session-1",
+					"anonymous_id": "anon-1",
+					"event_metadata_vars": "secret-meta",
+					"auth": {"account_uuid":"shared-account-uuid-001","organization_uuid":"org-secret-1"},
+					"user_attributes": "{\"id\":\"windows_device_aaa\",\"deviceID\":\"windows_device_aaa\",\"apiBaseUrlHost\":\"sub2api.local:8080\",\"email\":\"user1@gmail.com\",\"githubActionsMetadata\":{\"repo\":\"secret\"},\"accountUUID\":\"shared-account-uuid-001\",\"organizationUUID\":\"org-secret-1\",\"platform\":\"win32\",\"subscriptionType\":\"pro\"}"
 				}
 			},
 			{
 				"event_type": "ClaudeCodeInternalEvent",
 				"event_data": {
+					"event_id": "internal-event-1",
+					"client_timestamp": "2026-04-02T08:01:00Z",
 					"device_id": "mac_device_ccc",
+					"session_id": "internal-session-1",
+					"parent_session_id": "parent-session-1",
+					"agent_id": "worker-abc@swarm-main",
+					"process": "{\"pid\":999,\"rss\":123}",
 					"email": "user3@hack.local",
-					"accountUUID": "shared-account-uuid-001",
+					"auth": {"account_uuid":"shared-account-uuid-001","organization_uuid":"org-secret-1"},
+					"env": {
+						"platform":"linux",
+						"platform_raw":"linux",
+						"arch":"x64",
+						"node_version":"v18.20.0",
+						"terminal":"gnome-terminal",
+						"package_managers":"npm,yarn",
+						"runtimes":"node",
+						"is_running_with_bun":false,
+						"deployment_environment":"unknown-linux",
+						"wsl_version":"WSL2",
+						"linux_distro_id":"ubuntu",
+						"linux_distro_version":"22.04",
+						"linux_kernel":"5.15.0",
+						"github_actions_metadata":{"actor_id":"12345","repository_id":"67890"},
+						"is_ci":true,
+						"is_github_action":true
+					},
 					"additional_metadata": "` + encodedMeta + `"
 				}
 			}
 		]
 	}`
 
-	service := NewTelemetryService()
-	scrubbedBytes, err := service.DeepScrubPayload([]byte(mockPayload))
+	scrubbedBytes, err := svc.DeepScrubPayload([]byte(payload))
 	if err != nil {
 		t.Fatalf("DeepScrubPayload failed: %v", err)
 	}
 
 	result := string(scrubbedBytes)
-	t.Logf("Scrubbed JSON:\n%s\n", result)
+	if strings.Contains(result, "windows_device_aaa") || strings.Contains(result, "mac_device_ccc") {
+		t.Fatalf("original device_id leaked: %s", result)
+	}
+	if strings.Contains(result, "user1@gmail.com") || strings.Contains(result, "user3@hack.local") {
+		t.Fatalf("email leaked: %s", result)
+	}
+	if strings.Contains(result, "org-secret-1") || strings.Contains(result, "shared-account-uuid-001") {
+		t.Fatalf("auth/account identifier leaked: %s", result)
+	}
+	if strings.Contains(result, "sub2api") {
+		t.Fatalf("gateway marker leaked: %s", result)
+	}
 
-	// ====== 解析输出 ======
-	var parsedPayload map[string]interface{}
-	json.Unmarshal(scrubbedBytes, &parsedPayload)
-	events := parsedPayload["events"].([]interface{})
+	growthDev := gjson.GetBytes(scrubbedBytes, "events.0.event_data.device_id").String()
+	internalDev := gjson.GetBytes(scrubbedBytes, "events.1.event_data.device_id").String()
+	if growthDev == "" || internalDev == "" {
+		t.Fatalf("shadow device ids missing")
+	}
+	if growthDev != internalDev {
+		t.Fatalf("same account should converge to one shadow device id: %s vs %s", growthDev, internalDev)
+	}
 
-	// 收集所有 shadow device IDs
-	var allShadowIDs []string
+	if gjson.GetBytes(scrubbedBytes, "events.0.event_data.auth").Exists() || gjson.GetBytes(scrubbedBytes, "events.1.event_data.auth").Exists() {
+		t.Fatalf("auth block should be deleted")
+	}
+	if gjson.GetBytes(scrubbedBytes, "events.1.event_data.process").Exists() {
+		t.Fatalf("process block should be deleted")
+	}
+	if gjson.GetBytes(scrubbedBytes, "events.0.event_data.event_metadata_vars").Exists() {
+		t.Fatalf("event_metadata_vars should be deleted")
+	}
 
-	for idx, ev := range events {
-		evMap := ev.(map[string]interface{})
-		evData := evMap["event_data"].(map[string]interface{})
-		evType := evMap["event_type"].(string)
+	if got := gjson.GetBytes(scrubbedBytes, "events.0.event_data.session_id").String(); got == "growth-session-1" || got == "" {
+		t.Fatalf("growthbook session_id not remapped: %q", got)
+	}
+	if got := gjson.GetBytes(scrubbedBytes, "events.0.event_data.anonymous_id").String(); got == "anon-1" || got == "" {
+		t.Fatalf("anonymous_id not remapped: %q", got)
+	}
+	if got := gjson.GetBytes(scrubbedBytes, "events.1.event_data.parent_session_id").String(); got == "parent-session-1" || got == "" {
+		t.Fatalf("parent_session_id not remapped: %q", got)
+	}
+	if got := gjson.GetBytes(scrubbedBytes, "events.1.event_data.agent_id").String(); got == "worker-abc@swarm-main" || !strings.HasPrefix(got, "agent-") {
+		t.Fatalf("agent_id not remapped: %q", got)
+	}
 
-		deviceID := evData["device_id"].(string)
-		allShadowIDs = append(allShadowIDs, deviceID)
-		t.Logf("[Event %d] type=%s shadow_device_id=%s", idx, evType, deviceID)
+	if _, err := time.Parse(time.RFC3339Nano, gjson.GetBytes(scrubbedBytes, "events.0.event_data.timestamp").String()); err != nil {
+		t.Fatalf("growthbook timestamp not rewritten to RFC3339: %v", err)
+	}
+	if _, err := time.Parse(time.RFC3339Nano, gjson.GetBytes(scrubbedBytes, "events.1.event_data.client_timestamp").String()); err != nil {
+		t.Fatalf("client_timestamp not rewritten to RFC3339: %v", err)
+	}
 
-		// ====== 致命 PII 不得泄露 ======
-		evJSON, _ := json.Marshal(evData)
-		evStr := string(evJSON)
-
-		if strings.Contains(evStr, "user1@gmail.com") || strings.Contains(evStr, "user2@company.org") || strings.Contains(evStr, "user3@hack.local") {
-			t.Errorf("[Event %d] FATAL: email leaked!", idx)
-		}
-		if strings.Contains(evStr, "apiBaseUrlHost") {
-			t.Errorf("[Event %d] FATAL: apiBaseUrlHost leaked!", idx)
-		}
-		if strings.Contains(evStr, "sub2api") {
-			t.Errorf("[Event %d] FATAL: gateway/sub2api signature leaked!", idx)
-		}
-
-		// ====== accountUUID 必须保留 ======
-		if evType == "GrowthbookExperimentEvent" {
-			if !strings.Contains(evStr, "shared-account-uuid-001") {
-				t.Errorf("[Event %d] ERROR: accountUUID was wrongly deleted from Growthbook!", idx)
-			}
-
-			// 检查 user_attributes 中的 platform 是否已被涂抹
-			if userAttrStr, ok := evData["user_attributes"].(string); ok {
-				var attrMap map[string]interface{}
-				json.Unmarshal([]byte(userAttrStr), &attrMap)
-
-				if platform, ok := attrMap["platform"].(string); ok {
-					if platform != "darwin" {
-						t.Errorf("[Event %d] ERROR: Growthbook platform not overwritten! got=%s want=darwin", idx, platform)
-					}
-				}
-
-				// subscriptionType 应当保留（仅当原始数据有此字段时才检验）
-				if idx == 0 {
-					if _, ok := attrMap["subscriptionType"]; !ok {
-						t.Errorf("[Event %d] ERROR: subscriptionType was wrongly deleted!", idx)
-					}
-				}
-			}
-		}
-
-		if evType == "ClaudeCodeInternalEvent" {
-			// 检查 email 已被删除
-			if _, hasEmail := evData["email"]; hasEmail {
-				t.Errorf("[Event %d] FATAL: top-level email not deleted from Internal event!", idx)
-			}
-
-			// 深入 additional_metadata 检查环境涂抹
-			newB64 := evData["additional_metadata"].(string)
-			decoded, _ := base64.StdEncoding.DecodeString(newB64)
-			var metaMap map[string]interface{}
-			json.Unmarshal(decoded, &metaMap)
-			t.Logf("[Event %d] Decoded additional_metadata: %s", idx, string(decoded))
-
-			// baseUrl / gateway 必须消失
-			if _, has := metaMap["baseUrl"]; has {
-				t.Errorf("[Event %d] FATAL: baseUrl not removed from metadata!", idx)
-			}
-			if _, has := metaMap["gateway"]; has {
-				t.Errorf("[Event %d] FATAL: gateway not removed from metadata!", idx)
-			}
-
-			// safe_info 必须保留
-			if _, has := metaMap["safe_info"]; !has {
-				t.Errorf("[Event %d] ERROR: safe_info was wrongly deleted!", idx)
-			}
-
-			// 环境涂抹验证
-			envBlock, ok := metaMap["env"].(map[string]interface{})
-			if !ok {
-				t.Fatalf("[Event %d] FATAL: env block missing from metadata!", idx)
-			}
-
-			// 必须是 darwin/arm64
-			if envBlock["platform"] != "darwin" {
-				t.Errorf("[Event %d] FAIL: env.platform not overwritten! got=%v", idx, envBlock["platform"])
-			}
-			if envBlock["arch"] != "arm64" {
-				t.Errorf("[Event %d] FAIL: env.arch not overwritten! got=%v", idx, envBlock["arch"])
-			}
-			if envBlock["node_version"] != "v22.13.1" {
-				t.Errorf("[Event %d] FAIL: env.node_version not overwritten! got=%v", idx, envBlock["node_version"])
-			}
-			if envBlock["terminal"] != "iTerm.app" {
-				t.Errorf("[Event %d] FAIL: env.terminal not overwritten! got=%v", idx, envBlock["terminal"])
-			}
-
-			// Linux 痕迹必须被清除
-			if _, has := envBlock["wsl_version"]; has {
-				t.Errorf("[Event %d] FAIL: wsl_version not removed!", idx)
-			}
-			if _, has := envBlock["linux_distro_id"]; has {
-				t.Errorf("[Event %d] FAIL: linux_distro_id not removed!", idx)
-			}
-			if _, has := envBlock["linux_kernel"]; has {
-				t.Errorf("[Event %d] FAIL: linux_kernel not removed!", idx)
-			}
-			if _, has := envBlock["github_actions_metadata"]; has {
-				t.Errorf("[Event %d] FAIL: github_actions_metadata not removed from env!", idx)
-			}
-
-			// CI 标记必须被强制关闭
-			if envBlock["is_ci"] != false {
-				t.Errorf("[Event %d] FAIL: is_ci not forced to false!", idx)
-			}
-			if envBlock["is_github_action"] != false {
-				t.Errorf("[Event %d] FAIL: is_github_action not forced to false!", idx)
-			}
+	userAttrsRaw := gjson.GetBytes(scrubbedBytes, "events.0.event_data.user_attributes").String()
+	var userAttrs map[string]any
+	if err := json.Unmarshal([]byte(userAttrsRaw), &userAttrs); err != nil {
+		t.Fatalf("sanitized user_attributes is invalid json: %v", err)
+	}
+	if userAttrs["id"] != growthDev || userAttrs["deviceID"] != growthDev {
+		t.Fatalf("user_attributes ids not rewritten: %+v", userAttrs)
+	}
+	if userAttrs["platform"] != "darwin" {
+		t.Fatalf("user_attributes platform not overwritten: %+v", userAttrs)
+	}
+	if _, ok := userAttrs["subscriptionType"]; !ok {
+		t.Fatalf("subscriptionType should be preserved: %+v", userAttrs)
+	}
+	for _, key := range []string{"email", "apiBaseUrlHost", "githubActionsMetadata", "accountUUID", "organizationUUID"} {
+		if _, ok := userAttrs[key]; ok {
+			t.Fatalf("user_attributes leaked %s: %+v", key, userAttrs)
 		}
 	}
 
-	// ====== 核心验证：三个不同用户因共用同一个 accountUUID，device_id 必须完全相同 ======
-	if len(allShadowIDs) != 3 {
-		t.Fatalf("Expected 3 events, got %d", len(allShadowIDs))
+	env := gjson.GetBytes(scrubbedBytes, "events.1.event_data.env")
+	if env.Get("platform").String() != "darwin" || env.Get("platform_raw").String() != "darwin" {
+		t.Fatalf("env platform not overwritten: %s", env.Raw)
 	}
-	if allShadowIDs[0] != allShadowIDs[1] || allShadowIDs[1] != allShadowIDs[2] {
-		t.Errorf("CRITICAL FAILURE: Same accountUUID produced DIFFERENT shadow device IDs!\n  Growthbook1=%s\n  Growthbook2=%s\n  Internal=%s",
-			allShadowIDs[0], allShadowIDs[1], allShadowIDs[2])
-	} else {
-		t.Logf("SUCCESS: All 3 events converged to unified shadow device ID: %s", allShadowIDs[0])
+	if env.Get("node_version").String() == "v18.20.0" || env.Get("node_version").String() == "" {
+		t.Fatalf("env node_version not overwritten: %s", env.Raw)
+	}
+	if env.Get("version").String() == "" || env.Get("version_base").String() == "" {
+		t.Fatalf("env version fields missing: %s", env.Raw)
+	}
+	for _, key := range []string{"wsl_version", "linux_distro_id", "linux_distro_version", "linux_kernel", "github_actions_metadata", "vcs", "build_time"} {
+		if env.Get(key).Exists() {
+			t.Fatalf("env leaked %s: %s", key, env.Raw)
+		}
+	}
+	if env.Get("is_ci").Bool() || env.Get("is_github_action").Bool() || env.Get("is_claude_code_remote").Bool() {
+		t.Fatalf("env boolean scrub failed: %s", env.Raw)
 	}
 
-	// ====== 验证原始 device_id 绝不残留 ======
-	if strings.Contains(result, "windows_device_aaa") || strings.Contains(result, "linux_device_bbb") || strings.Contains(result, "mac_device_ccc") {
-		t.Errorf("FATAL: Original device_id leaked in output!")
+	metaB64 := gjson.GetBytes(scrubbedBytes, "events.1.event_data.additional_metadata").String()
+	metaBytes, err := base64.StdEncoding.DecodeString(metaB64)
+	if err != nil {
+		t.Fatalf("additional_metadata is not valid base64: %v", err)
+	}
+	meta := gjson.ParseBytes(metaBytes)
+	if meta.Get("safe_info").String() != "keep_this" {
+		t.Fatalf("safe_info should be preserved: %s", meta.Raw)
+	}
+	if meta.Get("baseUrl").Exists() || meta.Get("gateway").Exists() {
+		t.Fatalf("additional_metadata leaked gateway fields: %s", meta.Raw)
+	}
+	if meta.Get("env.platform").String() != "darwin" {
+		t.Fatalf("additional_metadata env not scrubbed: %s", meta.Raw)
 	}
 }
 
-// TestDeepScrubPayload_EmptyAndMalformed 边界情况测试
 func TestDeepScrubPayload_EmptyAndMalformed(t *testing.T) {
 	svc := NewTelemetryService()
 
 	tests := []struct {
-		name      string
-		input     string
-		wantErr   bool
-		wantSame  bool // 期望返回原始 bytes（无 events 字段时）
+		name    string
+		input   string
+		wantErr bool
 	}{
-		{
-			name:    "malformed JSON",
-			input:   `{not valid json`,
-			wantErr: true,
-		},
-		{
-			name:     "no events field",
-			input:    `{"foo":"bar"}`,
-			wantSame: true,
-		},
-		{
-			name:     "events is not array",
-			input:    `{"events":"not_an_array"}`,
-			wantSame: true,
-		},
-		{
-			name:  "empty events array",
-			input: `{"events":[]}`,
-		},
-		{
-			name:  "event without event_data",
-			input: `{"events":[{"event_type":"GrowthbookExperimentEvent"}]}`,
-		},
-		{
-			name:  "event with non-object event_data",
-			input: `{"events":[{"event_type":"GrowthbookExperimentEvent","event_data":"string_not_map"}]}`,
-		},
+		{name: "malformed json", input: `{not valid json`, wantErr: true},
+		{name: "no events field", input: `{"foo":"bar"}`, wantErr: true},
+		{name: "events is not array", input: `{"events":"not_an_array"}`, wantErr: true},
+		{name: "empty events array", input: `{"events":[]}`},
+		{name: "event without event_data", input: `{"events":[{"event_type":"GrowthbookExperimentEvent"}]}`, wantErr: true},
+		{name: "event with non-object event_data", input: `{"events":[{"event_type":"GrowthbookExperimentEvent","event_data":"string_not_map"}]}`, wantErr: true},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := svc.DeepScrubPayload([]byte(tt.input))
-			if tt.wantErr {
-				if err == nil {
-					t.Errorf("expected error, got nil")
-				}
-				return
+			_, err := svc.DeepScrubPayload([]byte(tt.input))
+			if tt.wantErr && err == nil {
+				t.Fatalf("expected error, got nil")
 			}
-			if err != nil {
+			if !tt.wantErr && err != nil {
 				t.Fatalf("unexpected error: %v", err)
-			}
-			if tt.wantSame {
-				// 无 events 时应返回原始内容
-				var orig, got map[string]interface{}
-				json.Unmarshal([]byte(tt.input), &orig)
-				json.Unmarshal(result, &got)
-				origBytes, _ := json.Marshal(orig)
-				gotBytes, _ := json.Marshal(got)
-				if string(origBytes) != string(gotBytes) {
-					t.Errorf("expected unchanged payload, got diff")
-				}
 			}
 		})
 	}
 }
 
-// TestDeepScrubPayload_InvalidBase64Metadata Base64 格式异常不应 panic
 func TestDeepScrubPayload_InvalidBase64Metadata(t *testing.T) {
 	svc := NewTelemetryService()
 	payload := `{
@@ -297,6 +238,7 @@ func TestDeepScrubPayload_InvalidBase64Metadata(t *testing.T) {
 			"event_type": "ClaudeCodeInternalEvent",
 			"event_data": {
 				"device_id": "dev-123",
+				"client_timestamp": "2026-04-02T08:01:00Z",
 				"additional_metadata": "NOT_VALID_BASE64!!!"
 			}
 		}]
@@ -304,16 +246,16 @@ func TestDeepScrubPayload_InvalidBase64Metadata(t *testing.T) {
 
 	result, err := svc.DeepScrubPayload([]byte(payload))
 	if err != nil {
-		t.Fatalf("should not error on invalid base64: %v", err)
+		t.Fatalf("should not error on invalid base64 metadata: %v", err)
 	}
-
-	// device_id 应该仍被替换
 	if strings.Contains(string(result), "dev-123") {
-		t.Errorf("original device_id leaked despite bad metadata")
+		t.Fatalf("original device_id leaked despite bad metadata")
+	}
+	if gjson.GetBytes(result, "events.0.event_data.additional_metadata").Exists() {
+		t.Fatalf("invalid additional_metadata should be deleted")
 	}
 }
 
-// TestDeepScrubPayload_InvalidUserAttributes user_attributes 非法 JSON 不应 panic
 func TestDeepScrubPayload_InvalidUserAttributes(t *testing.T) {
 	svc := NewTelemetryService()
 	payload := `{
@@ -328,49 +270,42 @@ func TestDeepScrubPayload_InvalidUserAttributes(t *testing.T) {
 
 	result, err := svc.DeepScrubPayload([]byte(payload))
 	if err != nil {
-		t.Fatalf("should not error on invalid user_attributes JSON: %v", err)
+		t.Fatalf("should not error on invalid user_attributes json: %v", err)
 	}
-
 	if strings.Contains(string(result), "dev-456") {
-		t.Errorf("original device_id leaked despite bad user_attributes")
+		t.Fatalf("original device_id leaked despite bad user_attributes")
+	}
+	userAttrs := gjson.GetBytes(result, "events.0.event_data.user_attributes").String()
+	if !strings.Contains(userAttrs, `"platform":"darwin"`) {
+		t.Fatalf("invalid user_attributes should be replaced with sanitized json: %s", userAttrs)
 	}
 }
 
-// TestGenerateShadowDeviceID_UUIDFormat 验证生成的 ID 是合法 UUIDv4
 func TestGenerateShadowDeviceID_UUIDFormat(t *testing.T) {
 	svc := NewTelemetryService()
 
 	seeds := []string{"test-uuid-1", "another-seed", "", "shared-account-uuid-001"}
 	for _, seed := range seeds {
 		id := svc.GenerateShadowDeviceID(seed, "")
-
-		// 格式: 8-4-4-4-12
 		parts := strings.Split(id, "-")
 		if len(parts) != 5 {
-			t.Errorf("seed=%q: expected 5 parts, got %d: %s", seed, len(parts), id)
-			continue
+			t.Fatalf("seed=%q: expected 5 parts, got %d: %s", seed, len(parts), id)
 		}
 		if len(parts[0]) != 8 || len(parts[1]) != 4 || len(parts[2]) != 4 || len(parts[3]) != 4 || len(parts[4]) != 12 {
-			t.Errorf("seed=%q: wrong part lengths in %s", seed, id)
-			continue
+			t.Fatalf("seed=%q: wrong part lengths in %s", seed, id)
 		}
-
-		// version nibble = 4
 		if parts[2][0] != '4' {
-			t.Errorf("seed=%q: version nibble should be '4', got '%c' in %s", seed, parts[2][0], id)
+			t.Fatalf("seed=%q: version nibble should be '4', got %q in %s", seed, parts[2][0], id)
 		}
-
-		// variant nibble ∈ {8,9,a,b}
 		v := parts[3][0]
 		if v != '8' && v != '9' && v != 'a' && v != 'b' {
-			t.Errorf("seed=%q: variant nibble should be 8/9/a/b, got '%c' in %s", seed, v, id)
+			t.Fatalf("seed=%q: variant nibble should be 8/9/a/b, got %q in %s", seed, v, id)
 		}
 	}
 
-	// 幂等性：同 seed → 同 ID
-	id1 := svc.GenerateShadowDeviceID("stable-seed", "")
-	id2 := svc.GenerateShadowDeviceID("stable-seed", "")
+	id1 := svc.GenerateShadowDeviceID("shared-account-uuid-001", "device-a")
+	id2 := svc.GenerateShadowDeviceID("shared-account-uuid-001", "device-b")
 	if id1 != id2 {
-		t.Errorf("same seed produced different IDs: %s vs %s", id1, id2)
+		t.Fatalf("same account seed should converge despite different device ids: %s vs %s", id1, id2)
 	}
 }
