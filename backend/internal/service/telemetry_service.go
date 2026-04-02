@@ -12,6 +12,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -284,6 +285,7 @@ func processStateFilePath() string {
 func init() {
 	profile := &tlsfingerprint.Profile{
 		ALPNProtocols: []string{"http/1.1"},
+		EnableGREASE:  true,
 	}
 	dialer := tlsfingerprint.NewDialer(profile, nil)
 	tr := &http.Transport{
@@ -520,29 +522,109 @@ func (s *TelemetryService) ForwardBackground(cleanedBody []byte, originalAuthTok
 		time.Sleep(time.Duration(jitterMs) * time.Millisecond)
 
 		endpoint := "https://api.anthropic.com/api/event_logging/batch"
-		req, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(cleanedBody))
-		if err != nil {
-			logger.LegacyPrintf("service.telemetry", "[Error] failed to create telemetry request: %v", err)
-			return
-		}
-
 		version := extractForwardVersion(cleanedBody)
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("User-Agent", telemetryUserAgent(version))
-		req.Header.Set("x-service-name", "claude-code")
-		if originalAuthToken != "" {
-			req.Header.Set("x-api-key", originalAuthToken)
+		if err := s.forwardWithNodeSidecar(cleanedBody, originalAuthToken, endpoint, version); err != nil {
+			if allowGoFallback() {
+				logger.LegacyPrintf("service.telemetry", "[Warn] node sidecar forward failed, falling back to Go sender: %v", err)
+				if err := s.forwardWithGoClient(cleanedBody, originalAuthToken, endpoint, version); err != nil {
+					logger.LegacyPrintf("service.telemetry", "[Error] failed to send shadow telemetry: %v", err)
+					return
+				}
+			} else {
+				logger.LegacyPrintf("service.telemetry", "[Error] node sidecar forward failed and Go fallback is disabled: %v", err)
+				return
+			}
 		}
 
-		resp, err := forwardClient.Do(req)
-		if err != nil {
-			logger.LegacyPrintf("service.telemetry", "[Error] failed to send shadow telemetry: %v", err)
-			return
-		}
-		defer resp.Body.Close()
-
-		logger.LegacyPrintf("service.telemetry", "[Success] Shadow telemetry dispatched (jitter=%dms), status=%d", jitterMs, resp.StatusCode)
+		logger.LegacyPrintf("service.telemetry", "[Success] Shadow telemetry dispatched (jitter=%dms)", jitterMs)
 	}()
+}
+
+func (s *TelemetryService) forwardWithGoClient(cleanedBody []byte, originalAuthToken, endpoint, version string) error {
+	req, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(cleanedBody))
+	if err != nil {
+		return fmt.Errorf("create telemetry request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("User-Agent", telemetryUserAgent(version))
+	req.Header.Set("x-service-name", "claude-code")
+	if originalAuthToken != "" {
+		req.Header.Set("x-api-key", originalAuthToken)
+	}
+
+	resp, err := forwardClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	return nil
+}
+
+func (s *TelemetryService) forwardWithNodeSidecar(cleanedBody []byte, originalAuthToken, endpoint, version string) error {
+	scriptPath, err := findTelemetrySidecarScript()
+	if err != nil {
+		return err
+	}
+
+	requestPayload, err := json.Marshal(map[string]any{
+		"endpoint": endpoint,
+		"headers": map[string]string{
+			"Content-Type":   "application/json",
+			"User-Agent":     telemetryUserAgent(version),
+			"x-service-name": "claude-code",
+			"x-api-key":      originalAuthToken,
+		},
+		"payload_base64": base64.StdEncoding.EncodeToString(cleanedBody),
+		"timeout_ms":     10000,
+	})
+	if err != nil {
+		return fmt.Errorf("marshal sidecar payload: %w", err)
+	}
+
+	cmd := exec.Command("node", scriptPath)
+	cmd.Stdin = bytes.NewReader(requestPayload)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("exec node sidecar: %w (%s)", err, strings.TrimSpace(string(output)))
+	}
+
+	var resp struct {
+		Status int    `json:"status"`
+		Error  string `json:"error"`
+	}
+	if err := json.Unmarshal(output, &resp); err != nil {
+		return fmt.Errorf("decode sidecar response: %w (%s)", err, strings.TrimSpace(string(output)))
+	}
+	if resp.Error != "" {
+		return errors.New(resp.Error)
+	}
+	return nil
+}
+
+func findTelemetrySidecarScript() (string, error) {
+	if override := strings.TrimSpace(os.Getenv("TELEMETRY_NODE_SIDECAR_SCRIPT")); override != "" {
+		if _, err := os.Stat(override); err == nil {
+			return override, nil
+		}
+		return "", fmt.Errorf("telemetry sidecar script not found at %s", override)
+	}
+
+	candidates := []string{
+		filepath.Join("..", "tools", "telemetry-sidecar.mjs"),
+		filepath.Join("tools", "telemetry-sidecar.mjs"),
+	}
+	for _, candidate := range candidates {
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate, nil
+		}
+	}
+	return "", errors.New("telemetry sidecar script not found")
+}
+
+func allowGoFallback() bool {
+	value := strings.TrimSpace(strings.ToLower(os.Getenv("TELEMETRY_ALLOW_GO_FALLBACK")))
+	return value == "1" || value == "true" || value == "yes"
 }
 
 func stableUUID(seed string) string {

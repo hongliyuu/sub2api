@@ -475,3 +475,81 @@ func TestProcessStateStore_PersistsAcrossRecreation(t *testing.T) {
 		t.Fatalf("cpu counters should remain monotonic across recreated store: %+v %+v", cpu2, cpu3)
 	}
 }
+
+func TestFindTelemetrySidecarScript_Override(t *testing.T) {
+	script := filepath.Join(t.TempDir(), "telemetry-sidecar.mjs")
+	if err := os.WriteFile(script, []byte("console.log('ok')\n"), 0o600); err != nil {
+		t.Fatalf("write temp sidecar: %v", err)
+	}
+	t.Setenv("TELEMETRY_NODE_SIDECAR_SCRIPT", script)
+
+	got, err := findTelemetrySidecarScript()
+	if err != nil {
+		t.Fatalf("expected override sidecar path to resolve: %v", err)
+	}
+	if got != script {
+		t.Fatalf("override sidecar path mismatch: got %q want %q", got, script)
+	}
+}
+
+func TestForwardWithNodeSidecar_Success(t *testing.T) {
+	script := filepath.Join(t.TempDir(), "telemetry-sidecar.mjs")
+	code := `
+const chunks = [];
+for await (const chunk of process.stdin) chunks.push(chunk);
+const input = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+if (input.headers["User-Agent"] !== "claude-code/2.2.19") {
+  throw new Error("unexpected user agent");
+}
+if (input.headers["x-service-name"] !== "claude-code") {
+  throw new Error("missing service name");
+}
+if (input.headers["x-api-key"] !== "test-key") {
+  throw new Error("missing api key");
+}
+const payload = Buffer.from(input.payload_base64, 'base64').toString('utf8');
+if (!payload.includes('"events"')) {
+  throw new Error("missing payload");
+}
+process.stdout.write(JSON.stringify({status: 204}));
+`
+	if err := os.WriteFile(script, []byte(code), 0o600); err != nil {
+		t.Fatalf("write temp sidecar: %v", err)
+	}
+	t.Setenv("TELEMETRY_NODE_SIDECAR_SCRIPT", script)
+
+	svc := NewTelemetryService()
+	err := svc.forwardWithNodeSidecar([]byte(`{"events":[]}`), "test-key", "https://api.anthropic.com/api/event_logging/batch", "2.2.19")
+	if err != nil {
+		t.Fatalf("expected sidecar success, got %v", err)
+	}
+}
+
+func TestForwardWithNodeSidecar_Error(t *testing.T) {
+	script := filepath.Join(t.TempDir(), "telemetry-sidecar.mjs")
+	code := `
+process.stdout.write(JSON.stringify({status: 0, error: "boom"}));
+`
+	if err := os.WriteFile(script, []byte(code), 0o600); err != nil {
+		t.Fatalf("write temp sidecar: %v", err)
+	}
+	t.Setenv("TELEMETRY_NODE_SIDECAR_SCRIPT", script)
+
+	svc := NewTelemetryService()
+	err := svc.forwardWithNodeSidecar([]byte(`{"events":[]}`), "", "https://api.anthropic.com/api/event_logging/batch", "2.2.19")
+	if err == nil || !strings.Contains(err.Error(), "boom") {
+		t.Fatalf("expected propagated sidecar error, got %v", err)
+	}
+}
+
+func TestAllowGoFallback_DefaultOff(t *testing.T) {
+	t.Setenv("TELEMETRY_ALLOW_GO_FALLBACK", "")
+	if allowGoFallback() {
+		t.Fatalf("expected Go fallback to be disabled by default")
+	}
+
+	t.Setenv("TELEMETRY_ALLOW_GO_FALLBACK", "true")
+	if !allowGoFallback() {
+		t.Fatalf("expected Go fallback to be enabled when explicitly requested")
+	}
+}
