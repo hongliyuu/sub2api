@@ -5,12 +5,14 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
 	"math/rand"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -128,14 +130,18 @@ type processState struct {
 }
 
 type processStateStore struct {
-	mu    sync.Mutex
-	items map[string]*processState
+	mu       sync.Mutex
+	items    map[string]*processState
+	filePath string
 }
 
 func newProcessStateStore() *processStateStore {
-	return &processStateStore{
-		items: make(map[string]*processState),
+	store := &processStateStore{
+		items:    make(map[string]*processState),
+		filePath: processStateFilePath(),
 	}
+	store.load()
+	return store
 }
 
 func (s *processStateStore) next(shadowDeviceID string, syntheticTime time.Time, seed [32]byte) processState {
@@ -162,6 +168,7 @@ func (s *processStateStore) next(shadowDeviceID string, syntheticTime time.Time,
 			state.lastHeapUsed = state.lastHeapTotal - 512_000
 		}
 		s.items[shadowDeviceID] = state
+		s.persistLocked()
 		return *state
 	}
 
@@ -221,6 +228,7 @@ func (s *processStateStore) next(shadowDeviceID string, syntheticTime time.Time,
 	if state.lastArrayBuf < 100_000 {
 		state.lastArrayBuf = 100_000 + int(seed[5])*1_500
 	}
+	s.persistLocked()
 	return *state
 }
 
@@ -228,6 +236,49 @@ func (s *processStateStore) reset() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.items = make(map[string]*processState)
+	if s.filePath != "" {
+		_ = os.Remove(s.filePath)
+	}
+}
+
+func (s *processStateStore) load() {
+	if s.filePath == "" {
+		return
+	}
+	raw, err := os.ReadFile(s.filePath)
+	if err != nil || len(raw) == 0 {
+		return
+	}
+	var stored map[string]*processState
+	if err := json.Unmarshal(raw, &stored); err != nil {
+		return
+	}
+	s.items = stored
+}
+
+func (s *processStateStore) persistLocked() {
+	if s.filePath == "" {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(s.filePath), 0o755); err != nil {
+		return
+	}
+	raw, err := json.Marshal(s.items)
+	if err != nil {
+		return
+	}
+	tmp := s.filePath + ".tmp"
+	if err := os.WriteFile(tmp, raw, 0o600); err != nil {
+		return
+	}
+	_ = os.Rename(tmp, s.filePath)
+}
+
+func processStateFilePath() string {
+	if override := strings.TrimSpace(os.Getenv("TELEMETRY_PROCESS_STATE_FILE")); override != "" {
+		return override
+	}
+	return filepath.Join(os.TempDir(), "sub2api-telemetry-process-state.json")
 }
 
 func init() {

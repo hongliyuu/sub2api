@@ -4,6 +4,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"math"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -429,4 +431,47 @@ func TestSyntheticProcessMetrics_MonotonicPerDevice(t *testing.T) {
 	}
 	checkCPUPercent(p1, p2, 5)
 	checkCPUPercent(p2, p3, 1)
+}
+
+func TestProcessStateStore_PersistsAcrossRecreation(t *testing.T) {
+	dir := t.TempDir()
+	stateFile := filepath.Join(dir, "telemetry-process-state.json")
+	t.Setenv("TELEMETRY_PROCESS_STATE_FILE", stateFile)
+	t.Cleanup(func() {
+		syntheticProcessStore = newProcessStateStore()
+	})
+
+	storeA := newProcessStateStore()
+	syntheticProcessStore = storeA
+	first := syntheticProcessMetrics("shadow-device-persist", time.Date(2026, 4, 2, 10, 0, 0, 0, time.UTC))
+	second := syntheticProcessMetrics("shadow-device-persist", time.Date(2026, 4, 2, 10, 0, 10, 0, time.UTC))
+
+	raw, err := os.ReadFile(stateFile)
+	if err != nil || len(raw) == 0 {
+		t.Fatalf("expected persisted process state file, err=%v", err)
+	}
+
+	storeB := newProcessStateStore()
+	syntheticProcessStore = storeB
+	third := syntheticProcessMetrics("shadow-device-persist", time.Date(2026, 4, 2, 10, 0, 20, 0, time.UTC))
+
+	parse := func(raw string) map[string]any {
+		var out map[string]any
+		if err := json.Unmarshal([]byte(raw), &out); err != nil {
+			t.Fatalf("invalid process json: %v", err)
+		}
+		return out
+	}
+
+	p1 := parse(first)
+	p2 := parse(second)
+	p3 := parse(third)
+	if p2["uptime"].(float64) <= p1["uptime"].(float64) || p3["uptime"].(float64) <= p2["uptime"].(float64) {
+		t.Fatalf("uptime should remain monotonic across recreated store: %v %v %v", p1["uptime"], p2["uptime"], p3["uptime"])
+	}
+	cpu2 := p2["cpuUsage"].(map[string]any)
+	cpu3 := p3["cpuUsage"].(map[string]any)
+	if cpu3["user"].(float64) <= cpu2["user"].(float64) || cpu3["system"].(float64) <= cpu2["system"].(float64) {
+		t.Fatalf("cpu counters should remain monotonic across recreated store: %+v %+v", cpu2, cpu3)
+	}
 }
