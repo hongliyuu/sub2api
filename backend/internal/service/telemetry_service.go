@@ -118,6 +118,13 @@ type processState struct {
 	lastUptimeSecs int
 	lastCPUUser    int
 	lastCPUSystem  int
+	lastRSS        int
+	lastHeapTotal  int
+	lastHeapUsed   int
+	lastExternal   int
+	lastArrayBuf   int
+	lastCPUPercent float64
+	tick           int
 }
 
 type processStateStore struct {
@@ -144,6 +151,15 @@ func (s *processStateStore) next(shadowDeviceID string, syntheticTime time.Time,
 			lastUptimeSecs: initialUptime,
 			lastCPUUser:    4_000_000 + int(seed[6])*18_000 + initialUptime*800,
 			lastCPUSystem:  1_200_000 + int(seed[7])*9_000 + initialUptime*300,
+			lastRSS:        90_000_000 + int(seed[1])*350_000,
+			lastHeapTotal:  28_000_000 + int(seed[2])*140_000,
+			lastHeapUsed:   14_000_000 + int(seed[3])*95_000,
+			lastExternal:   1_200_000 + int(seed[4])*14_000,
+			lastArrayBuf:   180_000 + int(seed[5])*2_000,
+			lastCPUPercent: 1.5,
+		}
+		if state.lastHeapUsed >= state.lastHeapTotal {
+			state.lastHeapUsed = state.lastHeapTotal - 512_000
 		}
 		s.items[shadowDeviceID] = state
 		return *state
@@ -160,8 +176,51 @@ func (s *processStateStore) next(shadowDeviceID string, syntheticTime time.Time,
 
 	state.lastSeen = state.lastSeen.Add(time.Duration(deltaSeconds) * time.Second)
 	state.lastUptimeSecs += deltaSeconds
-	state.lastCPUUser += deltaSeconds*(600_000+int(seed[6])*2_500) + int(seed[8])*500
-	state.lastCPUSystem += deltaSeconds*(210_000+int(seed[7])*1_100) + int(seed[9])*250
+	state.tick++
+
+	deltaCPUUser := deltaSeconds*(600_000+int(seed[6])*2_500) + int(seed[8])*500 + state.tick*250
+	deltaCPUSystem := deltaSeconds*(210_000+int(seed[7])*1_100) + int(seed[9])*250 + state.tick*100
+	state.lastCPUUser += deltaCPUUser
+	state.lastCPUSystem += deltaCPUSystem
+	state.lastCPUPercent = (float64(deltaCPUUser+deltaCPUSystem) / (float64(deltaSeconds) * 1_000_000.0)) * 100.0
+
+	rssDrift := ((state.tick%5)-2)*220_000 + int(seed[11])*400
+	state.lastRSS += rssDrift
+	if state.lastRSS < 80_000_000 {
+		state.lastRSS = 80_000_000 + int(seed[1])*250_000
+	}
+
+	heapTotalDrift := ((state.tick%4)-1)*120_000 + int(seed[12])*300
+	state.lastHeapTotal += heapTotalDrift
+	if state.lastHeapTotal < 24_000_000 {
+		state.lastHeapTotal = 24_000_000 + int(seed[2])*100_000
+	}
+
+	heapGrowth := 180_000 + int(seed[13])*1_000
+	if state.tick%6 == 0 {
+		state.lastHeapUsed -= 1_500_000 + int(seed[14])*3_000
+	} else {
+		state.lastHeapUsed += heapGrowth
+	}
+	minHeapUsed := 8_000_000 + int(seed[3])*50_000
+	if state.lastHeapUsed < minHeapUsed {
+		state.lastHeapUsed = minHeapUsed
+	}
+	if state.lastHeapUsed >= state.lastHeapTotal {
+		state.lastHeapUsed = state.lastHeapTotal - (256_000 + int(seed[15])*1_000)
+	}
+
+	externalDrift := ((state.tick%7)-3)*8_000 + int(seed[16])*40
+	state.lastExternal += externalDrift
+	if state.lastExternal < 900_000 {
+		state.lastExternal = 900_000 + int(seed[4])*10_000
+	}
+
+	arrayBufDrift := ((state.tick%5)-2)*2_500 + int(seed[17])*25
+	state.lastArrayBuf += arrayBufDrift
+	if state.lastArrayBuf < 100_000 {
+		state.lastArrayBuf = 100_000 + int(seed[5])*1_500
+	}
 	return *state
 }
 
@@ -349,18 +408,17 @@ func (s *TelemetryService) DeepScrubPayload(bodyBytes []byte) ([]byte, error) {
 }
 
 func overwriteEnvBlockSJSON(payload []byte, prefix string, persona PersonaProfile) []byte {
-	payload = setIfExists(payload, prefix+".platform", persona.Platform)
-	payload = setIfExists(payload, prefix+".platform_raw", persona.PlatformRaw)
-	payload = setIfExists(payload, prefix+".arch", persona.Arch)
-	payload = setIfExists(payload, prefix+".node_version", persona.NodeVersion)
-	payload = setIfExists(payload, prefix+".terminal", persona.Terminal)
-	payload = setIfExists(payload, prefix+".package_managers", persona.PackageManagers)
-	payload = setIfExists(payload, prefix+".runtimes", persona.Runtimes)
-	payload = setIfExists(payload, prefix+".is_running_with_bun", persona.IsRunningWithBun)
-	payload = setIfExists(payload, prefix+".deployment_environment", persona.DeploymentEnvironment)
-	payload = setIfExists(payload, prefix+".version", persona.Version)
-	payload = setIfExists(payload, prefix+".version_base", persona.VersionBase)
-	payload = setIfExists(payload, prefix+".build_time", persona.BuildTime)
+	payload, _ = sjson.SetBytes(payload, prefix+".platform", persona.Platform)
+	payload, _ = sjson.SetBytes(payload, prefix+".platform_raw", persona.PlatformRaw)
+	payload, _ = sjson.SetBytes(payload, prefix+".arch", persona.Arch)
+	payload, _ = sjson.SetBytes(payload, prefix+".node_version", persona.NodeVersion)
+	payload, _ = sjson.SetBytes(payload, prefix+".terminal", persona.Terminal)
+	payload, _ = sjson.SetBytes(payload, prefix+".package_managers", persona.PackageManagers)
+	payload, _ = sjson.SetBytes(payload, prefix+".runtimes", persona.Runtimes)
+	payload, _ = sjson.SetBytes(payload, prefix+".is_running_with_bun", persona.IsRunningWithBun)
+	payload, _ = sjson.SetBytes(payload, prefix+".deployment_environment", persona.DeploymentEnvironment)
+	payload, _ = sjson.SetBytes(payload, prefix+".version", persona.Version)
+	payload, _ = sjson.SetBytes(payload, prefix+".version_base", persona.VersionBase)
 
 	payload = deletePaths(payload,
 		prefix+".wsl_version",
@@ -376,15 +434,16 @@ func overwriteEnvBlockSJSON(payload []byte, prefix string, persona PersonaProfil
 		prefix+".claude_code_container_id",
 		prefix+".claude_code_remote_session_id",
 		prefix+".vcs",
+		prefix+".build_time",
 	)
 
-	payload = setIfExists(payload, prefix+".is_ci", false)
-	payload = setIfExists(payload, prefix+".is_github_action", false)
-	payload = setIfExists(payload, prefix+".is_claude_code_action", false)
-	payload = setIfExists(payload, prefix+".is_claude_code_remote", false)
-	payload = setIfExists(payload, prefix+".is_local_agent_mode", false)
-	payload = setIfExists(payload, prefix+".is_conductor", false)
-	payload = setIfExists(payload, prefix+".is_claubbit", false)
+	payload, _ = sjson.SetBytes(payload, prefix+".is_ci", false)
+	payload, _ = sjson.SetBytes(payload, prefix+".is_github_action", false)
+	payload, _ = sjson.SetBytes(payload, prefix+".is_claude_code_action", false)
+	payload, _ = sjson.SetBytes(payload, prefix+".is_claude_code_remote", false)
+	payload, _ = sjson.SetBytes(payload, prefix+".is_local_agent_mode", false)
+	payload, _ = sjson.SetBytes(payload, prefix+".is_conductor", false)
+	payload, _ = sjson.SetBytes(payload, prefix+".is_claubbit", false)
 	return payload
 }
 
@@ -584,18 +643,15 @@ func syntheticProcessMetrics(shadowDeviceID string, syntheticTime time.Time) str
 	hash := sha256.Sum256([]byte(shadowDeviceID + "|process"))
 	state := syntheticProcessStore.next(shadowDeviceID, syntheticTime, hash)
 	uptimeSeconds := state.lastUptimeSecs
-	rss := 90_000_000 + int(hash[1])*350_000
-	heapTotal := 28_000_000 + int(hash[2])*140_000
-	heapUsed := 14_000_000 + int(hash[3])*95_000
-	if heapUsed >= heapTotal {
-		heapUsed = heapTotal - 512_000
-	}
-	external := 1_200_000 + int(hash[4])*14_000
-	arrayBuffers := 180_000 + int(hash[5])*2_000
+	rss := state.lastRSS
+	heapTotal := state.lastHeapTotal
+	heapUsed := state.lastHeapUsed
+	external := state.lastExternal
+	arrayBuffers := state.lastArrayBuf
 	constrainedMemory := 0
 	cpuUser := state.lastCPUUser
 	cpuSystem := state.lastCPUSystem
-	cpuPercent := 1.0 + float64(hash[10]%30)/10.0
+	cpuPercent := state.lastCPUPercent
 
 	return fmt.Sprintf(`{"uptime":%d,"rss":%d,"heapTotal":%d,"heapUsed":%d,"external":%d,"arrayBuffers":%d,"constrainedMemory":%d,"cpuUsage":{"user":%d,"system":%d},"cpuPercent":%.1f}`,
 		uptimeSeconds,
@@ -615,14 +671,6 @@ func deletePaths(payload []byte, paths ...string) []byte {
 	for _, path := range paths {
 		payload, _ = sjson.DeleteBytes(payload, path)
 	}
-	return payload
-}
-
-func setIfExists(payload []byte, path string, value any) []byte {
-	if !gjson.GetBytes(payload, path).Exists() {
-		return payload
-	}
-	payload, _ = sjson.SetBytes(payload, path, value)
 	return payload
 }
 

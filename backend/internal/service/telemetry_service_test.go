@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/base64"
 	"encoding/json"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -183,6 +184,9 @@ func TestDeepScrubPayload_RealSchema(t *testing.T) {
 	if env.Get("runtimes").String() == "node" || env.Get("runtimes").String() == "" {
 		t.Fatalf("env runtimes not diversified: %s", env.Raw)
 	}
+	if env.Get("version").String() == "" || env.Get("version_base").String() == "" {
+		t.Fatalf("env version fields missing: %s", env.Raw)
+	}
 	for _, key := range []string{"wsl_version", "linux_distro_id", "linux_distro_version", "linux_kernel", "github_actions_metadata", "vcs"} {
 		if env.Get(key).Exists() {
 			t.Fatalf("env leaked %s: %s", key, env.Raw)
@@ -194,10 +198,8 @@ func TestDeepScrubPayload_RealSchema(t *testing.T) {
 	if env.Get("deployment_environment").String() == "unknown-linux" || env.Get("deployment_environment").String() == "" {
 		t.Fatalf("deployment_environment not diversified: %s", env.Raw)
 	}
-	for _, key := range []string{"version", "version_base", "build_time"} {
-		if env.Get(key).Exists() {
-			t.Fatalf("field %s should not be synthesized when absent in original env: %s", key, env.Raw)
-		}
+	if env.Get("build_time").Exists() {
+		t.Fatalf("build_time should be dropped rather than guessed: %s", env.Raw)
 	}
 	processRaw := gjson.GetBytes(scrubbedBytes, "events.1.event_data.process").String()
 	if processRaw == "" {
@@ -235,10 +237,11 @@ func TestDeepScrubPayload_RealSchema(t *testing.T) {
 	if meta.Get("env.platform").String() != "darwin" {
 		t.Fatalf("additional_metadata env not scrubbed: %s", meta.Raw)
 	}
-	for _, key := range []string{"env.version", "env.version_base", "env.build_time"} {
-		if meta.Get(key).Exists() {
-			t.Fatalf("additional_metadata field %s should not be synthesized when absent: %s", key, meta.Raw)
-		}
+	if meta.Get("env.version").String() == "" || meta.Get("env.version_base").String() == "" {
+		t.Fatalf("additional_metadata env version fields missing: %s", meta.Raw)
+	}
+	if meta.Get("env.build_time").Exists() {
+		t.Fatalf("additional_metadata build_time should be dropped rather than guessed: %s", meta.Raw)
 	}
 }
 
@@ -403,4 +406,27 @@ func TestSyntheticProcessMetrics_MonotonicPerDevice(t *testing.T) {
 	if cpu2["system"].(float64) <= cpu1["system"].(float64) || cpu3["system"].(float64) <= cpu2["system"].(float64) {
 		t.Fatalf("cpu system counter must be monotonic: %+v %+v %+v", cpu1, cpu2, cpu3)
 	}
+
+	if p1["rss"].(float64) == p2["rss"].(float64) && p2["rss"].(float64) == p3["rss"].(float64) {
+		t.Fatalf("rss should vary over time: %v %v %v", p1["rss"], p2["rss"], p3["rss"])
+	}
+	if p1["heapUsed"].(float64) == p2["heapUsed"].(float64) && p2["heapUsed"].(float64) == p3["heapUsed"].(float64) {
+		t.Fatalf("heapUsed should vary over time: %v %v %v", p1["heapUsed"], p2["heapUsed"], p3["heapUsed"])
+	}
+	if p1["external"].(float64) == p2["external"].(float64) && p2["external"].(float64) == p3["external"].(float64) {
+		t.Fatalf("external should vary over time: %v %v %v", p1["external"], p2["external"], p3["external"])
+	}
+
+	checkCPUPercent := func(prev, next map[string]any, deltaSeconds float64) {
+		prevCPU := prev["cpuUsage"].(map[string]any)
+		nextCPU := next["cpuUsage"].(map[string]any)
+		deltaCPU := (nextCPU["user"].(float64) - prevCPU["user"].(float64)) + (nextCPU["system"].(float64) - prevCPU["system"].(float64))
+		expected := (deltaCPU / (deltaSeconds * 1_000_000.0)) * 100.0
+		reported := next["cpuPercent"].(float64)
+		if math.Abs(expected-reported) > 0.2 {
+			t.Fatalf("cpuPercent inconsistent: expected %.3f reported %.3f", expected, reported)
+		}
+	}
+	checkCPUPercent(p1, p2, 5)
+	checkCPUPercent(p2, p3, 1)
 }
