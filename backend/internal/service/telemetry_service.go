@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -109,6 +110,66 @@ var defaultPersona = PersonaProfile{
 var defaultTelemetryVersionPool = []string{"2.2.17", "2.2.18", "2.2.19", "2.3.0"}
 var forwardSem = make(chan struct{}, 64)
 var forwardClient *http.Client
+var syntheticProcessStore = newProcessStateStore()
+
+type processState struct {
+	startedAt      time.Time
+	lastSeen       time.Time
+	lastUptimeSecs int
+	lastCPUUser    int
+	lastCPUSystem  int
+}
+
+type processStateStore struct {
+	mu    sync.Mutex
+	items map[string]*processState
+}
+
+func newProcessStateStore() *processStateStore {
+	return &processStateStore{
+		items: make(map[string]*processState),
+	}
+}
+
+func (s *processStateStore) next(shadowDeviceID string, syntheticTime time.Time, seed [32]byte) processState {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	state, ok := s.items[shadowDeviceID]
+	if !ok {
+		initialUptime := 900 + int(seed[0])
+		state = &processState{
+			startedAt:      syntheticTime.Add(-time.Duration(initialUptime) * time.Second),
+			lastSeen:       syntheticTime,
+			lastUptimeSecs: initialUptime,
+			lastCPUUser:    4_000_000 + int(seed[6])*18_000 + initialUptime*800,
+			lastCPUSystem:  1_200_000 + int(seed[7])*9_000 + initialUptime*300,
+		}
+		s.items[shadowDeviceID] = state
+		return *state
+	}
+
+	if syntheticTime.Before(state.lastSeen) {
+		syntheticTime = state.lastSeen.Add(time.Second)
+	}
+
+	deltaSeconds := int(syntheticTime.Sub(state.lastSeen).Seconds())
+	if deltaSeconds < 1 {
+		deltaSeconds = 1
+	}
+
+	state.lastSeen = state.lastSeen.Add(time.Duration(deltaSeconds) * time.Second)
+	state.lastUptimeSecs += deltaSeconds
+	state.lastCPUUser += deltaSeconds*(600_000+int(seed[6])*2_500) + int(seed[8])*500
+	state.lastCPUSystem += deltaSeconds*(210_000+int(seed[7])*1_100) + int(seed[9])*250
+	return *state
+}
+
+func (s *processStateStore) reset() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.items = make(map[string]*processState)
+}
 
 func init() {
 	profile := &tlsfingerprint.Profile{
@@ -288,18 +349,18 @@ func (s *TelemetryService) DeepScrubPayload(bodyBytes []byte) ([]byte, error) {
 }
 
 func overwriteEnvBlockSJSON(payload []byte, prefix string, persona PersonaProfile) []byte {
-	payload, _ = sjson.SetBytes(payload, prefix+".platform", persona.Platform)
-	payload, _ = sjson.SetBytes(payload, prefix+".platform_raw", persona.PlatformRaw)
-	payload, _ = sjson.SetBytes(payload, prefix+".arch", persona.Arch)
-	payload, _ = sjson.SetBytes(payload, prefix+".node_version", persona.NodeVersion)
-	payload, _ = sjson.SetBytes(payload, prefix+".terminal", persona.Terminal)
-	payload, _ = sjson.SetBytes(payload, prefix+".package_managers", persona.PackageManagers)
-	payload, _ = sjson.SetBytes(payload, prefix+".runtimes", persona.Runtimes)
-	payload, _ = sjson.SetBytes(payload, prefix+".is_running_with_bun", persona.IsRunningWithBun)
-	payload, _ = sjson.SetBytes(payload, prefix+".deployment_environment", persona.DeploymentEnvironment)
-	payload, _ = sjson.SetBytes(payload, prefix+".version", persona.Version)
-	payload, _ = sjson.SetBytes(payload, prefix+".version_base", persona.VersionBase)
-	payload, _ = sjson.SetBytes(payload, prefix+".build_time", persona.BuildTime)
+	payload = setIfExists(payload, prefix+".platform", persona.Platform)
+	payload = setIfExists(payload, prefix+".platform_raw", persona.PlatformRaw)
+	payload = setIfExists(payload, prefix+".arch", persona.Arch)
+	payload = setIfExists(payload, prefix+".node_version", persona.NodeVersion)
+	payload = setIfExists(payload, prefix+".terminal", persona.Terminal)
+	payload = setIfExists(payload, prefix+".package_managers", persona.PackageManagers)
+	payload = setIfExists(payload, prefix+".runtimes", persona.Runtimes)
+	payload = setIfExists(payload, prefix+".is_running_with_bun", persona.IsRunningWithBun)
+	payload = setIfExists(payload, prefix+".deployment_environment", persona.DeploymentEnvironment)
+	payload = setIfExists(payload, prefix+".version", persona.Version)
+	payload = setIfExists(payload, prefix+".version_base", persona.VersionBase)
+	payload = setIfExists(payload, prefix+".build_time", persona.BuildTime)
 
 	payload = deletePaths(payload,
 		prefix+".wsl_version",
@@ -317,13 +378,13 @@ func overwriteEnvBlockSJSON(payload []byte, prefix string, persona PersonaProfil
 		prefix+".vcs",
 	)
 
-	payload, _ = sjson.SetBytes(payload, prefix+".is_ci", false)
-	payload, _ = sjson.SetBytes(payload, prefix+".is_github_action", false)
-	payload, _ = sjson.SetBytes(payload, prefix+".is_claude_code_action", false)
-	payload, _ = sjson.SetBytes(payload, prefix+".is_claude_code_remote", false)
-	payload, _ = sjson.SetBytes(payload, prefix+".is_local_agent_mode", false)
-	payload, _ = sjson.SetBytes(payload, prefix+".is_conductor", false)
-	payload, _ = sjson.SetBytes(payload, prefix+".is_claubbit", false)
+	payload = setIfExists(payload, prefix+".is_ci", false)
+	payload = setIfExists(payload, prefix+".is_github_action", false)
+	payload = setIfExists(payload, prefix+".is_claude_code_action", false)
+	payload = setIfExists(payload, prefix+".is_claude_code_remote", false)
+	payload = setIfExists(payload, prefix+".is_local_agent_mode", false)
+	payload = setIfExists(payload, prefix+".is_conductor", false)
+	payload = setIfExists(payload, prefix+".is_claubbit", false)
 	return payload
 }
 
@@ -521,7 +582,8 @@ func syntheticBuildTime(version string) string {
 
 func syntheticProcessMetrics(shadowDeviceID string, syntheticTime time.Time) string {
 	hash := sha256.Sum256([]byte(shadowDeviceID + "|process"))
-	uptimeSeconds := 900 + int(syntheticTime.Unix()%86400) + int(hash[0])
+	state := syntheticProcessStore.next(shadowDeviceID, syntheticTime, hash)
+	uptimeSeconds := state.lastUptimeSecs
 	rss := 90_000_000 + int(hash[1])*350_000
 	heapTotal := 28_000_000 + int(hash[2])*140_000
 	heapUsed := 14_000_000 + int(hash[3])*95_000
@@ -531,9 +593,9 @@ func syntheticProcessMetrics(shadowDeviceID string, syntheticTime time.Time) str
 	external := 1_200_000 + int(hash[4])*14_000
 	arrayBuffers := 180_000 + int(hash[5])*2_000
 	constrainedMemory := 0
-	cpuUser := 4_000_000 + int(hash[6])*18_000 + uptimeSeconds*800
-	cpuSystem := 1_200_000 + int(hash[7])*9_000 + uptimeSeconds*300
-	cpuPercent := 1.5 + float64(hash[8]%35)/10.0
+	cpuUser := state.lastCPUUser
+	cpuSystem := state.lastCPUSystem
+	cpuPercent := 1.0 + float64(hash[10]%30)/10.0
 
 	return fmt.Sprintf(`{"uptime":%d,"rss":%d,"heapTotal":%d,"heapUsed":%d,"external":%d,"arrayBuffers":%d,"constrainedMemory":%d,"cpuUsage":{"user":%d,"system":%d},"cpuPercent":%.1f}`,
 		uptimeSeconds,
@@ -553,6 +615,14 @@ func deletePaths(payload []byte, paths ...string) []byte {
 	for _, path := range paths {
 		payload, _ = sjson.DeleteBytes(payload, path)
 	}
+	return payload
+}
+
+func setIfExists(payload []byte, path string, value any) []byte {
+	if !gjson.GetBytes(payload, path).Exists() {
+		return payload
+	}
+	payload, _ = sjson.SetBytes(payload, path, value)
 	return payload
 }
 

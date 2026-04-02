@@ -119,9 +119,6 @@ func TestDeepScrubPayload_RealSchema(t *testing.T) {
 	if gjson.GetBytes(scrubbedBytes, "events.0.event_data.auth").Exists() || gjson.GetBytes(scrubbedBytes, "events.1.event_data.auth").Exists() {
 		t.Fatalf("auth block should be deleted")
 	}
-	if gjson.GetBytes(scrubbedBytes, "events.1.event_data.process").Exists() {
-		t.Fatalf("process block should be deleted")
-	}
 	if gjson.GetBytes(scrubbedBytes, "events.0.event_data.event_metadata_vars").Exists() {
 		t.Fatalf("event_metadata_vars should be deleted")
 	}
@@ -135,8 +132,8 @@ func TestDeepScrubPayload_RealSchema(t *testing.T) {
 	if got := gjson.GetBytes(scrubbedBytes, "events.1.event_data.parent_session_id").String(); got == "parent-session-1" || got == "" {
 		t.Fatalf("parent_session_id not remapped: %q", got)
 	}
-	if got := gjson.GetBytes(scrubbedBytes, "events.1.event_data.agent_id").String(); got == "worker-abc@swarm-main" || !strings.HasPrefix(got, "agent-") {
-		t.Fatalf("agent_id not remapped: %q", got)
+	if got := gjson.GetBytes(scrubbedBytes, "events.1.event_data.agent_id").String(); got == "worker-abc@swarm-main" || !strings.Contains(got, "@") {
+		t.Fatalf("agent_id not remapped to teammate-style shape: %q", got)
 	}
 
 	if _, err := time.Parse(time.RFC3339Nano, gjson.GetBytes(scrubbedBytes, "events.0.event_data.timestamp").String()); err != nil {
@@ -144,6 +141,10 @@ func TestDeepScrubPayload_RealSchema(t *testing.T) {
 	}
 	if _, err := time.Parse(time.RFC3339Nano, gjson.GetBytes(scrubbedBytes, "events.1.event_data.client_timestamp").String()); err != nil {
 		t.Fatalf("client_timestamp not rewritten to RFC3339: %v", err)
+	}
+	timestamp := gjson.GetBytes(scrubbedBytes, "events.0.event_data.timestamp").String()
+	if strings.HasSuffix(timestamp, ".000000000Z") || strings.HasSuffix(timestamp, ".000000Z") {
+		t.Fatalf("timestamp still looks discretized: %q", timestamp)
 	}
 
 	userAttrsRaw := gjson.GetBytes(scrubbedBytes, "events.0.event_data.user_attributes").String()
@@ -173,16 +174,50 @@ func TestDeepScrubPayload_RealSchema(t *testing.T) {
 	if env.Get("node_version").String() == "v18.20.0" || env.Get("node_version").String() == "" {
 		t.Fatalf("env node_version not overwritten: %s", env.Raw)
 	}
-	if env.Get("version").String() == "" || env.Get("version_base").String() == "" {
-		t.Fatalf("env version fields missing: %s", env.Raw)
+	if env.Get("terminal").String() == "gnome-terminal" || env.Get("terminal").String() == "" {
+		t.Fatalf("env terminal not diversified: %s", env.Raw)
 	}
-	for _, key := range []string{"wsl_version", "linux_distro_id", "linux_distro_version", "linux_kernel", "github_actions_metadata", "vcs", "build_time"} {
+	if env.Get("package_managers").String() == "npm,yarn" || env.Get("package_managers").String() == "" {
+		t.Fatalf("env package_managers not diversified: %s", env.Raw)
+	}
+	if env.Get("runtimes").String() == "node" || env.Get("runtimes").String() == "" {
+		t.Fatalf("env runtimes not diversified: %s", env.Raw)
+	}
+	for _, key := range []string{"wsl_version", "linux_distro_id", "linux_distro_version", "linux_kernel", "github_actions_metadata", "vcs"} {
 		if env.Get(key).Exists() {
 			t.Fatalf("env leaked %s: %s", key, env.Raw)
 		}
 	}
 	if env.Get("is_ci").Bool() || env.Get("is_github_action").Bool() || env.Get("is_claude_code_remote").Bool() {
 		t.Fatalf("env boolean scrub failed: %s", env.Raw)
+	}
+	if env.Get("deployment_environment").String() == "unknown-linux" || env.Get("deployment_environment").String() == "" {
+		t.Fatalf("deployment_environment not diversified: %s", env.Raw)
+	}
+	for _, key := range []string{"version", "version_base", "build_time"} {
+		if env.Get(key).Exists() {
+			t.Fatalf("field %s should not be synthesized when absent in original env: %s", key, env.Raw)
+		}
+	}
+	processRaw := gjson.GetBytes(scrubbedBytes, "events.1.event_data.process").String()
+	if processRaw == "" {
+		t.Fatalf("process metrics missing")
+	}
+	var processMetrics map[string]any
+	if err := json.Unmarshal([]byte(processRaw), &processMetrics); err != nil {
+		t.Fatalf("process metrics invalid json: %v", err)
+	}
+	for _, key := range []string{"uptime", "rss", "heapTotal", "heapUsed", "external", "arrayBuffers", "constrainedMemory", "cpuUsage", "cpuPercent"} {
+		if _, ok := processMetrics[key]; !ok {
+			t.Fatalf("process metrics missing %s: %+v", key, processMetrics)
+		}
+	}
+	if processMetrics["uptime"].(float64) <= 0 {
+		t.Fatalf("process uptime must be positive: %+v", processMetrics)
+	}
+	cpuUsage, ok := processMetrics["cpuUsage"].(map[string]any)
+	if !ok || cpuUsage["user"] == nil || cpuUsage["system"] == nil {
+		t.Fatalf("cpuUsage missing expected shape: %+v", processMetrics)
 	}
 
 	metaB64 := gjson.GetBytes(scrubbedBytes, "events.1.event_data.additional_metadata").String()
@@ -199,6 +234,11 @@ func TestDeepScrubPayload_RealSchema(t *testing.T) {
 	}
 	if meta.Get("env.platform").String() != "darwin" {
 		t.Fatalf("additional_metadata env not scrubbed: %s", meta.Raw)
+	}
+	for _, key := range []string{"env.version", "env.version_base", "env.build_time"} {
+		if meta.Get(key).Exists() {
+			t.Fatalf("additional_metadata field %s should not be synthesized when absent: %s", key, meta.Raw)
+		}
 	}
 }
 
@@ -307,5 +347,60 @@ func TestGenerateShadowDeviceID_UUIDFormat(t *testing.T) {
 	id2 := svc.GenerateShadowDeviceID("shared-account-uuid-001", "device-b")
 	if id1 != id2 {
 		t.Fatalf("same account seed should converge despite different device ids: %s vs %s", id1, id2)
+	}
+}
+
+func TestGenerateOpaqueAgentID_PreservesNativeShapes(t *testing.T) {
+	svc := NewTelemetryService()
+
+	teamStyle := svc.GenerateOpaqueAgentID("shadow-device-1", "worker-abc@swarm-main")
+	if teamStyle == "worker-abc@swarm-main" || !strings.Contains(teamStyle, "@") {
+		t.Fatalf("expected teammate-style agent id, got %q", teamStyle)
+	}
+
+	uuidStyle := svc.GenerateOpaqueAgentID("shadow-device-1", "8cdbd330-29f8-4b73-b4f4-cf5f0fe3d300")
+	if uuidStyle == "8cdbd330-29f8-4b73-b4f4-cf5f0fe3d300" || strings.Contains(uuidStyle, "@") {
+		t.Fatalf("expected uuid-style agent id, got %q", uuidStyle)
+	}
+	parts := strings.Split(uuidStyle, "-")
+	if len(parts) != 5 {
+		t.Fatalf("uuid-style agent id malformed: %q", uuidStyle)
+	}
+}
+
+func TestSyntheticProcessMetrics_MonotonicPerDevice(t *testing.T) {
+	syntheticProcessStore.reset()
+
+	first := syntheticProcessMetrics("shadow-device-uptime", time.Date(2026, 4, 2, 10, 0, 0, 0, time.UTC))
+	second := syntheticProcessMetrics("shadow-device-uptime", time.Date(2026, 4, 2, 10, 0, 5, 0, time.UTC))
+	third := syntheticProcessMetrics("shadow-device-uptime", time.Date(2026, 4, 2, 10, 0, 4, 0, time.UTC))
+
+	parse := func(raw string) map[string]any {
+		var out map[string]any
+		if err := json.Unmarshal([]byte(raw), &out); err != nil {
+			t.Fatalf("invalid process json: %v", err)
+		}
+		return out
+	}
+
+	p1 := parse(first)
+	p2 := parse(second)
+	p3 := parse(third)
+
+	if p2["uptime"].(float64) <= p1["uptime"].(float64) {
+		t.Fatalf("uptime must increase: p1=%v p2=%v", p1["uptime"], p2["uptime"])
+	}
+	if p3["uptime"].(float64) <= p2["uptime"].(float64) {
+		t.Fatalf("uptime must keep increasing even if timestamps arrive out of order: p2=%v p3=%v", p2["uptime"], p3["uptime"])
+	}
+
+	cpu1 := p1["cpuUsage"].(map[string]any)
+	cpu2 := p2["cpuUsage"].(map[string]any)
+	cpu3 := p3["cpuUsage"].(map[string]any)
+	if cpu2["user"].(float64) <= cpu1["user"].(float64) || cpu3["user"].(float64) <= cpu2["user"].(float64) {
+		t.Fatalf("cpu user counter must be monotonic: %+v %+v %+v", cpu1, cpu2, cpu3)
+	}
+	if cpu2["system"].(float64) <= cpu1["system"].(float64) || cpu3["system"].(float64) <= cpu2["system"].(float64) {
+		t.Fatalf("cpu system counter must be monotonic: %+v %+v %+v", cpu1, cpu2, cpu3)
 	}
 }
