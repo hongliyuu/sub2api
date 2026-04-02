@@ -30,6 +30,7 @@ type AdminHandlers struct {
 	TLSFingerprintProfile *admin.TLSFingerprintProfileHandler
 	APIKey                *admin.AdminAPIKeyHandler
 	ScheduledTest         *admin.ScheduledTestHandler
+	Referral              *admin.ReferralHandler
 }
 
 // Handlers contains all HTTP handlers
@@ -48,6 +49,7 @@ type Handlers struct {
 	SoraClient    *SoraClientHandler
 	Setting       *SettingHandler
 	Totp          *TotpHandler
+	Referral      *ReferralHandler
 }
 
 // BuildInfo contains build-time information

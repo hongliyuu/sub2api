@@ -789,6 +789,56 @@
               </div>
               <Toggle v-model="form.invitation_code_enabled" />
             </div>
+            <!-- Referral (裂变推广) -->
+            <div
+              class="flex items-center justify-between border-t border-gray-100 pt-4 dark:border-dark-700"
+            >
+              <div>
+                <label class="font-medium text-gray-900 dark:text-white">{{
+                  t('admin.settings.registration.referralEnabled', 'Referral System')
+                }}</label>
+                <p class="text-sm text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.registration.referralEnabledHint', 'Enable referral system to reward users who invite new registrations') }}
+                </p>
+              </div>
+              <Toggle v-model="form.referral_enabled" />
+            </div>
+            <!-- Referral Rewards (only when enabled) -->
+            <div
+              v-if="form.referral_enabled"
+              class="space-y-3 border-t border-gray-100 pt-4 dark:border-dark-700"
+            >
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">{{
+                  t('admin.settings.registration.referralInviterReward', 'Inviter Reward')
+                }}</label>
+                <input
+                  v-model.number="form.referral_inviter_reward"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  class="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-dark-600 dark:bg-dark-700 dark:text-white"
+                />
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.registration.referralInviterRewardHint', 'Balance reward for the inviter when a referred user registers') }}
+                </p>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300">{{
+                  t('admin.settings.registration.referralInviteeReward', 'Invitee Reward')
+                }}</label>
+                <input
+                  v-model.number="form.referral_invitee_reward"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  class="mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-dark-600 dark:bg-dark-700 dark:text-white"
+                />
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.settings.registration.referralInviteeRewardHint', 'Balance reward for the new user who registers via referral') }}
+                </p>
+              </div>
+            </div>
             <!-- Password Reset - Only show when email verification is enabled -->
             <div
               v-if="form.email_verify_enabled"
@@ -2115,6 +2165,9 @@ const form = reactive<SettingsForm>({
   registration_email_suffix_whitelist: [],
   promo_code_enabled: true,
   invitation_code_enabled: false,
+  referral_enabled: false,
+  referral_inviter_reward: 0,
+  referral_invitee_reward: 0,
   password_reset_enabled: false,
   totp_enabled: false,
   totp_encryption_key_configured: false,
@@ -2440,6 +2493,9 @@ async function saveSettings() {
       ),
       promo_code_enabled: form.promo_code_enabled,
       invitation_code_enabled: form.invitation_code_enabled,
+      referral_enabled: form.referral_enabled,
+      referral_inviter_reward: form.referral_inviter_reward,
+      referral_invitee_reward: form.referral_invitee_reward,
       password_reset_enabled: form.password_reset_enabled,
       totp_enabled: form.totp_enabled,
       default_balance: form.default_balance,

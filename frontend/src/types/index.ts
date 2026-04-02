@@ -97,6 +97,7 @@ export interface PublicSettings {
   promo_code_enabled: boolean
   password_reset_enabled: boolean
   invitation_code_enabled: boolean
+  referral_enabled: boolean
   turnstile_enabled: boolean
   turnstile_site_key: string
   site_name: string

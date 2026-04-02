@@ -31,6 +31,9 @@ type SystemSettings struct {
 	PasswordResetEnabled             bool     `json:"password_reset_enabled"`
 	FrontendURL                      string   `json:"frontend_url"`
 	InvitationCodeEnabled            bool     `json:"invitation_code_enabled"`
+	ReferralEnabled                  bool     `json:"referral_enabled"`
+	ReferralInviterReward            float64  `json:"referral_inviter_reward"`
+	ReferralInviteeReward            float64  `json:"referral_invitee_reward"`
 	TotpEnabled                      bool     `json:"totp_enabled"`                   // TOTP 双因素认证
 	TotpEncryptionKeyConfigured      bool     `json:"totp_encryption_key_configured"` // TOTP 加密密钥是否已配置
 
@@ -112,6 +115,7 @@ type PublicSettings struct {
 	PromoCodeEnabled                 bool             `json:"promo_code_enabled"`
 	PasswordResetEnabled             bool             `json:"password_reset_enabled"`
 	InvitationCodeEnabled            bool             `json:"invitation_code_enabled"`
+	ReferralEnabled                  bool             `json:"referral_enabled"`
 	TotpEnabled                      bool             `json:"totp_enabled"` // TOTP 双因素认证
 	TurnstileEnabled                 bool             `json:"turnstile_enabled"`
 	TurnstileSiteKey                 string           `json:"turnstile_site_key"`

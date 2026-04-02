@@ -83,6 +83,11 @@ const (
 	SettingKeyFrontendURL                      = "frontend_url"                        // 前端基础URL，用于生成邮件中的重置密码链接
 	SettingKeyInvitationCodeEnabled            = "invitation_code_enabled"             // 是否启用邀请码注册
 
+	// 裂变推广设置
+	SettingKeyReferralEnabled       = "referral_enabled"        // 是否启用裂变推广
+	SettingKeyReferralInviterReward = "referral_inviter_reward"  // 邀请人奖励金额
+	SettingKeyReferralInviteeReward = "referral_invitee_reward"  // 被邀请人奖励金额
+
 	// 邮件服务设置
 	SettingKeySMTPHost     = "smtp_host"      // SMTP服务器地址
 	SettingKeySMTPPort     = "smtp_port"      // SMTP端口

@@ -33,6 +33,7 @@ func ProvideAdminHandlers(
 	tlsFingerprintProfileHandler *admin.TLSFingerprintProfileHandler,
 	apiKeyHandler *admin.AdminAPIKeyHandler,
 	scheduledTestHandler *admin.ScheduledTestHandler,
+	referralHandler *admin.ReferralHandler,
 ) *AdminHandlers {
 	return &AdminHandlers{
 		Dashboard:             dashboardHandler,
@@ -59,6 +60,7 @@ func ProvideAdminHandlers(
 		TLSFingerprintProfile: tlsFingerprintProfileHandler,
 		APIKey:                apiKeyHandler,
 		ScheduledTest:         scheduledTestHandler,
+		Referral:              referralHandler,
 	}
 }
 
@@ -88,6 +90,7 @@ func ProvideHandlers(
 	soraClientHandler *SoraClientHandler,
 	settingHandler *SettingHandler,
 	totpHandler *TotpHandler,
+	referralHandler *ReferralHandler,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
 ) *Handlers {
@@ -106,6 +109,7 @@ func ProvideHandlers(
 		SoraClient:    soraClientHandler,
 		Setting:       settingHandler,
 		Totp:          totpHandler,
+		Referral:      referralHandler,
 	}
 }
 
@@ -124,6 +128,7 @@ var ProviderSet = wire.NewSet(
 	NewSoraGatewayHandler,
 	NewTotpHandler,
 	ProvideSettingHandler,
+	NewReferralHandler,
 
 	// Admin handlers
 	admin.NewDashboardHandler,
@@ -150,6 +155,7 @@ var ProviderSet = wire.NewSet(
 	admin.NewTLSFingerprintProfileHandler,
 	admin.NewAdminAPIKeyHandler,
 	admin.NewScheduledTestHandler,
+	admin.NewReferralHandler,
 
 	// AdminHandlers and Handlers constructors
 	ProvideAdminHandlers,
