@@ -85,8 +85,8 @@ const (
 
 	// 裂变推广设置
 	SettingKeyReferralEnabled       = "referral_enabled"        // 是否启用裂变推广
-	SettingKeyReferralInviterReward = "referral_inviter_reward"  // 邀请人奖励金额
-	SettingKeyReferralInviteeReward = "referral_invitee_reward"  // 被邀请人奖励金额
+	SettingKeyReferralInviterReward = "referral_inviter_reward" // 邀请人奖励金额
+	SettingKeyReferralInviteeReward = "referral_invitee_reward" // 被邀请人奖励金额
 
 	// 邮件服务设置
 	SettingKeySMTPHost     = "smtp_host"      // SMTP服务器地址

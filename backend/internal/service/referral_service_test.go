@@ -150,6 +150,9 @@ func (r *stubUserRepoForReferral) UpdateTotpSecret(context.Context, int64, *stri
 }
 func (r *stubUserRepoForReferral) EnableTotp(context.Context, int64) error  { return nil }
 func (r *stubUserRepoForReferral) DisableTotp(context.Context, int64) error { return nil }
+func (r *stubUserRepoForReferral) RemoveGroupFromUserAllowedGroups(context.Context, int64, int64) error {
+	return nil
+}
 
 // =====================
 // 辅助函数测试

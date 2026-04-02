@@ -140,7 +140,7 @@ func TestMarshalAccountForCache_DoesNotMutateOriginal(t *testing.T) {
 	}
 
 	// Original Groups must still be populated.
-	if account.Groups == nil || len(account.Groups) == 0 {
+	if len(account.Groups) == 0 {
 		t.Error("original Groups slice was mutated")
 	}
 }
