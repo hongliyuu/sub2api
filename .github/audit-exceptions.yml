@@ -14,3 +14,17 @@ exceptions:
     mitigation: "Load only on export; restrict export permissions and data scope"
     expires_on: "2026-04-05"
     owner: "security@your-domain"
+  - package: lodash-es
+    advisory: "GHSA-r5fr-rjxr-66jc"
+    severity: high
+    reason: "Template injection via _.template; not used with user-controlled input"
+    mitigation: "No user-controlled template strings passed to lodash"
+    expires_on: "2026-07-01"
+    owner: "security@your-domain"
+  - package: lodash
+    advisory: "GHSA-r5fr-rjxr-66jc"
+    severity: high
+    reason: "Template injection via _.template; not used with user-controlled input"
+    mitigation: "No user-controlled template strings passed to lodash"
+    expires_on: "2026-07-01"
+    owner: "security@your-domain"
