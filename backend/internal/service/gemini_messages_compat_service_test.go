@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -24,6 +25,11 @@ type geminiCompatHTTPUpstreamStub struct {
 	lastReq  *http.Request
 }
 
+type rectifierSettingRepoStub struct {
+	value string
+	err   error
+}
+
 func (s *geminiCompatHTTPUpstreamStub) Do(req *http.Request, proxyURL string, accountID int64, accountConcurrency int) (*http.Response, error) {
 	s.calls++
 	s.lastReq = req
@@ -39,6 +45,72 @@ func (s *geminiCompatHTTPUpstreamStub) Do(req *http.Request, proxyURL string, ac
 
 func (s *geminiCompatHTTPUpstreamStub) DoWithTLS(req *http.Request, proxyURL string, accountID int64, accountConcurrency int, profile *tlsfingerprint.Profile) (*http.Response, error) {
 	return s.Do(req, proxyURL, accountID, accountConcurrency)
+}
+
+func (s *rectifierSettingRepoStub) Get(ctx context.Context, key string) (*Setting, error) {
+	panic("unexpected Get call")
+}
+
+func (s *rectifierSettingRepoStub) GetValue(ctx context.Context, key string) (string, error) {
+	if s.err != nil {
+		return "", s.err
+	}
+	return s.value, nil
+}
+
+func (s *rectifierSettingRepoStub) Set(ctx context.Context, key, value string) error {
+	panic("unexpected Set call")
+}
+
+func (s *rectifierSettingRepoStub) GetMultiple(ctx context.Context, keys []string) (map[string]string, error) {
+	panic("unexpected GetMultiple call")
+}
+
+func (s *rectifierSettingRepoStub) SetMultiple(ctx context.Context, settings map[string]string) error {
+	panic("unexpected SetMultiple call")
+}
+
+func (s *rectifierSettingRepoStub) GetAll(ctx context.Context) (map[string]string, error) {
+	panic("unexpected GetAll call")
+}
+
+func (s *rectifierSettingRepoStub) Delete(ctx context.Context, key string) error {
+	panic("unexpected Delete call")
+}
+
+func newGeminiNativeTestService(httpUpstream HTTPUpstream, enabled bool) *GeminiMessagesCompatService {
+	repo := &rectifierSettingRepoStub{err: ErrSettingNotFound}
+	if !enabled {
+		repo.value = `{"enabled":false,"thinking_signature_enabled":false,"thinking_budget_enabled":true}`
+		repo.err = nil
+	}
+	return &GeminiMessagesCompatService{
+		httpUpstream:   httpUpstream,
+		settingService: NewSettingService(repo, &config.Config{}),
+		cfg:            &config.Config{},
+	}
+}
+
+func newGeminiNativeTestAccount() *Account {
+	return &Account{
+		ID:          10,
+		Name:        "AI Studio",
+		Platform:    PlatformGemini,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key": "test-key",
+		},
+	}
+}
+
+func nativeGeminiBodyWithThoughtSignature() []byte {
+	return []byte(`{"contents":[{"role":"user","parts":[{"text":"hello"}]},{"role":"model","parts":[{"text":"thinking","thought":true,"thoughtSignature":"sig_bad_1"},{"functionCall":{"name":"tool","args":{"x":1}},"thoughtSignature":"sig_bad_2"}]}]}`)
+}
+
+func nativeGeminiBodyWithoutThoughtSignature() []byte {
+	return []byte(`{"contents":[{"role":"user","parts":[{"text":"hello"}]},{"role":"model","parts":[{"text":"thinking","thought":true}]}]}`)
 }
 
 // TestConvertClaudeToolsToGeminiTools_CustomType 测试custom类型工具转换
@@ -230,6 +302,202 @@ func TestGeminiMessagesCompatServiceForward_PreservesRequestedModelAndMappedUpst
 	require.Equal(t, 1, httpStub.calls)
 	require.NotNil(t, httpStub.lastReq)
 	require.Contains(t, httpStub.lastReq.URL.String(), "/models/claude-sonnet-4-20250514:")
+}
+
+func TestGeminiMessagesCompatService_ForwardNative_RetriesCorruptedThoughtSignature(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	body := nativeGeminiBodyWithThoughtSignature()
+	writer := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(writer)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini-3-flash-preview:generateContent", bytes.NewReader(body))
+
+	upstream := &queuedHTTPUpstreamStub{
+		responses: []*http.Response{
+			{
+				StatusCode: http.StatusBadRequest,
+				Header: http.Header{
+					"Content-Type": []string{"application/json"},
+					"X-Request-Id": []string{"req-native-sig-1"},
+				},
+				Body: io.NopCloser(strings.NewReader(`{"error":{"code":400,"message":"Corrupted thought signature.","status":"INVALID_ARGUMENT"}}`)),
+			},
+			{
+				StatusCode: http.StatusOK,
+				Header: http.Header{
+					"Content-Type": []string{"application/json"},
+					"X-Request-Id": []string{"req-native-sig-2"},
+				},
+				Body: io.NopCloser(strings.NewReader(`{"candidates":[{"content":{"parts":[{"text":"ok"}]}}],"usageMetadata":{"promptTokenCount":2,"candidatesTokenCount":1}}`)),
+			},
+		},
+	}
+	svc := newGeminiNativeTestService(upstream, true)
+
+	result, err := svc.ForwardNative(context.Background(), c, newGeminiNativeTestAccount(), "gemini-3-flash-preview", "generateContent", false, body)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Len(t, upstream.requestBodies, 2)
+	require.Contains(t, string(upstream.requestBodies[0]), `"thoughtSignature":"sig_bad_1"`)
+	require.Contains(t, string(upstream.requestBodies[0]), `"thoughtSignature":"sig_bad_2"`)
+	require.Contains(t, string(upstream.requestBodies[1]), `"thoughtSignature":"skip_thought_signature_validator"`)
+	require.NotContains(t, string(upstream.requestBodies[1]), `"thoughtSignature":"sig_bad_1"`)
+	require.NotContains(t, string(upstream.requestBodies[1]), `"thoughtSignature":"sig_bad_2"`)
+
+	rawOpsBody, ok := c.Get(OpsUpstreamRequestBodyKey)
+	require.True(t, ok)
+	require.Contains(t, rawOpsBody.(string), `"thoughtSignature":"skip_thought_signature_validator"`)
+
+	raw, ok := c.Get(OpsUpstreamErrorsKey)
+	require.True(t, ok)
+	events, ok := raw.([]*OpsUpstreamErrorEvent)
+	require.True(t, ok)
+	require.NotEmpty(t, events)
+	require.Equal(t, "signature_error", events[0].Kind)
+}
+
+func TestGeminiMessagesCompatService_ForwardNative_DoesNotRetryWhenRectifierDisabled(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	body := nativeGeminiBodyWithThoughtSignature()
+	writer := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(writer)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini-3-flash-preview:generateContent", bytes.NewReader(body))
+
+	upstream := &queuedHTTPUpstreamStub{
+		responses: []*http.Response{
+			{
+				StatusCode: http.StatusBadRequest,
+				Header: http.Header{
+					"Content-Type": []string{"application/json"},
+					"X-Request-Id": []string{"req-native-sig-disabled"},
+				},
+				Body: io.NopCloser(strings.NewReader(`{"error":{"code":400,"message":"Corrupted thought signature.","status":"INVALID_ARGUMENT"}}`)),
+			},
+		},
+	}
+	svc := newGeminiNativeTestService(upstream, false)
+
+	result, err := svc.ForwardNative(context.Background(), c, newGeminiNativeTestAccount(), "gemini-3-flash-preview", "generateContent", false, body)
+	require.Error(t, err)
+	require.Nil(t, result)
+	require.Len(t, upstream.requestBodies, 1)
+}
+
+func TestGeminiMessagesCompatService_ForwardNative_DoesNotRetryWithoutThoughtSignature(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	body := nativeGeminiBodyWithoutThoughtSignature()
+	writer := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(writer)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini-3-flash-preview:generateContent", bytes.NewReader(body))
+
+	upstream := &queuedHTTPUpstreamStub{
+		responses: []*http.Response{
+			{
+				StatusCode: http.StatusBadRequest,
+				Header: http.Header{
+					"Content-Type": []string{"application/json"},
+					"X-Request-Id": []string{"req-native-sig-none"},
+				},
+				Body: io.NopCloser(strings.NewReader(`{"error":{"code":400,"message":"Corrupted thought signature.","status":"INVALID_ARGUMENT"}}`)),
+			},
+		},
+	}
+	svc := newGeminiNativeTestService(upstream, true)
+
+	result, err := svc.ForwardNative(context.Background(), c, newGeminiNativeTestAccount(), "gemini-3-flash-preview", "generateContent", false, body)
+	require.Error(t, err)
+	require.Nil(t, result)
+	require.Len(t, upstream.requestBodies, 1)
+}
+
+func TestGeminiMessagesCompatService_ForwardNative_RecordsSignatureRetryWhenRetryStillFails(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	body := nativeGeminiBodyWithThoughtSignature()
+	writer := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(writer)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini-3-flash-preview:generateContent", bytes.NewReader(body))
+
+	upstream := &queuedHTTPUpstreamStub{
+		responses: []*http.Response{
+			{
+				StatusCode: http.StatusBadRequest,
+				Header: http.Header{
+					"Content-Type": []string{"application/json"},
+					"X-Request-Id": []string{"req-native-sig-retry-1"},
+				},
+				Body: io.NopCloser(strings.NewReader(`{"error":{"code":400,"message":"Corrupted thought signature.","status":"INVALID_ARGUMENT"}}`)),
+			},
+			{
+				StatusCode: http.StatusBadRequest,
+				Header: http.Header{
+					"Content-Type": []string{"application/json"},
+					"X-Request-Id": []string{"req-native-sig-retry-2"},
+				},
+				Body: io.NopCloser(strings.NewReader(`{"error":{"code":400,"message":"Corrupted thought signature.","status":"INVALID_ARGUMENT"}}`)),
+			},
+		},
+	}
+	svc := newGeminiNativeTestService(upstream, true)
+
+	result, err := svc.ForwardNative(context.Background(), c, newGeminiNativeTestAccount(), "gemini-3-flash-preview", "generateContent", false, body)
+	require.Error(t, err)
+	require.Nil(t, result)
+	require.Len(t, upstream.requestBodies, 2)
+
+	raw, ok := c.Get(OpsUpstreamErrorsKey)
+	require.True(t, ok)
+	events, ok := raw.([]*OpsUpstreamErrorEvent)
+	require.True(t, ok)
+	require.Len(t, events, 3)
+	require.Equal(t, "signature_error", events[0].Kind)
+	require.Equal(t, "signature_retry", events[1].Kind)
+	require.Equal(t, "http_error", events[2].Kind)
+}
+
+func TestGeminiMessagesCompatService_ForwardNative_CountTokensFallsBackAfterSignatureRetryFailure(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	body := nativeGeminiBodyWithThoughtSignature()
+	writer := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(writer)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1beta/models/gemini-3-flash-preview:countTokens", bytes.NewReader(body))
+
+	upstream := &queuedHTTPUpstreamStub{
+		responses: []*http.Response{
+			{
+				StatusCode: http.StatusBadRequest,
+				Header: http.Header{
+					"Content-Type": []string{"application/json"},
+					"X-Request-Id": []string{"req-native-counttokens-1"},
+				},
+				Body: io.NopCloser(strings.NewReader(`{"error":{"code":400,"message":"Corrupted thought signature.","status":"INVALID_ARGUMENT"}}`)),
+			},
+			{
+				StatusCode: http.StatusBadRequest,
+				Header: http.Header{
+					"Content-Type": []string{"application/json"},
+					"X-Request-Id": []string{"req-native-counttokens-2"},
+				},
+				Body: io.NopCloser(strings.NewReader(`{"error":{"code":400,"message":"Corrupted thought signature.","status":"INVALID_ARGUMENT"}}`)),
+			},
+		},
+	}
+	svc := newGeminiNativeTestService(upstream, true)
+
+	result, err := svc.ForwardNative(context.Background(), c, newGeminiNativeTestAccount(), "gemini-3-flash-preview", "countTokens", false, body)
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, http.StatusOK, writer.Code)
+
+	var payload map[string]any
+	require.NoError(t, json.Unmarshal(writer.Body.Bytes(), &payload))
+	require.Equal(t, float64(estimateGeminiCountTokens(body)), payload["totalTokens"])
+
+	raw, ok := c.Get(OpsUpstreamErrorsKey)
+	require.True(t, ok)
+	events, ok := raw.([]*OpsUpstreamErrorEvent)
+	require.True(t, ok)
+	require.Len(t, events, 2)
+	require.Equal(t, "signature_error", events[0].Kind)
+	require.Equal(t, "signature_retry", events[1].Kind)
 }
 
 func TestConvertClaudeMessagesToGeminiGenerateContent_AddsThoughtSignatureForToolUse(t *testing.T) {
