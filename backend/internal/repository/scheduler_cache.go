@@ -261,10 +261,11 @@ func ptrTime(t time.Time) *time.Time {
 }
 
 // schedulerCacheCredentialDenyList lists credential keys that are excluded from
-// the scheduler cache to reduce Redis bandwidth. The gateway request path only
-// needs access_token / api_key; id_token and refresh_token are consumed
-// exclusively by background token-refresh services that read from the database.
-var schedulerCacheCredentialDenyList = []string{"id_token", "refresh_token"}
+// the scheduler cache to reduce Redis bandwidth. Only id_token is stripped
+// because it is large and consumed exclusively by background token-refresh
+// services. refresh_token is kept because the Sora SDK client uses it as a
+// fallback to recover access_token on the gateway hot path.
+var schedulerCacheCredentialDenyList = []string{"id_token"}
 
 // marshalAccountForCache serialises an Account for the scheduler cache while
 // stripping large fields that are not needed for scheduling or request

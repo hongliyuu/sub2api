@@ -55,8 +55,8 @@ func TestMarshalAccountForCache_StripsHeavyTokens(t *testing.T) {
 		}
 	}
 
-	// Verify preserved fields are present.
-	for _, kept := range []string{"access_token", "api_key", "other_field"} {
+	// Verify preserved fields are present (refresh_token is kept for Sora recovery).
+	for _, kept := range []string{"access_token", "api_key", "refresh_token", "other_field"} {
 		if !containsKey(s, kept) {
 			t.Errorf("expected %q to be preserved in cache payload", kept)
 		}
