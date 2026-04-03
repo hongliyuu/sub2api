@@ -287,6 +287,21 @@ const FolderIcon = {
     )
 }
 
+const ChannelIcon = {
+  render: () =>
+    h(
+      'svg',
+      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
+      [
+        h('path', {
+          'stroke-linecap': 'round',
+          'stroke-linejoin': 'round',
+          d: 'M6.429 9.75L2.25 12l4.179 2.25m0-4.5l5.571 3 5.571-3m-11.142 0L2.25 7.5 12 2.25l9.75 5.25-4.179 2.25m0 0l4.179 2.25L12 17.25 2.25 12m15.321-2.25l4.179 2.25L12 17.25l-9.75-5.25'
+        })
+      ]
+    )
+}
+
 const CreditCardIcon = {
   render: () =>
     h(
@@ -352,21 +367,6 @@ const ServerIcon = {
           'stroke-linecap': 'round',
           'stroke-linejoin': 'round',
           d: 'M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z'
-        })
-      ]
-    )
-}
-
-const ChannelIcon = {
-  render: () =>
-    h(
-      'svg',
-      { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' },
-      [
-        h('path', {
-          'stroke-linecap': 'round',
-          'stroke-linejoin': 'round',
-          d: 'M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z'
         })
       ]
     )
@@ -583,7 +583,7 @@ const adminNavItems = computed((): NavItem[] => {
       : []),
     { path: '/admin/users', label: t('nav.users'), icon: UsersIcon, hideInSimpleMode: true },
     { path: '/admin/groups', label: t('nav.groups'), icon: FolderIcon, hideInSimpleMode: true },
-    { path: '/admin/channels', label: t('nav.channels'), icon: ChannelIcon, hideInSimpleMode: true },
+    { path: '/admin/channels', label: t('nav.channels', '渠道管理'), icon: ChannelIcon, hideInSimpleMode: true },
     { path: '/admin/subscriptions', label: t('nav.subscriptions'), icon: CreditCardIcon, hideInSimpleMode: true },
     { path: '/admin/accounts', label: t('nav.accounts'), icon: GlobeIcon },
     { path: '/admin/announcements', label: t('nav.announcements'), icon: BellIcon },
