@@ -1,17 +1,27 @@
 // Package claude provides constants and helpers for Claude API integration.
 package claude
 
+import (
+	"context"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"sync"
+	"time"
+)
+
 // Claude Code 客户端相关常量
 
 // Beta header 常量
 const (
-	BetaOAuth                    = "oauth-2025-04-20"
-	BetaClaudeCode               = "claude-code-20250219"
-	BetaInterleavedThinking      = "interleaved-thinking-2025-05-14"
-	BetaFineGrainedToolStreaming = "fine-grained-tool-streaming-2025-05-14"
-	BetaTokenCounting            = "token-counting-2024-11-01"
-	BetaContext1M                = "context-1m-2025-08-07"
-	BetaFastMode                 = "fast-mode-2026-02-01"
+	BetaOAuth               = "oauth-2025-04-20"
+	BetaClaudeCode          = "claude-code-20250219"
+	BetaInterleavedThinking = "interleaved-thinking-2025-05-14"
+	BetaTokenCounting       = "token-counting-2024-11-01"
+	BetaContext1M           = "context-1m-2025-08-07"
+	BetaFastMode            = "fast-mode-2026-02-01"
 )
 
 // DroppedBetas 是转发时需要从 anthropic-beta header 中移除的 beta token 列表。
@@ -19,7 +29,7 @@ const (
 var DroppedBetas = []string{}
 
 // DefaultBetaHeader Claude Code 客户端默认的 anthropic-beta header
-const DefaultBetaHeader = BetaClaudeCode + "," + BetaOAuth + "," + BetaInterleavedThinking + "," + BetaFineGrainedToolStreaming
+const DefaultBetaHeader = BetaClaudeCode + "," + BetaOAuth + "," + BetaInterleavedThinking
 
 // MessageBetaHeaderNoTools /v1/messages 在无工具时的 beta header
 //
@@ -39,26 +49,97 @@ const CountTokensBetaHeader = BetaClaudeCode + "," + BetaOAuth + "," + BetaInter
 const HaikuBetaHeader = BetaOAuth + "," + BetaInterleavedThinking
 
 // APIKeyBetaHeader API-key 账号建议使用的 anthropic-beta header（不包含 oauth）
-const APIKeyBetaHeader = BetaClaudeCode + "," + BetaInterleavedThinking + "," + BetaFineGrainedToolStreaming
+const APIKeyBetaHeader = BetaClaudeCode + "," + BetaInterleavedThinking
 
 // APIKeyHaikuBetaHeader Haiku 模型在 API-key 账号下使用的 anthropic-beta header（不包含 oauth / claude-code）
 const APIKeyHaikuBetaHeader = BetaInterleavedThinking
 
-// DefaultHeaders 是 Claude Code 客户端默认请求头。
-var DefaultHeaders = map[string]string{
-	// Keep these in sync with recent Claude CLI traffic to reduce the chance
-	// that Claude Code-scoped OAuth credentials are rejected as "non-CLI" usage.
-	"User-Agent":                                "claude-cli/2.1.22 (external, cli)",
-	"X-Stainless-Lang":                          "js",
-	"X-Stainless-Package-Version":               "0.70.0",
-	"X-Stainless-OS":                            "Linux",
-	"X-Stainless-Arch":                          "arm64",
-	"X-Stainless-Runtime":                       "node",
-	"X-Stainless-Runtime-Version":               "v24.13.0",
-	"X-Stainless-Retry-Count":                   "0",
-	"X-Stainless-Timeout":                       "600",
-	"X-App":                                     "cli",
-	"Anthropic-Dangerous-Direct-Browser-Access": "true",
+var (
+	defaultHeadersOnce sync.Once
+	// DefaultHeaders 是 Claude Code 客户端默认请求头。
+	DefaultHeaders map[string]string
+)
+
+var (
+	cliVersionPattern = regexp.MustCompile(`VERSION:"([0-9]+\.[0-9]+\.[0-9]+)"`)
+	sdkVersionPattern = regexp.MustCompile(`var pt="([0-9]+\.[0-9]+\.[0-9]+)"`)
+)
+
+func init() {
+	DefaultHeaders = loadDefaultHeaders()
+}
+
+func loadDefaultHeaders() map[string]string {
+	defaultHeadersOnce.Do(func() {
+		DefaultHeaders = map[string]string{
+			"User-Agent":                                "claude-cli/2.1.88 (external, cli)",
+			"X-Stainless-Lang":                          "js",
+			"X-Stainless-Package-Version":               "0.74.0",
+			"X-Stainless-OS":                            "MacOS",
+			"X-Stainless-Arch":                          "arm64",
+			"X-Stainless-Runtime":                       "node",
+			"X-Stainless-Runtime-Version":               detectNodeRuntimeVersion("v22.20.0"),
+			"X-Stainless-Retry-Count":                   "0",
+			"X-Stainless-Timeout":                       "600",
+			"X-App":                                     "cli",
+			"Anthropic-Dangerous-Direct-Browser-Access": "true",
+		}
+		if cliVersion := extractRecoveredCLIVersion(); cliVersion != "" {
+			DefaultHeaders["User-Agent"] = "claude-cli/" + cliVersion + " (external, cli)"
+		}
+		if sdkVersion := extractRecoveredSDKVersion(); sdkVersion != "" {
+			DefaultHeaders["X-Stainless-Package-Version"] = sdkVersion
+		}
+	})
+	return DefaultHeaders
+}
+
+func extractRecoveredCLIVersion() string {
+	for _, candidate := range artifactCandidates("package/cli.js") {
+		data, err := os.ReadFile(candidate)
+		if err != nil {
+			continue
+		}
+		if m := cliVersionPattern.FindStringSubmatch(string(data)); len(m) == 2 {
+			return m[1]
+		}
+	}
+	return ""
+}
+
+func extractRecoveredSDKVersion() string {
+	for _, candidate := range artifactCandidates("package/cli.js") {
+		data, err := os.ReadFile(candidate)
+		if err != nil {
+			continue
+		}
+		if m := sdkVersionPattern.FindStringSubmatch(string(data)); len(m) == 2 {
+			return m[1]
+		}
+	}
+	return ""
+}
+
+func artifactCandidates(rel string) []string {
+	return []string{
+		filepath.Join("..", rel),
+		filepath.Join("..", "..", rel),
+		filepath.Join(rel),
+	}
+}
+
+func detectNodeRuntimeVersion(fallback string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "node", "--version").Output()
+	if err != nil {
+		return fallback
+	}
+	v := strings.TrimSpace(string(out))
+	if v == "" {
+		return fallback
+	}
+	return v
 }
 
 // Model 表示一个 Claude 模型

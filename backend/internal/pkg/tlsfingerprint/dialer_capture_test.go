@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -365,4 +366,32 @@ func TestBuildClientHelloSpecNewFields(t *testing.T) {
 	}
 
 	t.Log("TestBuildClientHelloSpecNewFields passed")
+}
+
+func TestNewDialersEnableSessionCacheAndGrease(t *testing.T) {
+	dialer := NewDialer(&Profile{EnableGREASE: true}, nil)
+	if dialer.sessionCache == nil {
+		t.Fatalf("expected direct dialer session cache")
+	}
+
+	httpDialer := NewHTTPProxyDialer(&Profile{EnableGREASE: true}, &url.URL{Scheme: "http", Host: "127.0.0.1:8080"})
+	if httpDialer.sessionCache == nil {
+		t.Fatalf("expected HTTP proxy dialer session cache")
+	}
+
+	socksDialer := NewSOCKS5ProxyDialer(&Profile{EnableGREASE: true}, &url.URL{Scheme: "socks5", Host: "127.0.0.1:1080"})
+	if socksDialer.sessionCache == nil {
+		t.Fatalf("expected SOCKS5 proxy dialer session cache")
+	}
+
+	spec := buildClientHelloSpecFromProfile(&Profile{EnableGREASE: true})
+	greaseCount := 0
+	for _, ext := range spec.Extensions {
+		if _, ok := ext.(*utls.UtlsGREASEExtension); ok {
+			greaseCount++
+		}
+	}
+	if greaseCount < 2 {
+		t.Fatalf("expected GREASE extensions to be inserted, got %d", greaseCount)
+	}
 }

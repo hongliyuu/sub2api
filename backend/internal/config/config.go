@@ -455,6 +455,10 @@ type GatewayConfig struct {
 
 	// TLSFingerprint: TLS指纹伪装配置
 	TLSFingerprint TLSFingerprintConfig `mapstructure:"tls_fingerprint"`
+	// MessagesNodeSidecar: /v1/messages 转发可选 Node sidecar（用于更贴近 Node 网络栈）
+	MessagesNodeSidecar GatewayMessagesNodeSidecarConfig `mapstructure:"messages_node_sidecar"`
+	// SidecarDaemon: 长驻 Node sidecar daemon 配置
+	SidecarDaemon GatewaySidecarDaemonConfig `mapstructure:"sidecar_daemon"`
 
 	// UsageRecord: 使用量记录异步队列配置（有界队列 + 固定 worker）
 	UsageRecord GatewayUsageRecordConfig `mapstructure:"usage_record"`
@@ -489,6 +493,27 @@ type UserMessageQueueConfig struct {
 	MaxDelayMs int `mapstructure:"max_delay_ms"`
 	// CleanupIntervalSeconds: 孤儿锁清理间隔（秒），0 表示禁用
 	CleanupIntervalSeconds int `mapstructure:"cleanup_interval_seconds"`
+}
+
+// GatewayMessagesNodeSidecarConfig /v1/messages Node sidecar 配置
+type GatewayMessagesNodeSidecarConfig struct {
+	// Enabled: 是否启用 /v1/messages Node sidecar 转发
+	Enabled bool `mapstructure:"enabled"`
+	// Script: sidecar 脚本路径（为空时自动探测 tools/telemetry-sidecar.mjs）
+	Script string `mapstructure:"script"`
+	// TimeoutSeconds: sidecar 单次请求超时（秒）
+	TimeoutSeconds int `mapstructure:"timeout_seconds"`
+	// AllowGoFallback: sidecar 失败时是否回退到 Go 直连（默认 true）
+	AllowGoFallback bool `mapstructure:"allow_go_fallback"`
+	// EnableStreaming: 是否允许 stream=true 请求走 sidecar（默认 false）
+	EnableStreaming bool `mapstructure:"enable_streaming"`
+}
+
+// GatewaySidecarDaemonConfig 长驻 Node sidecar daemon 配置
+type GatewaySidecarDaemonConfig struct {
+	Enabled               bool   `mapstructure:"enabled"`
+	SocketPath            string `mapstructure:"socket_path"`
+	StartupTimeoutSeconds int    `mapstructure:"startup_timeout_seconds"`
 }
 
 // WaitTimeout 返回等待超时的 time.Duration
@@ -1463,6 +1488,14 @@ func setDefaults() {
 	viper.SetDefault("gateway.user_message_queue.cleanup_interval_seconds", 60)
 
 	viper.SetDefault("gateway.tls_fingerprint.enabled", true)
+	viper.SetDefault("gateway.messages_node_sidecar.enabled", true)
+	viper.SetDefault("gateway.messages_node_sidecar.script", "")
+	viper.SetDefault("gateway.messages_node_sidecar.timeout_seconds", 30)
+	viper.SetDefault("gateway.messages_node_sidecar.allow_go_fallback", true)
+	viper.SetDefault("gateway.messages_node_sidecar.enable_streaming", true)
+	viper.SetDefault("gateway.sidecar_daemon.enabled", true)
+	viper.SetDefault("gateway.sidecar_daemon.socket_path", "/tmp/sub2api-node-sidecar.sock")
+	viper.SetDefault("gateway.sidecar_daemon.startup_timeout_seconds", 5)
 	viper.SetDefault("concurrency.ping_interval", 10)
 
 	// Sora 直连配置
@@ -1890,6 +1923,12 @@ func (c *Config) Validate() error {
 	}
 	if c.Gateway.SoraMediaSignedURLTTLSeconds < 0 {
 		return fmt.Errorf("gateway.sora_media_signed_url_ttl_seconds must be non-negative")
+	}
+	if c.Gateway.MessagesNodeSidecar.TimeoutSeconds < 0 {
+		return fmt.Errorf("gateway.messages_node_sidecar.timeout_seconds must be non-negative")
+	}
+	if c.Gateway.SidecarDaemon.StartupTimeoutSeconds < 0 {
+		return fmt.Errorf("gateway.sidecar_daemon.startup_timeout_seconds must be non-negative")
 	}
 	if mode := strings.TrimSpace(strings.ToLower(c.Gateway.SoraStreamMode)); mode != "" {
 		switch mode {

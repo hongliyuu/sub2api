@@ -268,7 +268,6 @@ func buildClaudeMimicDebugLine(req *http.Request, body []byte, account *Account,
 		"x-api-key",
 		"content-type",
 		"accept",
-		"x-stainless-helper-method",
 	}
 
 	h := make([]string, 0, len(interesting))
@@ -359,7 +358,6 @@ var allowedHeaders = map[string]bool{
 	"x-stainless-arch":                          true,
 	"x-stainless-runtime":                       true,
 	"x-stainless-runtime-version":               true,
-	"x-stainless-helper-method":                 true,
 	"anthropic-dangerous-direct-browser-access": true,
 	"anthropic-version":                         true,
 	"x-app":                                     true,
@@ -570,6 +568,7 @@ type GatewayService struct {
 	debugClaudeMimic      atomic.Bool
 	debugGatewayBodyFile  atomic.Pointer[os.File] // non-nil when SUB2API_DEBUG_GATEWAY_BODY is set
 	tlsFPProfileService   *TLSFingerprintProfileService
+	sidecarDaemonClient   *nodeSidecarDaemonClient
 }
 
 // NewGatewayService creates a new GatewayService
@@ -629,6 +628,9 @@ func NewGatewayService(
 		modelsListCacheTTL:   modelsListTTL,
 		responseHeaderFilter: compileResponseHeaderFilter(cfg),
 		tlsFPProfileService:  tlsFPProfileService,
+	}
+	if daemonClient, err := newNodeSidecarDaemonClient(cfg); err == nil {
+		svc.sidecarDaemonClient = daemonClient
 	}
 	svc.userGroupRateResolver = newUserGroupRateResolver(
 		userGroupRateRepo,
@@ -885,21 +887,7 @@ type claudeOAuthNormalizeOptions struct {
 	stripSystemCacheControl bool
 }
 
-// sanitizeSystemText rewrites only the fixed OpenCode identity sentence (if present).
-// We intentionally avoid broad keyword replacement in system prompts to prevent
-// accidentally changing user-provided instructions.
 func sanitizeSystemText(text string) string {
-	if text == "" {
-		return text
-	}
-	// Some clients include a fixed OpenCode identity sentence. Anthropic may treat
-	// this as a non-Claude-Code fingerprint, so rewrite it to the canonical
-	// Claude Code banner before generic "OpenCode"/"opencode" replacements.
-	text = strings.ReplaceAll(
-		text,
-		"You are OpenCode, the best coding agent on the planet.",
-		strings.TrimSpace(claudeCodeSystemPrompt),
-	)
 	return text
 }
 
@@ -1058,18 +1046,6 @@ func normalizeClaudeOAuthRequestBody(body []byte, modelID string, opts claudeOAu
 		modified = true
 	}
 
-	rawModel := gjson.GetBytes(out, "model")
-	if rawModel.Exists() && rawModel.Type == gjson.String {
-		normalized := claude.NormalizeModelID(rawModel.String())
-		if normalized != rawModel.String() {
-			if next, ok := setJSONValueBytes(out, "model", normalized); ok {
-				out = next
-				modified = true
-			}
-			modelID = normalized
-		}
-	}
-
 	// 确保 tools 字段存在（即使为空数组）
 	if !gjson.GetBytes(out, "tools").Exists() {
 		if next, ok := setJSONRawBytes(out, "tools", []byte("[]")); ok {
@@ -1080,19 +1056,6 @@ func normalizeClaudeOAuthRequestBody(body []byte, modelID string, opts claudeOAu
 
 	if opts.injectMetadata && opts.metadataUserID != "" {
 		if next, changed := ensureClaudeOAuthMetadataUserID(out, opts.metadataUserID); changed {
-			out = next
-			modified = true
-		}
-	}
-
-	if gjson.GetBytes(out, "temperature").Exists() {
-		if next, ok := deleteJSONPathBytes(out, "temperature"); ok {
-			out = next
-			modified = true
-		}
-	}
-	if gjson.GetBytes(out, "tool_choice").Exists() {
-		if next, ok := deleteJSONPathBytes(out, "tool_choice"); ok {
 			out = next
 			modified = true
 		}
@@ -3871,11 +3834,6 @@ func injectClaudeCodePrompt(body []byte, system any) []byte {
 		logger.LegacyPrintf("service.gateway", "Warning: failed to build Claude Code prompt block: %v", err)
 		return body
 	}
-	// Opencode plugin applies an extra safeguard: it not only prepends the Claude Code
-	// banner, it also prefixes the next system instruction with the same banner plus
-	// a blank line. This helps when upstream concatenates system instructions.
-	claudeCodePrefix := strings.TrimSpace(claudeCodeSystemPrompt)
-
 	var items [][]byte
 
 	switch v := system.(type) {
@@ -3886,15 +3844,9 @@ func injectClaudeCodePrompt(body []byte, system any) []byte {
 		if strings.TrimSpace(v) == "" || strings.TrimSpace(v) == strings.TrimSpace(claudeCodeSystemPrompt) {
 			items = [][]byte{claudeCodeBlock}
 		} else {
-			// Mirror opencode behavior: keep the banner as a separate system entry,
-			// but also prefix the next system text with the banner.
-			merged := v
-			if !strings.HasPrefix(v, claudeCodePrefix) {
-				merged = claudeCodePrefix + "\n\n" + v
-			}
-			nextBlock, buildErr := marshalAnthropicSystemTextBlock(merged, false)
+			nextBlock, buildErr := marshalAnthropicSystemTextBlock(v, false)
 			if buildErr != nil {
-				logger.LegacyPrintf("service.gateway", "Warning: failed to build prefixed Claude Code system block: %v", buildErr)
+				logger.LegacyPrintf("service.gateway", "Warning: failed to build Claude Code system block: %v", buildErr)
 				return body
 			}
 			items = [][]byte{claudeCodeBlock, nextBlock}
@@ -3902,7 +3854,6 @@ func injectClaudeCodePrompt(body []byte, system any) []byte {
 	case []any:
 		items = make([][]byte, 0, len(v)+1)
 		items = append(items, claudeCodeBlock)
-		prefixedNext := false
 		systemResult := gjson.GetBytes(body, "system")
 		if systemResult.IsArray() {
 			systemResult.ForEach(func(_, item gjson.Result) bool {
@@ -3913,17 +3864,6 @@ func injectClaudeCodePrompt(body []byte, system any) []byte {
 				}
 
 				raw := []byte(item.Raw)
-				// Prefix the first subsequent text system block once.
-				if !prefixedNext && item.Get("type").String() == "text" && textResult.Exists() && textResult.Type == gjson.String {
-					text := textResult.String()
-					if strings.TrimSpace(text) != "" && !strings.HasPrefix(text, claudeCodePrefix) {
-						next, setErr := sjson.SetBytes(raw, "text", claudeCodePrefix+"\n\n"+text)
-						if setErr == nil {
-							raw = next
-							prefixedNext = true
-						}
-					}
-				}
 				items = append(items, raw)
 				return true
 			})
@@ -3939,14 +3879,6 @@ func injectClaudeCodePrompt(body []byte, system any) []byte {
 				}
 				if text, ok := m["text"].(string); ok && strings.TrimSpace(text) == strings.TrimSpace(claudeCodeSystemPrompt) {
 					continue
-				}
-				if !prefixedNext {
-					if blockType, _ := m["type"].(string); blockType == "text" {
-						if text, ok := m["text"].(string); ok && strings.TrimSpace(text) != "" && !strings.HasPrefix(text, claudeCodePrefix) {
-							m["text"] = claudeCodePrefix + "\n\n" + text
-							prefixedNext = true
-						}
-					}
 				}
 				raw, marshalErr := json.Marshal(m)
 				if marshalErr == nil {
@@ -4157,29 +4089,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	shouldMimicClaudeCode := account.IsOAuth() && !isClaudeCode
 
 	if shouldMimicClaudeCode {
-		// 智能注入 Claude Code 系统提示词（仅 OAuth/SetupToken 账号需要）
-		// 条件：1) OAuth/SetupToken 账号  2) 不是 Claude Code 客户端  3) 不是 Haiku 模型  4) system 中还没有 Claude Code 提示词
-		if !strings.Contains(strings.ToLower(reqModel), "haiku") &&
-			!systemIncludesClaudeCodePrompt(parsed.System) {
-			body = injectClaudeCodePrompt(body, parsed.System)
-		}
-
-		normalizeOpts := claudeOAuthNormalizeOptions{stripSystemCacheControl: true}
-		if s.identityService != nil {
-			fp, err := s.identityService.GetOrCreateFingerprint(ctx, account.ID, c.Request.Header)
-			if err == nil && fp != nil {
-				// metadata 透传开启时跳过 metadata 注入
-				_, mimicMPT := s.settingService.GetGatewayForwardingSettings(ctx)
-				if !mimicMPT {
-					if metadataUserID := s.buildOAuthMetadataUserID(parsed, account, fp); metadataUserID != "" {
-						normalizeOpts.injectMetadata = true
-						normalizeOpts.metadataUserID = metadataUserID
-					}
-				}
-			}
-		}
-
-		body, reqModel = normalizeClaudeOAuthRequestBody(body, reqModel, normalizeOpts)
+		body, reqModel = normalizeClaudeOAuthRequestBody(body, reqModel, claudeOAuthNormalizeOptions{stripSystemCacheControl: true})
 	}
 
 	// 强制执行 cache_control 块数量限制（最多 4 个）
@@ -4187,20 +4097,13 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 
 	// 应用模型映射：
 	// - APIKey 账号：使用账号级别的显式映射（如果配置），否则透传原始模型名
-	// - OAuth/SetupToken 账号：使用 Anthropic 标准映射（短ID → 长ID）
+	// - OAuth/SetupToken 账号：尽量保留客户端原始模型名，避免稳定暴露内部全名路由
 	mappedModel := reqModel
 	mappingSource := ""
 	if account.Type == AccountTypeAPIKey {
 		mappedModel = account.GetMappedModel(reqModel)
 		if mappedModel != reqModel {
 			mappingSource = "account"
-		}
-	}
-	if mappingSource == "" && account.Platform == PlatformAnthropic && account.Type != AccountTypeAPIKey {
-		normalized := claude.NormalizeModelID(reqModel)
-		if normalized != reqModel {
-			mappedModel = normalized
-			mappingSource = "prefix"
 		}
 	}
 	if mappedModel != reqModel {
@@ -4226,6 +4129,19 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 
 	// 解析 TLS 指纹 profile（同一请求生命周期内不变，避免重试循环中重复解析）
 	tlsProfile := s.tlsFPProfileService.ResolveTLSProfile(account)
+	doUpstream := func(upstreamReq *http.Request) (*http.Response, error) {
+		if s.shouldUseMessagesNodeSidecar(account, reqStream) {
+			sidecarResp, sidecarErr := s.doMessagesRequestWithNodeSidecar(ctx, upstreamReq, s.messagesNodeSidecarTimeout(), proxyURL, reqStream)
+			if sidecarErr == nil {
+				return sidecarResp, nil
+			}
+			if !s.messagesNodeSidecarAllowGoFallback() {
+				return nil, sidecarErr
+			}
+			s.logMessagesSidecarFallback(account, sidecarErr)
+		}
+		return s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, tlsProfile)
+	}
 
 	// 调试日志：记录即将转发的账号信息
 	logger.LegacyPrintf("service.gateway", "[Forward] Using account: ID=%d Name=%s Platform=%s Type=%s TLSFingerprint=%v Proxy=%s",
@@ -4249,7 +4165,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		}
 
 		// 发送请求
-		resp, err = s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, tlsProfile)
+		resp, err = doUpstream(upstreamReq)
 		if err != nil {
 			if resp != nil && resp.Body != nil {
 				_ = resp.Body.Close()
@@ -4315,29 +4231,27 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 						resp.Body = io.NopCloser(bytes.NewReader(respBody))
 						break
 					}
-					logger.LegacyPrintf("service.gateway", "[warn] Account %d: thinking blocks have invalid signature, retrying with filtered blocks", account.ID)
+					logger.LegacyPrintf("service.gateway", "[warn] Account %d: thinking blocks have invalid signature, retrying with a single rectified payload", account.ID)
 
-					// Conservative two-stage fallback:
-					// 1) Disable thinking + thinking->text (preserve content)
-					// 2) Only if upstream still errors AND error message points to tool/function signature issues:
-					//    also downgrade tool_use/tool_result blocks to text.
-
-					filteredBody := FilterThinkingBlocksForRetry(body)
+					rectifiedBody := FilterThinkingBlocksForRetry(body)
+					if looksLikeToolSignatureError(extractUpstreamErrorMessage(respBody)) {
+						rectifiedBody = FilterSignatureSensitiveBlocksForRetry(body)
+					}
 					retryCtx, releaseRetryCtx := detachStreamUpstreamContext(ctx, reqStream)
-					retryReq, buildErr := s.buildUpstreamRequest(retryCtx, c, account, filteredBody, token, tokenType, reqModel, reqStream, shouldMimicClaudeCode)
+					retryReq, buildErr := s.buildUpstreamRequest(retryCtx, c, account, rectifiedBody, token, tokenType, reqModel, reqStream, shouldMimicClaudeCode)
 					releaseRetryCtx()
 					if buildErr == nil {
-						retryResp, retryErr := s.httpUpstream.DoWithTLS(retryReq, proxyURL, account.ID, account.Concurrency, tlsProfile)
+						retryResp, retryErr := doUpstream(retryReq)
 						if retryErr == nil {
 							if retryResp.StatusCode < 400 {
-								logger.LegacyPrintf("service.gateway", "Account %d: thinking block retry succeeded (blocks downgraded)", account.ID)
+								logger.LegacyPrintf("service.gateway", "Account %d: signature rectifier retry succeeded", account.ID)
 								resp = retryResp
 								break
 							}
 
 							retryRespBody, retryReadErr := io.ReadAll(io.LimitReader(retryResp.Body, 2<<20))
 							_ = retryResp.Body.Close()
-							if retryReadErr == nil && retryResp.StatusCode == 400 && s.isSignatureErrorPattern(ctx, account, retryRespBody) {
+							if retryReadErr == nil && retryResp.StatusCode == 400 {
 								appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 									Platform:           account.Platform,
 									AccountID:          account.ID,
@@ -4345,7 +4259,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 									UpstreamStatusCode: retryResp.StatusCode,
 									UpstreamRequestID:  retryResp.Header.Get("x-request-id"),
 									UpstreamURL:        safeUpstreamURL(retryReq.URL.String()),
-									Kind:               "signature_retry_thinking",
+									Kind:               "signature_retry_single",
 									Message:            extractUpstreamErrorMessage(retryRespBody),
 									Detail: func() string {
 										if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
@@ -4354,36 +4268,6 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 										return ""
 									}(),
 								})
-								msg2 := extractUpstreamErrorMessage(retryRespBody)
-								if looksLikeToolSignatureError(msg2) && time.Since(retryStart) < maxRetryElapsed {
-									logger.LegacyPrintf("service.gateway", "Account %d: signature retry still failing and looks tool-related, retrying with tool blocks downgraded", account.ID)
-									filteredBody2 := FilterSignatureSensitiveBlocksForRetry(body)
-									retryCtx2, releaseRetryCtx2 := detachStreamUpstreamContext(ctx, reqStream)
-									retryReq2, buildErr2 := s.buildUpstreamRequest(retryCtx2, c, account, filteredBody2, token, tokenType, reqModel, reqStream, shouldMimicClaudeCode)
-									releaseRetryCtx2()
-									if buildErr2 == nil {
-										retryResp2, retryErr2 := s.httpUpstream.DoWithTLS(retryReq2, proxyURL, account.ID, account.Concurrency, tlsProfile)
-										if retryErr2 == nil {
-											resp = retryResp2
-											break
-										}
-										if retryResp2 != nil && retryResp2.Body != nil {
-											_ = retryResp2.Body.Close()
-										}
-										appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
-											Platform:           account.Platform,
-											AccountID:          account.ID,
-											AccountName:        account.Name,
-											UpstreamStatusCode: 0,
-											UpstreamURL:        safeUpstreamURL(retryReq2.URL.String()),
-											Kind:               "signature_retry_tools_request_error",
-											Message:            sanitizeUpstreamErrorMessage(retryErr2.Error()),
-										})
-										logger.LegacyPrintf("service.gateway", "Account %d: tool-downgrade signature retry failed: %v", account.ID, retryErr2)
-									} else {
-										logger.LegacyPrintf("service.gateway", "Account %d: tool-downgrade signature retry build failed: %v", account.ID, buildErr2)
-									}
-								}
 							}
 
 							// Fall back to the original retry response context.
@@ -4428,12 +4312,14 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 
 					rectifiedBody, applied := RectifyThinkingBudget(body)
 					if applied && time.Since(retryStart) < maxRetryElapsed {
-						logger.LegacyPrintf("service.gateway", "Account %d: detected budget_tokens constraint error, retrying with rectified budget (budget_tokens=%d, max_tokens=%d)", account.ID, BudgetRectifyBudgetTokens, BudgetRectifyMaxTokens)
+						rectifiedBudget := gjson.GetBytes(rectifiedBody, "thinking.budget_tokens").Int()
+						rectifiedMax := gjson.GetBytes(rectifiedBody, "max_tokens").Int()
+						logger.LegacyPrintf("service.gateway", "Account %d: detected budget_tokens constraint error, retrying with rectified budget (budget_tokens=%d, max_tokens=%d)", account.ID, rectifiedBudget, rectifiedMax)
 						budgetRetryCtx, releaseBudgetRetryCtx := detachStreamUpstreamContext(ctx, reqStream)
 						budgetRetryReq, buildErr := s.buildUpstreamRequest(budgetRetryCtx, c, account, rectifiedBody, token, tokenType, reqModel, reqStream, shouldMimicClaudeCode)
 						releaseBudgetRetryCtx()
 						if buildErr == nil {
-							budgetRetryResp, retryErr := s.httpUpstream.DoWithTLS(budgetRetryReq, proxyURL, account.ID, account.Concurrency, tlsProfile)
+							budgetRetryResp, retryErr := doUpstream(budgetRetryReq)
 							if retryErr == nil {
 								resp = budgetRetryResp
 								break
@@ -5713,7 +5599,7 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 		clientHeaders = c.Request.Header
 	}
 
-	// OAuth账号：应用统一指纹和metadata重写（受设置开关控制）
+	// OAuth账号：应用统一指纹（受设置开关控制）
 	var fingerprint *Fingerprint
 	enableFP, enableMPT := true, false
 	if s.settingService != nil {
@@ -5729,20 +5615,9 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 			if enableFP {
 				fingerprint = fp
 			}
-
-			// 2. 重写metadata.user_id（需要指纹中的ClientID和账号的account_uuid）
-			// 如果启用了会话ID伪装，会在重写后替换 session 部分为固定值
-			// 当 metadata 透传开启时跳过重写
-			if !enableMPT {
-				accountUUID := account.GetExtraString("account_uuid")
-				if accountUUID != "" && fp.ClientID != "" {
-					if newBody, err := s.identityService.RewriteUserIDWithMasking(ctx, body, account, accountUUID, fp.ClientID, fp.UserAgent); err == nil && len(newBody) > 0 {
-						body = newBody
-					}
-				}
-			}
 		}
 	}
+	_ = enableMPT
 
 	req, err := http.NewRequestWithContext(ctx, "POST", targetURL, bytes.NewReader(body))
 	if err != nil {
@@ -5821,14 +5696,7 @@ func (s *GatewayService) buildUpstreamRequest(ctx context.Context, c *gin.Contex
 		}
 	}
 
-	// 同步 X-Claude-Code-Session-Id 头：取 body 中已处理的 metadata.user_id 的 session_id 覆盖
-	if sessionHeader := getHeaderRaw(req.Header, "X-Claude-Code-Session-Id"); sessionHeader != "" {
-		if uid := gjson.GetBytes(body, "metadata.user_id").String(); uid != "" {
-			if parsed := ParseMetadataUserID(uid); parsed != nil {
-				setHeaderRaw(req.Header, "X-Claude-Code-Session-Id", parsed.SessionID)
-			}
-		}
-	}
+	ensureClaudeCodeSessionHeader(req, body)
 
 	// === DEBUG: 打印上游转发请求（headers + body 摘要），与 CLIENT_ORIGINAL 对比 ===
 	s.debugLogGatewaySnapshot("UPSTREAM_FORWARD", req.Header, body, map[string]string{
@@ -5934,6 +5802,24 @@ func applyClaudeOAuthHeaderDefaults(req *http.Request) {
 			setHeaderRaw(req.Header, resolveWireCasing(key), value)
 		}
 	}
+	if getHeaderRaw(req.Header, "x-client-request-id") == "" {
+		setHeaderRaw(req.Header, "x-client-request-id", uuid.NewString())
+	}
+}
+
+func ensureClaudeCodeSessionHeader(req *http.Request, body []byte) {
+	if req == nil || len(body) == 0 {
+		return
+	}
+	uid := strings.TrimSpace(gjson.GetBytes(body, "metadata.user_id").String())
+	if uid == "" {
+		return
+	}
+	parsed := ParseMetadataUserID(uid)
+	if parsed == nil || strings.TrimSpace(parsed.SessionID) == "" {
+		return
+	}
+	setHeaderRaw(req.Header, "X-Claude-Code-Session-Id", parsed.SessionID)
 }
 
 func mergeAnthropicBeta(required []string, incoming string) string {
@@ -6227,21 +6113,18 @@ func applyClaudeCodeMimicHeaders(req *http.Request, isStream bool) {
 	if req == nil {
 		return
 	}
-	// Start with the standard defaults (fill missing).
 	applyClaudeOAuthHeaderDefaults(req)
-	// Then force key headers to match Claude Code fingerprint regardless of what the client sent.
-	// 使用 resolveWireCasing 确保 key 与真实 wire format 一致（如 "x-app" 而非 "X-App"）
 	for key, value := range claude.DefaultHeaders {
 		if value == "" {
 			continue
 		}
-		setHeaderRaw(req.Header, resolveWireCasing(key), value)
+		if getHeaderRaw(req.Header, key) == "" {
+			setHeaderRaw(req.Header, resolveWireCasing(key), value)
+		}
 	}
 	// Real Claude CLI uses Accept: application/json (even for streaming).
 	setHeaderRaw(req.Header, "Accept", "application/json")
-	if isStream {
-		setHeaderRaw(req.Header, "x-stainless-helper-method", "stream")
-	}
+	_ = isStream
 }
 
 func truncateForLog(b []byte, maxBytes int) string {
@@ -8112,7 +7995,7 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 
 	// 应用模型映射：
 	// - APIKey 账号：使用账号级别的显式映射（如果配置），否则透传原始模型名
-	// - OAuth/SetupToken 账号：使用 Anthropic 标准映射（短ID → 长ID）
+	// - OAuth/SetupToken 账号：尽量保留客户端原始模型名，避免稳定暴露内部全名路由
 	if reqModel != "" {
 		mappedModel := reqModel
 		mappingSource := ""
@@ -8120,13 +8003,6 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 			mappedModel = account.GetMappedModel(reqModel)
 			if mappedModel != reqModel {
 				mappingSource = "account"
-			}
-		}
-		if mappingSource == "" && account.Platform == PlatformAnthropic && account.Type != AccountTypeAPIKey {
-			normalized := claude.NormalizeModelID(reqModel)
-			if normalized != reqModel {
-				mappedModel = normalized
-				mappingSource = "prefix"
 			}
 		}
 		if mappedModel != reqModel {
@@ -8451,8 +8327,7 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 		clientHeaders = c.Request.Header
 	}
 
-	// OAuth 账号：应用统一指纹和重写 userID（受设置开关控制）
-	// 如果启用了会话ID伪装，会在重写后替换 session 部分为固定值
+	// OAuth 账号：应用统一指纹（受设置开关控制）
 	ctEnableFP, ctEnableMPT := true, false
 	if s.settingService != nil {
 		ctEnableFP, ctEnableMPT = s.settingService.GetGatewayForwardingSettings(ctx)
@@ -8462,16 +8337,9 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 		fp, err := s.identityService.GetOrCreateFingerprint(ctx, account.ID, clientHeaders)
 		if err == nil {
 			ctFingerprint = fp
-			if !ctEnableMPT {
-				accountUUID := account.GetExtraString("account_uuid")
-				if accountUUID != "" && fp.ClientID != "" {
-					if newBody, err := s.identityService.RewriteUserIDWithMasking(ctx, body, account, accountUUID, fp.ClientID, fp.UserAgent); err == nil && len(newBody) > 0 {
-						body = newBody
-					}
-				}
-			}
 		}
 	}
+	_ = ctEnableMPT
 
 	req, err := http.NewRequestWithContext(ctx, "POST", targetURL, bytes.NewReader(body))
 	if err != nil {
@@ -8549,14 +8417,7 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 		}
 	}
 
-	// 同步 X-Claude-Code-Session-Id 头：取 body 中已处理的 metadata.user_id 的 session_id 覆盖
-	if sessionHeader := getHeaderRaw(req.Header, "X-Claude-Code-Session-Id"); sessionHeader != "" {
-		if uid := gjson.GetBytes(body, "metadata.user_id").String(); uid != "" {
-			if parsed := ParseMetadataUserID(uid); parsed != nil {
-				setHeaderRaw(req.Header, "X-Claude-Code-Session-Id", parsed.SessionID)
-			}
-		}
-	}
+	ensureClaudeCodeSessionHeader(req, body)
 
 	if c != nil && tokenType == "oauth" {
 		c.Set(claudeMimicDebugInfoKey, buildClaudeMimicDebugLine(req, body, account, tokenType, mimicClaudeCode))

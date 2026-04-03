@@ -86,7 +86,7 @@ security:
   url_allowlist:
     # Enable URL allowlist validation (disable to skip all URL checks)
     # 启用 URL 白名单验证（禁用则跳过所有 URL 检查）
-    enabled: false
+    enabled: true
     # Allowed upstream hosts for API proxying
     # 允许代理的上游 API 主机列表
     upstream_hosts:
@@ -378,6 +378,32 @@ gateway:
     #     name: "Custom Profile 1"
     #   profile_2:
     #     name: "Custom Profile 2"
+
+  # /v1/messages Node sidecar forwarding (optional)
+  # /v1/messages Node sidecar 转发（可选）
+  messages_node_sidecar:
+    # Enable sidecar path for Anthropic /v1/messages forwarding
+    # 启用 Anthropic /v1/messages 的 sidecar 转发路径
+    enabled: false
+    # Optional script path. Empty = auto-detect tools/telemetry-sidecar.mjs
+    # 可选脚本路径。为空时自动探测 tools/telemetry-sidecar.mjs
+    script: ""
+    # Sidecar request timeout (seconds)
+    # sidecar 请求超时（秒）
+    timeout_seconds: 30
+    # Fallback to Go transport when sidecar fails
+    # sidecar 失败时回退到 Go 转发
+    allow_go_fallback: true
+    # Whether stream=true requests can use sidecar
+    # 是否允许 stream=true 请求走 sidecar
+    enable_streaming: true
+
+  # Long-lived Node sidecar daemon
+  # 长驻 Node sidecar daemon
+  sidecar_daemon:
+    enabled: true
+    socket_path: "/tmp/sub2api-node-sidecar.sock"
+    startup_timeout_seconds: 5
 
 # =============================================================================
 # Logging Configuration

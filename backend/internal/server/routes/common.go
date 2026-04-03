@@ -3,18 +3,52 @@ package routes
 import (
 	"net/http"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
 // RegisterCommonRoutes 注册通用路由（健康检查、状态等）
-func RegisterCommonRoutes(r *gin.Engine) {
+func RegisterCommonRoutes(r *gin.Engine, cfg *config.Config) {
+	// Claude Code 遥测日志：接管、清洗、异步放行
+	telemetrySvc := service.NewTelemetryService(cfg)
+
 	// 健康检查
 	r.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+		daemonStatus, daemonError := telemetrySvc.SidecarDaemonHealth(c.Request.Context())
+		resp := gin.H{
+			"status":         "ok",
+			"sidecar_daemon": daemonStatus,
+		}
+		if daemonError != "" {
+			resp["sidecar_daemon_error"] = daemonError
+		}
+		c.JSON(http.StatusOK, resp)
 	})
 
-	// Claude Code 遥测日志（忽略，直接返回200）
 	r.POST("/api/event_logging/batch", func(c *gin.Context) {
+		token := c.GetHeader("x-api-key")
+
+		bodyBytes, err := c.GetRawData()
+		if err != nil {
+			c.Status(http.StatusOK)
+			return
+		}
+		if len(bodyBytes) == 0 {
+			c.Status(http.StatusOK)
+			return
+		}
+
+		cleanedBytes, err := telemetrySvc.DeepScrubPayload(bodyBytes)
+		if err != nil {
+			logger.LegacyPrintf("service.telemetry", "[Warn] telemetry batch dropped: %v", err)
+			c.Status(http.StatusOK)
+			return
+		}
+
+		telemetrySvc.ForwardBackground(cleanedBytes, token)
+
 		c.Status(http.StatusOK)
 	})
 
