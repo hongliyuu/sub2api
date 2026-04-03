@@ -64,9 +64,6 @@ func RegisterAdminRoutes(
 		// 运维监控（Ops）
 		registerOpsRoutes(admin, h)
 
-		// 渠道管理
-		registerChannelRoutes(admin, h)
-
 		// 系统管理
 		registerSystemRoutes(admin, h)
 
@@ -90,6 +87,9 @@ func RegisterAdminRoutes(
 
 		// 定时测试计划
 		registerScheduledTestRoutes(admin, h)
+
+		// 渠道管理
+		registerChannelRoutes(admin, h)
 	}
 }
 
