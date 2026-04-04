@@ -117,7 +117,7 @@
             v-model="openAIRequestOverridesText"
             rows="8"
             class="input font-mono text-xs"
-            :placeholder="t('admin.accounts.requestOverridesPlaceholder')"
+            :placeholder="OPENAI_REQUEST_OVERRIDES_PLACEHOLDER"
             spellcheck="false"
           ></textarea>
         </div>
@@ -970,6 +970,7 @@ import {
 import type { OpenAIWSMode } from '@/utils/openaiWsMode'
 import {
   OPENAI_REQUEST_OVERRIDES_EXTRA_KEY,
+  OPENAI_REQUEST_OVERRIDES_PLACEHOLDER,
   parseOpenAIRequestOverrides
 } from '@/utils/openaiRequestOverrides'
 interface Props {

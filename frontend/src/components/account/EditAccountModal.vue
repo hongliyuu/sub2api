@@ -1218,7 +1218,7 @@
           v-model="openAIRequestOverridesText"
           rows="8"
           class="input font-mono text-xs"
-          :placeholder="t('admin.accounts.requestOverridesPlaceholder')"
+          :placeholder="OPENAI_REQUEST_OVERRIDES_PLACEHOLDER"
           spellcheck="false"
         ></textarea>
         <p class="input-hint">{{ t('admin.accounts.requestOverridesDesc') }}</p>
@@ -1780,6 +1780,7 @@ import { formatDateTimeLocalInput, parseDateTimeLocalInput } from '@/utils/forma
 import { createStableObjectKeyResolver } from '@/utils/stableObjectKey'
 import {
   OPENAI_REQUEST_OVERRIDES_EXTRA_KEY,
+  OPENAI_REQUEST_OVERRIDES_PLACEHOLDER,
   parseOpenAIRequestOverrides,
   stringifyOpenAIRequestOverrides
 } from '@/utils/openaiRequestOverrides'
