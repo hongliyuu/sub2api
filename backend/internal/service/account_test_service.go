@@ -71,6 +71,7 @@ type AccountTestService struct {
 	httpUpstream              HTTPUpstream
 	cfg                       *config.Config
 	tlsFPProfileService       *TLSFingerprintProfileService
+	accountFailurePolicy      *AccountFailurePolicyService
 	soraTestGuardMu           sync.Mutex
 	soraTestLastRun           map[int64]time.Time
 	soraTestCooldown          time.Duration
@@ -97,6 +98,10 @@ func NewAccountTestService(
 		soraTestLastRun:           make(map[int64]time.Time),
 		soraTestCooldown:          defaultSoraTestCooldown,
 	}
+}
+
+func (s *AccountTestService) SetAccountFailurePolicy(policy *AccountFailurePolicyService) {
+	s.accountFailurePolicy = policy
 }
 
 func (s *AccountTestService) validateUpstreamBaseURL(raw string) (string, error) {
@@ -545,6 +550,9 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		if isOAuth && resp.StatusCode == http.StatusUnauthorized && s.accountFailurePolicy != nil {
+			_ = s.accountFailurePolicy.HandleUpstream401(ctx, account, "account_test_service_openai_oauth")
+		}
 		if isOAuth && s.accountRepo != nil {
 			if resetAt := (&RateLimitService{}).calculateOpenAI429ResetTime(resp.Header); resetAt != nil {
 				_ = s.accountRepo.SetRateLimited(ctx, account.ID, *resetAt)
@@ -820,6 +828,9 @@ func (s *AccountTestService) testSoraAPIKeyAccountConnection(c *gin.Context, acc
 	}
 
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		if resp.StatusCode == http.StatusUnauthorized && s.accountFailurePolicy != nil {
+			_ = s.accountFailurePolicy.HandleUpstream401(ctx, account, "account_test_service_sora_apikey")
+		}
 		return s.sendErrorAndEnd(c, fmt.Sprintf("上游认证失败 (HTTP %d)，请检查 API Key 是否正确", resp.StatusCode))
 	}
 
@@ -913,6 +924,9 @@ func (s *AccountTestService) testSoraAccountConnection(c *gin.Context, account *
 		switch {
 		case resp.StatusCode == http.StatusUnauthorized && strings.EqualFold(upstreamCode, "token_invalidated"):
 			recorder.addStep("me", "failed", resp.StatusCode, "token_invalidated", "Sora token invalidated")
+			if s.accountFailurePolicy != nil {
+				_ = s.accountFailurePolicy.HandleUpstream401(ctx, account, "account_test_service_sora_oauth")
+			}
 			s.emitSoraProbeSummary(c, recorder)
 			return s.sendErrorAndEnd(c, "Sora token 已失效（token_invalidated），请重新授权账号")
 		case strings.EqualFold(upstreamCode, "unsupported_country_code"):
