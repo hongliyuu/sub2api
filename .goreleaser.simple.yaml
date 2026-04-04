@@ -1,4 +1,5 @@
-# 简化版 GoReleaser 配置 - 仅发布 x86_64 GHCR 镜像
+# 简化版 GoReleaser 配置 - 仅用于手动触发的镜像发布。
+# 不生成安装脚本依赖的二进制资产，禁止用于正式 tag 发布。
 version: 2
 
 project_name: sub2api

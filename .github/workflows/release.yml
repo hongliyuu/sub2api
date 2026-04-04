@@ -16,10 +16,10 @@ on:
         type: boolean
         default: false
 
-# 环境变量：合并 workflow_dispatch 输入和 repository variable
-# tag push 触发时读取 vars.SIMPLE_RELEASE，workflow_dispatch 时使用输入参数
+# 环境变量：仅允许 workflow_dispatch 手动启用 simple release。
+# 正式 tag 发布必须始终生成完整的二进制资产，否则安装脚本无法工作。
 env:
-  SIMPLE_RELEASE: ${{ github.event.inputs.simple_release == 'true' || vars.SIMPLE_RELEASE == 'true' }}
+  SIMPLE_RELEASE: ${{ github.event_name == 'workflow_dispatch' && (github.event.inputs.simple_release == 'true' || vars.SIMPLE_RELEASE == 'true') }}
 
 permissions:
   contents: write
