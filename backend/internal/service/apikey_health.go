@@ -172,17 +172,19 @@ func ClassifyAPIKeyStatusAction(account *Account, statusCode int, responseBody [
 			if googleapi.IsPermanentlyDisabledError(string(responseBody)) {
 				return APIKeyStatusActionPermanentDisable
 			}
+			// Match known permanent-disable message patterns.
+			// Avoid catch-all: some 403s indicate model-level permission issues (not account problems).
 			if containsAny(msg,
 				"billing is disabled",
 				"billing disabled",
 				"consumer suspended",
 				"project disabled",
 				"project has been suspended",
-				"does not have permission",
 			) {
 				return APIKeyStatusActionPermanentDisable
 			}
-			return APIKeyStatusActionPermanentDisable
+			// Unknown 403: could be model-level restriction, do not permanently disable
+			return APIKeyStatusActionIgnore
 		case http.StatusBadRequest:
 			if strings.Contains(bodyUpper, "API_KEY_INVALID") || googleapi.IsServiceDisabledError(string(responseBody)) {
 				return APIKeyStatusActionPermanentDisable

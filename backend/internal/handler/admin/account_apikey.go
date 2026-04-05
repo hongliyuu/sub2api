@@ -92,11 +92,13 @@ func (h *AccountHandler) recoverValidAPIKeyAccount(ctx context.Context, account 
 	if account == nil {
 		return nil
 	}
+	// If status is not active (error or disabled), restore it to active.
 	if !account.IsActive() {
 		if _, err := h.adminService.ClearAccountError(ctx, account.ID); err != nil {
 			return err
 		}
 	}
+	// Re-enable scheduling if it was turned off.
 	if !account.Schedulable {
 		if _, err := h.adminService.SetAccountSchedulable(ctx, account.ID, true); err != nil {
 			return err
