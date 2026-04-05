@@ -314,9 +314,20 @@ func (s *AccountTestService) testClaudeAccountConnection(c *gin.Context, account
 		body, _ := io.ReadAll(resp.Body)
 		errMsg := fmt.Sprintf("API returned %d: %s", resp.StatusCode, string(body))
 
-		// 403 表示账号被上游封禁，标记为 error 状态
-		if resp.StatusCode == http.StatusForbidden {
-			_ = s.accountRepo.SetError(ctx, account.ID, errMsg)
+		if account.Type == AccountTypeAPIKey && s.accountRepo != nil {
+			switch ClassifyAPIKeyStatusAction(account, resp.StatusCode, body) {
+			case APIKeyStatusActionPermanentDisable:
+				msg := buildAPIKeyRuntimeErrorMessage(resp.StatusCode, body, "API key permanently disabled after test connection")
+				_ = s.accountRepo.SetError(ctx, account.ID, msg)
+				if account.Schedulable {
+					_ = s.accountRepo.SetSchedulable(ctx, account.ID, false)
+				}
+			case APIKeyStatusActionTemporaryCooldown:
+				if resp.StatusCode == http.StatusTooManyRequests {
+					t := time.Now().Add(apiKey429Cooldown)
+					_ = s.accountRepo.SetRateLimited(ctx, account.ID, t)
+				}
+			}
 		}
 
 		return s.sendErrorAndEnd(c, errMsg)
@@ -551,8 +562,28 @@ func (s *AccountTestService) testOpenAIAccountConnection(c *gin.Context, account
 				account.RateLimitResetAt = resetAt
 			}
 		}
-		// 401 Unauthorized: 标记账号为永久错误
-		if resp.StatusCode == http.StatusUnauthorized && s.accountRepo != nil {
+		if account.Type == AccountTypeAPIKey && s.accountRepo != nil {
+			// For API key accounts, classify the error and mark account state accordingly.
+			switch ClassifyAPIKeyStatusAction(account, resp.StatusCode, body) {
+			case APIKeyStatusActionPermanentDisable:
+				errMsg := buildAPIKeyRuntimeErrorMessage(resp.StatusCode, body, "API key permanently disabled after test connection")
+				_ = s.accountRepo.SetError(ctx, account.ID, errMsg)
+				if account.Schedulable {
+					_ = s.accountRepo.SetSchedulable(ctx, account.ID, false)
+				}
+			case APIKeyStatusActionTemporaryCooldown:
+				if resp.StatusCode == http.StatusTooManyRequests {
+					resetAt := (&RateLimitService{}).calculateOpenAI429ResetTime(resp.Header)
+					if resetAt == nil {
+						t := time.Now().Add(apiKey429Cooldown)
+						resetAt = &t
+					}
+					_ = s.accountRepo.SetRateLimited(ctx, account.ID, *resetAt)
+					account.RateLimitResetAt = resetAt
+				}
+			}
+		} else if resp.StatusCode == http.StatusUnauthorized && s.accountRepo != nil {
+			// OAuth 401: mark account as error
 			errMsg := fmt.Sprintf("Authentication failed (401): %s", string(body))
 			_ = s.accountRepo.SetError(ctx, account.ID, errMsg)
 		}
@@ -627,6 +658,23 @@ func (s *AccountTestService) testGeminiAccountConnection(c *gin.Context, account
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+
+		if account.Type == AccountTypeAPIKey && s.accountRepo != nil {
+			switch ClassifyAPIKeyStatusAction(account, resp.StatusCode, body) {
+			case APIKeyStatusActionPermanentDisable:
+				msg := buildAPIKeyRuntimeErrorMessage(resp.StatusCode, body, "API key permanently disabled after test connection")
+				_ = s.accountRepo.SetError(ctx, account.ID, msg)
+				if account.Schedulable {
+					_ = s.accountRepo.SetSchedulable(ctx, account.ID, false)
+				}
+			case APIKeyStatusActionTemporaryCooldown:
+				if resp.StatusCode == http.StatusTooManyRequests {
+					t := time.Now().Add(apiKey429Cooldown)
+					_ = s.accountRepo.SetRateLimited(ctx, account.ID, t)
+				}
+			}
+		}
+
 		return s.sendErrorAndEnd(c, fmt.Sprintf("API returned %d: %s", resp.StatusCode, string(body)))
 	}
 

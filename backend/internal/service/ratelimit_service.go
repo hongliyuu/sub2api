@@ -119,6 +119,11 @@ func (s *RateLimitService) CheckErrorPolicy(ctx context.Context, account *Accoun
 // 返回是否应该停止该账号的调度
 func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Account, statusCode int, headers http.Header, responseBody []byte) (shouldDisable bool) {
 	if account != nil && account.Type == AccountTypeAPIKey {
+		// Pool mode without custom error codes: upstream manages key state, skip local marking.
+		if account.IsPoolMode() && !account.IsCustomErrorCodesEnabled() {
+			slog.Info("pool_mode_error_skipped", "account_id", account.ID, "status_code", statusCode)
+			return false
+		}
 		action := ClassifyAPIKeyStatusAction(account, statusCode, responseBody)
 		if s == nil || s.accountRepo == nil {
 			return action == APIKeyStatusActionPermanentDisable || action == APIKeyStatusActionTemporaryCooldown
@@ -130,6 +135,9 @@ func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Acc
 		case APIKeyStatusActionTemporaryCooldown:
 			s.handleAPIKeyTemporaryCooldown(ctx, account, statusCode, headers, responseBody)
 			return true
+		default:
+			// Ignore or Valid: do not fall through to OAuth-oriented logic below.
+			return false
 		}
 	}
 
@@ -704,7 +712,11 @@ func (s *RateLimitService) handleAPIKeyTemporaryCooldown(ctx context.Context, ac
 		if account.Platform == PlatformOpenAI {
 			s.persistOpenAICodexSnapshot(ctx, account, headers)
 		}
-		resetAt := time.Now().Add(apiKey429Cooldown)
+		cooldown := apiKey429Cooldown
+		if account.Platform == PlatformGemini {
+			cooldown = s.GeminiCooldown(ctx, account)
+		}
+		resetAt := time.Now().Add(cooldown)
 		if err := s.accountRepo.SetRateLimited(ctx, account.ID, resetAt); err != nil {
 			slog.Warn("apikey_rate_limit_set_failed", "account_id", account.ID, "status_code", statusCode, "error", err)
 			return
