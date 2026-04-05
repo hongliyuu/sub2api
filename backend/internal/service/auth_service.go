@@ -190,6 +190,7 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 	// 创建用户
 	user := &User{
 		Email:        email,
+		Username:     email,
 		PasswordHash: hashedPassword,
 		Role:         RoleUser,
 		Balance:      defaultBalance,
