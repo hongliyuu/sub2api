@@ -1758,41 +1758,76 @@ func applyTestConnectionAction(ctx context.Context, repo AccountRepository, acco
 	}
 }
 
-func classifyOpenAIStreamTextAsAccountError(account *Account, accumulatedText string) APIKeyStatusAction {
-	if account == nil || account.Type != AccountTypeAPIKey {
-		return APIKeyStatusActionIgnore
+// knownStreamErrorPhrases are verbatim phrases that third-party OpenAI-compatible
+// APIs return as plain text deltas (HTTP 200) instead of structured error events.
+// Rules for adding entries:
+//  1. Must be a complete, verbatim phrase from an actual upstream error response.
+//  2. Must NOT be a phrase that could appear in a normal AI-generated reply.
+//  3. Prefer the shortest unique prefix that still uniquely identifies the error.
+var knownStreamErrorPhrases = []string{
+	"your account is not active",
+	"account is not active",
+	"your account has been suspended",
+	"account has been suspended",
+	"your account has been deactivated",
+	"account has been deactivated",
+	"organization has been disabled",
+	"workspace has been deactivated",
+	"workspace has been disabled",
+	"api key has been disabled",
+	"api key is disabled",
+	"key has been revoked",
+}
+
+// isStreamOnlyErrorText returns true only when the accumulated stream text is a
+// verbatim upstream error message, NOT normal AI content.
+// We require ALL of:
+//  1. No response.completed event was seen (a completed stream is a successful response)
+//  2. Only a single delta was received (error messages come as one chunk, not multi-turn)
+//  3. Text exactly matches a known error phrase (prefix match, case-insensitive)
+func isStreamOnlyErrorText(text string, deltaCount int, completedSeen bool) bool {
+	if completedSeen || deltaCount != 1 {
+		return false
 	}
-	txt := strings.TrimSpace(accumulatedText)
-	if txt == "" {
-		return APIKeyStatusActionIgnore
-	}
-	// Try each permanent-disable status code used by OpenAI-compatible APIs.
-	// The text is placed in the message field so extractUpstreamErrorMessage can find it.
-	for _, statusCode := range []int{http.StatusForbidden, http.StatusBadRequest, http.StatusPaymentRequired, http.StatusTooManyRequests} {
-		syntheticBody := []byte(`{"error":{"message":` + fmt.Sprintf("%q", txt) + `}}`)
-		if ClassifyAPIKeyStatusAction(account, statusCode, syntheticBody) == APIKeyStatusActionPermanentDisable {
-			return APIKeyStatusActionPermanentDisable
+	lower := strings.ToLower(strings.TrimSpace(text))
+	for _, phrase := range knownStreamErrorPhrases {
+		if strings.HasPrefix(lower, phrase) {
+			return true
 		}
 	}
-	return APIKeyStatusActionIgnore
+	return false
 }
 
 // processOpenAIStream processes the SSE stream from OpenAI Responses API.
 // account may be nil for OAuth accounts where state marking is not needed.
 func (s *AccountTestService) processOpenAIStream(c *gin.Context, ctx context.Context, account *Account, body io.Reader) error {
 	reader := bufio.NewReader(body)
-	var accumulatedText strings.Builder
 
-	applyStreamTextErrorAction := func(txt string) (bool, error) {
-		if txt == "" || classifyOpenAIStreamTextAsAccountError(account, txt) != APIKeyStatusActionPermanentDisable {
+	var (
+		accumulatedText strings.Builder
+		deltaCount      int
+		completedSeen   bool
+	)
+
+	applyStreamErrorText := func() (bool, error) {
+		txt := accumulatedText.String()
+		if !isStreamOnlyErrorText(txt, deltaCount, completedSeen) {
 			return false, nil
 		}
 		if account != nil && account.Type == AccountTypeAPIKey && s.accountRepo != nil {
 			syntheticBody := []byte(`{"error":{"message":` + fmt.Sprintf("%q", txt) + `}}`)
-			msg := buildAPIKeyRuntimeErrorMessage(http.StatusForbidden, syntheticBody, "API key permanently disabled after test connection (stream text error)")
-			_ = s.accountRepo.SetError(ctx, account.ID, msg)
-			if account.Schedulable {
-				_ = s.accountRepo.SetSchedulable(ctx, account.ID, false)
+			action := ClassifyAPIKeyStatusAction(account, http.StatusForbidden, syntheticBody)
+			switch action {
+			case APIKeyStatusActionPermanentDisable:
+				msg := buildAPIKeyRuntimeErrorMessage(http.StatusForbidden, syntheticBody, "API key permanently disabled after test connection (stream error)")
+				_ = s.accountRepo.SetError(ctx, account.ID, msg)
+				if account.Schedulable {
+					_ = s.accountRepo.SetSchedulable(ctx, account.ID, false)
+				}
+			case APIKeyStatusActionTemporaryCooldown:
+				reason := buildAPIKeyRuntimeErrorMessage(http.StatusForbidden, syntheticBody, "API key temporary cooldown after test connection (stream error)")
+				until := time.Now().Add(apiKeyProbeCooldown)
+				_ = s.accountRepo.SetTempUnschedulable(ctx, account.ID, until, reason)
 			}
 		}
 		return true, s.sendErrorAndEnd(c, txt)
@@ -1810,9 +1845,7 @@ func (s *AccountTestService) processOpenAIStream(c *gin.Context, ctx context.Con
 		if line != "" && sseDataPrefix.MatchString(line) {
 			jsonStr := sseDataPrefix.ReplaceAllString(line, "")
 
-			if jsonStr == "[DONE]" || isEOF && jsonStr == "" {
-				// Terminal: check accumulated text before declaring success.
-			} else if jsonStr != "" {
+			if jsonStr != "" && jsonStr != "[DONE]" {
 				var data map[string]any
 				if jsonErr := json.Unmarshal([]byte(jsonStr), &data); jsonErr == nil {
 					eventType, _ := data["type"].(string)
@@ -1820,19 +1853,14 @@ func (s *AccountTestService) processOpenAIStream(c *gin.Context, ctx context.Con
 					case "response.output_text.delta":
 						if delta, ok := data["delta"].(string); ok && delta != "" {
 							accumulatedText.WriteString(delta)
-							// Emit content immediately unless this is also the EOF line
-							// (in that case we may suppress it if it turns out to be an error).
-							if !isEOF {
-								s.sendEvent(c, TestEvent{Type: "content", Text: delta})
-							}
+							deltaCount++
+							s.sendEvent(c, TestEvent{Type: "content", Text: delta})
 						}
 						if !isEOF {
 							continue
 						}
 					case "response.completed":
-						if triggered, errResult := applyStreamTextErrorAction(accumulatedText.String()); triggered {
-							return errResult
-						}
+						completedSeen = true
 						s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})
 						return nil
 					case "error":
@@ -1846,9 +1874,7 @@ func (s *AccountTestService) processOpenAIStream(c *gin.Context, ctx context.Con
 								errorCode = code
 							}
 						}
-						// For API Key accounts, classify the in-stream error and mark account state.
-						// OpenAI sometimes returns HTTP 200 with an error event inside the SSE stream
-						// for account-level issues (e.g. "account is not active").
+						// Structured error event: classify and mark account state.
 						if account != nil && account.Type == AccountTypeAPIKey && s.accountRepo != nil {
 							syntheticBody := []byte(`{"error":{"message":` + fmt.Sprintf("%q", errorMsg) + `,"code":` + fmt.Sprintf("%q", errorCode) + `}}`)
 							action := ClassifyAPIKeyStatusAction(account, http.StatusForbidden, syntheticBody)
@@ -1872,7 +1898,7 @@ func (s *AccountTestService) processOpenAIStream(c *gin.Context, ctx context.Con
 		}
 
 		if isEOF {
-			if triggered, errResult := applyStreamTextErrorAction(accumulatedText.String()); triggered {
+			if triggered, errResult := applyStreamErrorText(); triggered {
 				return errResult
 			}
 			s.sendEvent(c, TestEvent{Type: "test_complete", Success: true})

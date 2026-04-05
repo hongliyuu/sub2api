@@ -152,39 +152,63 @@ func (r *openAIStreamTextErrorRepo) SetSchedulable(_ context.Context, _ int64, s
 	return nil
 }
 
-// TestAccountTestService_OpenAIApiKey_StreamTextAccountError verifies that when an
-// OpenAI-compatible upstream returns an account-level error message as plain text
-// delta content (HTTP 200 + stream), the account is permanently disabled.
-func TestAccountTestService_OpenAIApiKey_StreamTextAccountError(t *testing.T) {
+func TestAccountTestService_OpenAIApiKey_StreamBehavior(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	cases := []struct {
-		name    string
-		sseBody string
-		wantErr bool
+		name        string
+		sseBody     string
+		wantDisable bool // expect SetError+SetSchedulable(false)
+		wantSuccess bool // expect test_complete in output
 	}{
 		{
-			name: "account_not_active_via_completed_event",
-			sseBody: "data: {\"type\":\"response.output_text.delta\",\"delta\":\"Your account is not active, please check your billing details on our website.\"}\n\n" +
-				"data: {\"type\":\"response.completed\"}\n\n",
-			wantErr: true,
-		},
-		{
-			name: "account_not_active_via_done",
+			// Single delta matching known error phrase, no response.completed → disable
+			name: "single_delta_error_phrase_no_completed",
 			sseBody: "data: {\"type\":\"response.output_text.delta\",\"delta\":\"Your account is not active, please check your billing details on our website.\"}\n\n" +
 				"data: [DONE]\n\n",
-			wantErr: true,
+			wantDisable: true,
+			wantSuccess: false,
 		},
 		{
-			name:    "account_not_active_via_eof",
-			sseBody: "data: {\"type\":\"response.output_text.delta\",\"delta\":\"Your account is not active, please check your billing details on our website.\"}",
-			wantErr: true,
+			// Same error phrase but stream ends with response.completed → normal reply, no disable
+			name: "error_phrase_with_completed_event_not_flagged",
+			sseBody: "data: {\"type\":\"response.output_text.delta\",\"delta\":\"Your account is not active, please check your billing details on our website.\"}\n\n" +
+				"data: {\"type\":\"response.completed\"}\n\n",
+			wantDisable: false,
+			wantSuccess: true,
 		},
 		{
+			// Multiple deltas → normal multi-token reply, no disable even if one delta matches
+			name: "multiple_deltas_not_flagged",
+			sseBody: "data: {\"type\":\"response.output_text.delta\",\"delta\":\"Your account is not active\"}\n\n" +
+				"data: {\"type\":\"response.output_text.delta\",\"delta\":\", please check your billing details.\"}\n\n" +
+				"data: [DONE]\n\n",
+			wantDisable: false,
+			wantSuccess: true,
+		},
+		{
+			// Normal AI reply: no disable
 			name: "normal_response_not_flagged",
 			sseBody: "data: {\"type\":\"response.output_text.delta\",\"delta\":\"Hello! How can I help you?\"}\n\n" +
 				"data: {\"type\":\"response.completed\"}\n\n",
-			wantErr: false,
+			wantDisable: false,
+			wantSuccess: true,
+		},
+		{
+			// The original bug: "Hi — what can I help with?" must never trigger disable
+			name: "hi_response_not_flagged",
+			sseBody: "data: {\"type\":\"response.output_text.delta\",\"delta\":\"Hi \\u2014 what can I help with?\"}\n\n" +
+				"data: {\"type\":\"response.completed\"}\n\n",
+			wantDisable: false,
+			wantSuccess: true,
+		},
+		{
+			// Single delta, no completed, but text does not match any known error phrase → success
+			name: "single_delta_unknown_text_not_flagged",
+			sseBody: "data: {\"type\":\"response.output_text.delta\",\"delta\":\"Sure, happy to help!\"}\n\n" +
+				"data: [DONE]\n\n",
+			wantDisable: false,
+			wantSuccess: true,
 		},
 	}
 
@@ -211,45 +235,50 @@ func TestAccountTestService_OpenAIApiKey_StreamTextAccountError(t *testing.T) {
 				Credentials: map[string]any{"api_key": "sk-test", "base_url": "https://api.openai.com"},
 			}
 
-			err := svc.testOpenAIAccountConnection(ctx, account, "gpt-5.4")
-			if tc.wantErr {
-				require.Error(t, err)
-				require.Equal(t, 1, repo.setErrorCalls, "SetError should be called once")
-				require.Equal(t, 1, repo.setSchedulableCalls, "SetSchedulable should be called once")
-				require.False(t, repo.lastSchedulable, "account should be marked not schedulable")
+			_ = svc.testOpenAIAccountConnection(ctx, account, "gpt-5.4")
+
+			if tc.wantDisable {
+				require.Equal(t, 1, repo.setErrorCalls, "SetError should be called")
+				require.Equal(t, 1, repo.setSchedulableCalls, "SetSchedulable should be called")
+				require.False(t, repo.lastSchedulable)
 				require.NotContains(t, recorder.Body.String(), "test_complete")
 			} else {
-				require.NoError(t, err)
 				require.Equal(t, 0, repo.setErrorCalls, "SetError should NOT be called")
 				require.Equal(t, 0, repo.setSchedulableCalls, "SetSchedulable should NOT be called")
-				require.Contains(t, recorder.Body.String(), "test_complete")
+				if tc.wantSuccess {
+					require.Contains(t, recorder.Body.String(), "test_complete")
+				}
 			}
 		})
 	}
 }
 
-// TestClassifyOpenAIStreamTextAsAccountError verifies pattern matching.
-func TestClassifyOpenAIStreamTextAsAccountError(t *testing.T) {
-	account := &Account{ID: 1, Type: AccountTypeAPIKey, Platform: PlatformOpenAI}
-
+func TestIsStreamOnlyErrorText(t *testing.T) {
 	cases := []struct {
-		text   string
-		action APIKeyStatusAction
+		text          string
+		deltaCount    int
+		completedSeen bool
+		want          bool
 	}{
-		{"Your account is not active, please check your billing details on our website.", APIKeyStatusActionPermanentDisable},
-		{"account is not active", APIKeyStatusActionPermanentDisable},
-		{"billing details", APIKeyStatusActionPermanentDisable},
-		{"check your billing", APIKeyStatusActionPermanentDisable},
-		{"Account has been suspended.", APIKeyStatusActionPermanentDisable},
-		{"insufficient_quota exceeded", APIKeyStatusActionPermanentDisable},
-		{"Hello, how can I assist you today?", APIKeyStatusActionIgnore},
-		{"", APIKeyStatusActionIgnore},
+		// Known error phrase, single delta, no completed → detect
+		{"Your account is not active, please check your billing details on our website.", 1, false, true},
+		{"account is not active", 1, false, true},
+		// response.completed seen → never detect
+		{"Your account is not active, please check your billing details on our website.", 1, true, false},
+		// Multiple deltas → normal reply
+		{"Your account is not active", 2, false, false},
+		// Text doesn't match any phrase
+		{"Hello! How can I help you?", 1, false, false},
+		{"Hi — what can I help with?", 1, false, false},
+		{"Sure, happy to help!", 1, false, false},
+		{"", 1, false, false},
 	}
 
 	for _, tc := range cases {
-		got := classifyOpenAIStreamTextAsAccountError(account, tc.text)
-		if got != tc.action {
-			t.Errorf("text=%q: want %v, got %v", tc.text, tc.action, got)
+		got := isStreamOnlyErrorText(tc.text, tc.deltaCount, tc.completedSeen)
+		if got != tc.want {
+			t.Errorf("text=%q deltaCount=%d completedSeen=%v: want %v, got %v",
+				tc.text, tc.deltaCount, tc.completedSeen, tc.want, got)
 		}
 	}
 }
