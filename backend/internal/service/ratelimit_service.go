@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -51,6 +52,12 @@ type geminiUsageTotalsBatchProvider interface {
 }
 
 const geminiPrecheckCacheTTL = time.Minute
+
+const (
+	apiKey429Cooldown         = 60 * time.Minute
+	apiKey529Cooldown         = 120 * time.Minute
+	apiKeyServerErrorCooldown = 60 * time.Minute
+)
 
 // NewRateLimitService 创建RateLimitService实例
 func NewRateLimitService(accountRepo AccountRepository, usageRepo UsageLogRepository, cfg *config.Config, geminiQuotaService *GeminiQuotaService, tempUnschedCache TempUnschedCache) *RateLimitService {
@@ -111,6 +118,21 @@ func (s *RateLimitService) CheckErrorPolicy(ctx context.Context, account *Accoun
 // HandleUpstreamError 处理上游错误响应，标记账号状态
 // 返回是否应该停止该账号的调度
 func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Account, statusCode int, headers http.Header, responseBody []byte) (shouldDisable bool) {
+	if account != nil && account.Type == AccountTypeAPIKey {
+		action := ClassifyAPIKeyStatusAction(account, statusCode, responseBody)
+		if s == nil || s.accountRepo == nil {
+			return action == APIKeyStatusActionPermanentDisable || action == APIKeyStatusActionTemporaryCooldown
+		}
+		switch action {
+		case APIKeyStatusActionPermanentDisable:
+			s.handleAPIKeyPermanentDisable(ctx, account, statusCode, responseBody)
+			return true
+		case APIKeyStatusActionTemporaryCooldown:
+			s.handleAPIKeyTemporaryCooldown(ctx, account, statusCode, headers, responseBody)
+			return true
+		}
+	}
+
 	customErrorCodesEnabled := account.IsCustomErrorCodesEnabled()
 
 	// 池模式默认不标记本地账号状态；仅当用户显式配置自定义错误码时按本地策略处理。
@@ -142,6 +164,15 @@ func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Acc
 
 	switch statusCode {
 	case 400:
+		if account.Type == AccountTypeAPIKey && ShouldDisableAPIKeyStatus(account, statusCode, responseBody) {
+			msg := "API key rejected (400)"
+			if upstreamMsg != "" {
+				msg = "API key rejected (400): " + upstreamMsg
+			}
+			s.handleAuthError(ctx, account, msg)
+			shouldDisable = true
+			break
+		}
 		// 只有当错误信息包含 "organization has been disabled" 时才禁用
 		if strings.Contains(strings.ToLower(upstreamMsg), "organization has been disabled") {
 			msg := "Organization disabled (400): " + upstreamMsg
@@ -645,6 +676,53 @@ func (s *RateLimitService) handleAuthError(ctx context.Context, account *Account
 	slog.Warn("account_disabled_auth_error", "account_id", account.ID, "error", errorMsg)
 }
 
+func buildAPIKeyRuntimeErrorMessage(statusCode int, responseBody []byte, prefix string) string {
+	upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(responseBody))
+	upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
+	if upstreamMsg == "" {
+		upstreamMsg = http.StatusText(statusCode)
+	}
+	if strings.TrimSpace(prefix) == "" {
+		return upstreamMsg
+	}
+	return fmt.Sprintf("%s (%d): %s", prefix, statusCode, upstreamMsg)
+}
+
+func (s *RateLimitService) handleAPIKeyPermanentDisable(ctx context.Context, account *Account, statusCode int, responseBody []byte) {
+	msg := buildAPIKeyRuntimeErrorMessage(statusCode, responseBody, "API key permanently disabled after runtime detection")
+	s.handleAuthError(ctx, account, msg)
+}
+
+func (s *RateLimitService) handleAPIKeyTemporaryCooldown(ctx context.Context, account *Account, statusCode int, headers http.Header, responseBody []byte) {
+	switch statusCode {
+	case http.StatusTooManyRequests:
+		if account.Platform == PlatformOpenAI {
+			s.persistOpenAICodexSnapshot(ctx, account, headers)
+		}
+		resetAt := time.Now().Add(apiKey429Cooldown)
+		if err := s.accountRepo.SetRateLimited(ctx, account.ID, resetAt); err != nil {
+			slog.Warn("apikey_rate_limit_set_failed", "account_id", account.ID, "status_code", statusCode, "error", err)
+			return
+		}
+		slog.Info("apikey_rate_limited", "account_id", account.ID, "status_code", statusCode, "reset_at", resetAt)
+	case 529:
+		until := time.Now().Add(apiKey529Cooldown)
+		if err := s.accountRepo.SetOverloaded(ctx, account.ID, until); err != nil {
+			slog.Warn("apikey_overload_set_failed", "account_id", account.ID, "status_code", statusCode, "error", err)
+			return
+		}
+		slog.Info("apikey_overloaded", "account_id", account.ID, "status_code", statusCode, "until", until)
+	case http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		until := time.Now().Add(apiKeyServerErrorCooldown)
+		reason := buildAPIKeyRuntimeErrorMessage(statusCode, responseBody, "API key temporary cooldown after upstream server error")
+		if err := s.accountRepo.SetTempUnschedulable(ctx, account.ID, until, reason); err != nil {
+			slog.Warn("apikey_temp_unsched_set_failed", "account_id", account.ID, "status_code", statusCode, "error", err)
+			return
+		}
+		slog.Info("apikey_temp_unschedulable", "account_id", account.ID, "status_code", statusCode, "until", until)
+	}
+}
+
 // handle403 处理 403 Forbidden 错误
 // Antigravity 平台区分 validation/violation/generic 三种类型，均 SetError 永久禁用；
 // 其他平台保持原有 SetError 行为。
@@ -652,7 +730,7 @@ func (s *RateLimitService) handle403(ctx context.Context, account *Account, upst
 	if account.Platform == PlatformAntigravity {
 		return s.handleAntigravity403(ctx, account, upstreamMsg, responseBody)
 	}
-	if account.Type == AccountTypeAPIKey && !ShouldDisableAPIKeyAuthFailure(account, http.StatusForbidden, responseBody) {
+	if account.Type == AccountTypeAPIKey && !ShouldDisableAPIKeyStatus(account, http.StatusForbidden, responseBody) {
 		slog.Info("apikey_403_not_disabled", "account_id", account.ID, "platform", account.Platform)
 		return false
 	}

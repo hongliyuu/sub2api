@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/googleapi"
 )
 
 type APIKeyHealthCheckResult struct {
@@ -18,6 +19,15 @@ type APIKeyHealthCheckResult struct {
 	Invalid    bool   `json:"invalid"`
 	Message    string `json:"message,omitempty"`
 }
+
+type APIKeyStatusAction int
+
+const (
+	APIKeyStatusActionIgnore APIKeyStatusAction = iota
+	APIKeyStatusActionValid
+	APIKeyStatusActionPermanentDisable
+	APIKeyStatusActionTemporaryCooldown
+)
 
 func DetectAPIKeyPlatform(rawKey string) (string, bool) {
 	key := strings.TrimSpace(rawKey)
@@ -46,50 +56,98 @@ func DefaultAPIKeyBaseURL(platform string) string {
 	}
 }
 
-func ShouldDisableAPIKeyAuthFailure(account *Account, statusCode int, responseBody []byte) bool {
+func ShouldDisableAPIKeyStatus(account *Account, statusCode int, responseBody []byte) bool {
+	return ClassifyAPIKeyStatusAction(account, statusCode, responseBody) == APIKeyStatusActionPermanentDisable
+}
+
+func ClassifyAPIKeyStatusAction(account *Account, statusCode int, responseBody []byte) APIKeyStatusAction {
 	if account == nil || account.Type != AccountTypeAPIKey {
-		return false
+		return APIKeyStatusActionIgnore
+	}
+	if statusCode == http.StatusOK {
+		return APIKeyStatusActionValid
 	}
 
 	msg := strings.ToLower(strings.TrimSpace(extractUpstreamErrorMessage(responseBody)))
 	code := strings.ToLower(strings.TrimSpace(extractUpstreamErrorCode(responseBody)))
+	bodyUpper := strings.ToUpper(string(responseBody))
+
+	switch statusCode {
+	case http.StatusTooManyRequests, 529, http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return APIKeyStatusActionTemporaryCooldown
+	}
 
 	switch account.Platform {
 	case PlatformOpenAI:
-		if statusCode == http.StatusUnauthorized {
-			return true
+		switch statusCode {
+		case http.StatusUnauthorized, http.StatusPaymentRequired:
+			return APIKeyStatusActionPermanentDisable
+		case http.StatusBadRequest:
+			if containsAny(msg,
+				"organization has been disabled",
+				"project has been disabled",
+				"workspace has been deactivated",
+				"workspace has been disabled",
+				"account deactivated",
+				"account has been deactivated",
+				"key is disabled",
+				"api key disabled",
+			) {
+				return APIKeyStatusActionPermanentDisable
+			}
+		case http.StatusForbidden:
+			if code == "invalid_api_key" || code == "token_invalidated" || code == "token_revoked" || code == "account_deactivated" || code == "deactivated_workspace" {
+				return APIKeyStatusActionPermanentDisable
+			}
+			if containsAny(msg,
+				"invalid api key",
+				"incorrect api key",
+				"token invalidated",
+				"token revoked",
+				"account deactivated",
+				"workspace has been deactivated",
+				"organization has been disabled",
+				"project has been disabled",
+				"key is disabled",
+				"api key disabled",
+			) {
+				return APIKeyStatusActionPermanentDisable
+			}
 		}
-		if statusCode != http.StatusForbidden {
-			return false
-		}
-		if code == "invalid_api_key" || code == "token_invalidated" || code == "token_revoked" || code == "account_deactivated" || code == "deactivated_workspace" {
-			return true
-		}
-		return containsAny(msg,
-			"invalid api key",
-			"incorrect api key",
-			"token invalidated",
-			"token revoked",
-			"account deactivated",
-			"workspace has been deactivated",
-			"organization has been disabled",
-			"project has been disabled",
-			"key is disabled",
-			"api key disabled",
-		)
 	case PlatformAnthropic:
-		if statusCode == http.StatusUnauthorized {
-			return true
+		switch statusCode {
+		case http.StatusUnauthorized, http.StatusForbidden:
+			return APIKeyStatusActionPermanentDisable
 		}
-		if statusCode != http.StatusForbidden {
-			return false
-		}
-		return true
 	case PlatformGemini:
-		return statusCode == http.StatusUnauthorized || statusCode == http.StatusForbidden
-	default:
-		return statusCode == http.StatusUnauthorized
+		switch statusCode {
+		case http.StatusUnauthorized, http.StatusForbidden:
+			return APIKeyStatusActionPermanentDisable
+		case http.StatusBadRequest:
+			if strings.Contains(bodyUpper, "API_KEY_INVALID") || googleapi.IsServiceDisabledError(string(responseBody)) {
+				return APIKeyStatusActionPermanentDisable
+			}
+			if containsAny(msg,
+				"api key not valid",
+				"invalid api key",
+				"api_key_invalid",
+				"api key is invalid",
+				"before or it is disabled",
+				"service disabled",
+				"api has not been used in project",
+				"unregistered callers",
+				"caller not registered",
+			) {
+				return APIKeyStatusActionPermanentDisable
+			}
+		}
 	}
+
+	return APIKeyStatusActionIgnore
+}
+
+func ShouldDisableAPIKeyAuthFailure(account *Account, statusCode int, responseBody []byte) bool {
+	return ShouldDisableAPIKeyStatus(account, statusCode, responseBody)
 }
 
 func ClassifyAPIKeyProbeResponse(account *Account, statusCode int, responseBody []byte) (valid bool, invalid bool, message string) {
@@ -104,40 +162,11 @@ func ClassifyAPIKeyProbeResponse(account *Account, statusCode int, responseBody 
 	message = sanitizeUpstreamErrorMessage(message)
 
 	switch account.Platform {
-	case PlatformAnthropic:
-		switch statusCode {
-		case http.StatusOK, http.StatusBadRequest, http.StatusNotFound, http.StatusMethodNotAllowed, http.StatusTooManyRequests, 529:
+	case PlatformAnthropic, PlatformOpenAI, PlatformGemini:
+		switch ClassifyAPIKeyStatusAction(account, statusCode, responseBody) {
+		case APIKeyStatusActionValid:
 			return true, false, message
-		case http.StatusUnauthorized, http.StatusForbidden:
-			return false, true, message
-		default:
-			return false, false, message
-		}
-	case PlatformOpenAI:
-		switch statusCode {
-		case http.StatusOK, http.StatusTooManyRequests:
-			return true, false, message
-		case http.StatusPaymentRequired:
-			return false, true, message
-		case http.StatusUnauthorized:
-			return false, true, message
-		case http.StatusForbidden:
-			return false, ShouldDisableAPIKeyAuthFailure(account, statusCode, responseBody), message
-		default:
-			return false, false, message
-		}
-	case PlatformGemini:
-		switch statusCode {
-		case http.StatusOK, http.StatusTooManyRequests:
-			return true, false, message
-		case http.StatusBadRequest:
-			bodyUpper := strings.ToUpper(string(responseBody))
-			msgLower := strings.ToLower(message)
-			if strings.Contains(bodyUpper, "API_KEY_INVALID") || containsAny(msgLower, "api key not valid", "invalid api key", "api_key_invalid") {
-				return false, true, message
-			}
-			return false, false, message
-		case http.StatusUnauthorized, http.StatusForbidden:
+		case APIKeyStatusActionPermanentDisable:
 			return false, true, message
 		default:
 			return false, false, message

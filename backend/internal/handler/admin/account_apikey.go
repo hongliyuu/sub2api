@@ -255,6 +255,16 @@ func (h *AccountHandler) CheckAPIKeysHealth(c *gin.Context) {
 			item.Valid = health.Valid
 			if health.Valid {
 				result.Valid++
+				if acc.Status != service.StatusActive {
+					if _, err := h.adminService.ClearAccountError(ctx, acc.ID); err != nil {
+						item.Error = err.Error()
+						result.Failed++
+					} else if strings.TrimSpace(item.Message) == "" {
+						item.Message = "account re-enabled after successful health check"
+					} else {
+						item.Message = item.Message + " | account re-enabled after successful health check"
+					}
+				}
 			}
 
 			if health.Invalid {

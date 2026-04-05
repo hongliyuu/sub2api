@@ -34,6 +34,10 @@ type openAICodexExtraListRepo struct {
 	rateLimitCh chan time.Time
 }
 
+func (r *openAIWSRateLimitSignalRepo) SetError(_ context.Context, _ int64, _ string) error {
+	return nil
+}
+
 func (r *openAIWSRateLimitSignalRepo) SetRateLimited(_ context.Context, _ int64, resetAt time.Time) error {
 	r.rateLimitCalls = append(r.rateLimitCalls, resetAt)
 	return nil
@@ -55,6 +59,10 @@ func (r *openAICodexSnapshotAsyncRepo) SetRateLimited(_ context.Context, _ int64
 	return nil
 }
 
+func (r *openAICodexSnapshotAsyncRepo) SetError(_ context.Context, _ int64, _ string) error {
+	return nil
+}
+
 func (r *openAICodexSnapshotAsyncRepo) UpdateExtra(_ context.Context, _ int64, updates map[string]any) error {
 	if r.updateExtraCh != nil {
 		copied := make(map[string]any, len(updates))
@@ -70,6 +78,10 @@ func (r *openAICodexExtraListRepo) SetRateLimited(_ context.Context, _ int64, re
 	if r.rateLimitCh != nil {
 		r.rateLimitCh <- resetAt
 	}
+	return nil
+}
+
+func (r *openAICodexExtraListRepo) SetError(_ context.Context, _ int64, _ string) error {
 	return nil
 }
 
@@ -159,13 +171,15 @@ func TestOpenAIGatewayService_Forward_WSv2ErrorEventUsageLimitPersistsRateLimit(
 	}
 
 	body := []byte(`{"model":"gpt-5.1","stream":false,"input":[{"type":"input_text","text":"hello"}]}`)
+	before := time.Now()
 	result, err := svc.Forward(context.Background(), c, &account, body)
+	after := time.Now()
 	require.Error(t, err)
 	require.Nil(t, result)
 	require.Equal(t, http.StatusTooManyRequests, rec.Code)
 	require.Nil(t, upstream.lastReq, "WS 限流 error event 不应回退到同账号 HTTP")
 	require.Len(t, repo.rateLimitCalls, 1)
-	require.WithinDuration(t, time.Unix(resetAt, 0), repo.rateLimitCalls[0], 2*time.Second)
+	require.WithinDuration(t, before.Add(apiKey429Cooldown), repo.rateLimitCalls[0], after.Sub(before)+time.Second)
 }
 
 func TestOpenAIGatewayService_Forward_WSv2Handshake429PersistsRateLimit(t *testing.T) {
@@ -229,12 +243,15 @@ func TestOpenAIGatewayService_Forward_WSv2Handshake429PersistsRateLimit(t *testi
 	}
 
 	body := []byte(`{"model":"gpt-5.1","stream":false,"input":[{"type":"input_text","text":"hello"}]}`)
+	before := time.Now()
 	result, err := svc.Forward(context.Background(), c, &account, body)
+	after := time.Now()
 	require.Error(t, err)
 	require.Nil(t, result)
 	require.Equal(t, http.StatusTooManyRequests, rec.Code)
 	require.Nil(t, upstream.lastReq, "WS 握手 429 不应回退到同账号 HTTP")
 	require.Len(t, repo.rateLimitCalls, 1)
+	require.WithinDuration(t, before.Add(apiKey429Cooldown), repo.rateLimitCalls[0], after.Sub(before)+time.Second)
 	require.NotEmpty(t, repo.updateExtra, "握手 429 的 x-codex 头应立即落库")
 	require.Contains(t, repo.updateExtra[0], "codex_usage_updated_at")
 }
@@ -335,11 +352,13 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_ErrorEventUsageL
 	cancelWrite()
 	require.NoError(t, err)
 
+	before := time.Now()
 	select {
 	case serverErr := <-serverErrCh:
+		after := time.Now()
 		require.Error(t, serverErr)
 		require.Len(t, repo.rateLimitCalls, 1)
-		require.WithinDuration(t, time.Unix(resetAt, 0), repo.rateLimitCalls[0], 2*time.Second)
+		require.WithinDuration(t, before.Add(apiKey429Cooldown), repo.rateLimitCalls[0], after.Sub(before)+time.Second)
 	case <-time.After(5 * time.Second):
 		t.Fatal("等待 ingress websocket 结束超时")
 	}

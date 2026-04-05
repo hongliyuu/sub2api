@@ -28,11 +28,17 @@ func TestDetectAPIKeyPlatform(t *testing.T) {
 	}
 }
 
-func TestShouldDisableAPIKeyAuthFailure_OpenAI403RequiresExplicitSignals(t *testing.T) {
-	account := &Account{Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
+func TestClassifyAPIKeyStatusAction(t *testing.T) {
+	openAI := &Account{Platform: PlatformOpenAI, Type: AccountTypeAPIKey}
+	anthropic := &Account{Platform: PlatformAnthropic, Type: AccountTypeAPIKey}
+	gemini := &Account{Platform: PlatformGemini, Type: AccountTypeAPIKey}
 
-	require.True(t, ShouldDisableAPIKeyAuthFailure(account, http.StatusForbidden, []byte(`{"error":{"message":"organization has been disabled","code":"account_deactivated"}}`)))
-	require.False(t, ShouldDisableAPIKeyAuthFailure(account, http.StatusForbidden, []byte(`{"error":{"message":"model not allowed for this project","code":"forbidden"}}`)))
+	require.Equal(t, APIKeyStatusActionValid, ClassifyAPIKeyStatusAction(openAI, http.StatusOK, []byte(`{}`)))
+	require.Equal(t, APIKeyStatusActionPermanentDisable, ClassifyAPIKeyStatusAction(openAI, http.StatusForbidden, []byte(`{"error":{"message":"organization has been disabled","code":"account_deactivated"}}`)))
+	require.Equal(t, APIKeyStatusActionIgnore, ClassifyAPIKeyStatusAction(openAI, http.StatusForbidden, []byte(`{"error":{"message":"model not allowed for this project","code":"forbidden"}}`)))
+	require.Equal(t, APIKeyStatusActionIgnore, ClassifyAPIKeyStatusAction(anthropic, http.StatusMethodNotAllowed, []byte(`method not allowed`)))
+	require.Equal(t, APIKeyStatusActionTemporaryCooldown, ClassifyAPIKeyStatusAction(gemini, http.StatusTooManyRequests, []byte(`{"error":{"message":"quota exceeded"}}`)))
+	require.Equal(t, APIKeyStatusActionPermanentDisable, ClassifyAPIKeyStatusAction(gemini, http.StatusBadRequest, []byte(`{"error":{"message":"API key not valid. Please pass a valid API key.","status":"API_KEY_INVALID"}}`)))
 }
 
 func TestClassifyAPIKeyProbeResponse(t *testing.T) {
@@ -52,7 +58,15 @@ func TestClassifyAPIKeyProbeResponse(t *testing.T) {
 	require.False(t, valid)
 	require.True(t, invalid)
 
+	valid, invalid, _ = ClassifyAPIKeyProbeResponse(openAIAccount, http.StatusForbidden, []byte(`{"error":{"message":"model not allowed for this project","code":"forbidden"}}`))
+	require.False(t, valid)
+	require.False(t, invalid)
+
 	valid, invalid, _ = ClassifyAPIKeyProbeResponse(anthropicAccount, http.StatusMethodNotAllowed, []byte(`method not allowed`))
-	require.True(t, valid)
+	require.False(t, valid)
+	require.False(t, invalid)
+
+	valid, invalid, _ = ClassifyAPIKeyProbeResponse(openAIAccount, http.StatusTooManyRequests, []byte(`{"error":{"message":"rate limited"}}`))
+	require.False(t, valid)
 	require.False(t, invalid)
 }
