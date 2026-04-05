@@ -836,6 +836,27 @@ func (a *Account) IsAPIKeyOrBedrock() bool {
 	return a.Type == AccountTypeAPIKey || a.Type == AccountTypeBedrock
 }
 
+// IsCopilot returns true if the account belongs to the Copilot platform.
+func (a *Account) IsCopilot() bool {
+	return a.Platform == PlatformCopilot
+}
+
+// GetGitHubToken returns the GitHub OAuth access_token stored in credentials.
+// This token is used to exchange for a short-lived Copilot API JWT.
+func (a *Account) GetGitHubToken() string {
+	return a.GetCredential("github_token")
+}
+
+// GetCopilotBaseURL returns the Copilot API base URL.
+// If a custom base_url is set in credentials, it is used instead of the default.
+func (a *Account) GetCopilotBaseURL() string {
+	baseURL := a.GetCredential("base_url")
+	if baseURL == "" {
+		return "https://api.githubcopilot.com"
+	}
+	return baseURL
+}
+
 func (a *Account) IsOpenAI() bool {
 	return a.Platform == PlatformOpenAI
 }
