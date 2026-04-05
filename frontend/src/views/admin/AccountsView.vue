@@ -151,6 +151,8 @@
           default-sort-key="name"
           default-sort-order="asc"
           :sort-storage-key="ACCOUNT_SORT_STORAGE_KEY"
+          :server-side-sort="true"
+          @sort="handleSort"
         >
           <template #header-select>
             <input
@@ -401,6 +403,15 @@ const HIDDEN_COLUMNS_KEY = 'account-hidden-columns'
 
 // Sorting settings
 const ACCOUNT_SORT_STORAGE_KEY = 'account-table-sort'
+type AccountSortKey = 'name' | 'status' | 'schedulable' | 'priority' | 'rate_multiplier' | 'last_used_at' | 'expires_at'
+type AccountSortOrder = 'asc' | 'desc'
+type AccountSortState = {
+  sort_by: AccountSortKey
+  sort_order: AccountSortOrder
+}
+const ACCOUNT_DEFAULT_SORT: AccountSortState = { sort_by: 'name', sort_order: 'asc' }
+const ACCOUNT_SORTABLE_KEYS = ['name', 'status', 'schedulable', 'priority', 'rate_multiplier', 'last_used_at', 'expires_at'] as const
+const ACCOUNT_SORTABLE_KEY_SET = new Set<string>(ACCOUNT_SORTABLE_KEYS)
 
 // Auto refresh settings
 const showAutoRefreshDropdown = ref(false)
@@ -511,6 +522,43 @@ const saveColumnsToStorage = () => {
   }
 }
 
+const normalizeAccountSortOrder = (candidate: unknown): AccountSortOrder => {
+  return candidate === 'desc' ? 'desc' : 'asc'
+}
+
+const normalizeAccountSortKey = (candidate: unknown, allowedKeys: Set<string> = ACCOUNT_SORTABLE_KEY_SET): AccountSortKey | '' => {
+  if (typeof candidate !== 'string') return ''
+  return allowedKeys.has(candidate) ? candidate as AccountSortKey : ''
+}
+
+const getVisibleAccountSortKeys = () => {
+  return new Set<string>(
+    ACCOUNT_SORTABLE_KEYS.filter((key) => key === ACCOUNT_DEFAULT_SORT.sort_by || !hiddenColumns.has(key))
+  )
+}
+
+const readPersistedAccountSortState = (allowedKeys: Set<string> = ACCOUNT_SORTABLE_KEY_SET): AccountSortState | null => {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = localStorage.getItem(ACCOUNT_SORT_STORAGE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<AccountSortState>
+    const sortBy = normalizeAccountSortKey(parsed.sort_by, allowedKeys)
+    if (!sortBy) return null
+    return {
+      sort_by: sortBy,
+      sort_order: normalizeAccountSortOrder(parsed.sort_order)
+    }
+  } catch (e) {
+    console.error('Failed to load saved account sort settings:', e)
+    return null
+  }
+}
+
+const resolveInitialAccountSortState = (allowedKeys: Set<string> = ACCOUNT_SORTABLE_KEY_SET): AccountSortState => {
+  return readPersistedAccountSortState(allowedKeys) ?? ACCOUNT_DEFAULT_SORT
+}
+
 const loadSavedAutoRefresh = () => {
   try {
     const saved = localStorage.getItem(AUTO_REFRESH_STORAGE_KEY)
@@ -544,6 +592,8 @@ if (typeof window !== 'undefined') {
   loadSavedColumns()
   loadSavedAutoRefresh()
 }
+
+const initialAccountSort = resolveInitialAccountSortState(getVisibleAccountSortKeys())
 
 const setAutoRefreshEnabled = (enabled: boolean) => {
   autoRefreshEnabled.value = enabled
@@ -594,7 +644,16 @@ const {
   handlePageSizeChange: baseHandlePageSizeChange
 } = useTableLoader<Account, any>({
   fetchFn: adminAPI.accounts.list,
-  initialParams: { platform: '', type: '', status: '', privacy_mode: '', group: '', search: '' }
+  initialParams: {
+    platform: '',
+    type: '',
+    status: '',
+    privacy_mode: '',
+    group: '',
+    search: '',
+    sort_by: initialAccountSort.sort_by,
+    sort_order: initialAccountSort.sort_order
+  }
 })
 
 const {
@@ -671,6 +730,14 @@ const handlePageSizeChange = (size: number) => {
   baseHandlePageSizeChange(size)
 }
 
+const handleSort = (key: string, order: 'asc' | 'desc') => {
+  const sortBy = normalizeAccountSortKey(key)
+  if (!sortBy) return
+  params.sort_by = sortBy
+  params.sort_order = normalizeAccountSortOrder(order)
+  reload()
+}
+
 watch(loading, (isLoading, wasLoading) => {
   if (wasLoading && !isLoading && pendingTodayStatsRefresh.value) {
     pendingTodayStatsRefresh.value = false
@@ -680,6 +747,30 @@ watch(loading, (isLoading, wasLoading) => {
   }
 })
 
+const visibleAccountSortKeySignature = computed(() =>
+  ACCOUNT_SORTABLE_KEYS.filter((key) => key === ACCOUNT_DEFAULT_SORT.sort_by || !hiddenColumns.has(key)).join('|')
+)
+
+watch(visibleAccountSortKeySignature, () => {
+  const allowedKeys = getVisibleAccountSortKeys()
+  const currentSortBy = normalizeAccountSortKey(params.sort_by, allowedKeys)
+  const currentSortOrder = normalizeAccountSortOrder(params.sort_order)
+  if (currentSortBy) {
+    if (params.sort_order !== currentSortOrder) {
+      params.sort_order = currentSortOrder
+    }
+    return
+  }
+
+  const nextSort = resolveInitialAccountSortState(allowedKeys)
+  if (params.sort_by === nextSort.sort_by && params.sort_order === nextSort.sort_order) {
+    return
+  }
+
+  params.sort_by = nextSort.sort_by
+  params.sort_order = nextSort.sort_order
+  reload()
+}, { flush: 'post' })
 const isAnyModalOpen = computed(() => {
   return (
     showCreate.value ||
@@ -774,7 +865,8 @@ const refreshAccountsIncrementally = async () => {
         privacy_mode?: string
         group?: string
         search?: string
-
+        sort_by?: string
+        sort_order?: 'asc' | 'desc'
       },
       { etag: autoRefreshETag.value }
     )

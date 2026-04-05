@@ -187,7 +187,18 @@ func (s *stubAdminService) BatchSetGroupRateMultipliers(_ context.Context, _ int
 	return nil
 }
 
-func (s *stubAdminService) ListAccounts(ctx context.Context, page, pageSize int, platform, accountType, status, search string, groupID int64, privacyMode string) ([]service.Account, int64, error) {
+func (s *stubAdminService) ListAccounts(ctx context.Context, page, pageSize int, platform, accountType, status, search string, groupID int64, privacyMode, sortBy, sortOrder string) ([]service.Account, int64, error) {
+	_ = ctx
+	_ = page
+	_ = pageSize
+	_ = platform
+	_ = accountType
+	_ = status
+	_ = search
+	_ = groupID
+	_ = privacyMode
+	_ = sortBy
+	_ = sortOrder
 	return s.accounts, int64(len(s.accounts)), nil
 }
 

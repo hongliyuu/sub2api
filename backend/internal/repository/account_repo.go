@@ -454,10 +454,37 @@ func (r *accountRepository) Delete(ctx context.Context, id int64) error {
 }
 
 func (r *accountRepository) List(ctx context.Context, params pagination.PaginationParams) ([]service.Account, *pagination.PaginationResult, error) {
-	return r.ListWithFilters(ctx, params, "", "", "", "", 0, "")
+	return r.ListWithFilters(ctx, params, "", "", "", "", 0, "", "", "")
 }
 
-func (r *accountRepository) ListWithFilters(ctx context.Context, params pagination.PaginationParams, platform, accountType, status, search string, groupID int64, privacyMode string) ([]service.Account, *pagination.PaginationResult, error) {
+func normalizeAccountListSort(sortBy, sortOrder string) (string, string) {
+	switch sortBy {
+	case dbaccount.FieldName,
+		dbaccount.FieldStatus,
+		dbaccount.FieldSchedulable,
+		dbaccount.FieldPriority,
+		dbaccount.FieldRateMultiplier,
+		dbaccount.FieldLastUsedAt,
+		dbaccount.FieldExpiresAt:
+	default:
+		sortBy = dbaccount.FieldID
+	}
+
+	if strings.EqualFold(sortOrder, "asc") {
+		return sortBy, "asc"
+	}
+	return sortBy, "desc"
+}
+
+func applyAccountListSort(q *dbent.AccountQuery, sortBy, sortOrder string) *dbent.AccountQuery {
+	field, order := normalizeAccountListSort(sortBy, sortOrder)
+	if order == "asc" {
+		return q.Order(dbent.Asc(field), dbent.Asc(dbaccount.FieldID))
+	}
+	return q.Order(dbent.Desc(field), dbent.Desc(dbaccount.FieldID))
+}
+
+func (r *accountRepository) ListWithFilters(ctx context.Context, params pagination.PaginationParams, platform, accountType, status, search string, groupID int64, privacyMode, sortBy, sortOrder string) ([]service.Account, *pagination.PaginationResult, error) {
 	q := r.client.Account.Query()
 
 	if platform != "" {
@@ -510,10 +537,9 @@ func (r *accountRepository) ListWithFilters(ctx context.Context, params paginati
 		return nil, nil, err
 	}
 
-	accounts, err := q.
+	accounts, err := applyAccountListSort(q, sortBy, sortOrder).
 		Offset(params.Offset()).
 		Limit(params.Limit()).
-		Order(dbent.Desc(dbaccount.FieldID)).
 		All(ctx)
 	if err != nil {
 		return nil, nil, err
