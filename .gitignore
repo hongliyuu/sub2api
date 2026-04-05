@@ -151,3 +151,5 @@ backend/logs/*
 .dekit/
 .omx/
 .gstack/
+.aidesigner/*
+!.aidesigner/.gitkeep
