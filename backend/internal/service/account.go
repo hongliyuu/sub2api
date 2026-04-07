@@ -865,6 +865,21 @@ func (a *Account) GetOpenAIBaseURL() string {
 	return "https://api.openai.com"
 }
 
+// HasCustomOpenAIBaseURL returns true when the account uses a non-default
+// OpenAI-compatible base URL (i.e. a third-party provider such as Azure,
+// CommonStack, etc.).  Callers use this to skip OpenAI-specific model name
+// normalisation that would strip provider prefixes or rewrite model IDs.
+func (a *Account) HasCustomOpenAIBaseURL() bool {
+	if a == nil || !a.IsOpenAI() || a.Type != AccountTypeAPIKey {
+		return false
+	}
+	baseURL := strings.TrimSpace(a.GetCredential("base_url"))
+	if baseURL == "" {
+		return false
+	}
+	return !strings.HasPrefix(baseURL, "https://api.openai.com")
+}
+
 func (a *Account) GetOpenAIAccessToken() string {
 	if !a.IsOpenAI() {
 		return ""

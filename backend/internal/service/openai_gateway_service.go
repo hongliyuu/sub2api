@@ -1937,8 +1937,9 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	}
 	upstreamModel := billingModel
 
-	// 针对所有 OpenAI 账号执行 Codex 模型名规范化，确保上游识别一致。
-	if model, ok := reqBody["model"].(string); ok {
+	// 针对 OpenAI 官方账号执行 Codex 模型名规范化，确保上游识别一致。
+	// 自定义 base_url 的第三方 provider 保留 model_mapping 后的原始名称。
+	if model, ok := reqBody["model"].(string); ok && !account.HasCustomOpenAIBaseURL() {
 		upstreamModel = normalizeCodexModel(model)
 		if upstreamModel != "" && upstreamModel != model {
 			logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Upstream model resolved: %s -> %s (account: %s, type: %s, isCodexCLI: %v)",
