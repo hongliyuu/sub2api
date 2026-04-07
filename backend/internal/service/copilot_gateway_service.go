@@ -117,6 +117,16 @@ func (s *CopilotGatewayService) ForwardChatCompletions(
 ) (*CopilotForwardResult, error) {
 	startTime := time.Now()
 
+	// GitHub Copilot /chat/completions rejects "file" content parts (only
+	// "text" and "image_url" are accepted). When the client sends file
+	// attachments (e.g. Cherry Studio PDF upload), bridge the request through
+	// the /responses endpoint which supports inline base64 file input, then
+	// translate the response back to Chat Completions format so the client
+	// receives the expected protocol.
+	if _, hasFile := StripUnsupportedContentPartsFromOpenAIBody(body); hasFile {
+		return s.forwardChatCompletionsViaResponses(ctx, c, account, body, startTime)
+	}
+
 	translateStart := time.Now()
 	// Normalize the OpenAI request body before forwarding:
 	// merge consecutive same-role messages so Copilot API doesn't reject with 400.
@@ -246,6 +256,333 @@ func (s *CopilotGatewayService) ForwardChatCompletions(
 
 	// Handle non-streaming response
 	return s.handleNonStreamingResponse(c, resp, model, upstreamSent, startTime)
+}
+
+// forwardChatCompletionsViaResponses handles Chat Completions requests that
+// contain "file" content parts (e.g. PDF attachments from Cherry Studio).
+//
+// GitHub Copilot /chat/completions does not accept file parts, but /responses
+// supports inline base64 file input as "input_file". This function:
+//  1. Converts the OpenAI Chat Completions request to Responses API format
+//     (file parts become input_file parts via apicompat.ChatCompletionsToResponses).
+//  2. Forwards the request to Copilot /responses (always streaming upstream).
+//  3. Translates the Responses SSE stream back to Chat Completions format
+//     (streaming or non-streaming depending on what the client requested).
+func (s *CopilotGatewayService) forwardChatCompletionsViaResponses(
+	ctx context.Context,
+	c *gin.Context,
+	account *Account,
+	body []byte,
+	startTime time.Time,
+) (*CopilotForwardResult, error) {
+	translateStart := time.Now()
+
+	body = mergeConsecutiveSameRoleMessagesInOpenAIBody(body)
+	body, logModel := rewriteCopilotUpstreamModel(body, account)
+	body = clampCopilotUpstreamMaxTokens(body, account)
+
+	var chatReq apicompat.ChatCompletionsRequest
+	if err := json.Unmarshal(body, &chatReq); err != nil {
+		return nil, fmt.Errorf("copilot chat via responses: parse request: %w", err)
+	}
+
+	clientWantsStream := chatReq.Stream
+	clientWantsUsageChunk := chatReq.StreamOptions != nil && chatReq.StreamOptions.IncludeUsage
+
+	responsesReq, err := apicompat.ChatCompletionsToResponses(&chatReq)
+	if err != nil {
+		// Conversion errors are client-side problems (e.g. malformed file parts).
+		// Write 400 directly so the handler loop does not mistake this for an
+		// upstream/account failure and attempt unnecessary failover.
+		c.JSON(http.StatusBadRequest, map[string]any{
+			"error": map[string]any{
+				"type":    "invalid_request_error",
+				"message": "Invalid file attachment: " + err.Error(),
+			},
+		})
+		return &CopilotForwardResult{StatusCode: http.StatusBadRequest}, nil
+	}
+	// Always stream upstream — consistent with forwardMessagesViaResponses strategy.
+	responsesReq.Stream = true
+
+	responsesBody, err := json.Marshal(responsesReq)
+	if err != nil {
+		return nil, fmt.Errorf("copilot chat via responses: marshal responses body: %w", err)
+	}
+
+	upstreamModel := strings.TrimSpace(responsesReq.Model)
+	model := logModel
+	if model == "" {
+		model = upstreamModel
+	}
+
+	AppendOpsSpan(c, OpsSpan{
+		Name:        "translate.req",
+		StartUnixMs: translateStart.UnixMilli(),
+		DurationMs:  time.Since(translateStart).Milliseconds(),
+		Status:      "ok",
+	})
+
+	tokenStart := time.Now()
+	token, err := s.tokenProvider.GetAccessToken(ctx, account)
+	AppendOpsSpan(c, OpsSpan{
+		Name:        "token.fetch",
+		StartUnixMs: tokenStart.UnixMilli(),
+		DurationMs:  time.Since(tokenStart).Milliseconds(),
+		Status: func() string {
+			if err != nil {
+				return "error"
+			}
+			return "ok"
+		}(),
+		Attrs: map[string]any{"account_id": account.ID},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("copilot chat via responses: auth: %w", err)
+	}
+
+	// /responses is only available on the canonical Copilot base URL.
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, copilot.CopilotAPIBase+"/responses", bytes.NewReader(responsesBody))
+	if err != nil {
+		return nil, fmt.Errorf("copilot chat via responses: build request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	initiator := copilotInitiator(body)
+	for k, vals := range copilot.CopilotHeaders(initiator, false) {
+		for _, v := range vals {
+			req.Header.Set(k, v)
+		}
+	}
+
+	setOpsUpstreamRequestBody(c, responsesBody)
+
+	upstreamStart := time.Now()
+	resp, err := s.httpClient.Do(req) //nolint:gosec // URL is from trusted Copilot API config
+	upstreamDurationMs := time.Since(upstreamStart).Milliseconds()
+	SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, upstreamDurationMs)
+	AppendOpsSpan(c, OpsSpan{
+		Name:        "upstream.post",
+		StartUnixMs: upstreamStart.UnixMilli(),
+		DurationMs:  upstreamDurationMs,
+		Status: func() string {
+			if err != nil {
+				return "error"
+			}
+			return "ok"
+		}(),
+		Attrs: map[string]any{"account_id": account.ID, "endpoint": "responses"},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("copilot chat via responses: upstream request: %w", err)
+	}
+
+	slog.Debug("copilot upstream response",
+		"account_id", account.ID,
+		"model", upstreamModel,
+		"status", resp.StatusCode,
+		"stream", true,
+		"latency_ms", upstreamDurationMs)
+
+	if resp.StatusCode != http.StatusOK {
+		return s.handleErrorResponse(c, resp, account)
+	}
+
+	if clientWantsStream {
+		return s.handleChatViaResponsesStreamingResponse(c, resp, model, upstreamModel, clientWantsUsageChunk, startTime)
+	}
+	return s.handleChatViaResponsesNonStreamingResponse(c, resp, model, upstreamModel, startTime)
+}
+
+// handleChatViaResponsesStreamingResponse reads a Responses API SSE stream from
+// Copilot and translates each event into Chat Completions SSE chunks, writing
+// them directly to the client as they arrive.
+func (s *CopilotGatewayService) handleChatViaResponsesStreamingResponse(
+	c *gin.Context,
+	resp *http.Response,
+	model string,
+	upstreamModel string,
+	includeUsage bool,
+	startTime time.Time,
+) (*CopilotForwardResult, error) {
+	defer func() { _ = resp.Body.Close() }()
+
+	c.Header("Content-Type", "text/event-stream")
+	c.Header("Cache-Control", "no-cache")
+	c.Header("Connection", "keep-alive")
+	c.Status(http.StatusOK)
+
+	flusher, ok := c.Writer.(http.Flusher)
+	if !ok {
+		return nil, fmt.Errorf("copilot chat via responses stream: writer does not support flushing")
+	}
+
+	state := apicompat.NewResponsesEventToChatState()
+	state.Model = model
+	state.IncludeUsage = includeUsage
+
+	var firstTokenMs *int
+	var usage *CopilotUsage
+
+	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 256*1024), 256*1024)
+
+	for scanner.Scan() {
+		if err := c.Request.Context().Err(); err != nil {
+			slog.Debug("copilot chat via responses stream: client disconnected", "error", err)
+			break
+		}
+
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "data: ") || line == "data: [DONE]" {
+			continue
+		}
+
+		data := line[6:]
+		var evt apicompat.ResponsesStreamEvent
+		if err := json.Unmarshal([]byte(data), &evt); err != nil {
+			continue
+		}
+
+		chunks := apicompat.ResponsesEventToChatChunks(&evt, state)
+		for _, chunk := range chunks {
+			if firstTokenMs == nil {
+				ms := int(time.Since(startTime).Milliseconds())
+				firstTokenMs = &ms
+			}
+			sse, err := apicompat.ChatChunkToSSE(chunk)
+			if err != nil {
+				continue
+			}
+			fmt.Fprint(c.Writer, sse)
+			flusher.Flush()
+		}
+
+		// Capture usage from completion event.
+		if state.Usage != nil && usage == nil {
+			usage = &CopilotUsage{
+				PromptTokens:     state.Usage.PromptTokens,
+				CompletionTokens: state.Usage.CompletionTokens,
+				TotalTokens:      state.Usage.TotalTokens,
+			}
+		}
+	}
+
+	// Emit finish chunk if the stream ended without a proper completion event.
+	for _, chunk := range apicompat.FinalizeResponsesChatStream(state) {
+		sse, err := apicompat.ChatChunkToSSE(chunk)
+		if err == nil {
+			fmt.Fprint(c.Writer, sse)
+			flusher.Flush()
+		}
+	}
+	fmt.Fprint(c.Writer, "data: [DONE]\n\n")
+	flusher.Flush()
+
+	if usage == nil && state.Usage != nil {
+		usage = &CopilotUsage{
+			PromptTokens:     state.Usage.PromptTokens,
+			CompletionTokens: state.Usage.CompletionTokens,
+			TotalTokens:      state.Usage.TotalTokens,
+		}
+	}
+
+	return &CopilotForwardResult{
+		StatusCode:    http.StatusOK,
+		Model:         model,
+		UpstreamModel: upstreamModel,
+		Usage:         usage,
+		Duration:      time.Since(startTime),
+		FirstTokenMs:  firstTokenMs,
+	}, nil
+}
+
+// handleChatViaResponsesNonStreamingResponse buffers the entire Responses API
+// SSE stream from Copilot and returns a single Chat Completions JSON response.
+func (s *CopilotGatewayService) handleChatViaResponsesNonStreamingResponse(
+	c *gin.Context,
+	resp *http.Response,
+	model string,
+	upstreamModel string,
+	startTime time.Time,
+) (*CopilotForwardResult, error) {
+	defer func() { _ = resp.Body.Close() }()
+
+	// Accumulate the final response from terminal SSE events.
+	// response.completed, response.incomplete and response.failed all carry a
+	// Response object; we capture the first one we see as the terminal event.
+	var finalResp *apicompat.ResponsesResponse
+	var terminalEventType string
+
+	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 256*1024), 256*1024)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "data: ") || line == "data: [DONE]" {
+			continue
+		}
+
+		var evt apicompat.ResponsesStreamEvent
+		if err := json.Unmarshal([]byte(line[6:]), &evt); err != nil {
+			continue
+		}
+
+		switch evt.Type {
+		case "response.completed", "response.incomplete", "response.failed":
+			if finalResp == nil && evt.Response != nil {
+				finalResp = evt.Response
+				terminalEventType = evt.Type
+			}
+		}
+	}
+
+	// No terminal event received — the stream ended unexpectedly.
+	if finalResp == nil {
+		return nil, fmt.Errorf("copilot chat via responses: upstream stream ended without terminal event")
+	}
+
+	// Propagate upstream failures as gateway errors.
+	if terminalEventType == "response.failed" {
+		errMsg := "Upstream response failed"
+		if finalResp.Error != nil {
+			errMsg = finalResp.Error.Message
+		}
+		c.JSON(http.StatusBadGateway, map[string]any{
+			"error": map[string]any{
+				"type":    "upstream_error",
+				"message": errMsg,
+			},
+		})
+		return &CopilotForwardResult{StatusCode: http.StatusBadGateway}, nil
+	}
+
+	chatResp := apicompat.ResponsesToChatCompletions(finalResp, model)
+	chatResp.Model = model
+
+	var usage *CopilotUsage
+	if finalResp.Usage != nil {
+		usage = &CopilotUsage{
+			PromptTokens:     finalResp.Usage.InputTokens,
+			CompletionTokens: finalResp.Usage.OutputTokens,
+			TotalTokens:      finalResp.Usage.InputTokens + finalResp.Usage.OutputTokens,
+		}
+	}
+
+	respBytes, err := json.Marshal(chatResp)
+	if err != nil {
+		return nil, fmt.Errorf("copilot chat via responses: marshal response: %w", err)
+	}
+	setOpsUpstreamResponseBody(c, respBytes)
+	c.Data(http.StatusOK, "application/json", respBytes)
+
+	return &CopilotForwardResult{
+		StatusCode:    http.StatusOK,
+		Model:         model,
+		UpstreamModel: upstreamModel,
+		Usage:         usage,
+		Duration:      time.Since(startTime),
+	}, nil
 }
 
 // handleStreamingResponse proxies SSE streaming from Copilot API to the client.

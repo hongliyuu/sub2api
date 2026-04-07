@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +16,31 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 )
+
+// newRedirectingHTTPClient returns an *http.Client backed by the test server's
+// TLS config whose transport rewrites every outbound request to point at srv,
+// regardless of the original Host. Used to intercept calls to canonical Copilot
+// URLs (e.g. api.githubcopilot.com) in unit tests.
+func newRedirectingHTTPClient(srv *httptest.Server) *http.Client {
+	srvURL, _ := url.Parse(srv.URL)
+	base := srv.Client().Transport
+	client := srv.Client()
+	client.Transport = &redirectTransport{target: srvURL, base: base}
+	return client
+}
+
+type redirectTransport struct {
+	target *url.URL
+	base   http.RoundTripper
+}
+
+func (t *redirectTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	cloned := req.Clone(req.Context())
+	cloned.URL.Scheme = t.target.Scheme
+	cloned.URL.Host = t.target.Host
+	cloned.Host = t.target.Host
+	return t.base.RoundTrip(cloned)
+}
 
 func TestCopilotInitiator(t *testing.T) {
 	tests := []struct {
@@ -1057,4 +1083,204 @@ func TestStripUnsupportedContentPartsFromOpenAIBody(t *testing.T) {
 			t.Error("stream field should be preserved")
 		}
 	})
+}
+
+// ── ForwardChatCompletions: file parts routed via /responses ─────────────────
+
+// TestForwardChatCompletions_FilePartsViaResponsesStreaming verifies that when a
+// Chat Completions request contains file content parts, ForwardChatCompletions
+// bridges through Copilot /responses and translates the response back to Chat
+// Completions SSE, so the client receives the file content.
+func TestForwardChatCompletions_FilePartsViaResponsesStreaming(t *testing.T) {
+	var capturedPath string
+	var capturedBody []byte
+
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path
+		capturedBody, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		// Minimal Responses API SSE stream with text output.
+		fmt.Fprint(w, `data: {"type":"response.created","response":{"id":"resp_abc","status":"in_progress","model":"gpt-4o","output":[]}}`, "\n\n")
+		fmt.Fprint(w, `data: {"type":"response.output_text.delta","output_index":0,"content_index":0,"delta":"PDF 摘要内容"}`, "\n\n")
+		fmt.Fprint(w, `data: {"type":"response.completed","response":{"id":"resp_abc","status":"completed","model":"gpt-4o","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"PDF 摘要内容"}]}],"usage":{"input_tokens":50,"output_tokens":20}}}`, "\n\n")
+		fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer srv.Close()
+
+	provider := NewCopilotTokenProvider()
+	tok := newCopilotTestToken("copilot-token-file")
+	provider.tokens[1] = &tok
+
+	svc := NewCopilotGatewayService(provider)
+	// Redirect requests to api.githubcopilot.com → test server via custom transport.
+	svc.httpClient = newRedirectingHTTPClient(srv)
+
+	account := &Account{
+		ID: 1, Platform: PlatformCopilot, Type: AccountTypeAPIKey,
+		Credentials: map[string]any{"github_token": "ghp_test"},
+	}
+
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/copilot/v1/chat/completions", nil)
+
+	clientBody := []byte(`{"model":"gpt-4o","stream":true,"messages":[{"role":"user","content":[{"type":"text","text":"总结这个PDF"},{"type":"file","file":{"filename":"report.pdf","file_data":"data:application/pdf;base64,JVBERi0x"}}]}]}`)
+	result, err := svc.ForwardChatCompletions(context.Background(), c, account, clientBody)
+	if err != nil {
+		t.Fatalf("ForwardChatCompletions: %v", err)
+	}
+
+	// Upstream must have been called at /responses, not /chat/completions.
+	if capturedPath != "/responses" {
+		t.Fatalf("expected upstream path /responses, got %q", capturedPath)
+	}
+
+	// Upstream request must be Responses API format (has "input", not "messages").
+	if !gjson.GetBytes(capturedBody, "input").Exists() {
+		t.Fatalf("expected Responses API format with 'input' field; got: %s", capturedBody)
+	}
+	// File part must have been converted to input_file.
+	inputContent := gjson.GetBytes(capturedBody, "input.0.content")
+	if !inputContent.Exists() {
+		t.Fatalf("expected input[0].content in upstream body; got: %s", capturedBody)
+	}
+	var foundInputFile bool
+	for _, part := range inputContent.Array() {
+		if part.Get("type").String() == "input_file" {
+			foundInputFile = true
+		}
+	}
+	if !foundInputFile {
+		t.Fatalf("expected input_file part in upstream body; got content: %s", inputContent.Raw)
+	}
+
+	// Client response must be Chat Completions SSE.
+	respBody := w.Body.String()
+	if !strings.Contains(respBody, "PDF 摘要内容") {
+		t.Errorf("expected response text in Chat Completions SSE; got: %s", respBody)
+	}
+	if !strings.Contains(respBody, "data:") {
+		t.Errorf("expected SSE format with 'data:' prefix; got: %s", respBody)
+	}
+	if !strings.Contains(respBody, "[DONE]") {
+		t.Errorf("expected [DONE] in SSE stream; got: %s", respBody)
+	}
+
+	// Usage must be captured.
+	if result == nil || result.Usage == nil {
+		t.Fatalf("expected non-nil usage; result=%+v", result)
+	}
+	if result.Usage.PromptTokens != 50 || result.Usage.CompletionTokens != 20 {
+		t.Errorf("expected usage prompt=50 completion=20; got %+v", result.Usage)
+	}
+}
+
+// TestForwardChatCompletions_FilePartsViaResponsesNonStreaming verifies the
+// non-streaming path: file request is bridged via /responses and the response
+// is returned as a single Chat Completions JSON object.
+func TestForwardChatCompletions_FilePartsViaResponsesNonStreaming(t *testing.T) {
+	var capturedPath string
+
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path
+		_, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, `data: {"type":"response.completed","response":{"id":"resp_xyz","status":"completed","model":"gpt-4o","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"文件分析结果"}]}],"usage":{"input_tokens":30,"output_tokens":10}}}`, "\n\n")
+		fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer srv.Close()
+
+	provider := NewCopilotTokenProvider()
+	tok := newCopilotTestToken("copilot-token-nonstream")
+	provider.tokens[1] = &tok
+
+	svc := NewCopilotGatewayService(provider)
+	svc.httpClient = newRedirectingHTTPClient(srv)
+
+	account := &Account{
+		ID: 1, Platform: PlatformCopilot, Type: AccountTypeAPIKey,
+		Credentials: map[string]any{"github_token": "ghp_test"},
+	}
+
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/copilot/v1/chat/completions", nil)
+
+	// stream: false
+	clientBody := []byte(`{"model":"gpt-4o","stream":false,"messages":[{"role":"user","content":[{"type":"text","text":"分析文件"},{"type":"file","file":{"filename":"doc.pdf","file_data":"data:application/pdf;base64,JVBERi0x"}}]}]}`)
+	result, err := svc.ForwardChatCompletions(context.Background(), c, account, clientBody)
+	if err != nil {
+		t.Fatalf("ForwardChatCompletions: %v", err)
+	}
+
+	if capturedPath != "/responses" {
+		t.Fatalf("expected upstream path /responses, got %q", capturedPath)
+	}
+
+	// Response must be valid Chat Completions JSON (not SSE).
+	respBody := w.Body.Bytes()
+	if w.Result().Header.Get("Content-Type") == "text/event-stream" {
+		t.Fatal("expected JSON response for non-streaming request, got SSE content-type")
+	}
+	if !gjson.GetBytes(respBody, "choices.0.message.content").Exists() {
+		t.Fatalf("expected choices[0].message.content in response; got: %s", respBody)
+	}
+	if got := gjson.GetBytes(respBody, "choices.0.message.content").String(); got != "文件分析结果" {
+		t.Errorf("expected '文件分析结果', got %q; body: %s", got, respBody)
+	}
+
+	if result == nil || result.Usage == nil || result.Usage.PromptTokens != 30 {
+		t.Errorf("expected usage prompt=30; result=%+v", result)
+	}
+}
+
+// TestForwardChatCompletions_NoFilePartsUsesDirectPath verifies that requests
+// without file parts still use the direct /chat/completions path (not bridged).
+func TestForwardChatCompletions_NoFilePartsUsesDirectPath(t *testing.T) {
+	var capturedPath string
+
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path
+		_, _ = io.ReadAll(r.Body)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n\n")
+		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"hello\"}}]}\n\n")
+		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n")
+		fmt.Fprint(w, "data: {\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":1}}\n\n")
+		fmt.Fprint(w, "data: [DONE]\n\n")
+	}))
+	defer srv.Close()
+
+	provider := NewCopilotTokenProvider()
+	tok := newCopilotTestToken("copilot-token-direct")
+	provider.tokens[1] = &tok
+
+	svc := NewCopilotGatewayService(provider)
+	svc.httpClient = srv.Client()
+
+	account := &Account{
+		ID: 1, Platform: PlatformCopilot, Type: AccountTypeAPIKey,
+		Credentials: map[string]any{"github_token": "ghp_test", "base_url": srv.URL},
+	}
+
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/copilot/v1/chat/completions", nil)
+
+	// Plain text only, no file parts.
+	clientBody := []byte(`{"model":"gpt-4o","stream":true,"messages":[{"role":"user","content":"hello"}]}`)
+	_, err := svc.ForwardChatCompletions(context.Background(), c, account, clientBody)
+	if err != nil {
+		t.Fatalf("ForwardChatCompletions: %v", err)
+	}
+
+	if capturedPath != "/chat/completions" {
+		t.Fatalf("expected upstream path /chat/completions for no-file request, got %q", capturedPath)
+	}
 }
