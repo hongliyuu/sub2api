@@ -1153,6 +1153,13 @@ func TestForwardChatCompletions_FilePartsViaResponsesStreaming(t *testing.T) {
 	var capturedBody []byte
 
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/models" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, `{"data":[{"id":"gpt-4o","supported_endpoints":["/responses"]}]}`)
+			return
+		}
+
 		capturedPath = r.URL.Path
 		capturedBody, _ = io.ReadAll(r.Body)
 		w.Header().Set("Content-Type", "text/event-stream")
@@ -1241,6 +1248,13 @@ func TestForwardChatCompletions_FilePartsViaResponsesNonStreaming(t *testing.T) 
 	var capturedPath string
 
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/models" {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, `{"data":[{"id":"gpt-4o","supported_endpoints":["/responses"]}]}`)
+			return
+		}
+
 		capturedPath = r.URL.Path
 		_, _ = io.ReadAll(r.Body)
 		w.Header().Set("Content-Type", "text/event-stream")
@@ -1302,8 +1316,17 @@ func TestForwardChatCompletions_FilePartsViaResponsesNonStreaming(t *testing.T) 
 // standard /chat/completions path using the stripped body (file parts removed).
 func TestForwardChatCompletions_UnsupportedAPIForModel_FallbackToChatCompletions(t *testing.T) {
 	var requestPaths []string
+	var sawModelsRequest bool
 
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/models" {
+			sawModelsRequest = true
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, `{"data":[{"id":"claude-opus-4.6","supported_endpoints":["/responses"]}]}`)
+			return
+		}
+
 		requestPaths = append(requestPaths, r.URL.Path)
 		_, _ = io.ReadAll(r.Body)
 
@@ -1349,6 +1372,9 @@ func TestForwardChatCompletions_UnsupportedAPIForModel_FallbackToChatCompletions
 		t.Fatalf("ForwardChatCompletions: %v", err)
 	}
 
+	if !sawModelsRequest {
+		t.Fatal("expected /models probe before upstream path selection")
+	}
 	// Must have tried /responses first, then fallen back to /chat/completions.
 	if len(requestPaths) < 2 {
 		t.Fatalf("expected 2 upstream requests (/responses then /chat/completions), got: %v", requestPaths)
@@ -1385,8 +1411,17 @@ func TestForwardChatCompletions_UnsupportedAPIForModel_FallbackToChatCompletions
 // the unsupported-API fallback — it is forwarded to the client as-is.
 func TestForwardChatCompletions_NonUnsupportedAPI400_NotFallback(t *testing.T) {
 	var requestPaths []string
+	var sawModelsRequest bool
 
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/models" {
+			sawModelsRequest = true
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, `{"data":[{"id":"gpt-4o","supported_endpoints":["/responses"]}]}`)
+			return
+		}
+
 		requestPaths = append(requestPaths, r.URL.Path)
 		_, _ = io.ReadAll(r.Body)
 
@@ -1420,6 +1455,9 @@ func TestForwardChatCompletions_NonUnsupportedAPI400_NotFallback(t *testing.T) {
 		t.Fatalf("ForwardChatCompletions: %v", err)
 	}
 
+	if !sawModelsRequest {
+		t.Fatal("expected /models probe before upstream path selection")
+	}
 	// Only one upstream request — no fallback should happen.
 	if len(requestPaths) != 1 {
 		t.Errorf("expected exactly 1 upstream request (no fallback), got: %v", requestPaths)
