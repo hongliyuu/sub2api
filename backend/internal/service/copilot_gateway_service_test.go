@@ -1519,3 +1519,246 @@ func TestForwardChatCompletions_NoFilePartsUsesDirectPath(t *testing.T) {
 		t.Fatalf("expected upstream path /chat/completions for no-file request, got %q", capturedPath)
 	}
 }
+
+// =============================================================================
+// X-Initiator header billing guard tests
+//
+// These tests lock the Copilot billing behavior at the HTTP layer.
+// X-Initiator controls which quota bucket each request draws from:
+//   - "user"  → Premium Interactions (paid, counts against monthly limit)
+//   - "agent" → Standard quota (free, for multi-turn / tool-call sub-requests)
+//
+// Any code change that breaks these tests risks silently burning the upstream
+// account's Premium quota on every tool-call sub-request in a Codex/CC task.
+// =============================================================================
+
+// TestXInitiatorHeader_ChatCompletions verifies that ForwardChatCompletions sets
+// the correct X-Initiator header on the upstream request:
+//   - First turn (messages has only system/user roles) → "user"
+//   - Multi-turn (messages contains an assistant message) → "agent"
+//   - Tool result (messages contains a tool role) → "agent"
+func TestXInitiatorHeader_ChatCompletions(t *testing.T) {
+	cases := []struct {
+		name          string
+		body          string
+		wantInitiator string
+	}{
+		{
+			name:          "first turn – user only → Premium quota",
+			body:          `{"model":"gpt-4o","stream":false,"messages":[{"role":"user","content":"hello"}]}`,
+			wantInitiator: "user",
+		},
+		{
+			name:          "multi-turn with assistant → Standard quota (free)",
+			body:          `{"model":"gpt-4o","stream":false,"messages":[{"role":"user","content":"hi"},{"role":"assistant","content":"hello"},{"role":"user","content":"more"}]}`,
+			wantInitiator: "agent",
+		},
+		{
+			name:          "tool result sub-request → Standard quota (free)",
+			body:          `{"model":"gpt-4o","stream":false,"messages":[{"role":"user","content":"hi"},{"role":"assistant","content":"ok","tool_calls":[{"id":"c1","type":"function","function":{"name":"f","arguments":"{}"}}]},{"role":"tool","tool_call_id":"c1","content":"result"}]}`,
+			wantInitiator: "agent",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var capturedInitiator string
+			srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				capturedInitiator = r.Header.Get("X-Initiator")
+				_, _ = io.ReadAll(r.Body)
+				w.Header().Set("Content-Type", "text/event-stream")
+				w.WriteHeader(http.StatusOK)
+				fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n\n")
+				fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"},\"finish_reason\":\"stop\"}]}\n\n")
+				fmt.Fprint(w, "data: {\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":5}}\n\n")
+				fmt.Fprint(w, "data: [DONE]\n\n")
+			}))
+			defer srv.Close()
+
+			provider := NewCopilotTokenProvider()
+			tok := newCopilotTestToken("tok-chat-" + tc.name)
+			provider.tokens[1] = &tok
+
+			svc := NewCopilotGatewayService(provider)
+			svc.httpClient = newRedirectingHTTPClient(srv)
+
+			// Use account with custom base_url pointing to test server so the
+			// direct /chat/completions path is used (no /models probe needed).
+			account := &Account{
+				ID: 1, Platform: PlatformCopilot, Type: AccountTypeAPIKey,
+				Credentials: map[string]any{"github_token": "ghp_test", "base_url": srv.URL},
+			}
+
+			gin.SetMode(gin.TestMode)
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest(http.MethodPost, "/copilot/v1/chat/completions", nil)
+
+			_, err := svc.ForwardChatCompletions(context.Background(), c, account, []byte(tc.body))
+			if err != nil {
+				t.Fatalf("ForwardChatCompletions: %v", err)
+			}
+
+			if capturedInitiator != tc.wantInitiator {
+				t.Errorf("X-Initiator = %q, want %q\n(wrong value burns upstream Premium quota on every sub-request)", capturedInitiator, tc.wantInitiator)
+			}
+		})
+	}
+}
+
+// TestXInitiatorHeader_ResponsesEndpoint verifies that ForwardResponses sets the
+// correct X-Initiator header for the OpenAI Responses API (used by Codex CLI).
+// This is the path most likely to be abused: a Codex task fires dozens of
+// tool-call sub-requests — each must be "agent", not "user".
+func TestXInitiatorHeader_ResponsesEndpoint(t *testing.T) {
+	cases := []struct {
+		name          string
+		body          string
+		wantInitiator string
+	}{
+		{
+			name:          "first turn plain string → Premium quota",
+			body:          `{"model":"gpt-4o","input":"hello"}`,
+			wantInitiator: "user",
+		},
+		{
+			name:          "first turn array user only → Premium quota",
+			body:          `{"model":"gpt-4o","input":[{"role":"user","content":"hello"}]}`,
+			wantInitiator: "user",
+		},
+		{
+			name:          "multi-turn with assistant → Standard quota (free)",
+			body:          `{"model":"gpt-4o","input":[{"role":"user","content":"hi"},{"role":"assistant","content":"hello"},{"role":"user","content":"more"}]}`,
+			wantInitiator: "agent",
+		},
+		{
+			name:          "function_call item → Standard quota (free)",
+			body:          `{"model":"gpt-4o","input":[{"role":"user","content":"hi"},{"type":"function_call","name":"read_file","arguments":"{}","call_id":"c1"}]}`,
+			wantInitiator: "agent",
+		},
+		{
+			name:          "function_call_output item → Standard quota (free)",
+			body:          `{"model":"gpt-4o","input":[{"role":"user","content":"hi"},{"type":"function_call_output","call_id":"c1","output":"file contents"}]}`,
+			wantInitiator: "agent",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var capturedInitiator string
+			srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				capturedInitiator = r.Header.Get("X-Initiator")
+				_, _ = io.ReadAll(r.Body)
+				w.Header().Set("Content-Type", "text/event-stream")
+				w.WriteHeader(http.StatusOK)
+				fmt.Fprint(w, `data: {"type":"response.completed","response":{"id":"r1","status":"completed","model":"gpt-4o","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"ok"}]}],"usage":{"input_tokens":10,"output_tokens":5}}}`, "\n\n")
+				fmt.Fprint(w, "data: [DONE]\n\n")
+			}))
+			defer srv.Close()
+
+			provider := NewCopilotTokenProvider()
+			tok := newCopilotTestToken("tok-responses-" + tc.name)
+			provider.tokens[1] = &tok
+
+			svc := NewCopilotGatewayService(provider)
+			svc.httpClient = newRedirectingHTTPClient(srv)
+
+			account := &Account{
+				ID: 1, Platform: PlatformCopilot, Type: AccountTypeAPIKey,
+				Credentials: map[string]any{"github_token": "ghp_test"},
+			}
+
+			gin.SetMode(gin.TestMode)
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest(http.MethodPost, "/copilot/v1/responses", nil)
+
+			_, err := svc.ForwardResponses(context.Background(), c, account, []byte(tc.body))
+			if err != nil {
+				t.Fatalf("ForwardResponses: %v", err)
+			}
+
+			if capturedInitiator != tc.wantInitiator {
+				t.Errorf("X-Initiator = %q, want %q\n(wrong value burns upstream Premium quota on every sub-request)", capturedInitiator, tc.wantInitiator)
+			}
+		})
+	}
+}
+
+// TestXInitiatorHeader_MessagesEndpoint verifies that ForwardMessages (Anthropic
+// protocol, used by Claude Code) sets the correct X-Initiator header.
+// Anthropic tool_use/tool_result blocks must translate to "agent" after the
+// OpenAI translation layer — this test pins that end-to-end behavior.
+func TestXInitiatorHeader_MessagesEndpoint(t *testing.T) {
+	cases := []struct {
+		name          string
+		body          string
+		wantInitiator string
+	}{
+		{
+			name: "first turn user only → Premium quota",
+			body: `{"model":"claude-sonnet-4-5","max_tokens":1024,"messages":[{"role":"user","content":"hello"}]}`,
+			wantInitiator: "user",
+		},
+		{
+			name: "multi-turn with assistant → Standard quota (free)",
+			body: `{"model":"claude-sonnet-4-5","max_tokens":1024,"messages":[{"role":"user","content":"hi"},{"role":"assistant","content":"hello"},{"role":"user","content":"more"}]}`,
+			wantInitiator: "agent",
+		},
+		{
+			name: "tool_use + tool_result (Anthropic format) → Standard quota (free)",
+			body: `{"model":"claude-sonnet-4-5","max_tokens":1024,"messages":[{"role":"user","content":"read file"},{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"read_file","input":{"path":"/tmp/a"}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"file contents"}]}]}`,
+			wantInitiator: "agent",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var capturedInitiator string
+			srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/models" {
+					w.Header().Set("Content-Type", "application/json")
+					w.WriteHeader(http.StatusOK)
+					_, _ = fmt.Fprint(w, `{"data":[{"id":"claude-sonnet-4-5","supported_endpoints":["/chat/completions"]}]}`)
+					return
+				}
+				capturedInitiator = r.Header.Get("X-Initiator")
+				_, _ = io.ReadAll(r.Body)
+				w.Header().Set("Content-Type", "text/event-stream")
+				w.WriteHeader(http.StatusOK)
+				fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n\n")
+				fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}\n\n")
+				fmt.Fprint(w, "data: {\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":3}}\n\n")
+				fmt.Fprint(w, "data: [DONE]\n\n")
+			}))
+			defer srv.Close()
+
+			provider := NewCopilotTokenProvider()
+			tok := newCopilotTestToken("tok-messages-" + tc.name)
+			provider.tokens[1] = &tok
+
+			svc := NewCopilotGatewayService(provider)
+			svc.httpClient = newRedirectingHTTPClient(srv)
+
+			account := &Account{
+				ID: 1, Platform: PlatformCopilot, Type: AccountTypeAPIKey,
+				Credentials: map[string]any{"github_token": "ghp_test"},
+			}
+
+			gin.SetMode(gin.TestMode)
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request = httptest.NewRequest(http.MethodPost, "/copilot/v1/messages", nil)
+			c.Request.Header.Set("Accept", "text/event-stream")
+
+			_, err := svc.ForwardMessages(context.Background(), c, account, []byte(tc.body))
+			if err != nil {
+				t.Fatalf("ForwardMessages: %v", err)
+			}
+
+			if capturedInitiator != tc.wantInitiator {
+				t.Errorf("X-Initiator = %q, want %q\n(wrong value burns upstream Premium quota on every sub-request)", capturedInitiator, tc.wantInitiator)
+			}
+		})
+	}
+}
