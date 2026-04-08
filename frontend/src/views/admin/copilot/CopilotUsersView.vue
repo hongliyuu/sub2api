@@ -53,23 +53,26 @@
           color="blue"
         />
         <SummaryCard
-          title="人均请求数"
+          title="人均 Premium"
           :value="kpiAvgRequests"
           :loading="loading"
           color="purple"
         />
-        <!-- Top 消耗用户（自定义卡片） -->
+        <!-- Top Premium 用户（自定义卡片） -->
         <div class="relative overflow-hidden rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-700 dark:bg-gray-800">
           <div class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-amber-400 via-orange-500 to-pink-500" />
-          <p class="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Top 消耗用户</p>
+          <p class="text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">Top Premium 用户</p>
           <div v-if="loading" class="mt-3 space-y-2">
             <div class="h-5 w-32 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
             <div class="h-7 w-20 animate-pulse rounded bg-gray-200 dark:bg-gray-700" />
           </div>
           <template v-else-if="topUser">
             <p class="mt-2 truncate text-lg font-bold text-gray-900 dark:text-white">{{ topUser.username }}</p>
-            <p class="text-2xl font-bold text-amber-600 dark:text-amber-400">{{ topUser.totalRequests.toLocaleString() }}</p>
-            <p class="mt-0.5 text-xs text-gray-400">总请求数</p>
+            <p class="text-2xl font-bold text-amber-600 dark:text-amber-400">{{ topUser.premiumRequests.toLocaleString() }}</p>
+            <p class="mt-0.5 text-xs text-gray-400">Premium 请求数</p>
+          </template>
+          <template v-else-if="aggregatedUsers.length > 0">
+            <p class="mt-2 text-sm text-gray-400">暂无 Premium 请求</p>
           </template>
           <template v-else>
             <p class="mt-2 text-sm text-gray-400">暂无活跃用户</p>
@@ -175,7 +178,7 @@
                 </td>
                 <td class="hidden px-4 py-3 md:table-cell">
                   <UserSparkline :data="user.sparkline" :width="88" :height="28" color="#8b5cf6" />
-                  <p class="mt-0.5 text-xs text-gray-400">总 {{ user.totalRequests.toLocaleString() }}</p>
+                  <p class="mt-0.5 text-xs text-gray-400">总 {{ user.totalRequests.toLocaleString() }}（含 Agent）</p>
                 </td>
                 <td class="px-4 py-3">
                   <span
@@ -229,7 +232,7 @@ import UserSparkline from '@/components/admin/copilot/UserSparkline.vue'
 // Types
 // ─────────────────────────────────────────────
 
-type ChartMetric = 'premium' | 'agent'
+type ChartMetric = 'premium' | 'agent' | 'total'
 type SortKey = 'premium' | 'agent' | 'total'
 
 interface UserRow {
@@ -258,6 +261,7 @@ const DAY_OPTIONS = [
 const METRIC_OPTIONS = [
   { label: 'Premium', value: 'premium' as ChartMetric },
   { label: 'Agent', value: 'agent' as ChartMetric },
+  { label: '总量', value: 'total' as ChartMetric },
 ]
 
 const SORT_OPTIONS = [
@@ -373,15 +377,17 @@ const kpiTotalPremium = computed(() =>
 const kpiActiveUsers = computed(() => aggregatedUsers.value.length)
 
 const kpiAvgRequests = computed(() => {
-  if (kpiActiveUsers.value === 0) return 0
-  const total = aggregatedUsers.value.reduce((sum, u) => sum + u.totalRequests, 0)
-  return Math.round(total / kpiActiveUsers.value)
+  const premiumUsers = aggregatedUsers.value.filter(u => u.premiumRequests > 0)
+  if (premiumUsers.length === 0) return 0
+  const total = premiumUsers.reduce((sum, u) => sum + u.premiumRequests, 0)
+  return Math.round(total / premiumUsers.length)
 })
 
 const topUser = computed<UserRow | null>(() => {
-  if (!aggregatedUsers.value.length) return null
-  return aggregatedUsers.value.reduce((best, u) =>
-    u.totalRequests > best.totalRequests ? u : best,
+  const withPremium = aggregatedUsers.value.filter(u => u.premiumRequests > 0)
+  if (!withPremium.length) return null
+  return withPremium.reduce((best, u) =>
+    u.premiumRequests > best.premiumRequests ? u : best,
   )
 })
 
