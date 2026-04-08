@@ -55,8 +55,8 @@
               <AmountInput
                 v-model="amount"
                 :amounts="[10, 20, 50, 100, 200, 500, 1000, 2000, 5000]"
-                :min="globalMinAmount"
-                :max="globalMaxAmount"
+                :min="activeMinAmount"
+                :max="activeMaxAmount"
               />
               <p v-if="amountError" class="mt-2 text-xs text-amber-600 dark:text-amber-300">{{ amountError }}</p>
             </div>
@@ -71,15 +71,15 @@
               <div class="space-y-2 text-sm">
                 <div class="flex justify-between">
                   <span class="text-gray-500 dark:text-gray-400">{{ t('payment.amountLabel') }}</span>
-                  <span class="text-gray-900 dark:text-white">${{ validAmount.toFixed(2) }}</span>
+                  <span class="text-gray-900 dark:text-white">¥{{ validAmount.toFixed(2) }}</span>
                 </div>
                 <div class="flex justify-between">
                   <span class="text-gray-500 dark:text-gray-400">{{ t('payment.fee') }} ({{ feeRate }}%)</span>
-                  <span class="text-gray-900 dark:text-white">${{ feeAmount.toFixed(2) }}</span>
+                  <span class="text-gray-900 dark:text-white">¥{{ feeAmount.toFixed(2) }}</span>
                 </div>
                 <div class="flex justify-between border-t border-gray-200 pt-2 dark:border-dark-600">
                   <span class="font-medium text-gray-700 dark:text-gray-300">{{ t('payment.actualPay') }}</span>
-                  <span class="text-lg font-bold text-primary-600 dark:text-primary-400">${{ totalAmount.toFixed(2) }}</span>
+                  <span class="text-lg font-bold text-primary-600 dark:text-primary-400">¥{{ totalAmount.toFixed(2) }}</span>
                 </div>
               </div>
             </div>
@@ -88,7 +88,7 @@
                 <span class="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
                 {{ t('common.processing') }}
               </span>
-              <span v-else>{{ t('payment.createOrder') }} ${{ (feeRate > 0 && validAmount > 0 ? totalAmount : validAmount).toFixed(2) }}</span>
+              <span v-else>{{ t('payment.createOrder') }} ¥{{ (feeRate > 0 && validAmount > 0 ? totalAmount : validAmount).toFixed(2) }}</span>
             </button>
             <div v-if="errorMessage" class="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-800/50 dark:bg-red-900/20">
               <p class="text-sm text-red-700 dark:text-red-400">{{ errorMessage }}</p>
@@ -100,14 +100,12 @@
             <!-- Subscription confirm (inline, replaces plan list) -->
             <template v-if="selectedPlan">
               <div class="card p-5">
-                <!-- Header: platform badge + plan name -->
                 <div class="mb-3 flex flex-wrap items-center gap-2">
                   <span :class="['rounded-md border px-2 py-0.5 text-xs font-medium', planBadgeClass]">
                     {{ platformLabel(selectedPlan.group_platform || '') }}
                   </span>
                   <h3 class="text-lg font-bold text-gray-900 dark:text-white">{{ selectedPlan.name }}</h3>
                 </div>
-                <!-- Price -->
                 <div class="flex items-baseline gap-2">
                   <span v-if="selectedPlan.original_price" class="text-sm text-gray-400 line-through dark:text-gray-500">
                     ${{ selectedPlan.original_price }}
@@ -115,11 +113,9 @@
                   <span :class="['text-3xl font-bold', planTextClass]">${{ selectedPlan.price }}</span>
                   <span class="text-sm text-gray-500 dark:text-gray-400">/ {{ planValiditySuffix }}</span>
                 </div>
-                <!-- Description -->
                 <p v-if="selectedPlan.description" class="mt-2 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
                   {{ selectedPlan.description }}
                 </p>
-                <!-- Rate + Limits grid -->
                 <div class="mt-3 grid grid-cols-2 gap-3">
                   <div>
                     <span class="text-xs text-gray-400 dark:text-gray-500">{{ t('payment.planCard.rate') }}</span>
@@ -189,7 +185,6 @@
               <div v-else :class="planGridClass">
                 <SubscriptionPlanCard v-for="plan in checkout.plans" :key="plan.id" :plan="plan" :active-subscriptions="activeSubscriptions" @select="selectPlan" />
               </div>
-              <!-- Active subscriptions (compact, below plan list) -->
               <div v-if="activeSubscriptions.length > 0">
                 <p class="mb-2 text-xs font-medium text-gray-400 dark:text-gray-500">{{ t('payment.activeSubscription') }}</p>
                 <div class="space-y-2">
@@ -230,7 +225,6 @@
       <Transition name="modal">
         <div v-if="showRenewalModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" @click.self="closeRenewalModal">
           <div class="relative w-full max-w-lg rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl dark:border-dark-700 dark:bg-dark-900">
-            <!-- Close button -->
             <button class="absolute right-4 top-4 rounded-lg p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-dark-700 dark:hover:text-gray-200" @click="closeRenewalModal">
               <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
@@ -300,7 +294,7 @@ const selectedMethod = ref('')
 const selectedPlan = ref<SubscriptionPlan | null>(null)
 const previewImage = ref('')
 
-// Payment phase: 'select' → 'paying' (QR/redirect) or 'stripe' (inline Stripe)
+// Payment phase: 'select' -> 'paying' (QR/redirect) or 'stripe' (inline Stripe)
 const paymentPhase = ref<'select' | 'paying' | 'stripe'>('select')
 const paymentState = ref({ orderId: 0, qrCode: '', expiresAt: '', paymentType: '', payUrl: '', clientSecret: '', publishableKey: '', payAmount: 0, orderType: '' })
 
@@ -339,7 +333,6 @@ function onStripeRedirect(orderId: number, payUrl: string) {
   paymentPhase.value = 'paying'
 }
 
-// All checkout data from single API call
 const checkout = ref<CheckoutInfoResponse>({
   methods: {}, global_min: 0, global_max: 0,
   plans: [], balance_disabled: false, help_text: '', help_image_url: '', stripe_publishable_key: '',
@@ -355,14 +348,12 @@ const tabs = computed(() => {
 const enabledMethods = computed(() => Object.keys(checkout.value.methods))
 const validAmount = computed(() => amount.value ?? 0)
 
-// Adaptive grid: center single card, 2-col for 2 plans, 3-col for 3+
 const planGridClass = computed(() => {
   const n = checkout.value.plans.length
   if (n <= 2) return 'grid grid-cols-1 gap-5 sm:grid-cols-2'
   return 'grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3'
 })
 
-// Check if an amount fits a method's [min, max]. 0 = no limit.
 function amountFitsMethod(amt: number, methodType: string): boolean {
   if (amt <= 0) return true
   const ml = checkout.value.methods[methodType]
@@ -382,12 +373,17 @@ function amountInMethodRange(amt: number, methodType: string): boolean {
   return true
 }
 
-// Global range for AmountInput (union of all methods, precomputed by backend)
-const globalMinAmount = computed(() => checkout.value.global_min)
-const globalMaxAmount = computed(() => checkout.value.global_max)
-
-// Selected method's limits (for validation and error messages)
 const selectedLimit = computed(() => checkout.value.methods[selectedMethod.value])
+
+const activeMinAmount = computed(() => {
+  const ml = selectedLimit.value
+  return ml?.single_min && ml.single_min > 0 ? ml.single_min : checkout.value.global_min
+})
+
+const activeMaxAmount = computed(() => {
+  const ml = selectedLimit.value
+  return ml?.single_max && ml.single_max > 0 ? ml.single_max : checkout.value.global_max
+})
 
 const methodOptions = computed<PaymentMethodOption[]>(() =>
   enabledMethods.value.map((type) => {
@@ -414,14 +410,12 @@ const totalAmount = computed(() =>
 
 const amountError = computed(() => {
   if (validAmount.value <= 0) return ''
-  // No method can handle this amount
   if (!enabledMethods.value.some((m) => amountInMethodRange(validAmount.value, m))) {
     return t('payment.amountNoMethod')
   }
   if (!methodOptions.value.some((m) => m.available)) {
     return t('payment.errors.noAvailableInstance')
   }
-  // Selected method can't handle this amount (but others can)
   const ml = selectedLimit.value
   if (ml) {
     if (ml.single_min > 0 && validAmount.value < ml.single_min) return t('payment.amountTooLow', { min: ml.single_min })
@@ -431,12 +425,11 @@ const amountError = computed(() => {
 })
 
 const canSubmit = computed(() =>
-  validAmount.value > 0
-    && amountFitsMethod(validAmount.value, selectedMethod.value)
-    && selectedLimit.value?.available !== false
+  validAmount.value > 0 &&
+    amountFitsMethod(validAmount.value, selectedMethod.value) &&
+    selectedLimit.value?.available !== false
 )
 
-// Subscription-specific: method options based on plan price
 const subMethodOptions = computed<PaymentMethodOption[]>(() => {
   const planPrice = selectedPlan.value?.price ?? 0
   return enabledMethods.value.map((type) => {
@@ -462,12 +455,11 @@ const subTotalAmount = computed(() => {
 })
 
 const canSubmitSubscription = computed(() =>
-  selectedPlan.value !== null
-    && amountFitsMethod(selectedPlan.value.price, selectedMethod.value)
-    && selectedLimit.value?.available !== false
+  selectedPlan.value !== null &&
+    amountFitsMethod(selectedPlan.value.price, selectedMethod.value) &&
+    selectedLimit.value?.available !== false
 )
 
-// Auto-switch to first available method when current selection can't handle the amount
 watch(() => [validAmount.value, selectedMethod.value] as const, ([amt, method]) => {
   const current = methodOptions.value.find((m) => m.type === method)
   if (amt <= 0 && current?.available !== false) return
@@ -476,7 +468,6 @@ watch(() => [validAmount.value, selectedMethod.value] as const, ([amt, method]) 
   if (available) selectedMethod.value = available.type
 })
 
-// Payment button class: follows selected payment method color
 const paymentButtonClass = computed(() => {
   const m = selectedMethod.value
   if (!m) return 'btn-primary'
@@ -486,23 +477,21 @@ const paymentButtonClass = computed(() => {
   return 'btn-primary'
 })
 
-// Subscription confirm: platform accent colors (clean card, no gradient)
 const planBadgeClass = computed(() => platformBadgeClass(selectedPlan.value?.group_platform || ''))
 const planTextClass = computed(() => platformTextClass(selectedPlan.value?.group_platform || ''))
 
-// Renewal modal state
 const showRenewalModal = ref(false)
 const renewGroupId = ref<number | null>(null)
 const renewalPlans = computed(() => {
   if (renewGroupId.value == null) return []
-  return checkout.value.plans.filter(p => p.group_id === renewGroupId.value)
+  return checkout.value.plans.filter((p) => p.group_id === renewGroupId.value)
 })
 
 const planValiditySuffix = computed(() => {
   if (!selectedPlan.value) return ''
-  const u = selectedPlan.value.validity_unit || 'day'
-  if (u === 'month') return t('payment.perMonth')
-  if (u === 'year') return t('payment.perYear')
+  const unit = selectedPlan.value.validity_unit || 'day'
+  if (unit === 'month') return t('payment.perMonth')
+  if (unit === 'year') return t('payment.perYear')
   return `${selectedPlan.value.validity_days}${t('payment.days')}`
 })
 
@@ -550,42 +539,57 @@ async function createOrder(orderAmount: number, orderType: string, planId?: numb
       }
     }
     if (result.client_secret) {
-      // Stripe: show Payment Element inline (user picks method → confirms → redirect if needed)
       paymentState.value = {
-        orderId: result.order_id, qrCode: '', expiresAt: result.expires_at || '',
-        paymentType: selectedMethod.value, payUrl: '',
-        clientSecret: result.client_secret, publishableKey: result.stripe_publishable_key || '',
+        orderId: result.order_id,
+        qrCode: '',
+        expiresAt: result.expires_at || '',
+        paymentType: selectedMethod.value,
+        payUrl: '',
+        clientSecret: result.client_secret,
+        publishableKey: result.stripe_publishable_key || '',
         payAmount: result.pay_amount,
         orderType,
       }
       paymentPhase.value = 'stripe'
     } else if (isMobileDevice() && result.pay_url) {
-      // Mobile + pay_url: redirect directly instead of QR/popup (mobile browsers block popups)
       paymentState.value = {
-        orderId: result.order_id, qrCode: '', expiresAt: result.expires_at || '',
-        paymentType: selectedMethod.value, payUrl: result.pay_url,
-        clientSecret: '', publishableKey: '', payAmount: 0,
+        orderId: result.order_id,
+        qrCode: '',
+        expiresAt: result.expires_at || '',
+        paymentType: selectedMethod.value,
+        payUrl: result.pay_url,
+        clientSecret: '',
+        publishableKey: '',
+        payAmount: 0,
         orderType,
       }
       paymentPhase.value = 'paying'
       window.location.href = result.pay_url
       return
     } else if (result.qr_code) {
-      // QR mode: show QR code inline
       paymentState.value = {
-        orderId: result.order_id, qrCode: result.qr_code,
-        expiresAt: result.expires_at || '', paymentType: selectedMethod.value, payUrl: '',
-        clientSecret: '', publishableKey: '', payAmount: 0,
+        orderId: result.order_id,
+        qrCode: result.qr_code,
+        expiresAt: result.expires_at || '',
+        paymentType: selectedMethod.value,
+        payUrl: '',
+        clientSecret: '',
+        publishableKey: '',
+        payAmount: 0,
         orderType,
       }
       paymentPhase.value = 'paying'
     } else if (result.pay_url) {
-      // Redirect/popup mode: open payment URL, show waiting state inline
       openWindow(result.pay_url)
       paymentState.value = {
-        orderId: result.order_id, qrCode: '', expiresAt: result.expires_at || '',
-        paymentType: selectedMethod.value, payUrl: result.pay_url,
-        clientSecret: '', publishableKey: '', payAmount: 0,
+        orderId: result.order_id,
+        qrCode: '',
+        expiresAt: result.expires_at || '',
+        paymentType: selectedMethod.value,
+        payUrl: result.pay_url,
+        clientSecret: '',
+        publishableKey: '',
+        payAmount: 0,
         orderType,
       }
       paymentPhase.value = 'paying'
@@ -627,12 +631,11 @@ onMounted(async () => {
     if (checkout.value.balance_disabled) {
       activeTab.value = 'subscription'
     }
-    // Handle renewal navigation: ?tab=subscription&group=123
     if (route.query.tab === 'subscription') {
       activeTab.value = 'subscription'
       if (route.query.group) {
         const groupId = Number(route.query.group)
-        const groupPlans = checkout.value.plans.filter(p => p.group_id === groupId)
+        const groupPlans = checkout.value.plans.filter((p) => p.group_id === groupId)
         if (groupPlans.length === 1) {
           selectedPlan.value = groupPlans[0]
         } else if (groupPlans.length > 1) {
@@ -641,9 +644,11 @@ onMounted(async () => {
         }
       }
     }
-  } catch (err: unknown) { appStore.showError(extractApiErrorMessage(err, t('common.error'))) }
-  finally { loading.value = false }
-  // Fetch active subscriptions (uses cache, non-blocking)
+  } catch (err: unknown) {
+    appStore.showError(extractApiErrorMessage(err, t('common.error')))
+  } finally {
+    loading.value = false
+  }
   subscriptionStore.fetchActiveSubscriptions().catch(() => {})
 })
 </script>
