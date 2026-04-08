@@ -86,6 +86,11 @@
             {{ detail.message || '—' }}
           </div>
         </div>
+
+        <div v-if="detail.client_ip" class="rounded-xl bg-gray-50 p-4 dark:bg-dark-900">
+          <div class="text-xs font-bold uppercase tracking-wider text-gray-400">{{ t('admin.ops.errorDetail.clientIp') }}</div>
+          <div class="mt-1 font-mono text-sm font-medium text-gray-900 dark:text-white">{{ detail.client_ip }}</div>
+        </div>
       </div>
 
       <!-- 阶段耗时分解（有 stage 数据时展示，帮助排查失败原因） -->
