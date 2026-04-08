@@ -1020,7 +1020,7 @@ func (s *CopilotGatewayService) handleChatViaMessagesNonStreamingResponse(
 				} `json:"delta"`
 			}
 			if err := json.Unmarshal([]byte(data), &delta); err == nil && delta.Delta.Type == "text_delta" {
-				fullText.WriteString(delta.Delta.Text)
+				_, _ = fullText.WriteString(delta.Delta.Text)
 			}
 		case "message_start":
 			var ms struct {

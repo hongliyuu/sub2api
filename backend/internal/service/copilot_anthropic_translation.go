@@ -1111,8 +1111,8 @@ func TruncateAnthropicBodyToLimit(body []byte, limitBytes int) (trimmed []byte, 
 // AnthropicDocumentBlock is an Anthropic content block for document (PDF) files.
 // The Anthropic Messages API accepts these natively, preserving file content.
 type AnthropicDocumentBlock struct {
-	Type   string                        `json:"type"` // "document"
-	Source AnthropicDocumentBlockSource  `json:"source"`
+	Type   string                       `json:"type"` // "document"
+	Source AnthropicDocumentBlockSource `json:"source"`
 }
 
 // AnthropicDocumentBlockSource holds the encoded document data.
@@ -1357,4 +1357,3 @@ func extractIntField(m map[string]json.RawMessage, key string) int {
 	_ = json.Unmarshal(raw, &n)
 	return n
 }
-

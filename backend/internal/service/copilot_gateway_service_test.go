@@ -1706,18 +1706,18 @@ func TestXInitiatorHeader_MessagesEndpoint(t *testing.T) {
 		wantInitiator string
 	}{
 		{
-			name: "first turn user only → Premium quota",
-			body: `{"model":"claude-sonnet-4-5","max_tokens":1024,"messages":[{"role":"user","content":"hello"}]}`,
+			name:          "first turn user only → Premium quota",
+			body:          `{"model":"claude-sonnet-4-5","max_tokens":1024,"messages":[{"role":"user","content":"hello"}]}`,
 			wantInitiator: "user",
 		},
 		{
-			name: "multi-turn with assistant → Standard quota (free)",
-			body: `{"model":"claude-sonnet-4-5","max_tokens":1024,"messages":[{"role":"user","content":"hi"},{"role":"assistant","content":"hello"},{"role":"user","content":"more"}]}`,
+			name:          "multi-turn with assistant → Standard quota (free)",
+			body:          `{"model":"claude-sonnet-4-5","max_tokens":1024,"messages":[{"role":"user","content":"hi"},{"role":"assistant","content":"hello"},{"role":"user","content":"more"}]}`,
 			wantInitiator: "agent",
 		},
 		{
-			name: "tool_use + tool_result (Anthropic format) → Standard quota (free)",
-			body: `{"model":"claude-sonnet-4-5","max_tokens":1024,"messages":[{"role":"user","content":"read file"},{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"read_file","input":{"path":"/tmp/a"}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"file contents"}]}]}`,
+			name:          "tool_use + tool_result (Anthropic format) → Standard quota (free)",
+			body:          `{"model":"claude-sonnet-4-5","max_tokens":1024,"messages":[{"role":"user","content":"read file"},{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"read_file","input":{"path":"/tmp/a"}}]},{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"file contents"}]}]}`,
 			wantInitiator: "agent",
 		},
 	}
@@ -1896,7 +1896,7 @@ func modelEndpointMapKeys(m map[string][]string) []string {
 // used when the live /models fetch fails.
 func TestStaticSupportedEndpoints(t *testing.T) {
 	cases := []struct {
-		modelID      string
+		modelID       string
 		wantResponses bool
 	}{
 		{"claude-opus-4.6", true},

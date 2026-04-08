@@ -44,10 +44,10 @@ const (
 // bound to a specific SDK session or a single-use idempotency constraint.
 var opsRetryRequestHeaderAllowlist = map[string]bool{
 	// Anthropic platform behavior
-	"anthropic-beta":                              true,
-	"anthropic-version":                           true,
-	"anthropic-dangerous-direct-browser-access":   true,
-	"x-app":                                       true,
+	"anthropic-beta":                            true,
+	"anthropic-version":                         true,
+	"anthropic-dangerous-direct-browser-access": true,
+	"x-app": true,
 	// OpenAI platform behavior
 	"openai-beta":  true,
 	"content-type": true,
