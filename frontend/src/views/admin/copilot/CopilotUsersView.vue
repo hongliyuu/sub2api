@@ -149,6 +149,7 @@
             :days="selectedDays"
             :user-id="selectedUserId"
             :daily-data="dailyData"
+            :loading="loading"
           />
         </div>
       </div>
@@ -441,11 +442,23 @@ const topUser = computed<UserRow | null>(() => {
   )
 })
 
-// 首次加载后把默认选中用户设为 topUser（当日 Premium 最多）
-watch(topUser, (val) => {
-  if (val && selectedUserId.value === null) {
-    selectedUserId.value = val.userId
+// 默认选中用户：优先 topUser（Premium 最多），降级为列表第一个（兼容纯 Agent 流量）
+// 日期范围切换后，若当前选中用户不在新数据中则重置
+watch(aggregatedUsers, (users) => {
+  if (users.length === 0) {
+    selectedUserId.value = null
+    return
   }
+  const ids = new Set(users.map(u => u.userId))
+  if (selectedUserId.value !== null && ids.has(selectedUserId.value)) {
+    // 当前选中仍然有效，保持不变
+    return
+  }
+  // 优先选 topUser（Premium 最多），否则选第一个有效用户
+  const best = users.filter(u => u.premiumRequests > 0)
+  selectedUserId.value = best.length > 0
+    ? best.reduce((a, b) => b.premiumRequests > a.premiumRequests ? b : a).userId
+    : users[0].userId
 }, { immediate: true })
 
 // ─────────────────────────────────────────────

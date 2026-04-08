@@ -1,11 +1,22 @@
 <template>
   <div class="relative">
-    <div v-if="!userId" class="flex h-[300px] items-center justify-center text-sm text-gray-400">
+    <!-- 加载中 -->
+    <div v-if="loading" class="flex h-[300px] items-center justify-center">
+      <LoadingSpinner />
+    </div>
+    <!-- 未选中用户 -->
+    <div v-else-if="!userId" class="flex h-[300px] items-center justify-center text-sm text-gray-400">
       请选择一个用户
     </div>
+    <!-- 无数据 -->
     <div v-else-if="!dailyData" class="flex h-[300px] items-center justify-center text-sm text-gray-400">
       暂无数据
     </div>
+    <!-- 选中用户不在当前区间 -->
+    <div v-else-if="!userHasData" class="flex h-[300px] items-center justify-center text-sm text-gray-400">
+      该用户在当前时间区间内无请求记录
+    </div>
+    <!-- 图表 -->
     <div v-else class="h-[300px]">
       <canvas ref="chartRef" class="!h-full !w-full" />
     </div>
@@ -13,7 +24,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, watch, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import {
   Chart,
   LineController,
@@ -26,6 +37,7 @@ import {
   Filler,
 } from 'chart.js'
 import type { CopilotUsersDailyStatsResult } from '@/api/admin/copilotAnalytics'
+import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 
 Chart.register(LineController, LineElement, PointElement, LinearScale, CategoryScale, Tooltip, Legend, Filler)
 
@@ -33,8 +45,16 @@ const props = withDefaults(defineProps<{
   days?: number
   userId: number | null
   dailyData: CopilotUsersDailyStatsResult | null
+  loading?: boolean
 }>(), {
   days: 30,
+  loading: false,
+})
+
+/** 当前选中用户在 dailyData 中是否有数据 */
+const userHasData = computed(() => {
+  if (!props.userId || !props.dailyData) return false
+  return props.dailyData.days.some(e => e.user_id === props.userId)
 })
 
 const chartRef = ref<HTMLCanvasElement | null>(null)
@@ -55,7 +75,7 @@ function buildDateRange(days: number): string[] {
 }
 
 function buildChart() {
-  if (!props.userId || !props.dailyData || !chartRef.value) return
+  if (!props.userId || !props.dailyData || !chartRef.value || !userHasData.value) return
 
   const dates = buildDateRange(props.days ?? 30)
 
@@ -158,6 +178,6 @@ async function rebuild() {
 }
 
 onMounted(rebuild)
-watch(() => [props.userId, props.dailyData, props.days], rebuild)
+watch(() => [props.userId, props.dailyData, props.days, props.loading], rebuild)
 onBeforeUnmount(() => chart?.destroy())
 </script>

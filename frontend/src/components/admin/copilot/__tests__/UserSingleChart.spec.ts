@@ -4,7 +4,6 @@ import { mount } from '@vue/test-utils'
 import type { CopilotUsersDailyStatsResult } from '@/api/admin/copilotAnalytics'
 
 // ── Mock Chart.js before importing the component ──────────────────────────────
-// Chart.js requires a canvas context that jsdom does not provide; stub it out.
 vi.mock('chart.js', () => {
   const Chart = vi.fn().mockImplementation(() => ({
     data: {},
@@ -24,6 +23,11 @@ vi.mock('chart.js', () => {
     Filler: {},
   }
 })
+
+// ── Mock LoadingSpinner（依赖 vue-i18n，测试环境无法直接挂载）────────────────
+vi.mock('@/components/common/LoadingSpinner.vue', () => ({
+  default: { template: '<div class="loading-spinner-stub" />' },
+}))
 
 // ── Mock data ─────────────────────────────────────────────────────────────────
 
@@ -63,6 +67,25 @@ describe('UserSingleChart', () => {
     expect(wrapper.text()).toContain('暂无数据')
   })
 
+  it('当 loading=true 时显示 spinner 而非暂无数据', () => {
+    const wrapper = mount(UserSingleChart, {
+      props: { userId: 1, dailyData: null, loading: true },
+    })
+    expect(wrapper.find('.loading-spinner-stub').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('暂无数据')
+  })
+
+  it('当选中用户不在 dailyData 中时显示区间提示', () => {
+    const dataWithoutUser3: CopilotUsersDailyStatsResult = {
+      users: [{ user_id: 1, username: 'alice' }],
+      days: [{ user_id: 1, date: '2026-04-07', premium_count: 5, agent_count: 0 }],
+    }
+    const wrapper = mount(UserSingleChart, {
+      props: { userId: 3, dailyData: dataWithoutUser3 },
+    })
+    expect(wrapper.text()).toContain('该用户在当前时间区间内无请求记录')
+  })
+
   it('当 userId 和 dailyData 都有效时渲染 canvas', () => {
     const wrapper = mount(UserSingleChart, {
       props: { userId: 1, dailyData: MOCK_DAILY_DATA },
@@ -71,3 +94,4 @@ describe('UserSingleChart', () => {
     expect(wrapper.find('canvas').exists()).toBe(true)
   })
 })
+
