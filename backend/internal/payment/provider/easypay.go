@@ -186,7 +186,6 @@ func (e *EasyPay) VerifyNotification(_ context.Context, rawBody string, _ map[st
 	if err != nil {
 		return nil, fmt.Errorf("parse notify: %w", err)
 	}
-	// url.ParseQuery already decodes values — no additional decode needed.
 	params := make(map[string]string)
 	for k := range values {
 		params[k] = values.Get(k)

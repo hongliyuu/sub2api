@@ -213,12 +213,6 @@ func (s *PaymentService) resolveRefundTradeNo(ctx context.Context, prov payment.
 	return tradeNo, nil
 }
 
-// getRefundProvider creates a provider using the order's original instance config.
-// Delegates to getOrderProvider which handles instance lookup and fallback.
-func (s *PaymentService) getRefundProvider(ctx context.Context, o *dbent.PaymentOrder) (payment.Provider, error) {
-	return s.getOrderProvider(ctx, o)
-}
-
 func (s *PaymentService) handleGwFail(ctx context.Context, p *RefundPlan, gErr error) (*RefundResult, error) {
 	if s.RollbackRefund(ctx, p, gErr) {
 		s.restoreStatus(ctx, p)

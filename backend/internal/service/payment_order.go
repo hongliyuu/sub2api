@@ -82,9 +82,6 @@ func (s *PaymentService) validateOrderInput(ctx context.Context, req CreateOrder
 	if req.OrderType == payment.OrderTypeSubscription {
 		return s.validateSubOrder(ctx, req)
 	}
-	if math.IsNaN(req.Amount) || math.IsInf(req.Amount, 0) || req.Amount <= 0 {
-		return nil, infraerrors.BadRequest("INVALID_AMOUNT", "amount must be a positive number")
-	}
 	if (cfg.MinAmount > 0 && req.Amount < cfg.MinAmount) || (cfg.MaxAmount > 0 && req.Amount > cfg.MaxAmount) {
 		return nil, infraerrors.BadRequest("INVALID_AMOUNT", "amount out of range").
 			WithMetadata(map[string]string{"min": fmt.Sprintf("%.2f", cfg.MinAmount), "max": fmt.Sprintf("%.2f", cfg.MaxAmount)})
@@ -304,7 +301,8 @@ func (s *PaymentService) checkDailyLimit(ctx context.Context, tx *dbent.Tx, user
 }
 
 func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.PaymentOrder, req CreateOrderRequest, cfg *PaymentConfig, payAmountStr string, payAmount float64, plan *dbent.SubscriptionPlan, sel *payment.InstanceSelection) (*CreateOrderResponse, error) {
-	prov, err := provider.CreateProvider(sel.ProviderKey, sel.InstanceID, sel.Config)
+	providerKey := sel.ProviderKey
+	prov, err := provider.CreateProvider(providerKey, sel.InstanceID, sel.Config)
 	if err != nil {
 		return nil, infraerrors.ServiceUnavailable("PAYMENT_GATEWAY_ERROR", "payment method is temporarily unavailable")
 	}
@@ -312,7 +310,7 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 	outTradeNo := order.OutTradeNo
 	pr, err := prov.CreatePayment(ctx, payment.CreatePaymentRequest{OrderID: outTradeNo, Amount: payAmountStr, PaymentType: req.PaymentType, Subject: subject, ClientIP: req.ClientIP, IsMobile: req.IsMobile, InstanceSubMethods: sel.SupportedTypes})
 	if err != nil {
-		slog.Error("[PaymentService] CreatePayment failed", "provider", sel.ProviderKey, "instance", sel.InstanceID, "error", err)
+		slog.Error("[PaymentService] CreatePayment failed", "provider", providerKey, "instance", sel.InstanceID, "error", err)
 		return nil, infraerrors.ServiceUnavailable("PAYMENT_GATEWAY_ERROR", fmt.Sprintf("payment gateway error: %s", err.Error()))
 	}
 	_, err = s.entClient.PaymentOrder.UpdateOneID(order.ID).SetNillablePaymentTradeNo(psNilIfEmpty(pr.TradeNo)).SetNillablePayURL(psNilIfEmpty(pr.PayURL)).SetNillableQrCode(psNilIfEmpty(pr.QRCode)).Save(ctx)
@@ -446,13 +444,6 @@ func (s *PaymentService) AdminListOrders(ctx context.Context, userID int64, p Or
 	}
 	if p.PaymentType != "" {
 		q = q.Where(paymentorder.PaymentTypeEQ(p.PaymentType))
-	}
-	if p.Keyword != "" {
-		q = q.Where(paymentorder.Or(
-			paymentorder.OutTradeNoContainsFold(p.Keyword),
-			paymentorder.UserEmailContainsFold(p.Keyword),
-			paymentorder.UserNameContainsFold(p.Keyword),
-		))
 	}
 	total, err := q.Clone().Count(ctx)
 	if err != nil {

@@ -148,7 +148,9 @@ onMounted(async () => {
       try {
         const result = await paymentAPI.verifyOrder(outTradeNo)
         order.value = result.data
-      } catch (_e: unknown) { /* fall through */ }
+      } catch (_e: unknown) {
+        // fall through
+      }
     }
   }
 
