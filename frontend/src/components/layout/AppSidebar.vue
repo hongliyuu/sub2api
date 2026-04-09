@@ -807,6 +807,7 @@ onMounted(() => {
 .sidebar-brand {
   min-width: 0;
   flex: 1 1 auto;
+  overflow: hidden;
   white-space: nowrap;
   transition:
     max-width 0.22s ease,
