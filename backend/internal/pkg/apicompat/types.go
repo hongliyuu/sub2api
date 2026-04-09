@@ -158,11 +158,17 @@ type ResponsesRequest struct {
 	TopP            *float64            `json:"top_p,omitempty"`
 	Stream          bool                `json:"stream,omitempty"`
 	Tools           []ResponsesTool     `json:"tools,omitempty"`
+	Text            *ResponsesText      `json:"text,omitempty"`
 	Include         []string            `json:"include,omitempty"`
 	Store           *bool               `json:"store,omitempty"`
 	Reasoning       *ResponsesReasoning `json:"reasoning,omitempty"`
 	ToolChoice      json.RawMessage     `json:"tool_choice,omitempty"`
 	ServiceTier     string              `json:"service_tier,omitempty"`
+}
+
+// ResponsesText configures text output formatting in the Responses API.
+type ResponsesText struct {
+	Format json.RawMessage `json:"format,omitempty"`
 }
 
 // ResponsesReasoning configures reasoning effort in the Responses API.
@@ -345,6 +351,7 @@ type ChatCompletionsRequest struct {
 	StreamOptions       *ChatStreamOptions `json:"stream_options,omitempty"`
 	Tools               []ChatTool         `json:"tools,omitempty"`
 	ToolChoice          json.RawMessage    `json:"tool_choice,omitempty"`
+	ResponseFormat      json.RawMessage    `json:"response_format,omitempty"`
 	ReasoningEffort     string             `json:"reasoning_effort,omitempty"` // "low" | "medium" | "high"
 	ServiceTier         string             `json:"service_tier,omitempty"`
 	Stop                json.RawMessage    `json:"stop,omitempty"` // string or []string

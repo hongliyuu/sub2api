@@ -157,6 +157,55 @@ func TestChatCompletionsToResponses_ReasoningEffort(t *testing.T) {
 	assert.Equal(t, "auto", resp.Reasoning.Summary)
 }
 
+func TestChatCompletionsToResponses_ResponseFormat(t *testing.T) {
+	req := &ChatCompletionsRequest{
+		Model: "gpt-4o",
+		Messages: []ChatMessage{
+			{Role: "user", Content: json.RawMessage(`"Return structured data"`)}},
+		ResponseFormat: json.RawMessage(`{
+			"type":"json_schema",
+			"json_schema":{
+				"name":"weather",
+				"strict":true,
+				"schema":{
+					"type":"object",
+					"properties":{"city":{"type":"string"}},
+					"required":["city"],
+					"additionalProperties":false
+				}
+			}
+		}`),
+	}
+
+	resp, err := ChatCompletionsToResponses(req)
+	require.NoError(t, err)
+	require.NotNil(t, resp.Text)
+
+	var format map[string]any
+	require.NoError(t, json.Unmarshal(resp.Text.Format, &format))
+	assert.Equal(t, "json_schema", format["type"])
+	assert.Equal(t, "weather", format["name"])
+	assert.Equal(t, true, format["strict"])
+
+	schema, ok := format["schema"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "object", schema["type"])
+}
+
+func TestChatCompletionsToResponses_ResponseFormatJSONObject(t *testing.T) {
+	req := &ChatCompletionsRequest{
+		Model: "gpt-4o",
+		Messages: []ChatMessage{
+			{Role: "user", Content: json.RawMessage(`"Return JSON"`)}},
+		ResponseFormat: json.RawMessage(`{"type":"json_object"}`),
+	}
+
+	resp, err := ChatCompletionsToResponses(req)
+	require.NoError(t, err)
+	require.NotNil(t, resp.Text)
+	assert.JSONEq(t, `{"type":"json_object"}`, string(resp.Text.Format))
+}
+
 func TestChatCompletionsToResponses_ImageURL(t *testing.T) {
 	content := `[{"type":"text","text":"Describe this"},{"type":"image_url","image_url":{"url":"data:image/png;base64,abc123"}}]`
 	req := &ChatCompletionsRequest{

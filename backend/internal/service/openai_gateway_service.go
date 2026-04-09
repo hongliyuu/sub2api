@@ -4966,6 +4966,21 @@ func normalizeOpenAIPassthroughOAuthBody(body []byte, compact bool) ([]byte, boo
 	return normalized, changed, nil
 }
 
+func extractResponsesTextFormatRaw(body []byte) json.RawMessage {
+	format := gjson.GetBytes(body, "text.format")
+	if !format.Exists() || strings.TrimSpace(format.Raw) == "" {
+		return nil
+	}
+	return json.RawMessage(format.Raw)
+}
+
+func restoreResponsesTextFormatRaw(body []byte, format json.RawMessage) ([]byte, error) {
+	if len(format) == 0 {
+		return body, nil
+	}
+	return sjson.SetRawBytes(body, "text.format", format)
+}
+
 func detectOpenAIPassthroughInstructionsRejectReason(reqModel string, body []byte) string {
 	model := strings.ToLower(strings.TrimSpace(reqModel))
 	if !strings.Contains(model, "codex") {

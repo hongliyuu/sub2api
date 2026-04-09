@@ -11,6 +11,26 @@ type chatMessageContent struct {
 	Parts []ChatContentPart
 }
 
+type chatResponseFormat struct {
+	Type       string                  `json:"type"`
+	JSONSchema *chatResponseJSONSchema `json:"json_schema,omitempty"`
+}
+
+type chatResponseJSONSchema struct {
+	Name        string          `json:"name,omitempty"`
+	Description string          `json:"description,omitempty"`
+	Schema      json.RawMessage `json:"schema,omitempty"`
+	Strict      *bool           `json:"strict,omitempty"`
+}
+
+type responsesTextFormat struct {
+	Type        string          `json:"type"`
+	Name        string          `json:"name,omitempty"`
+	Description string          `json:"description,omitempty"`
+	Schema      json.RawMessage `json:"schema,omitempty"`
+	Strict      *bool           `json:"strict,omitempty"`
+}
+
 // ChatCompletionsToResponses converts a Chat Completions request into a
 // Responses API request. The upstream always streams, so Stream is forced to
 // true. store is always false and reasoning.encrypted_content is always
@@ -63,6 +83,17 @@ func ChatCompletionsToResponses(req *ChatCompletionsRequest) (*ResponsesRequest,
 		}
 	}
 
+	// Chat Completions structured outputs use response_format; Responses uses
+	// text.format with a different shape. Convert json_schema requests from
+	// response_format.json_schema.* into text.format.*.
+	if len(req.ResponseFormat) > 0 {
+		format, err := convertChatResponseFormat(req.ResponseFormat)
+		if err != nil {
+			return nil, fmt.Errorf("convert response_format: %w", err)
+		}
+		out.Text = &ResponsesText{Format: format}
+	}
+
 	// tools[] and legacy functions[] → ResponsesTool[]
 	if len(req.Tools) > 0 || len(req.Functions) > 0 {
 		out.Tools = convertChatToolsToResponses(req.Tools, req.Functions)
@@ -81,6 +112,35 @@ func ChatCompletionsToResponses(req *ChatCompletionsRequest) (*ResponsesRequest,
 	}
 
 	return out, nil
+}
+
+func convertChatResponseFormat(raw json.RawMessage) (json.RawMessage, error) {
+	var format chatResponseFormat
+	if err := json.Unmarshal(raw, &format); err != nil {
+		return nil, err
+	}
+
+	switch format.Type {
+	case "json_schema":
+		if format.JSONSchema == nil {
+			return nil, fmt.Errorf("response_format.json_schema is required")
+		}
+		return json.Marshal(responsesTextFormat{
+			Type:        "json_schema",
+			Name:        format.JSONSchema.Name,
+			Description: format.JSONSchema.Description,
+			Schema:      format.JSONSchema.Schema,
+			Strict:      format.JSONSchema.Strict,
+		})
+	case "json_object":
+		return json.Marshal(struct {
+			Type string `json:"type"`
+		}{Type: "json_object"})
+	default:
+		// Keep unknown formats untouched so upstream validation remains the
+		// source of truth for any newer response_format shapes.
+		return raw, nil
+	}
 }
 
 // convertChatMessagesToResponsesInput converts the Chat Completions messages
