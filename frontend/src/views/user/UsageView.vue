@@ -1,5 +1,5 @@
 <template>
-  <AppLayout>
+  <AppLayout v-if="!adminUserId">
     <TablePageLayout>
       <template #actions>
         <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -341,6 +341,336 @@
       </template>
     </TablePageLayout>
   </AppLayout>
+  <TablePageLayout v-else>
+    <template #actions>
+      <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <!-- Total Requests -->
+        <div class="card p-4">
+        <div class="flex items-center gap-3">
+          <div class="rounded-lg bg-blue-100 p-2 dark:bg-blue-900/30">
+            <Icon name="document" size="md" class="text-blue-600 dark:text-blue-400" />
+          </div>
+          <div>
+            <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
+              {{ t('usage.totalRequests') }}
+            </p>
+            <p class="text-xl font-bold text-gray-900 dark:text-white">
+              {{ usageStats?.total_requests?.toLocaleString() || '0' }}
+            </p>
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+              {{ t('usage.inSelectedRange') }}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Total Tokens -->
+      <div class="card p-4">
+        <div class="flex items-center gap-3">
+          <div class="rounded-lg bg-amber-100 p-2 dark:bg-amber-900/30">
+            <Icon name="cube" size="md" class="text-amber-600 dark:text-amber-400" />
+          </div>
+          <div>
+            <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
+              {{ t('usage.totalTokens') }}
+            </p>
+            <p class="text-xl font-bold text-gray-900 dark:text-white">
+              {{ formatTokens(usageStats?.total_tokens || 0) }}
+            </p>
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+              {{ t('usage.in') }}: {{ formatTokens(usageStats?.total_input_tokens || 0) }} /
+              {{ t('usage.out') }}: {{ formatTokens(usageStats?.total_output_tokens || 0) }}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Total Cost -->
+      <div class="card p-4">
+        <div class="flex items-center gap-3">
+          <div class="rounded-lg bg-green-100 p-2 dark:bg-green-900/30">
+            <Icon name="dollar" size="md" class="text-green-600 dark:text-green-400" />
+          </div>
+          <div class="min-w-0 flex-1">
+            <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
+              {{ t('usage.totalCost') }}
+            </p>
+            <p class="text-xl font-bold text-green-600 dark:text-green-400">
+              ${{ (usageStats?.total_actual_cost || 0).toFixed(4) }}
+            </p>
+            <p class="text-xs text-gray-500 dark:text-gray-400">
+              {{ t('usage.actualCost') }} /
+              <span class="line-through">${{ (usageStats?.total_cost || 0).toFixed(4) }}</span>
+              {{ t('usage.standardCost') }}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Average Duration -->
+      <div class="card p-4">
+        <div class="flex items-center gap-3">
+          <div class="rounded-lg bg-purple-100 p-2 dark:bg-purple-900/30">
+            <Icon name="clock" size="md" class="text-purple-600 dark:text-purple-400" />
+          </div>
+          <div>
+            <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
+              {{ t('usage.avgDuration') }}
+            </p>
+            <p class="text-xl font-bold text-gray-900 dark:text-white">
+              {{ formatDuration(usageStats?.average_duration_ms || 0) }}
+            </p>
+            <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('usage.perRequest') }}</p>
+          </div>
+        </div>
+      </div>
+      </div>
+    </template>
+
+    <template #filters>
+      <div class="card">
+        <div class="px-6 py-4">
+        <div class="flex flex-wrap items-end gap-4">
+          <!-- API Key Filter -->
+          <div class="min-w-[180px]">
+            <label class="input-label">{{ t('usage.apiKeyFilter') }}</label>
+            <Select
+              v-model="filters.api_key_id"
+              :options="apiKeyOptions"
+              :placeholder="t('usage.allApiKeys')"
+              @change="applyFilters"
+            />
+          </div>
+
+          <!-- Date Range Filter -->
+          <div>
+            <label class="input-label">{{ t('usage.timeRange') }}</label>
+            <DateRangePicker
+              v-model:start-date="startDate"
+              v-model:end-date="endDate"
+              @change="onDateRangeChange"
+            />
+          </div>
+
+          <!-- Actions -->
+          <div class="ml-auto flex items-center gap-3">
+            <button @click="applyFilters" :disabled="loading" class="btn btn-secondary">
+              {{ t('common.refresh') }}
+            </button>
+            <button @click="resetFilters" class="btn btn-secondary">
+              {{ t('common.reset') }}
+            </button>
+            <button @click="exportToCSV" :disabled="exporting" class="btn btn-primary">
+              <svg
+                v-if="exporting"
+                class="-ml-1 mr-2 h-4 w-4 animate-spin"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  class="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  stroke-width="4"
+                ></circle>
+                <path
+                  class="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                ></path>
+              </svg>
+              {{ exporting ? t('usage.exporting') : t('usage.exportCsv') }}
+            </button>
+          </div>
+        </div>
+      </div>
+      </div>
+    </template>
+
+    <template #table>
+      <DataTable :columns="columns" :data="usageLogs" :loading="loading">
+        <template #cell-api_key="{ row }">
+          <span class="text-sm text-gray-900 dark:text-white">{{
+            row.api_key?.name || '-'
+          }}</span>
+        </template>
+
+        <template #cell-model="{ value }">
+          <span class="font-medium text-gray-900 dark:text-white">{{ value }}</span>
+        </template>
+
+        <template #cell-reasoning_effort="{ row }">
+          <span class="text-sm text-gray-900 dark:text-white">
+            {{ formatReasoningEffort(row.reasoning_effort) }}
+          </span>
+        </template>
+
+        <template #cell-endpoint="{ row }">
+          <span class="text-sm text-gray-600 dark:text-gray-300 block max-w-[320px] whitespace-normal break-all">
+            {{ formatUsageEndpoints(row) }}
+          </span>
+        </template>
+
+        <template #cell-stream="{ row }">
+          <span
+            class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium"
+            :class="getRequestTypeBadgeClass(row)"
+          >
+            {{ getRequestTypeLabel(row) }}
+          </span>
+        </template>
+
+        <template #cell-tokens="{ row }">
+          <div v-if="row.image_count > 0" class="flex items-center gap-1.5">
+            <svg
+              class="h-4 w-4 text-indigo-500"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
+            </svg>
+            <span class="font-medium text-gray-900 dark:text-white">{{ row.image_count }}{{ $t('usage.imageUnit') }}</span>
+            <span class="text-gray-400">({{ row.image_size || '2K' }})</span>
+          </div>
+          <div v-else class="flex items-center gap-1.5">
+            <div class="space-y-1.5 text-sm">
+              <div class="flex items-center gap-2">
+                <div class="inline-flex items-center gap-1">
+                  <Icon name="arrowDown" size="sm" class="text-emerald-500" />
+                  <span class="font-medium text-gray-900 dark:text-white">{{
+                    row.input_tokens.toLocaleString()
+                  }}</span>
+                </div>
+                <div class="inline-flex items-center gap-1">
+                  <Icon name="arrowUp" size="sm" class="text-violet-500" />
+                  <span class="font-medium text-gray-900 dark:text-white">{{
+                    row.output_tokens.toLocaleString()
+                  }}</span>
+                </div>
+              </div>
+              <div
+                v-if="row.cache_read_tokens > 0 || row.cache_creation_tokens > 0"
+                class="flex items-center gap-2"
+              >
+                <div v-if="row.cache_read_tokens > 0" class="inline-flex items-center gap-1">
+                  <Icon name="inbox" size="sm" class="text-sky-500" />
+                  <span class="font-medium text-sky-600 dark:text-sky-400">{{
+                    formatCacheTokens(row.cache_read_tokens)
+                  }}</span>
+                </div>
+                <div v-if="row.cache_creation_tokens > 0" class="inline-flex items-center gap-1">
+                  <Icon name="edit" size="sm" class="text-amber-500" />
+                  <span class="font-medium text-amber-600 dark:text-amber-400">{{
+                    formatCacheTokens(row.cache_creation_tokens)
+                  }}</span>
+                  <span v-if="row.cache_creation_1h_tokens > 0" class="inline-flex items-center rounded px-1 py-px text-[10px] font-medium leading-tight bg-orange-100 text-orange-600 ring-1 ring-inset ring-orange-200 dark:bg-orange-500/20 dark:text-orange-400 dark:ring-orange-500/30">1h</span>
+                  <span v-if="row.cache_ttl_overridden" :title="t('usage.cacheTtlOverriddenHint')" class="inline-flex items-center rounded px-1 py-px text-[10px] font-medium leading-tight bg-rose-100 text-rose-600 ring-1 ring-inset ring-rose-200 dark:bg-rose-500/20 dark:text-rose-400 dark:ring-rose-500/30 cursor-help">R</span>
+                </div>
+              </div>
+            </div>
+            <div
+              class="group relative"
+              @mouseenter="showTokenTooltip($event, row)"
+              @mouseleave="hideTokenTooltip"
+            >
+              <div
+                class="flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-gray-100 transition-colors group-hover:bg-blue-100 dark:bg-gray-700 dark:group-hover:bg-blue-900/50"
+              >
+                <Icon
+                  name="infoCircle"
+                  size="xs"
+                  class="text-gray-400 group-hover:text-blue-500 dark:text-gray-500 dark:group-hover:text-blue-400"
+                />
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <template #cell-cost="{ row }">
+          <div class="flex items-center gap-1.5 text-sm">
+            <span class="font-medium text-green-600 dark:text-green-400">
+              ${{ row.actual_cost.toFixed(6) }}
+            </span>
+            <div
+              class="group relative"
+              @mouseenter="showTooltip($event, row)"
+              @mouseleave="hideTooltip"
+            >
+              <div
+                class="flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-gray-100 transition-colors group-hover:bg-blue-100 dark:bg-gray-700 dark:group-hover:bg-blue-900/50"
+              >
+                <Icon
+                  name="infoCircle"
+                  size="xs"
+                  class="text-gray-400 group-hover:text-blue-500 dark:text-gray-500 dark:group-hover:text-blue-400"
+                />
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <template #cell-first_token="{ row }">
+          <span
+            v-if="row.first_token_ms != null"
+            class="text-sm text-gray-600 dark:text-gray-400"
+          >
+            {{ formatDuration(row.first_token_ms) }}
+          </span>
+          <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
+        </template>
+
+        <template #cell-duration="{ row }">
+          <span class="text-sm text-gray-600 dark:text-gray-400">{{
+            formatDuration(row.duration_ms)
+          }}</span>
+        </template>
+
+        <template #cell-request_body_size="{ row }">
+          <span
+            v-if="row.request_body_bytes != null"
+            class="text-sm text-gray-600 dark:text-gray-400"
+          >
+            {{ Math.round(row.request_body_bytes / 1024) }} KB
+          </span>
+          <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
+        </template>
+
+        <template #cell-created_at="{ value }">
+          <span class="text-sm text-gray-600 dark:text-gray-400">{{
+            formatDateTime(value)
+          }}</span>
+        </template>
+
+        <template #cell-user_agent="{ row }">
+          <span v-if="row.user_agent" class="text-sm text-gray-600 dark:text-gray-400 block max-w-[320px] whitespace-normal break-all" :title="row.user_agent">{{ formatUserAgent(row.user_agent) }}</span>
+          <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
+        </template>
+
+        <template #empty>
+          <EmptyState :message="t('usage.noRecords')" />
+        </template>
+      </DataTable>
+    </template>
+
+    <template #pagination>
+      <Pagination
+        v-if="pagination.total > 0"
+        :page="pagination.page"
+        :total="pagination.total"
+        :page-size="pagination.page_size"
+        @update:page="handlePageChange"
+        @update:pageSize="handlePageSizeChange"
+      />
+    </template>
+  </TablePageLayout>
 
   <!-- Token Tooltip Portal -->
   <Teleport to="body">
@@ -495,6 +825,8 @@ import { ref, computed, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { usageAPI, keysAPI } from '@/api'
+import adminUsageAPI from '@/api/admin/usage'
+import { usersAPI as adminUsersAPI } from '@/api/admin/users'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 import DataTable from '@/components/common/DataTable.vue'
@@ -510,6 +842,9 @@ import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { formatTokenPricePerMillion } from '@/utils/usagePricing'
 import { getUsageServiceTierLabel } from '@/utils/usageServiceTier'
 import { resolveUsageRequestType } from '@/utils/usageRequestType'
+
+const props = defineProps<{ adminUserId?: number }>()
+const adminUserId = computed(() => props.adminUserId)
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -675,13 +1010,24 @@ const loadUsageLogs = async () => {
       ...filters.value
     }
 
-    const response = await usageAPI.query(params, { signal })
-    if (signal.aborted) {
-      return
+    if (props.adminUserId) {
+      const adminParams = { ...params, user_id: props.adminUserId }
+      const response = await adminUsageAPI.list(adminParams, { signal })
+      if (signal.aborted) {
+        return
+      }
+      usageLogs.value = response.items as any
+      pagination.total = response.total
+      pagination.pages = response.pages
+    } else {
+      const response = await usageAPI.query(params, { signal })
+      if (signal.aborted) {
+        return
+      }
+      usageLogs.value = response.items
+      pagination.total = response.total
+      pagination.pages = response.pages
     }
-    usageLogs.value = response.items
-    pagination.total = response.total
-    pagination.pages = response.pages
   } catch (error) {
     if (signal.aborted) {
       return
@@ -700,8 +1046,13 @@ const loadUsageLogs = async () => {
 
 const loadApiKeys = async () => {
   try {
-    const response = await keysAPI.list(1, 100)
-    apiKeys.value = response.items
+    if (props.adminUserId) {
+      const res = await adminUsersAPI.getUserApiKeys(props.adminUserId)
+      apiKeys.value = res.items as any
+    } else {
+      const response = await keysAPI.list(1, 100)
+      apiKeys.value = response.items
+    }
   } catch (error) {
     console.error('Failed to load API keys:', error)
   }
@@ -709,13 +1060,22 @@ const loadApiKeys = async () => {
 
 const loadUsageStats = async () => {
   try {
-    const apiKeyId = filters.value.api_key_id ? Number(filters.value.api_key_id) : undefined
-    const stats = await usageAPI.getStatsByDateRange(
-      filters.value.start_date || startDate.value,
-      filters.value.end_date || endDate.value,
-      apiKeyId
-    )
-    usageStats.value = stats
+    if (props.adminUserId) {
+      const stats = await adminUsageAPI.getStats({
+        user_id: props.adminUserId,
+        start_date: filters.value.start_date || startDate.value,
+        end_date: filters.value.end_date || endDate.value
+      })
+      usageStats.value = stats as any
+    } else {
+      const apiKeyId = filters.value.api_key_id ? Number(filters.value.api_key_id) : undefined
+      const stats = await usageAPI.getStatsByDateRange(
+        filters.value.start_date || startDate.value,
+        filters.value.end_date || endDate.value,
+        apiKeyId
+      )
+      usageStats.value = stats
+    }
   } catch (error) {
     console.error('Failed to load usage stats:', error)
   }

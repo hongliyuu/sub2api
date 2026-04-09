@@ -1,5 +1,5 @@
 <template>
-  <AppLayout>
+  <AppLayout v-if="!adminUserId">
     <TablePageLayout>
       <template #filters>
         <div class="flex flex-wrap items-center gap-3">
@@ -368,8 +368,367 @@
         />
       </template>
     </TablePageLayout>
+  </AppLayout>
+  <TablePageLayout v-else>
+    <template #filters>
+      <div class="flex flex-wrap items-center gap-3">
+        <SearchInput
+          v-model="filterSearch"
+          :placeholder="t('keys.searchPlaceholder')"
+          class="w-full sm:w-64"
+          @search="onFilterChange"
+        />
+        <Select
+          :model-value="filterGroupId"
+          class="w-40"
+          :options="groupFilterOptions"
+          @update:model-value="onGroupFilterChange"
+        />
+        <Select
+          :model-value="filterStatus"
+          class="w-40"
+          :options="statusFilterOptions"
+          @update:model-value="onStatusFilterChange"
+        />
+      </div>
+    </template>
 
-    <!-- Create/Edit Modal -->
+    <template #actions>
+      <div class="flex justify-end gap-3">
+        <button
+          @click="loadApiKeys"
+          :disabled="loading"
+          class="btn btn-secondary"
+          :title="t('common.refresh')"
+        >
+          <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
+        </button>
+        <button @click="showCreateModal = true" class="btn btn-primary" data-tour="keys-create-btn">
+          <Icon name="plus" size="md" class="mr-2" />
+          {{ t('keys.createKey') }}
+        </button>
+      </div>
+    </template>
+
+    <template #table>
+      <DataTable :columns="columns" :data="apiKeys" :loading="loading">
+        <template #cell-key="{ value, row }">
+          <div class="flex items-center gap-2">
+            <code class="code text-xs">
+              {{ maskKey(value) }}
+            </code>
+            <button
+              @click="copyToClipboard(value, row.id)"
+              class="rounded-lg p-1 transition-colors hover:bg-gray-100 dark:hover:bg-dark-700"
+              :class="
+                copiedKeyId === row.id
+                  ? 'text-green-500'
+                  : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+              "
+              :title="copiedKeyId === row.id ? t('keys.copied') : t('keys.copyToClipboard')"
+            >
+              <Icon
+                v-if="copiedKeyId === row.id"
+                name="check"
+                size="sm"
+                :stroke-width="2"
+              />
+              <Icon v-else name="clipboard" size="sm" />
+            </button>
+          </div>
+        </template>
+
+        <template #cell-name="{ value, row }">
+          <div class="flex items-center gap-1.5">
+            <span class="font-medium text-gray-900 dark:text-white">{{ value }}</span>
+            <Icon
+              v-if="row.ip_whitelist?.length > 0 || row.ip_blacklist?.length > 0"
+              name="shield"
+              size="sm"
+              class="text-blue-500"
+              :title="t('keys.ipRestrictionEnabled')"
+            />
+          </div>
+        </template>
+
+        <template #cell-group="{ row }">
+          <div class="group/dropdown relative">
+            <button
+              :ref="(el) => setGroupButtonRef(row.id, el)"
+              @click="openGroupSelector(row)"
+              class="-mx-2 -my-1 flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-dark-700"
+              :title="t('keys.clickToChangeGroup')"
+            >
+              <GroupBadge
+                v-if="row.group"
+                :name="row.group.name"
+                :platform="row.group.platform"
+                :subscription-type="row.group.subscription_type"
+                :rate-multiplier="row.group.rate_multiplier"
+                :user-rate-multiplier="userGroupRates[row.group.id]"
+              />
+              <span v-else class="text-sm text-gray-400 dark:text-dark-500">{{
+                t('keys.noGroup')
+              }}</span>
+              <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('keys.selectGroup') }}</span>
+              <svg
+                class="h-3.5 w-3.5 text-gray-400 opacity-60 transition-opacity group-hover/dropdown:opacity-100"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                stroke-width="2"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9"
+                />
+              </svg>
+            </button>
+          </div>
+        </template>
+
+        <template #cell-usage="{ row }">
+          <div class="text-sm">
+            <div class="flex items-center gap-1.5">
+              <span class="text-gray-500 dark:text-gray-400">{{ t('keys.today') }}:</span>
+              <span class="font-medium text-gray-900 dark:text-white">
+                ${{ (usageStats[row.id]?.today_actual_cost ?? 0).toFixed(4) }}
+              </span>
+            </div>
+            <div class="mt-0.5 flex items-center gap-1.5">
+              <span class="text-gray-500 dark:text-gray-400">{{ t('keys.total') }}:</span>
+              <span class="font-medium text-gray-900 dark:text-white">
+                ${{ (usageStats[row.id]?.total_actual_cost ?? 0).toFixed(4) }}
+              </span>
+            </div>
+            <div v-if="row.quota > 0" class="mt-1.5">
+              <div class="flex items-center gap-1.5">
+                <span class="text-gray-500 dark:text-gray-400">{{ t('keys.quota') }}:</span>
+                <span :class="[
+                  'font-medium',
+                  row.quota_used >= row.quota ? 'text-red-500' :
+                  row.quota_used >= row.quota * 0.8 ? 'text-yellow-500' :
+                  'text-gray-900 dark:text-white'
+                ]">
+                  ${{ row.quota_used?.toFixed(2) || '0.00' }} / ${{ row.quota?.toFixed(2) }}
+                </span>
+              </div>
+              <div class="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-dark-600">
+                <div
+                  :class="[
+                    'h-full rounded-full transition-all',
+                    row.quota_used >= row.quota ? 'bg-red-500' :
+                    row.quota_used >= row.quota * 0.8 ? 'bg-yellow-500' :
+                    'bg-primary-500'
+                  ]"
+                  :style="{ width: Math.min((row.quota_used / row.quota) * 100, 100) + '%' }"
+                />
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <template #cell-rate_limit="{ row }">
+          <div v-if="row.rate_limit_5h > 0 || row.rate_limit_1d > 0 || row.rate_limit_7d > 0" class="space-y-1.5 min-w-[140px]">
+            <div v-if="row.rate_limit_5h > 0">
+              <div class="flex items-center justify-between text-xs">
+                <span class="text-gray-500 dark:text-gray-400">5h</span>
+                <span :class="[
+                  'font-medium tabular-nums',
+                  row.usage_5h >= row.rate_limit_5h ? 'text-red-500' :
+                  row.usage_5h >= row.rate_limit_5h * 0.8 ? 'text-yellow-500' :
+                  'text-gray-700 dark:text-gray-300'
+                ]">
+                  ${{ row.usage_5h?.toFixed(2) || '0.00' }}/${{ row.rate_limit_5h?.toFixed(2) }}
+                </span>
+              </div>
+              <div class="h-1 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-dark-600">
+                <div
+                  :class="[
+                    'h-full rounded-full transition-all',
+                    row.usage_5h >= row.rate_limit_5h ? 'bg-red-500' :
+                    row.usage_5h >= row.rate_limit_5h * 0.8 ? 'bg-yellow-500' :
+                    'bg-emerald-500'
+                  ]"
+                  :style="{ width: Math.min((row.usage_5h / row.rate_limit_5h) * 100, 100) + '%' }"
+                />
+              </div>
+              <div v-if="row.reset_5h_at && formatResetTime(row.reset_5h_at)" class="text-[10px] text-gray-400 dark:text-gray-500 tabular-nums">
+                ⟳ {{ formatResetTime(row.reset_5h_at) }}
+              </div>
+            </div>
+            <div v-if="row.rate_limit_1d > 0">
+              <div class="flex items-center justify-between text-xs">
+                <span class="text-gray-500 dark:text-gray-400">1d</span>
+                <span :class="[
+                  'font-medium tabular-nums',
+                  row.usage_1d >= row.rate_limit_1d ? 'text-red-500' :
+                  row.usage_1d >= row.rate_limit_1d * 0.8 ? 'text-yellow-500' :
+                  'text-gray-700 dark:text-gray-300'
+                ]">
+                  ${{ row.usage_1d?.toFixed(2) || '0.00' }}/${{ row.rate_limit_1d?.toFixed(2) }}
+                </span>
+              </div>
+              <div class="h-1 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-dark-600">
+                <div
+                  :class="[
+                    'h-full rounded-full transition-all',
+                    row.usage_1d >= row.rate_limit_1d ? 'bg-red-500' :
+                    row.usage_1d >= row.rate_limit_1d * 0.8 ? 'bg-yellow-500' :
+                    'bg-emerald-500'
+                  ]"
+                  :style="{ width: Math.min((row.usage_1d / row.rate_limit_1d) * 100, 100) + '%' }"
+                />
+              </div>
+              <div v-if="row.reset_1d_at && formatResetTime(row.reset_1d_at)" class="text-[10px] text-gray-400 dark:text-gray-500 tabular-nums">
+                ⟳ {{ formatResetTime(row.reset_1d_at) }}
+              </div>
+            </div>
+            <div v-if="row.rate_limit_7d > 0">
+              <div class="flex items-center justify-between text-xs">
+                <span class="text-gray-500 dark:text-gray-400">7d</span>
+                <span :class="[
+                  'font-medium tabular-nums',
+                  row.usage_7d >= row.rate_limit_7d ? 'text-red-500' :
+                  row.usage_7d >= row.rate_limit_7d * 0.8 ? 'bg-yellow-500' :
+                  'text-gray-700 dark:text-gray-300'
+                ]">
+                  ${{ row.usage_7d?.toFixed(2) || '0.00' }}/${{ row.rate_limit_7d?.toFixed(2) }}
+                </span>
+              </div>
+              <div class="h-1 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-dark-600">
+                <div
+                  :class="[
+                    'h-full rounded-full transition-all',
+                    row.usage_7d >= row.rate_limit_7d ? 'bg-red-500' :
+                    row.usage_7d >= row.rate_limit_7d * 0.8 ? 'bg-yellow-500' :
+                    'bg-emerald-500'
+                  ]"
+                  :style="{ width: Math.min((row.usage_7d / row.rate_limit_7d) * 100, 100) + '%' }"
+                />
+              </div>
+              <div v-if="row.reset_7d_at && formatResetTime(row.reset_7d_at)" class="text-[10px] text-gray-400 dark:text-gray-500 tabular-nums">
+                ⟳ {{ formatResetTime(row.reset_7d_at) }}
+              </div>
+            </div>
+            <button
+              v-if="row.usage_5h > 0 || row.usage_1d > 0 || row.usage_7d > 0"
+              @click.stop="confirmResetRateLimitFromTable(row)"
+              class="mt-0.5 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+              :title="t('keys.resetRateLimitUsage')"
+            >
+              <Icon name="refresh" size="xs" />
+              {{ t('keys.resetUsage') }}
+            </button>
+          </div>
+          <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
+        </template>
+
+        <template #cell-expires_at="{ value }">
+          <span v-if="value" :class="[
+            'text-sm',
+            new Date(value) < new Date() ? 'text-red-500 dark:text-red-400' : 'text-gray-500 dark:text-dark-400'
+          ]">
+            {{ formatDateTime(value) }}
+          </span>
+          <span v-else class="text-sm text-gray-400 dark:text-dark-500">{{ t('keys.noExpiration') }}</span>
+        </template>
+
+        <template #cell-status="{ value }">
+          <span :class="[
+            'badge',
+            value === 'active' ? 'badge-success' :
+            value === 'quota_exhausted' ? 'badge-warning' :
+            value === 'expired' ? 'badge-danger' :
+            'badge-gray'
+          ]">
+            {{ t('keys.status.' + value) }}
+          </span>
+        </template>
+
+        <template #cell-last_used_at="{ value }">
+          <span v-if="value" class="text-sm text-gray-500 dark:text-dark-400">
+            {{ formatDateTime(value) }}
+          </span>
+          <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
+        </template>
+
+        <template #cell-created_at="{ value }">
+          <span class="text-sm text-gray-500 dark:text-dark-400">{{ formatDateTime(value) }}</span>
+        </template>
+
+        <template #cell-actions="{ row }">
+          <div class="flex items-center gap-1">
+            <button
+              @click="openUseKeyModal(row)"
+              class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400"
+            >
+              <Icon name="terminal" size="sm" />
+              <span class="text-xs">{{ t('keys.useKey') }}</span>
+            </button>
+            <button
+              v-if="!publicSettings?.hide_ccs_import_button"
+              @click="importToCcswitch(row)"
+              class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+            >
+              <Icon name="upload" size="sm" />
+              <span class="text-xs">{{ t('keys.importToCcSwitch') }}</span>
+            </button>
+            <button
+              @click="toggleKeyStatus(row)"
+              :class="[
+                'flex flex-col items-center gap-0.5 rounded-lg p-1.5 transition-colors',
+                row.status === 'active'
+                  ? 'text-gray-500 hover:bg-yellow-50 hover:text-yellow-600 dark:hover:bg-yellow-900/20 dark:hover:text-yellow-400'
+                  : 'text-gray-500 hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400'
+              ]"
+            >
+              <Icon v-if="row.status === 'active'" name="ban" size="sm" />
+              <Icon v-else name="checkCircle" size="sm" />
+              <span class="text-xs">{{ row.status === 'active' ? t('keys.disable') : t('keys.enable') }}</span>
+            </button>
+            <button
+              @click="editKey(row)"
+              class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+            >
+              <Icon name="edit" size="sm" />
+              <span class="text-xs">{{ t('common.edit') }}</span>
+            </button>
+            <button
+              @click="confirmDelete(row)"
+              class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+            >
+              <Icon name="trash" size="sm" />
+              <span class="text-xs">{{ t('common.delete') }}</span>
+            </button>
+          </div>
+        </template>
+
+        <template #empty>
+          <EmptyState
+            :title="t('keys.noKeysYet')"
+            :description="t('keys.createFirstKey')"
+            :action-text="t('keys.createKey')"
+            @action="showCreateModal = true"
+          />
+        </template>
+      </DataTable>
+    </template>
+
+    <template #pagination>
+      <Pagination
+        v-if="pagination.total > 0"
+        :page="pagination.page"
+        :total="pagination.total"
+        :page-size="pagination.page_size"
+        @update:page="handlePageChange"
+        @update:pageSize="handlePageSizeChange"
+      />
+    </template>
+  </TablePageLayout>
+
+  <!-- Create/Edit Modal -->
     <BaseDialog
       :show="showCreateModal || showEditModal"
       :title="showEditModal ? t('keys.editKey') : t('keys.createKey')"
@@ -1026,7 +1385,6 @@
         </div>
       </div>
     </Teleport>
-  </AppLayout>
 </template>
 
 <script setup lang="ts">
@@ -1037,8 +1395,12 @@
 	import { useClipboard } from '@/composables/useClipboard'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 
+const props = defineProps<{ adminUserId?: number }>()
+const adminUserId = computed(() => props.adminUserId)
+
 const { t } = useI18n()
 import { keysAPI, authAPI, usageAPI, userGroupsAPI } from '@/api'
+import { usersAPI as adminUsersAPI } from '@/api/admin/users'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 	import DataTable from '@/components/common/DataTable.vue'
@@ -1268,30 +1630,40 @@ const loadApiKeys = async () => {
   const { signal } = controller
   loading.value = true
   try {
-    // Build filters
-    const filters: { search?: string; status?: string; group_id?: number | string } = {}
-    if (filterSearch.value) filters.search = filterSearch.value
-    if (filterStatus.value) filters.status = filterStatus.value
-    if (filterGroupId.value !== '') filters.group_id = filterGroupId.value
+    if (props.adminUserId) {
+      // Admin mode: load all keys for this user via admin API (no pagination/filters)
+      const res = await adminUsersAPI.getUserApiKeys(props.adminUserId)
+      if (signal.aborted) return
+      apiKeys.value = res.items
+      pagination.value.total = res.total
+      pagination.value.pages = res.pages
+      // Skip usageStats in admin mode
+    } else {
+      // Build filters
+      const filters: { search?: string; status?: string; group_id?: number | string } = {}
+      if (filterSearch.value) filters.search = filterSearch.value
+      if (filterStatus.value) filters.status = filterStatus.value
+      if (filterGroupId.value !== '') filters.group_id = filterGroupId.value
 
-    const response = await keysAPI.list(pagination.value.page, pagination.value.page_size, filters, {
-      signal
-    })
-    if (signal.aborted) return
-    apiKeys.value = response.items
-    pagination.value.total = response.total
-    pagination.value.pages = response.pages
+      const response = await keysAPI.list(pagination.value.page, pagination.value.page_size, filters, {
+        signal
+      })
+      if (signal.aborted) return
+      apiKeys.value = response.items
+      pagination.value.total = response.total
+      pagination.value.pages = response.pages
 
-    // Load usage stats for all API keys in the list
-    if (response.items.length > 0) {
-      const keyIds = response.items.map((k) => k.id)
-      try {
-        const usageResponse = await usageAPI.getDashboardApiKeysUsage(keyIds, { signal })
-        if (signal.aborted) return
-        usageStats.value = usageResponse.stats
-      } catch (e) {
-        if (!isAbortError(e)) {
-          console.error('Failed to load usage stats:', e)
+      // Load usage stats for all API keys in the list
+      if (response.items.length > 0) {
+        const keyIds = response.items.map((k) => k.id)
+        try {
+          const usageResponse = await usageAPI.getDashboardApiKeysUsage(keyIds, { signal })
+          if (signal.aborted) return
+          usageStats.value = usageResponse.stats
+        } catch (e) {
+          if (!isAbortError(e)) {
+            console.error('Failed to load usage stats:', e)
+          }
         }
       }
     }
