@@ -1159,8 +1159,14 @@ const exportToCSV = async () => {
         page_size: pageSize,
         ...filters.value
       }
-      const response = await usageAPI.query(params)
-      allLogs.push(...response.items)
+      if (props.adminUserId) {
+        const adminParams = { ...params, user_id: props.adminUserId }
+        const response = await adminUsageAPI.list(adminParams)
+        allLogs.push(...(response.items as UsageLog[]))
+      } else {
+        const response = await usageAPI.query(params)
+        allLogs.push(...response.items)
+      }
     }
 
     if (allLogs.length === 0) {
