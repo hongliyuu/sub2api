@@ -122,7 +122,7 @@
                   {{ t('nav.apiKeys') }}
                 </router-link>
 
-                <a
+                <!-- <a
                   v-if="authStore.isAdmin"
                   href="https://github.com/Wei-Shaw/sub2api"
                   target="_blank"
@@ -138,7 +138,7 @@
                     />
                   </svg>
                   {{ t('nav.github') }}
-                </a>
+                </a> -->
 
               </div>
 
@@ -168,7 +168,7 @@
                 </div>
               </div>
 
-              <div v-if="showOnboardingButton" class="border-t border-gray-100 py-1 dark:border-dark-700">
+              <!-- <div v-if="showOnboardingButton" class="border-t border-gray-100 py-1 dark:border-dark-700">
                 <button @click="handleReplayGuide" class="dropdown-item w-full">
                   <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
                     <path
@@ -177,7 +177,7 @@
                   </svg>
                   {{ $t('onboarding.restartTour') }}
                 </button>
-              </div>
+              </div> -->
 
               <div class="border-t border-gray-100 py-1 dark:border-dark-700">
                 <button
@@ -212,7 +212,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
+import { useAppStore, useAuthStore } from '@/stores'
 import { useAdminSettingsStore } from '@/stores/adminSettings'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMini.vue'
@@ -225,7 +225,7 @@ const { t } = useI18n()
 const appStore = useAppStore()
 const authStore = useAuthStore()
 const adminSettingsStore = useAdminSettingsStore()
-const onboardingStore = useOnboardingStore()
+// const onboardingStore = useOnboardingStore()
 
 const user = computed(() => authStore.user)
 const dropdownOpen = ref(false)
@@ -233,10 +233,10 @@ const dropdownRef = ref<HTMLElement | null>(null)
 const contactInfo = computed(() => appStore.contactInfo)
 const docUrl = computed(() => appStore.docUrl)
 
-// 只在标准模式的管理员下显示新手引导按钮
-const showOnboardingButton = computed(() => {
-  return !authStore.isSimpleMode && user.value?.role === 'admin'
-})
+// 只在标准模式的管理员下显示新手引导按钮（已注释）
+// const showOnboardingButton = computed(() => {
+//   return !authStore.isSimpleMode && user.value?.role === 'admin'
+// })
 
 const userInitials = computed(() => {
   if (!user.value) return ''
@@ -304,10 +304,10 @@ async function handleLogout() {
   await router.push('/login')
 }
 
-function handleReplayGuide() {
-  closeDropdown()
-  onboardingStore.replay()
-}
+// function handleReplayGuide() {
+//   closeDropdown()
+//   onboardingStore.replay()
+// }
 
 function handleClickOutside(event: MouseEvent) {
   if (dropdownRef.value && !dropdownRef.value.contains(event.target as Node)) {

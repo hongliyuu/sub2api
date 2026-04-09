@@ -118,12 +118,15 @@
           <!-- Left: Text Content -->
           <div class="flex-1 text-center lg:text-left">
             <h1
-              class="mb-4 text-4xl font-bold text-gray-900 dark:text-white md:text-5xl lg:text-6xl"
+              class="mb-2 text-4xl font-bold text-gray-900 dark:text-white md:text-5xl lg:text-6xl"
             >
               {{ siteName }}
             </h1>
+            <p class="mb-4 text-xl font-semibold text-primary-600 dark:text-primary-400 md:text-2xl">
+              {{ t('home.heroSubtitle') }}
+            </p>
             <p class="mb-8 text-lg text-gray-600 dark:text-dark-300 md:text-xl">
-              {{ siteSubtitle }}
+              {{ t('home.heroDescription') }}
             </p>
 
             <!-- CTA Button -->
@@ -204,8 +207,45 @@
           </div>
         </div>
 
+        <!-- Pain Points -->
+        <div class="mb-16">
+          <h2 class="mb-8 text-center text-2xl font-bold text-gray-900 dark:text-white md:text-3xl">
+            {{ t('home.painPoints.title') }}
+          </h2>
+          <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <div
+              v-for="(item, key) in painPointItems"
+              :key="key"
+              class="rounded-2xl border border-red-100 bg-red-50/50 p-6 dark:border-red-900/30 dark:bg-red-950/20"
+            >
+              <div
+                class="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-red-100 dark:bg-red-900/30"
+              >
+                <Icon :name="item.icon" size="lg" class="text-red-500 dark:text-red-400" />
+              </div>
+              <h3 class="mb-2 text-base font-semibold text-gray-900 dark:text-white">
+                {{ t(`home.painPoints.items.${key}.title`) }}
+              </h3>
+              <p class="text-sm leading-relaxed text-gray-600 dark:text-dark-400">
+                {{ t(`home.painPoints.items.${key}.desc`) }}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Solutions -->
+        <div class="mb-16">
+          <div class="mb-8 text-center">
+            <h2 class="mb-3 text-2xl font-bold text-gray-900 dark:text-white md:text-3xl">
+              {{ t('home.solutions.title') }}
+            </h2>
+            <p class="text-gray-600 dark:text-dark-400">
+              {{ t('home.solutions.subtitle') }}
+            </p>
+          </div>
+
         <!-- Features Grid -->
-        <div class="mb-12 grid gap-6 md:grid-cols-3">
+        <div class="grid gap-6 md:grid-cols-3">
           <!-- Feature 1: Unified Gateway -->
           <div
             class="group rounded-2xl border border-gray-200/50 bg-white/60 p-6 backdrop-blur-sm transition-all duration-300 hover:shadow-xl hover:shadow-primary-500/10 dark:border-dark-700/50 dark:bg-dark-800/60"
@@ -279,6 +319,52 @@
             <p class="text-sm leading-relaxed text-gray-600 dark:text-dark-400">
               {{ t('home.features.balanceQuotaDesc') }}
             </p>
+          </div>
+        </div>
+        </div>
+
+        <!-- Comparison Table -->
+        <div class="mb-16">
+          <h2 class="mb-8 text-center text-2xl font-bold text-gray-900 dark:text-white md:text-3xl">
+            {{ t('home.comparison.title') }}
+          </h2>
+          <div
+            class="overflow-x-auto rounded-2xl border border-gray-200/50 bg-white/60 backdrop-blur-sm dark:border-dark-700/50 dark:bg-dark-800/60"
+          >
+            <table class="w-full min-w-[500px]">
+              <thead>
+                <tr class="border-b border-gray-100 dark:border-dark-700">
+                  <th class="px-6 py-4 text-left text-sm font-semibold text-gray-900 dark:text-white">
+                    {{ t('home.comparison.headers.feature') }}
+                  </th>
+                  <th class="px-6 py-4 text-left text-sm font-semibold text-gray-500 dark:text-dark-400">
+                    {{ t('home.comparison.headers.official') }}
+                  </th>
+                  <th class="px-6 py-4 text-left text-sm font-semibold text-primary-600 dark:text-primary-400">
+                    {{ t('home.comparison.headers.us') }}
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100 dark:divide-dark-700/50">
+                <tr v-for="key in comparisonKeys" :key="key">
+                  <td class="px-6 py-4 text-sm font-medium text-gray-900 dark:text-white">
+                    {{ t(`home.comparison.items.${key}.feature`) }}
+                  </td>
+                  <td class="px-6 py-4 text-sm text-gray-500 dark:text-dark-400">
+                    <span class="inline-flex items-center gap-1.5">
+                      <Icon name="x" size="sm" class="text-red-400" />
+                      {{ t(`home.comparison.items.${key}.official`) }}
+                    </span>
+                  </td>
+                  <td class="px-6 py-4 text-sm text-gray-700 dark:text-dark-200">
+                    <span class="inline-flex items-center gap-1.5">
+                      <Icon name="check" size="sm" class="text-primary-500" />
+                      {{ t(`home.comparison.items.${key}.us`) }}
+                    </span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
 
@@ -369,6 +455,27 @@
             >
           </div>
         </div>
+
+        <!-- CTA Banner -->
+        <div class="mb-16">
+          <div
+            class="rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 p-8 text-center shadow-xl shadow-primary-500/20 md:p-12"
+          >
+            <h2 class="mb-4 text-2xl font-bold text-white md:text-3xl">
+              {{ t('home.cta.title') }}
+            </h2>
+            <p class="mx-auto mb-8 max-w-2xl text-primary-100">
+              {{ t('home.cta.description') }}
+            </p>
+            <router-link
+              :to="isAuthenticated ? dashboardPath : '/login'"
+              class="inline-flex items-center gap-2 rounded-full bg-white px-8 py-3 text-base font-semibold text-primary-700 shadow-lg transition-all hover:bg-gray-50 hover:shadow-xl"
+            >
+              {{ isAuthenticated ? t('home.goToDashboard') : t('home.cta.button') }}
+              <Icon name="arrowRight" size="md" :stroke-width="2" />
+            </router-link>
+          </div>
+        </div>
       </div>
     </main>
 
@@ -390,14 +497,14 @@
           >
             {{ t('home.docs') }}
           </a>
-          <a
+          <!-- <a
             :href="githubUrl"
             target="_blank"
             rel="noopener noreferrer"
             class="text-sm text-gray-500 transition-colors hover:text-gray-700 dark:text-dark-400 dark:hover:text-white"
           >
             GitHub
-          </a>
+          </a> -->
         </div>
       </div>
     </footer>
@@ -419,7 +526,6 @@ const appStore = useAppStore()
 // Site settings - directly from appStore (already initialized from injected config)
 const siteName = computed(() => appStore.cachedPublicSettings?.site_name || appStore.siteName || 'Sub2API')
 const siteLogo = computed(() => appStore.cachedPublicSettings?.site_logo || appStore.siteLogo || '')
-const siteSubtitle = computed(() => appStore.cachedPublicSettings?.site_subtitle || 'AI API Gateway Platform')
 const docUrl = computed(() => appStore.cachedPublicSettings?.doc_url || appStore.docUrl || '')
 const homeContent = computed(() => appStore.cachedPublicSettings?.home_content || '')
 
@@ -432,8 +538,19 @@ const isHomeContentUrl = computed(() => {
 // Theme
 const isDark = ref(document.documentElement.classList.contains('dark'))
 
-// GitHub URL
-const githubUrl = 'https://github.com/Wei-Shaw/sub2api'
+// GitHub URL (commented out in template)
+// const githubUrl = 'https://github.com/Wei-Shaw/sub2api'
+
+// Pain point items with icon mappings
+const painPointItems = {
+  expensive: { icon: 'dollar' as const },
+  complex: { icon: 'key' as const },
+  unstable: { icon: 'exclamationTriangle' as const },
+  noControl: { icon: 'chart' as const }
+}
+
+// Comparison table row keys
+const comparisonKeys = ['pricing', 'models', 'management', 'stability', 'control'] as const
 
 // Auth state
 const isAuthenticated = computed(() => authStore.isAuthenticated)
