@@ -901,7 +901,6 @@ onMounted(() => {
   justify-content: space-between;
   gap: 0.5rem;
 }
-
 .sidebar-label-collapsed {
   max-width: 0;
   opacity: 0;
