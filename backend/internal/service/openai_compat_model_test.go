@@ -357,6 +357,49 @@ func TestForwardAsAnthropic_RestoresOriginalClaudeToolNameFromRequestTools_Buffe
 	require.Equal(t, "WebFetch", gjson.GetBytes(upstream.lastBody, "tools.0.name").String())
 }
 
+func TestForwardAsAnthropic_BufferedWebSearchSupplementsMissingTerminalText(t *testing.T) {
+	t.Parallel()
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	body := []byte(`{"model":"claude-opus-4-6","max_tokens":64,"system":"You are a helpful assistant.","messages":[{"role":"user","content":"Find the official OpenAI Responses API reference page and give me the URL."}],"tools":[{"type":"web_search_20250305","name":"web_search"}],"stream":false}`)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewReader(body))
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	upstreamBody := strings.Join([]string{
+		`data: {"type":"response.output_text.delta","delta":"https://developers.openai.com/api/reference/resources/responses/methods/create"}`,
+		"",
+		`data: {"type":"response.completed","response":{"id":"resp_websearch_buffered","object":"response","model":"gpt-5.4","status":"completed","output":[{"type":"message","id":"msg_1","status":"completed","role":"assistant","content":[{"type":"output_text"}]},{"type":"web_search_call","id":"ws_1","status":"completed","action":{"type":"search","query":"OpenAI Responses API reference"}}],"usage":{"input_tokens":5,"output_tokens":2,"total_tokens":7}}}`,
+		"",
+		"data: [DONE]",
+		"",
+	}, "\n")
+	upstream := &httpUpstreamRecorder{resp: &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}},
+		Body:       io.NopCloser(strings.NewReader(upstreamBody)),
+	}}
+
+	svc := &OpenAIGatewayService{httpUpstream: upstream}
+	account := &Account{
+		ID:          1,
+		Name:        "openai-oauth",
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"access_token":       "oauth-token",
+			"chatgpt_account_id": "chatgpt-acc",
+		},
+	}
+
+	result, err := svc.ForwardAsAnthropic(context.Background(), c, account, body, "", "gpt-5.1")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.Equal(t, "https://developers.openai.com/api/reference/resources/responses/methods/create", gjson.GetBytes(rec.Body.Bytes(), "content.0.text").String())
+}
+
 func TestForwardAsAnthropic_RestoresOriginalClaudeToolNameFromRequestTools_Streaming(t *testing.T) {
 	t.Parallel()
 	gin.SetMode(gin.TestMode)

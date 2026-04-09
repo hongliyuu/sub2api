@@ -569,6 +569,9 @@ func emitAnthropicWebSearchResultBlock(
 	toolUseID string,
 	results []anthropicWebSearchResult,
 ) []AnthropicStreamEvent {
+	if results == nil {
+		results = []anthropicWebSearchResult{}
+	}
 	resultsJSON, _ := json.Marshal(results)
 	idx := state.ContentBlockIndex
 	state.ContentBlockIndex++

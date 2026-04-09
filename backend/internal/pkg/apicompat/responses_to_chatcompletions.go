@@ -478,14 +478,38 @@ func (a *BufferedResponseAccumulator) BuildOutput() []ResponsesOutput {
 }
 
 // SupplementResponseOutput fills resp.Output from accumulated delta content
-// when the terminal event delivered an empty output array. If resp.Output is
-// already populated, this is a no-op (preserves backward compatibility).
+// when the terminal event delivered an empty output array or when a terminal
+// message block exists but its output_text content is empty.
 func (a *BufferedResponseAccumulator) SupplementResponseOutput(resp *ResponsesResponse) {
-	if resp == nil || len(resp.Output) > 0 {
+	if resp == nil {
 		return
 	}
 	if !a.HasContent() {
 		return
 	}
-	resp.Output = a.BuildOutput()
+	if len(resp.Output) == 0 {
+		resp.Output = a.BuildOutput()
+		return
+	}
+	if a.text.Len() == 0 {
+		return
+	}
+	for i := range resp.Output {
+		if resp.Output[i].Type != "message" {
+			continue
+		}
+		if len(resp.Output[i].Content) == 0 {
+			resp.Output[i].Content = []ResponsesContentPart{{
+				Type: "output_text",
+				Text: a.text.String(),
+			}}
+			return
+		}
+		for j := range resp.Output[i].Content {
+			if resp.Output[i].Content[j].Type == "output_text" && resp.Output[i].Content[j].Text == "" {
+				resp.Output[i].Content[j].Text = a.text.String()
+				return
+			}
+		}
+	}
 }
