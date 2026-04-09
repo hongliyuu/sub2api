@@ -449,5 +449,19 @@ func (s *stubAdminService) ReplaceUserGroup(ctx context.Context, userID, oldGrou
 	return &service.ReplaceUserGroupResult{MigratedKeys: 0}, nil
 }
 
+func (s *stubAdminService) AdminCreateAPIKey(ctx context.Context, userID int64, req service.CreateAPIKeyRequest) (*service.APIKey, error) {
+	key := service.APIKey{ID: 999, UserID: userID, Key: "sk-admin-test", Name: req.Name, Status: service.StatusActive}
+	return &key, nil
+}
+
+func (s *stubAdminService) AdminUpdateAPIKey(ctx context.Context, keyID int64, req service.UpdateAPIKeyRequest) (*service.APIKey, error) {
+	key := service.APIKey{ID: keyID, Key: "sk-admin-test", Status: service.StatusActive}
+	return &key, nil
+}
+
+func (s *stubAdminService) AdminDeleteAPIKey(ctx context.Context, keyID int64) error {
+	return nil
+}
+
 // Ensure stub implements interface.
 var _ service.AdminService = (*stubAdminService)(nil)
