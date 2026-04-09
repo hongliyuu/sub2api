@@ -155,6 +155,67 @@ export async function getUserApiKeys(id: number): Promise<PaginatedResponse<ApiK
 }
 
 /**
+ * Create an API key for a user (admin)
+ */
+export async function createUserApiKey(userId: number, payload: {
+  name: string
+  group_id?: number | null
+  custom_key?: string
+  ip_whitelist?: string[]
+  ip_blacklist?: string[]
+  quota?: number
+  expires_in_days?: number
+  rate_limit_5h?: number
+  rate_limit_1d?: number
+  rate_limit_7d?: number
+}): Promise<ApiKey> {
+  const { data } = await apiClient.post<ApiKey>(`/admin/users/${userId}/api-keys`, payload)
+  return data
+}
+
+/**
+ * Update a user's API key (admin)
+ */
+export async function updateUserApiKey(userId: number, keyId: number, payload: {
+  name?: string
+  group_id?: number | null
+  status?: string
+  ip_whitelist?: string[]
+  ip_blacklist?: string[]
+  quota?: number
+  expires_at?: string | null
+  reset_quota?: boolean
+  rate_limit_5h?: number
+  rate_limit_1d?: number
+  rate_limit_7d?: number
+  reset_rate_limit_usage?: boolean
+}): Promise<ApiKey> {
+  const { data } = await apiClient.put<ApiKey>(`/admin/users/${userId}/api-keys/${keyId}`, payload)
+  return data
+}
+
+/**
+ * Delete a user's API key (admin)
+ */
+export async function deleteUserApiKey(userId: number, keyId: number): Promise<void> {
+  await apiClient.delete(`/admin/users/${userId}/api-keys/${keyId}`)
+}
+
+/**
+ * Redeem a code on behalf of a user (admin)
+ */
+export async function redeemForUser(userId: number, code: string): Promise<{
+  message: string
+  type: string
+  value: number
+  validity_days?: number
+  group_id?: number
+}> {
+  const { data } = await apiClient.post(`/admin/users/${userId}/redeem`, { code })
+  return data
+}
+
+/**
  * Get user's usage statistics
  * @param id - User ID
  * @param period - Time period
@@ -254,6 +315,10 @@ export const usersAPI = {
   updateConcurrency,
   toggleStatus,
   getUserApiKeys,
+  createUserApiKey,
+  updateUserApiKey,
+  deleteUserApiKey,
+  redeemForUser,
   getUserUsageStats,
   getUserBalanceHistory,
   replaceGroup

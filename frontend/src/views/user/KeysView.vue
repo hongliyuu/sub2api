@@ -403,6 +403,10 @@
         >
           <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
         </button>
+        <button @click="showCreateModal = true" class="btn btn-primary">
+          <Icon name="plus" size="md" class="mr-2" />
+          {{ t('keys.createKey') }}
+        </button>
       </div>
     </template>
 
@@ -448,18 +452,39 @@
         </template>
 
         <template #cell-group="{ row }">
-          <div>
-            <GroupBadge
-              v-if="row.group"
-              :name="row.group.name"
-              :platform="row.group.platform"
-              :subscription-type="row.group.subscription_type"
-              :rate-multiplier="row.group.rate_multiplier"
-              :user-rate-multiplier="userGroupRates[row.group.id]"
-            />
-            <span v-else class="text-sm text-gray-400 dark:text-dark-500">{{
-              t('keys.noGroup')
-            }}</span>
+          <div class="group/dropdown relative">
+            <button
+              :ref="(el) => setGroupButtonRef(row.id, el)"
+              @click="openGroupSelector(row)"
+              class="-mx-2 -my-1 flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-dark-700"
+              :title="t('keys.clickToChangeGroup')"
+            >
+              <GroupBadge
+                v-if="row.group"
+                :name="row.group.name"
+                :platform="row.group.platform"
+                :subscription-type="row.group.subscription_type"
+                :rate-multiplier="row.group.rate_multiplier"
+                :user-rate-multiplier="userGroupRates[row.group.id]"
+              />
+              <span v-else class="text-sm text-gray-400 dark:text-dark-500">{{
+                t('keys.noGroup')
+              }}</span>
+              <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('keys.selectGroup') }}</span>
+              <svg
+                class="h-3.5 w-3.5 text-gray-400 opacity-60 transition-opacity group-hover/dropdown:opacity-100"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                stroke-width="2"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  d="M8.25 15L12 18.75 15.75 15m-7.5-6L12 5.25 15.75 9"
+                />
+              </svg>
+            </button>
           </div>
         </template>
 
@@ -587,6 +612,16 @@
                 ⟳ {{ formatResetTime(row.reset_7d_at) }}
               </div>
             </div>
+            <!-- Reset button -->
+            <button
+              v-if="row.usage_5h > 0 || row.usage_1d > 0 || row.usage_7d > 0"
+              @click.stop="confirmResetRateLimitFromTable(row)"
+              class="mt-0.5 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-xs text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+              :title="t('keys.resetRateLimitUsage')"
+            >
+              <Icon name="refresh" size="xs" />
+              {{ t('keys.resetUsage') }}
+            </button>
           </div>
           <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
         </template>
@@ -626,6 +661,7 @@
 
         <template #cell-actions="{ row }">
           <div class="flex items-center gap-1">
+            <!-- Use Key Button -->
             <button
               @click="openUseKeyModal(row)"
               class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400"
@@ -633,6 +669,7 @@
               <Icon name="terminal" size="sm" />
               <span class="text-xs">{{ t('keys.useKey') }}</span>
             </button>
+            <!-- Import to CC Switch Button -->
             <button
               v-if="!publicSettings?.hide_ccs_import_button"
               @click="importToCcswitch(row)"
@@ -641,15 +678,45 @@
               <Icon name="upload" size="sm" />
               <span class="text-xs">{{ t('keys.importToCcSwitch') }}</span>
             </button>
+            <!-- Toggle Status Button -->
+            <button
+              @click="toggleKeyStatus(row)"
+              :class="[
+                'flex flex-col items-center gap-0.5 rounded-lg p-1.5 transition-colors',
+                row.status === 'active'
+                  ? 'text-gray-500 hover:bg-yellow-50 hover:text-yellow-600 dark:hover:bg-yellow-900/20 dark:hover:text-yellow-400'
+                  : 'text-gray-500 hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400'
+              ]"
+            >
+              <Icon v-if="row.status === 'active'" name="ban" size="sm" />
+              <Icon v-else name="checkCircle" size="sm" />
+              <span class="text-xs">{{ row.status === 'active' ? t('keys.disable') : t('keys.enable') }}</span>
+            </button>
+            <!-- Edit Button -->
+            <button
+              @click="editKey(row)"
+              class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+            >
+              <Icon name="edit" size="sm" />
+              <span class="text-xs">{{ t('common.edit') }}</span>
+            </button>
+            <!-- Delete Button -->
+            <button
+              @click="confirmDelete(row)"
+              class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
+            >
+              <Icon name="trash" size="sm" />
+              <span class="text-xs">{{ t('common.delete') }}</span>
+            </button>
           </div>
         </template>
 
         <template #empty>
           <EmptyState
             :title="t('keys.noKeysYet')"
-            :description="adminUserId ? t('keys.noKeysYet') : t('keys.createFirstKey')"
-            :action-text="adminUserId ? undefined : t('keys.createKey')"
-            @action="adminUserId ? undefined : (showCreateModal = true)"
+            :description="t('keys.createFirstKey')"
+            :action-text="t('keys.createKey')"
+            @action="showCreateModal = true"
           />
         </template>
       </DataTable>
@@ -667,9 +734,8 @@
     </template>
   </TablePageLayout>
 
-  <!-- Create/Edit Modal — hidden in admin preview mode -->
+  <!-- Create/Edit Modal -->
     <BaseDialog
-      v-if="!adminUserId"
       :show="showCreateModal || showEditModal"
       :title="showEditModal ? t('keys.editKey') : t('keys.createKey')"
       width="normal"
@@ -1168,9 +1234,8 @@
       </template>
     </BaseDialog>
 
-    <!-- Delete Confirmation Dialog — hidden in admin preview mode -->
+    <!-- Delete Confirmation Dialog -->
     <ConfirmDialog
-      v-if="!adminUserId"
       :show="showDeleteDialog"
       :title="t('keys.deleteKey')"
       :message="t('keys.deleteConfirmMessage', { name: selectedKey?.name })"
@@ -1181,9 +1246,8 @@
       @cancel="showDeleteDialog = false"
     />
 
-    <!-- Reset Quota Confirmation Dialog — hidden in admin preview mode -->
+    <!-- Reset Quota Confirmation Dialog -->
     <ConfirmDialog
-      v-if="!adminUserId"
       :show="showResetQuotaDialog"
       :title="t('keys.resetQuotaTitle')"
       :message="t('keys.resetQuotaConfirmMessage', { name: selectedKey?.name, used: selectedKey?.quota_used?.toFixed(4) })"
@@ -1194,9 +1258,8 @@
       @cancel="showResetQuotaDialog = false"
     />
 
-    <!-- Reset Rate Limit Confirmation Dialog — hidden in admin preview mode -->
+    <!-- Reset Rate Limit Confirmation Dialog -->
     <ConfirmDialog
-      v-if="!adminUserId"
       :show="showResetRateLimitDialog"
       :title="t('keys.resetRateLimitTitle')"
       :message="t('keys.resetRateLimitConfirmMessage', { name: selectedKey?.name })"
@@ -1696,7 +1759,11 @@ const editKey = (key: ApiKey) => {
 const toggleKeyStatus = async (key: ApiKey) => {
   const newStatus = key.status === 'active' ? 'inactive' : 'active'
   try {
-    await keysAPI.toggleStatus(key.id, newStatus)
+    if (adminUserId.value) {
+      await adminUsersAPI.updateUserApiKey(adminUserId.value, key.id, { status: newStatus })
+    } else {
+      await keysAPI.toggleStatus(key.id, newStatus)
+    }
     appStore.showSuccess(
       newStatus === 'active' ? t('keys.keyEnabledSuccess') : t('keys.keyDisabledSuccess')
     )
@@ -1743,7 +1810,11 @@ const changeGroup = async (key: ApiKey, newGroupId: number | null) => {
   if (key.group_id === newGroupId) return
 
   try {
-    await keysAPI.update(key.id, { group_id: newGroupId })
+    if (adminUserId.value) {
+      await adminUsersAPI.updateUserApiKey(adminUserId.value, key.id, { group_id: newGroupId })
+    } else {
+      await keysAPI.update(key.id, { group_id: newGroupId })
+    }
     appStore.showSuccess(t('keys.groupChangedSuccess'))
     loadApiKeys()
   } catch (error) {
@@ -1822,36 +1893,66 @@ const handleSubmit = async () => {
   submitting.value = true
   try {
     if (showEditModal.value && selectedKey.value) {
-      await keysAPI.update(selectedKey.value.id, {
-        name: formData.value.name,
-        group_id: formData.value.group_id,
-        status: formData.value.status,
-        ip_whitelist: ipWhitelist,
-        ip_blacklist: ipBlacklist,
-        quota: quota,
-        expires_at: expiresAt,
-        rate_limit_5h: rateLimitData.rate_limit_5h,
-        rate_limit_1d: rateLimitData.rate_limit_1d,
-        rate_limit_7d: rateLimitData.rate_limit_7d,
-      })
+      if (adminUserId.value) {
+        await adminUsersAPI.updateUserApiKey(adminUserId.value, selectedKey.value.id, {
+          name: formData.value.name,
+          group_id: formData.value.group_id,
+          status: formData.value.status,
+          ip_whitelist: ipWhitelist,
+          ip_blacklist: ipBlacklist,
+          quota: quota,
+          expires_at: expiresAt ?? undefined,
+          rate_limit_5h: rateLimitData.rate_limit_5h,
+          rate_limit_1d: rateLimitData.rate_limit_1d,
+          rate_limit_7d: rateLimitData.rate_limit_7d,
+        })
+      } else {
+        await keysAPI.update(selectedKey.value.id, {
+          name: formData.value.name,
+          group_id: formData.value.group_id,
+          status: formData.value.status,
+          ip_whitelist: ipWhitelist,
+          ip_blacklist: ipBlacklist,
+          quota: quota,
+          expires_at: expiresAt,
+          rate_limit_5h: rateLimitData.rate_limit_5h,
+          rate_limit_1d: rateLimitData.rate_limit_1d,
+          rate_limit_7d: rateLimitData.rate_limit_7d,
+        })
+      }
       appStore.showSuccess(t('keys.keyUpdatedSuccess'))
     } else {
       const customKey = formData.value.use_custom_key ? formData.value.custom_key : undefined
-      await keysAPI.create(
-        formData.value.name,
-        formData.value.group_id,
-        customKey,
-        ipWhitelist,
-        ipBlacklist,
-        quota,
-        expiresInDays,
-        rateLimitData
-      )
-      appStore.showSuccess(t('keys.keyCreatedSuccess'))
-      // Only advance tour if active, on submit step, and creation succeeded
-      if (onboardingStore.isCurrentStep('[data-tour="key-form-submit"]')) {
-        onboardingStore.nextStep(500)
+      if (adminUserId.value) {
+        await adminUsersAPI.createUserApiKey(adminUserId.value, {
+          name: formData.value.name,
+          group_id: formData.value.group_id,
+          custom_key: customKey,
+          ip_whitelist: ipWhitelist,
+          ip_blacklist: ipBlacklist,
+          quota: quota,
+          expires_in_days: expiresInDays,
+          rate_limit_5h: rateLimitData.rate_limit_5h,
+          rate_limit_1d: rateLimitData.rate_limit_1d,
+          rate_limit_7d: rateLimitData.rate_limit_7d,
+        })
+      } else {
+        await keysAPI.create(
+          formData.value.name,
+          formData.value.group_id,
+          customKey,
+          ipWhitelist,
+          ipBlacklist,
+          quota,
+          expiresInDays,
+          rateLimitData
+        )
+        // Only advance tour if active, on submit step, and creation succeeded
+        if (onboardingStore.isCurrentStep('[data-tour="key-form-submit"]')) {
+          onboardingStore.nextStep(500)
+        }
       }
+      appStore.showSuccess(t('keys.keyCreatedSuccess'))
     }
     closeModals()
     loadApiKeys()
@@ -1873,7 +1974,11 @@ const handleDelete = async () => {
   if (!selectedKey.value) return
 
   try {
-    await keysAPI.delete(selectedKey.value.id)
+    if (adminUserId?.value) {
+      await adminUsersAPI.deleteUserApiKey(adminUserId.value, selectedKey.value.id)
+    } else {
+      await keysAPI.delete(selectedKey.value.id)
+    }
     appStore.showSuccess(t('keys.keyDeletedSuccess'))
     showDeleteDialog.value = false
     loadApiKeys()
@@ -1927,7 +2032,11 @@ const resetQuotaUsed = async () => {
   if (!selectedKey.value) return
   showResetQuotaDialog.value = false
   try {
-    await keysAPI.update(selectedKey.value.id, { reset_quota: true })
+    if (adminUserId?.value) {
+      await adminUsersAPI.updateUserApiKey(adminUserId.value, selectedKey.value.id, { reset_quota: true })
+    } else {
+      await keysAPI.update(selectedKey.value.id, { reset_quota: true })
+    }
     appStore.showSuccess(t('keys.quotaResetSuccess'))
     // Update local state
     if (selectedKey.value) {
@@ -1955,7 +2064,11 @@ const resetRateLimitUsage = async () => {
   if (!selectedKey.value) return
   showResetRateLimitDialog.value = false
   try {
-    await keysAPI.update(selectedKey.value.id, { reset_rate_limit_usage: true })
+    if (adminUserId?.value) {
+      await adminUsersAPI.updateUserApiKey(adminUserId.value, selectedKey.value.id, { reset_rate_limit_usage: true })
+    } else {
+      await keysAPI.update(selectedKey.value.id, { reset_rate_limit_usage: true })
+    }
     appStore.showSuccess(t('keys.rateLimitResetSuccess'))
     // Refresh key data
     await loadApiKeys()

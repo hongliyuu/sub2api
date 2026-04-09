@@ -25,6 +25,7 @@ type UserHandler struct {
 	adminService       service.AdminService
 	concurrencyService *service.ConcurrencyService
 	usageService       *service.UsageService
+	redeemService      *service.RedeemService
 }
 
 // NewUserHandler creates a new admin user handler
@@ -34,6 +35,12 @@ func NewUserHandler(adminService service.AdminService, concurrencyService *servi
 		concurrencyService: concurrencyService,
 		usageService:       usageService,
 	}
+}
+
+// WithRedeemService sets the redeem service on the handler (optional, enables admin redeem-for-user)
+func (h *UserHandler) WithRedeemService(redeemService *service.RedeemService) *UserHandler {
+	h.redeemService = redeemService
+	return h
 }
 
 // parseAdminUserTimeRange parses start_date, end_date query parameters for admin user dashboard
@@ -503,5 +510,110 @@ func (h *UserHandler) GetUserDashboardModels(c *gin.Context) {
 		"models":     stats,
 		"start_date": startTime.Format("2006-01-02"),
 		"end_date":   endTime.Add(-24 * time.Hour).Format("2006-01-02"),
+	})
+}
+
+// CreateUserAPIKey handles admin creating an API key for a user
+// POST /api/v1/admin/users/:id/api-keys
+func (h *UserHandler) CreateUserAPIKey(c *gin.Context) {
+	userID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid user ID")
+		return
+	}
+
+	var req service.CreateAPIKeyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	key, err := h.adminService.AdminCreateAPIKey(c.Request.Context(), userID, req)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, dto.APIKeyFromService(key))
+}
+
+// UpdateUserAPIKey handles admin updating a user's API key
+// PUT /api/v1/admin/users/:id/api-keys/:keyId
+func (h *UserHandler) UpdateUserAPIKey(c *gin.Context) {
+	keyID, err := strconv.ParseInt(c.Param("keyId"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid key ID")
+		return
+	}
+
+	var req service.UpdateAPIKeyRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	key, err := h.adminService.AdminUpdateAPIKey(c.Request.Context(), keyID, req)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, dto.APIKeyFromService(key))
+}
+
+// DeleteUserAPIKey handles admin deleting a user's API key
+// DELETE /api/v1/admin/users/:id/api-keys/:keyId
+func (h *UserHandler) DeleteUserAPIKey(c *gin.Context) {
+	keyID, err := strconv.ParseInt(c.Param("keyId"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid key ID")
+		return
+	}
+
+	if err := h.adminService.AdminDeleteAPIKey(c.Request.Context(), keyID); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, gin.H{"message": "API key deleted"})
+}
+
+// AdminRedeemForUserRequest is the request body for admin redeeming a code for a user
+type AdminRedeemForUserRequest struct {
+	Code string `json:"code" binding:"required"`
+}
+
+// RedeemForUser handles admin redeeming a code on behalf of a user
+// POST /api/v1/admin/users/:id/redeem
+func (h *UserHandler) RedeemForUser(c *gin.Context) {
+	userID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		response.BadRequest(c, "Invalid user ID")
+		return
+	}
+
+	var req AdminRedeemForUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	if h.redeemService == nil {
+		response.InternalError(c, "Redeem service not available")
+		return
+	}
+
+	result, err := h.redeemService.Redeem(c.Request.Context(), userID, req.Code)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, gin.H{
+		"message":       "Redeem successful",
+		"type":          result.Type,
+		"value":         result.Value,
+		"validity_days": result.ValidityDays,
+		"group_id":      result.GroupID,
 	})
 }

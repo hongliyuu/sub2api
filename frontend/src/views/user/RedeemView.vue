@@ -358,6 +358,106 @@
       </div>
     </div>
 
+    <!-- Redeem Form (admin proxy) -->
+    <div class="card">
+      <div class="p-6">
+        <form @submit.prevent="handleRedeem" class="space-y-5">
+          <div>
+            <label for="admin-code" class="input-label">
+              {{ t('redeem.redeemCodeLabel') }}
+            </label>
+            <div class="relative mt-1">
+              <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+                <Icon name="gift" size="md" class="text-gray-400 dark:text-dark-500" />
+              </div>
+              <input
+                id="admin-code"
+                v-model="redeemCode"
+                type="text"
+                required
+                :placeholder="t('redeem.redeemCodePlaceholder')"
+                :disabled="submitting"
+                class="input py-3 pl-12 text-lg"
+              />
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            :disabled="!redeemCode || submitting"
+            class="btn btn-primary w-full py-3"
+          >
+            <svg
+              v-if="submitting"
+              class="-ml-1 mr-2 h-5 w-5 animate-spin"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                class="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                stroke-width="4"
+              ></circle>
+              <path
+                class="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              ></path>
+            </svg>
+            <Icon v-else name="checkCircle" size="md" class="mr-2" />
+            {{ submitting ? t('redeem.redeeming') : t('redeem.redeemButton') }}
+          </button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Success Message (admin) -->
+    <transition name="fade">
+      <div
+        v-if="redeemResult"
+        class="card border-emerald-200 bg-emerald-50 dark:border-emerald-800/50 dark:bg-emerald-900/20"
+      >
+        <div class="p-6">
+          <div class="flex items-start gap-4">
+            <div
+              class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-100 dark:bg-emerald-900/30"
+            >
+              <Icon name="checkCircle" size="md" class="text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div class="flex-1">
+              <h3 class="text-sm font-semibold text-emerald-800 dark:text-emerald-300">
+                {{ t('redeem.redeemSuccess') }}
+              </h3>
+              <div class="mt-2 text-sm text-emerald-700 dark:text-emerald-400">
+                <p>{{ redeemResult.message }}</p>
+                <div class="mt-3 space-y-1">
+                  <p v-if="redeemResult.type === 'balance'" class="font-medium">
+                    {{ t('redeem.added') }}: ${{ redeemResult.value.toFixed(2) }}
+                  </p>
+                  <p v-else-if="redeemResult.type === 'concurrency'" class="font-medium">
+                    {{ t('redeem.added') }}: {{ redeemResult.value }}
+                    {{ t('redeem.concurrentRequests') }}
+                  </p>
+                  <p v-else-if="redeemResult.type === 'subscription'" class="font-medium">
+                    {{ t('redeem.subscriptionAssigned') }}
+                    <span v-if="redeemResult.group_name"> - {{ redeemResult.group_name }}</span>
+                    <span v-if="redeemResult.validity_days">
+                      ({{
+                        t('redeem.subscriptionDays', { days: redeemResult.validity_days })
+                      }})</span
+                    >
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </transition>
+
     <!-- Information Card -->
     <div
       class="card border-primary-200 bg-primary-50 dark:border-primary-800/50 dark:bg-primary-900/20"
@@ -643,22 +743,27 @@ const handleRedeem = async () => {
   redeemResult.value = null
 
   try {
-    const result = await redeemAPI.redeem(redeemCode.value.trim())
-
-    redeemResult.value = result
-
-    // Refresh user data to get updated balance/concurrency
-    await authStore.refreshUser()
-
-    // If subscription type, immediately refresh subscription status
-    if (result.type === 'subscription') {
-      try {
-        await subscriptionStore.fetchActiveSubscriptions(true) // force refresh
-      } catch (error) {
-        console.error('Failed to refresh subscriptions after redeem:', error)
-        appStore.showWarning(t('redeem.subscriptionRefreshFailed'))
+    let result: { message: string; type: string; value: number; validity_days?: number; group_id?: number }
+    if (props.adminUserId) {
+      result = await adminUsersAPI.redeemForUser(props.adminUserId, redeemCode.value.trim())
+      // Refresh the admin user to show updated balance
+      try { adminUser.value = await adminUsersAPI.getById(props.adminUserId) } catch {}
+    } else {
+      result = await redeemAPI.redeem(redeemCode.value.trim())
+      // Refresh user data to get updated balance/concurrency
+      await authStore.refreshUser()
+      // If subscription type, immediately refresh subscription status
+      if (result.type === 'subscription') {
+        try {
+          await subscriptionStore.fetchActiveSubscriptions(true)
+        } catch (error) {
+          console.error('Failed to refresh subscriptions after redeem:', error)
+          appStore.showWarning(t('redeem.subscriptionRefreshFailed'))
+        }
       }
     }
+
+    redeemResult.value = result as any
 
     // Clear the input
     redeemCode.value = ''

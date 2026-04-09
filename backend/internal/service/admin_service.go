@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -49,6 +51,12 @@ type AdminService interface {
 
 	// API Key management (admin)
 	AdminUpdateAPIKeyGroupID(ctx context.Context, keyID int64, groupID *int64) (*AdminUpdateAPIKeyGroupIDResult, error)
+	// AdminCreateAPIKey 管理员为目标用户创建 API Key（跳过所有权校验）
+	AdminCreateAPIKey(ctx context.Context, userID int64, req CreateAPIKeyRequest) (*APIKey, error)
+	// AdminUpdateAPIKey 管理员更新目标用户的 API Key（跳过所有权校验）
+	AdminUpdateAPIKey(ctx context.Context, keyID int64, req UpdateAPIKeyRequest) (*APIKey, error)
+	// AdminDeleteAPIKey 管理员删除目标用户的 API Key（跳过所有权校验）
+	AdminDeleteAPIKey(ctx context.Context, keyID int64) error
 
 	// ReplaceUserGroup 替换用户的专属分组：授予新分组权限、迁移 Key、移除旧分组权限
 	ReplaceUserGroup(ctx context.Context, userID, oldGroupID, newGroupID int64) (*ReplaceUserGroupResult, error)
@@ -1383,6 +1391,124 @@ func (s *adminServiceImpl) AdminUpdateAPIKeyGroupID(ctx context.Context, keyID i
 
 	result.APIKey = apiKey
 	return result, nil
+}
+
+// AdminCreateAPIKey 管理员为目标用户创建 API Key，跳过所有权与分组权限校验
+func (s *adminServiceImpl) AdminCreateAPIKey(ctx context.Context, userID int64, req CreateAPIKeyRequest) (*APIKey, error) {
+	// 验证用户存在
+	if _, err := s.userRepo.GetByID(ctx, userID); err != nil {
+		return nil, fmt.Errorf("get user: %w", err)
+	}
+
+	// 生成 Key
+	var key string
+	if req.CustomKey != nil && *req.CustomKey != "" {
+		exists, err := s.apiKeyRepo.ExistsByKey(ctx, *req.CustomKey)
+		if err != nil {
+			return nil, fmt.Errorf("check key exists: %w", err)
+		}
+		if exists {
+			return nil, ErrAPIKeyExists
+		}
+		key = *req.CustomKey
+	} else {
+		b := make([]byte, 32)
+		if _, err := rand.Read(b); err != nil {
+			return nil, fmt.Errorf("generate key: %w", err)
+		}
+		key = "sk-" + hex.EncodeToString(b)
+	}
+
+	apiKey := &APIKey{
+		UserID:      userID,
+		Key:         key,
+		Name:        req.Name,
+		GroupID:     req.GroupID,
+		Status:      StatusActive,
+		IPWhitelist: req.IPWhitelist,
+		IPBlacklist: req.IPBlacklist,
+		Quota:       req.Quota,
+		RateLimit5h: req.RateLimit5h,
+		RateLimit1d: req.RateLimit1d,
+		RateLimit7d: req.RateLimit7d,
+	}
+	if req.ExpiresInDays != nil && *req.ExpiresInDays > 0 {
+		t := time.Now().AddDate(0, 0, *req.ExpiresInDays)
+		apiKey.ExpiresAt = &t
+	}
+
+	if err := s.apiKeyRepo.Create(ctx, apiKey); err != nil {
+		return nil, fmt.Errorf("create api key: %w", err)
+	}
+	return apiKey, nil
+}
+
+// AdminUpdateAPIKey 管理员更新目标 API Key，跳过所有权校验
+func (s *adminServiceImpl) AdminUpdateAPIKey(ctx context.Context, keyID int64, req UpdateAPIKeyRequest) (*APIKey, error) {
+	apiKey, err := s.apiKeyRepo.GetByID(ctx, keyID)
+	if err != nil {
+		return nil, fmt.Errorf("get api key: %w", err)
+	}
+
+	if req.Name != nil {
+		apiKey.Name = *req.Name
+	}
+	if req.GroupID != nil {
+		if *req.GroupID == 0 {
+			apiKey.GroupID = nil
+		} else {
+			apiKey.GroupID = req.GroupID
+		}
+	}
+	if req.Status != nil {
+		apiKey.Status = *req.Status
+	}
+	if req.Quota != nil {
+		apiKey.Quota = *req.Quota
+	}
+	if req.ResetQuota != nil && *req.ResetQuota {
+		apiKey.QuotaUsed = 0
+	}
+	if req.ExpiresAt != nil {
+		apiKey.ExpiresAt = req.ExpiresAt
+	}
+	if req.ClearExpiration {
+		apiKey.ExpiresAt = nil
+	}
+	if req.RateLimit5h != nil {
+		apiKey.RateLimit5h = *req.RateLimit5h
+	}
+	if req.RateLimit1d != nil {
+		apiKey.RateLimit1d = *req.RateLimit1d
+	}
+	if req.RateLimit7d != nil {
+		apiKey.RateLimit7d = *req.RateLimit7d
+	}
+	if req.ResetRateLimitUsage != nil && *req.ResetRateLimitUsage {
+		if err := s.apiKeyRepo.ResetRateLimitWindows(ctx, keyID); err != nil {
+			return nil, fmt.Errorf("reset rate limit: %w", err)
+		}
+	}
+
+	if err := s.apiKeyRepo.Update(ctx, apiKey); err != nil {
+		return nil, fmt.Errorf("update api key: %w", err)
+	}
+	if s.authCacheInvalidator != nil {
+		s.authCacheInvalidator.InvalidateAuthCacheByKey(ctx, apiKey.Key)
+	}
+	return apiKey, nil
+}
+
+// AdminDeleteAPIKey 管理员删除目标 API Key，跳过所有权校验
+func (s *adminServiceImpl) AdminDeleteAPIKey(ctx context.Context, keyID int64) error {
+	key, _, err := s.apiKeyRepo.GetKeyAndOwnerID(ctx, keyID)
+	if err != nil {
+		return fmt.Errorf("get api key: %w", err)
+	}
+	if s.authCacheInvalidator != nil {
+		s.authCacheInvalidator.InvalidateAuthCacheByKey(ctx, key)
+	}
+	return s.apiKeyRepo.Delete(ctx, keyID)
 }
 
 // ReplaceUserGroup 替换用户的专属分组

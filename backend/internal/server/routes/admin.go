@@ -231,6 +231,14 @@ func registerUserManagementRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		users.GET("/:id/dashboard/trend", h.Admin.User.GetUserDashboardTrend)
 		users.GET("/:id/dashboard/models", h.Admin.User.GetUserDashboardModels)
 
+		// Admin-managed API keys for a user
+		users.POST("/:id/api-keys", h.Admin.User.CreateUserAPIKey)
+		users.PUT("/:id/api-keys/:keyId", h.Admin.User.UpdateUserAPIKey)
+		users.DELETE("/:id/api-keys/:keyId", h.Admin.User.DeleteUserAPIKey)
+
+		// Admin redeem on behalf of user
+		users.POST("/:id/redeem", h.Admin.User.RedeemForUser)
+
 		// User attribute values
 		users.GET("/:id/attributes", h.Admin.UserAttribute.GetUserAttributes)
 		users.PUT("/:id/attributes", h.Admin.UserAttribute.UpdateUserAttributes)
