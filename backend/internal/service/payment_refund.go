@@ -292,7 +292,12 @@ func (s *PaymentService) deductBalanceForRefund(ctx context.Context, p *RefundPl
 	if !p.DeductBalance || p.DeductionType != payment.DeductionTypeBalance || p.BalanceToDeduct <= 0 {
 		return nil
 	}
-	if err := s.userRepo.UpdateBalance(ctx, p.Order.UserID, -p.BalanceToDeduct); err != nil {
+	if s.hasAuditLog(ctx, p.OrderID, "REFUND_ROLLBACK_FAILED") {
+		slog.Warn("skipping balance deduction on retry (previous rollback failed)", "orderID", p.OrderID)
+		p.BalanceToDeduct = 0
+		return nil
+	}
+	if err := s.userRepo.DeductBalance(ctx, p.Order.UserID, p.BalanceToDeduct); err != nil {
 		return fmt.Errorf("deduct refund balance: %w", err)
 	}
 	return nil
