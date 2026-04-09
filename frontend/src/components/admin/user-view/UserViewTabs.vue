@@ -307,7 +307,7 @@ import { adminUsageAPI } from '@/api/admin/usage'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import UserDashboardStats from '@/components/user/dashboard/UserDashboardStats.vue'
 import type { UserDashboardStats as UserStatsType } from '@/api/usage'
-import type { TrendDataPoint, ModelStat, ApiKey, UserSubscription, AdminUser } from '@/types'
+import type { TrendDataPoint, ApiKey, UserSubscription, AdminUser } from '@/types'
 
 const props = defineProps<{
   userId: number

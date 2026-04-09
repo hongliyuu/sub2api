@@ -103,7 +103,7 @@ interface SelectedUser {
   email: string
 }
 
-const props = defineProps<{
+defineProps<{
   selectedUser?: SelectedUser | null
 }>()
 
