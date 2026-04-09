@@ -489,7 +489,8 @@ async function loadSubscriptions() {
     loading.value = true
     if (props.adminUserId) {
       const res = await adminSubscriptionsAPI.listByUser(props.adminUserId)
-      subscriptions.value = res.items
+      // Backend returns array directly (not PaginatedResponse)
+      subscriptions.value = (Array.isArray(res) ? res : (res as any).items ?? []) as any
     } else {
       subscriptions.value = await subscriptionsAPI.getMySubscriptions()
     }
