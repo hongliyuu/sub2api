@@ -293,6 +293,7 @@ func (s *OpenAIGatewayService) handleAnthropicBufferedStreamingResponse(
 
 	var finalResponse *apicompat.ResponsesResponse
 	var usage OpenAIUsage
+	acc := apicompat.NewBufferedResponseAccumulator()
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -310,6 +311,10 @@ func (s *OpenAIGatewayService) handleAnthropicBufferedStreamingResponse(
 			)
 			continue
 		}
+
+		// Accumulate delta content for fallback when terminal output is empty
+		// or carries message blocks with missing text.
+		acc.ProcessEvent(&event)
 
 		// Terminal events carry the complete ResponsesResponse with output + usage.
 		if (event.Type == "response.completed" || event.Type == "response.incomplete" || event.Type == "response.failed") &&
@@ -341,6 +346,7 @@ func (s *OpenAIGatewayService) handleAnthropicBufferedStreamingResponse(
 		return nil, fmt.Errorf("upstream stream ended without terminal event")
 	}
 
+	acc.SupplementResponseOutput(finalResponse)
 	anthropicResp := apicompat.ResponsesToAnthropicWithToolNameMap(finalResponse, originalModel, toolNameMap)
 
 	if s.responseHeaderFilter != nil {

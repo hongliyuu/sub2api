@@ -452,6 +452,31 @@ func TestResponsesToAnthropic_WebSearchUsesActionSources(t *testing.T) {
 	assert.Equal(t, "Example Source", results[0]["title"])
 }
 
+func TestResponsesToAnthropic_WebSearchUsesEmptyArrayWhenNoResultsAvailable(t *testing.T) {
+	var resp ResponsesResponse
+	require.NoError(t, json.Unmarshal([]byte(`{
+		"id": "resp_ws_empty",
+		"model": "gpt-5.4",
+		"status": "completed",
+		"output": [
+			{
+				"type": "web_search_call",
+				"id": "ws_1",
+				"status": "completed",
+				"action": {
+					"type": "search",
+					"query": "latest news"
+				}
+			}
+		]
+	}`), &resp))
+
+	anth := ResponsesToAnthropic(&resp, "claude-opus-4-6")
+	require.Len(t, anth.Content, 2)
+	assert.Equal(t, "web_search_tool_result", anth.Content[1].Type)
+	assert.JSONEq(t, `[]`, string(anth.Content[1].Content))
+}
+
 func TestResponsesToAnthropic_Incomplete(t *testing.T) {
 	resp := &ResponsesResponse{
 		ID:     "resp_inc",
@@ -886,6 +911,60 @@ func TestStreamingWebSearchUsesCompletionSourcesWhenDoneEventHasNone(t *testing.
 	require.NotEmpty(t, results)
 	assert.Equal(t, "https://example.com/completion-source", results[0]["url"])
 	assert.Equal(t, "Completion Source", results[0]["title"])
+}
+
+func TestStreamingWebSearchUsesEmptyArrayWhenNoResultsAvailable(t *testing.T) {
+	state := NewResponsesEventToAnthropicState()
+
+	ResponsesEventToAnthropicEvents(&ResponsesStreamEvent{
+		Type:     "response.created",
+		Response: &ResponsesResponse{ID: "resp_ws_stream_empty", Model: "gpt-5.4"},
+	}, state)
+
+	var doneEvt ResponsesStreamEvent
+	require.NoError(t, json.Unmarshal([]byte(`{
+		"type": "response.output_item.done",
+		"output_index": 0,
+		"item": {
+			"type": "web_search_call",
+			"id": "ws_1",
+			"status": "completed",
+			"action": {
+				"type": "search",
+				"query": "latest news"
+			}
+		}
+	}`), &doneEvt))
+
+	events := ResponsesEventToAnthropicEvents(&doneEvt, state)
+	require.Len(t, events, 2)
+	assert.Equal(t, "server_tool_use", events[0].ContentBlock.Type)
+
+	var completedEvt ResponsesStreamEvent
+	require.NoError(t, json.Unmarshal([]byte(`{
+		"type": "response.completed",
+		"response": {
+			"id": "resp_ws_stream_empty",
+			"model": "gpt-5.4",
+			"status": "completed",
+			"output": [
+				{
+					"type": "web_search_call",
+					"id": "ws_1",
+					"status": "completed",
+					"action": {
+						"type": "search",
+						"query": "latest news"
+					}
+				}
+			]
+		}
+	}`), &completedEvt))
+
+	events = ResponsesEventToAnthropicEvents(&completedEvt, state)
+	require.Len(t, events, 4)
+	assert.Equal(t, "web_search_tool_result", events[0].ContentBlock.Type)
+	assert.JSONEq(t, `[]`, string(events[0].ContentBlock.Content))
 }
 
 func TestStreamingIncomplete(t *testing.T) {
