@@ -552,6 +552,39 @@ var (
 			},
 		},
 	}
+	// ModelPricingsColumns holds the columns for the "model_pricings" table.
+	ModelPricingsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "deleted_at", Type: field.TypeTime, Nullable: true, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "model_key", Type: field.TypeString, Size: 200},
+		{Name: "display_name", Type: field.TypeString, Nullable: true, Size: 200},
+		{Name: "input_price_per_million", Type: field.TypeFloat64, Default: 0},
+		{Name: "output_price_per_million", Type: field.TypeFloat64, Default: 0},
+		{Name: "input_price_per_million_priority", Type: field.TypeFloat64, Default: 0},
+		{Name: "output_price_per_million_priority", Type: field.TypeFloat64, Default: 0},
+		{Name: "cache_read_price_per_million", Type: field.TypeFloat64, Default: 0},
+		{Name: "cache_read_price_per_million_priority", Type: field.TypeFloat64, Default: 0},
+		{Name: "cache_creation_price_per_million", Type: field.TypeFloat64, Default: 0},
+		{Name: "enabled", Type: field.TypeBool, Default: true},
+		{Name: "note", Type: field.TypeString, Nullable: true, Size: 500},
+	}
+	// ModelPricingsTable holds the schema information for the "model_pricings" table.
+	ModelPricingsTable = &schema.Table{
+		Name:       "model_pricings",
+		Columns:    ModelPricingsColumns,
+		PrimaryKey: []*schema.Column{ModelPricingsColumns[0]},
+		Indexes: []*schema.Index{
+			// active 记录的唯一性由迁移 SQL 中的 partial unique index 保证，不在此定义复合唯一约束。
+			// CREATE UNIQUE INDEX model_pricings_model_key_active_unique_idx ON model_pricings (model_key) WHERE deleted_at IS NULL
+			{
+				Name:    "modelpricing_enabled",
+				Unique:  false,
+				Columns: []*schema.Column{ModelPricingsColumns[13]},
+			},
+		},
+	}
 	// PromoCodesColumns holds the columns for the "promo_codes" table.
 	PromoCodesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -1181,6 +1214,7 @@ var (
 		ErrorPassthroughRulesTable,
 		GroupsTable,
 		IdempotencyRecordsTable,
+		ModelPricingsTable,
 		PromoCodesTable,
 		PromoCodeUsagesTable,
 		ProxiesTable,
@@ -1234,6 +1268,9 @@ func init() {
 	}
 	IdempotencyRecordsTable.Annotation = &entsql.Annotation{
 		Table: "idempotency_records",
+	}
+	ModelPricingsTable.Annotation = &entsql.Annotation{
+		Table: "model_pricings",
 	}
 	PromoCodesTable.Annotation = &entsql.Annotation{
 		Table: "promo_codes",

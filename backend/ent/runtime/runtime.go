@@ -15,6 +15,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
+	"github.com/Wei-Shaw/sub2api/ent/modelpricing"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
@@ -557,6 +558,83 @@ func init() {
 	idempotencyrecordDescErrorReason := idempotencyrecordFields[6].Descriptor()
 	// idempotencyrecord.ErrorReasonValidator is a validator for the "error_reason" field. It is called by the builders before save.
 	idempotencyrecord.ErrorReasonValidator = idempotencyrecordDescErrorReason.Validators[0].(func(string) error)
+	modelpricingMixin := schema.ModelPricing{}.Mixin()
+	modelpricingMixinHooks1 := modelpricingMixin[1].Hooks()
+	modelpricing.Hooks[0] = modelpricingMixinHooks1[0]
+	modelpricingMixinInters1 := modelpricingMixin[1].Interceptors()
+	modelpricing.Interceptors[0] = modelpricingMixinInters1[0]
+	modelpricingMixinFields0 := modelpricingMixin[0].Fields()
+	_ = modelpricingMixinFields0
+	modelpricingFields := schema.ModelPricing{}.Fields()
+	_ = modelpricingFields
+	// modelpricingDescCreatedAt is the schema descriptor for created_at field.
+	modelpricingDescCreatedAt := modelpricingMixinFields0[0].Descriptor()
+	// modelpricing.DefaultCreatedAt holds the default value on creation for the created_at field.
+	modelpricing.DefaultCreatedAt = modelpricingDescCreatedAt.Default.(func() time.Time)
+	// modelpricingDescUpdatedAt is the schema descriptor for updated_at field.
+	modelpricingDescUpdatedAt := modelpricingMixinFields0[1].Descriptor()
+	// modelpricing.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	modelpricing.DefaultUpdatedAt = modelpricingDescUpdatedAt.Default.(func() time.Time)
+	// modelpricing.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	modelpricing.UpdateDefaultUpdatedAt = modelpricingDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// modelpricingDescModelKey is the schema descriptor for model_key field.
+	modelpricingDescModelKey := modelpricingFields[0].Descriptor()
+	// modelpricing.ModelKeyValidator is a validator for the "model_key" field. It is called by the builders before save.
+	modelpricing.ModelKeyValidator = func() func(string) error {
+		validators := modelpricingDescModelKey.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(model_key string) error {
+			for _, fn := range fns {
+				if err := fn(model_key); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// modelpricingDescDisplayName is the schema descriptor for display_name field.
+	modelpricingDescDisplayName := modelpricingFields[1].Descriptor()
+	// modelpricing.DisplayNameValidator is a validator for the "display_name" field. It is called by the builders before save.
+	modelpricing.DisplayNameValidator = modelpricingDescDisplayName.Validators[0].(func(string) error)
+	// modelpricingDescInputPricePerMillion is the schema descriptor for input_price_per_million field.
+	modelpricingDescInputPricePerMillion := modelpricingFields[2].Descriptor()
+	// modelpricing.DefaultInputPricePerMillion holds the default value on creation for the input_price_per_million field.
+	modelpricing.DefaultInputPricePerMillion = modelpricingDescInputPricePerMillion.Default.(float64)
+	// modelpricingDescOutputPricePerMillion is the schema descriptor for output_price_per_million field.
+	modelpricingDescOutputPricePerMillion := modelpricingFields[3].Descriptor()
+	// modelpricing.DefaultOutputPricePerMillion holds the default value on creation for the output_price_per_million field.
+	modelpricing.DefaultOutputPricePerMillion = modelpricingDescOutputPricePerMillion.Default.(float64)
+	// modelpricingDescInputPricePerMillionPriority is the schema descriptor for input_price_per_million_priority field.
+	modelpricingDescInputPricePerMillionPriority := modelpricingFields[4].Descriptor()
+	// modelpricing.DefaultInputPricePerMillionPriority holds the default value on creation for the input_price_per_million_priority field.
+	modelpricing.DefaultInputPricePerMillionPriority = modelpricingDescInputPricePerMillionPriority.Default.(float64)
+	// modelpricingDescOutputPricePerMillionPriority is the schema descriptor for output_price_per_million_priority field.
+	modelpricingDescOutputPricePerMillionPriority := modelpricingFields[5].Descriptor()
+	// modelpricing.DefaultOutputPricePerMillionPriority holds the default value on creation for the output_price_per_million_priority field.
+	modelpricing.DefaultOutputPricePerMillionPriority = modelpricingDescOutputPricePerMillionPriority.Default.(float64)
+	// modelpricingDescCacheReadPricePerMillion is the schema descriptor for cache_read_price_per_million field.
+	modelpricingDescCacheReadPricePerMillion := modelpricingFields[6].Descriptor()
+	// modelpricing.DefaultCacheReadPricePerMillion holds the default value on creation for the cache_read_price_per_million field.
+	modelpricing.DefaultCacheReadPricePerMillion = modelpricingDescCacheReadPricePerMillion.Default.(float64)
+	// modelpricingDescCacheReadPricePerMillionPriority is the schema descriptor for cache_read_price_per_million_priority field.
+	modelpricingDescCacheReadPricePerMillionPriority := modelpricingFields[7].Descriptor()
+	// modelpricing.DefaultCacheReadPricePerMillionPriority holds the default value on creation for the cache_read_price_per_million_priority field.
+	modelpricing.DefaultCacheReadPricePerMillionPriority = modelpricingDescCacheReadPricePerMillionPriority.Default.(float64)
+	// modelpricingDescCacheCreationPricePerMillion is the schema descriptor for cache_creation_price_per_million field.
+	modelpricingDescCacheCreationPricePerMillion := modelpricingFields[8].Descriptor()
+	// modelpricing.DefaultCacheCreationPricePerMillion holds the default value on creation for the cache_creation_price_per_million field.
+	modelpricing.DefaultCacheCreationPricePerMillion = modelpricingDescCacheCreationPricePerMillion.Default.(float64)
+	// modelpricingDescEnabled is the schema descriptor for enabled field.
+	modelpricingDescEnabled := modelpricingFields[9].Descriptor()
+	// modelpricing.DefaultEnabled holds the default value on creation for the enabled field.
+	modelpricing.DefaultEnabled = modelpricingDescEnabled.Default.(bool)
+	// modelpricingDescNote is the schema descriptor for note field.
+	modelpricingDescNote := modelpricingFields[10].Descriptor()
+	// modelpricing.NoteValidator is a validator for the "note" field. It is called by the builders before save.
+	modelpricing.NoteValidator = modelpricingDescNote.Validators[0].(func(string) error)
 	promocodeFields := schema.PromoCode{}.Fields()
 	_ = promocodeFields
 	// promocodeDescCode is the schema descriptor for code field.

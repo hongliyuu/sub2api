@@ -90,6 +90,9 @@ func RegisterAdminRoutes(
 
 		// Copilot 成本分析
 		registerCopilotAnalyticsRoutes(admin, h)
+
+		// 模型计费价格管理
+		registerModelPricingRoutes(admin, h)
 	}
 }
 
@@ -610,5 +613,18 @@ func registerCopilotAnalyticsRoutes(admin *gin.RouterGroup, h *handler.Handlers)
 			accounts.POST("/:id/quota-refresh", h.Admin.CopilotAnalytics.QuotaRefresh)
 			accounts.PUT("/:id/budget", h.Admin.CopilotAnalytics.UpsertBudgetAlert)
 		}
+	}
+}
+
+func registerModelPricingRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	if h.Admin.ModelPricing == nil {
+		return
+	}
+	pricings := admin.Group("/model-pricings")
+	{
+		pricings.GET("", h.Admin.ModelPricing.List)
+		pricings.POST("", h.Admin.ModelPricing.Create)
+		pricings.PUT("/:id", h.Admin.ModelPricing.Update)
+		pricings.DELETE("/:id", h.Admin.ModelPricing.Delete)
 	}
 }

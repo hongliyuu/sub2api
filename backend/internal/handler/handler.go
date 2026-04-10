@@ -31,6 +31,7 @@ type AdminHandlers struct {
 	APIKey           *admin.AdminAPIKeyHandler
 	ScheduledTest    *admin.ScheduledTestHandler
 	CopilotAnalytics *admin.CopilotAnalyticsHandler
+	ModelPricing     *admin.ModelPricingHandler
 }
 
 // Handlers contains all HTTP handlers

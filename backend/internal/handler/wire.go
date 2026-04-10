@@ -34,6 +34,7 @@ func ProvideAdminHandlers(
 	apiKeyHandler *admin.AdminAPIKeyHandler,
 	scheduledTestHandler *admin.ScheduledTestHandler,
 	copilotAnalyticsHandler *admin.CopilotAnalyticsHandler,
+	modelPricingHandler *admin.ModelPricingHandler,
 ) *AdminHandlers {
 	return &AdminHandlers{
 		Dashboard:        dashboardHandler,
@@ -61,6 +62,7 @@ func ProvideAdminHandlers(
 		APIKey:           apiKeyHandler,
 		ScheduledTest:    scheduledTestHandler,
 		CopilotAnalytics: copilotAnalyticsHandler,
+		ModelPricing:     modelPricingHandler,
 	}
 }
 

@@ -218,7 +218,14 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	copilotQuotaCacheService := service.NewCopilotQuotaCacheService(copilotGatewayService, copilotQuotaSnapshotRepository, copilotBudgetAlertRepository, adminService)
 	copilotAnalyticsService := service.NewCopilotAnalyticsService(db, copilotQuotaCacheService, adminService, copilotQuotaSnapshotRepository, copilotBudgetAlertRepository)
 	copilotAnalyticsHandler := admin.NewCopilotAnalyticsHandler(copilotAnalyticsService, copilotQuotaCacheService, adminService, copilotBudgetAlertRepository)
-	adminHandlers := handler.ProvideAdminHandlers(dashboardHandler, adminUserHandler, groupHandler, accountHandler, adminAnnouncementHandler, dataManagementHandler, backupHandler, oAuthHandler, openAIOAuthHandler, geminiOAuthHandler, antigravityOAuthHandler, copilotOAuthHandler, proxyHandler, adminRedeemHandler, promoHandler, settingHandler, opsHandler, systemHandler, adminSubscriptionHandler, adminUsageHandler, userAttributeHandler, errorPassthroughHandler, adminAPIKeyHandler, scheduledTestHandler, copilotAnalyticsHandler)
+	modelPricingRepository := repository.NewModelPricingRepository(client)
+	modelPricingService := service.NewModelPricingService(modelPricingRepository)
+	billingService.SetModelPricingService(modelPricingService)
+	if err2 := modelPricingService.LoadCache(context.Background()); err2 != nil {
+		log.Printf("[Warn] failed to load model pricing cache: %v", err2)
+	}
+	modelPricingHandler := admin.NewModelPricingHandler(modelPricingService)
+	adminHandlers := handler.ProvideAdminHandlers(dashboardHandler, adminUserHandler, groupHandler, accountHandler, adminAnnouncementHandler, dataManagementHandler, backupHandler, oAuthHandler, openAIOAuthHandler, geminiOAuthHandler, antigravityOAuthHandler, copilotOAuthHandler, proxyHandler, adminRedeemHandler, promoHandler, settingHandler, opsHandler, systemHandler, adminSubscriptionHandler, adminUsageHandler, userAttributeHandler, errorPassthroughHandler, adminAPIKeyHandler, scheduledTestHandler, copilotAnalyticsHandler, modelPricingHandler)
 	usageRecordWorkerPool := service.NewUsageRecordWorkerPool(configConfig)
 	userMsgQueueCache := repository.NewUserMsgQueueCache(redisClient)
 	userMessageQueueService := service.ProvideUserMessageQueueService(userMsgQueueCache, rpmCache, configConfig)

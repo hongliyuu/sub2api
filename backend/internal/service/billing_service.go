@@ -108,9 +108,10 @@ type CostBreakdown struct {
 
 // BillingService 计费服务
 type BillingService struct {
-	cfg            *config.Config
-	pricingService *PricingService
-	fallbackPrices map[string]*ModelPricing // 硬编码回退价格
+	cfg                 *config.Config
+	pricingService      *PricingService
+	modelPricingService *ModelPricingService // 数据库价格缓存（可选）
+	fallbackPrices      map[string]*ModelPricing // 硬编码回退价格
 }
 
 // NewBillingService 创建计费服务实例
@@ -125,6 +126,11 @@ func NewBillingService(cfg *config.Config, pricingService *PricingService) *Bill
 	s.initFallbackPricing()
 
 	return s
+}
+
+// SetModelPricingService 注入数据库价格缓存服务（启动后调用）
+func (s *BillingService) SetModelPricingService(svc *ModelPricingService) {
+	s.modelPricingService = svc
 }
 
 // initFallbackPricing 初始化硬编码回退价格（当动态价格不可用时使用）
@@ -266,11 +272,71 @@ func (s *BillingService) initFallbackPricing() {
 		SupportsCacheBreakdown:         false,
 	}
 	s.fallbackPrices["gpt-5.3-codex"] = s.fallbackPrices["gpt-5.1-codex"]
+
+	// gpt-4-o-preview / gpt-4o-preview（Copilot 平台出现的旧 preview 变体）
+	// 按 gpt-4o preview 官方价格计费，防止被误匹配到 gpt-4（$30/$60）
+	s.fallbackPrices["gpt-4-o-preview"] = &ModelPricing{
+		InputPricePerToken:  5e-6,  // $5 per MTok
+		OutputPricePerToken: 15e-6, // $15 per MTok
+	}
+
+	// gpt-41-copilot（Copilot 内部 gpt-4.1 变体），与 gpt-4.1 同价
+	s.fallbackPrices["gpt-41-copilot"] = &ModelPricing{
+		InputPricePerToken:     2e-6,   // $2 per MTok
+		OutputPricePerToken:    8e-6,   // $8 per MTok
+		CacheReadPricePerToken: 0.5e-6, // $0.50 per MTok
+	}
+
+	// text-embedding-ada-002 OpenAI 官方价格
+	s.fallbackPrices["text-embedding-ada-002"] = &ModelPricing{
+		InputPricePerToken:  0.1e-6, // $0.10 per MTok
+		OutputPricePerToken: 0,
+	}
+
+	// text-embedding-3-small / text-embedding-3-small-inference OpenAI 官方价格
+	s.fallbackPrices["text-embedding-3-small"] = &ModelPricing{
+		InputPricePerToken:  0.02e-6, // $0.02 per MTok
+		OutputPricePerToken: 0,
+	}
+
+	// grok-code-fast-1 xAI 官方价格（docs.x.ai）
+	s.fallbackPrices["grok-code-fast-1"] = &ModelPricing{
+		InputPricePerToken:     0.2e-6,  // $0.20 per MTok
+		OutputPricePerToken:    1.5e-6,  // $1.50 per MTok
+		CacheReadPricePerToken: 0.02e-6, // $0.02 per MTok
+	}
 }
 
 // getFallbackPricing 根据模型系列获取回退价格
 func (s *BillingService) getFallbackPricing(model string) *ModelPricing {
 	modelLower := strings.ToLower(model)
+
+	// Copilot 平台特有模型（必须在通用 gpt-4/gpt-5 匹配之前，防止被宽泛规则截胡）
+
+	// gpt-4-o-preview / gpt-4o-preview：应按 gpt-4o preview 价格收费，
+	// 而不是被误匹配到 gpt-4（$30/$60）
+	if strings.Contains(modelLower, "gpt-4-o-preview") || strings.Contains(modelLower, "gpt-4o-preview") {
+		return s.fallbackPrices["gpt-4-o-preview"]
+	}
+
+	// gpt-41-copilot / gpt-4.1-copilot：Copilot 内部 gpt-4.1 变体
+	if strings.Contains(modelLower, "gpt-41-copilot") || strings.Contains(modelLower, "gpt-4.1-copilot") {
+		return s.fallbackPrices["gpt-41-copilot"]
+	}
+
+	// text-embedding 系列（OpenAI embedding 模型）
+	if strings.Contains(modelLower, "text-embedding") {
+		if strings.Contains(modelLower, "ada") {
+			return s.fallbackPrices["text-embedding-ada-002"]
+		}
+		// text-embedding-3-small / text-embedding-3-small-inference 共用同一价格
+		return s.fallbackPrices["text-embedding-3-small"]
+	}
+
+	// grok 系列（xAI）
+	if strings.Contains(modelLower, "grok") {
+		return s.fallbackPrices["grok-code-fast-1"]
+	}
 
 	// 按模型系列匹配
 	if strings.Contains(modelLower, "opus") {
@@ -361,7 +427,16 @@ func (s *BillingService) GetModelPricing(model string) (*ModelPricing, error) {
 		}
 	}
 
-	// 2. 使用硬编码回退价格
+	// 2. 从数据库管理价格缓存查询（精确匹配 model_key）
+	if s.modelPricingService != nil {
+		dbPricing := s.modelPricingService.GetCachedPricing(model)
+		if dbPricing != nil {
+			log.Printf("[Billing] Using DB pricing for model: %s", model)
+			return s.applyModelSpecificPricingPolicy(model, dbPricing), nil
+		}
+	}
+
+	// 3. 使用硬编码回退价格
 	fallback := s.getFallbackPricing(model)
 	if fallback != nil {
 		log.Printf("[Billing] Using fallback pricing for model: %s", model)

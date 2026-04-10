@@ -22,6 +22,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
+	"github.com/Wei-Shaw/sub2api/ent/modelpricing"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/promocode"
 	"github.com/Wei-Shaw/sub2api/ent/promocodeusage"
@@ -58,6 +59,7 @@ const (
 	TypeErrorPassthroughRule    = "ErrorPassthroughRule"
 	TypeGroup                   = "Group"
 	TypeIdempotencyRecord       = "IdempotencyRecord"
+	TypeModelPricing            = "ModelPricing"
 	TypePromoCode               = "PromoCode"
 	TypePromoCodeUsage          = "PromoCodeUsage"
 	TypeProxy                   = "Proxy"
@@ -14258,6 +14260,1328 @@ func (m *IdempotencyRecordMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *IdempotencyRecordMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown IdempotencyRecord edge %s", name)
+}
+
+// ModelPricingMutation represents an operation that mutates the ModelPricing nodes in the graph.
+type ModelPricingMutation struct {
+	config
+	op                                       Op
+	typ                                      string
+	id                                       *int64
+	created_at                               *time.Time
+	updated_at                               *time.Time
+	deleted_at                               *time.Time
+	model_key                                *string
+	display_name                             *string
+	input_price_per_million                  *float64
+	addinput_price_per_million               *float64
+	output_price_per_million                 *float64
+	addoutput_price_per_million              *float64
+	input_price_per_million_priority         *float64
+	addinput_price_per_million_priority      *float64
+	output_price_per_million_priority        *float64
+	addoutput_price_per_million_priority     *float64
+	cache_read_price_per_million             *float64
+	addcache_read_price_per_million          *float64
+	cache_read_price_per_million_priority    *float64
+	addcache_read_price_per_million_priority *float64
+	cache_creation_price_per_million         *float64
+	addcache_creation_price_per_million      *float64
+	enabled                                  *bool
+	note                                     *string
+	clearedFields                            map[string]struct{}
+	done                                     bool
+	oldValue                                 func(context.Context) (*ModelPricing, error)
+	predicates                               []predicate.ModelPricing
+}
+
+var _ ent.Mutation = (*ModelPricingMutation)(nil)
+
+// modelpricingOption allows management of the mutation configuration using functional options.
+type modelpricingOption func(*ModelPricingMutation)
+
+// newModelPricingMutation creates new mutation for the ModelPricing entity.
+func newModelPricingMutation(c config, op Op, opts ...modelpricingOption) *ModelPricingMutation {
+	m := &ModelPricingMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeModelPricing,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withModelPricingID sets the ID field of the mutation.
+func withModelPricingID(id int64) modelpricingOption {
+	return func(m *ModelPricingMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *ModelPricing
+		)
+		m.oldValue = func(ctx context.Context) (*ModelPricing, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().ModelPricing.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withModelPricing sets the old ModelPricing of the mutation.
+func withModelPricing(node *ModelPricing) modelpricingOption {
+	return func(m *ModelPricingMutation) {
+		m.oldValue = func(context.Context) (*ModelPricing, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m ModelPricingMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m ModelPricingMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *ModelPricingMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *ModelPricingMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().ModelPricing.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *ModelPricingMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *ModelPricingMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the ModelPricing entity.
+// If the ModelPricing object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ModelPricingMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *ModelPricingMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *ModelPricingMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *ModelPricingMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the ModelPricing entity.
+// If the ModelPricing object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ModelPricingMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *ModelPricingMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetDeletedAt sets the "deleted_at" field.
+func (m *ModelPricingMutation) SetDeletedAt(t time.Time) {
+	m.deleted_at = &t
+}
+
+// DeletedAt returns the value of the "deleted_at" field in the mutation.
+func (m *ModelPricingMutation) DeletedAt() (r time.Time, exists bool) {
+	v := m.deleted_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDeletedAt returns the old "deleted_at" field's value of the ModelPricing entity.
+// If the ModelPricing object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ModelPricingMutation) OldDeletedAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDeletedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDeletedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDeletedAt: %w", err)
+	}
+	return oldValue.DeletedAt, nil
+}
+
+// ClearDeletedAt clears the value of the "deleted_at" field.
+func (m *ModelPricingMutation) ClearDeletedAt() {
+	m.deleted_at = nil
+	m.clearedFields[modelpricing.FieldDeletedAt] = struct{}{}
+}
+
+// DeletedAtCleared returns if the "deleted_at" field was cleared in this mutation.
+func (m *ModelPricingMutation) DeletedAtCleared() bool {
+	_, ok := m.clearedFields[modelpricing.FieldDeletedAt]
+	return ok
+}
+
+// ResetDeletedAt resets all changes to the "deleted_at" field.
+func (m *ModelPricingMutation) ResetDeletedAt() {
+	m.deleted_at = nil
+	delete(m.clearedFields, modelpricing.FieldDeletedAt)
+}
+
+// SetModelKey sets the "model_key" field.
+func (m *ModelPricingMutation) SetModelKey(s string) {
+	m.model_key = &s
+}
+
+// ModelKey returns the value of the "model_key" field in the mutation.
+func (m *ModelPricingMutation) ModelKey() (r string, exists bool) {
+	v := m.model_key
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldModelKey returns the old "model_key" field's value of the ModelPricing entity.
+// If the ModelPricing object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ModelPricingMutation) OldModelKey(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldModelKey is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldModelKey requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldModelKey: %w", err)
+	}
+	return oldValue.ModelKey, nil
+}
+
+// ResetModelKey resets all changes to the "model_key" field.
+func (m *ModelPricingMutation) ResetModelKey() {
+	m.model_key = nil
+}
+
+// SetDisplayName sets the "display_name" field.
+func (m *ModelPricingMutation) SetDisplayName(s string) {
+	m.display_name = &s
+}
+
+// DisplayName returns the value of the "display_name" field in the mutation.
+func (m *ModelPricingMutation) DisplayName() (r string, exists bool) {
+	v := m.display_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDisplayName returns the old "display_name" field's value of the ModelPricing entity.
+// If the ModelPricing object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ModelPricingMutation) OldDisplayName(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDisplayName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDisplayName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDisplayName: %w", err)
+	}
+	return oldValue.DisplayName, nil
+}
+
+// ClearDisplayName clears the value of the "display_name" field.
+func (m *ModelPricingMutation) ClearDisplayName() {
+	m.display_name = nil
+	m.clearedFields[modelpricing.FieldDisplayName] = struct{}{}
+}
+
+// DisplayNameCleared returns if the "display_name" field was cleared in this mutation.
+func (m *ModelPricingMutation) DisplayNameCleared() bool {
+	_, ok := m.clearedFields[modelpricing.FieldDisplayName]
+	return ok
+}
+
+// ResetDisplayName resets all changes to the "display_name" field.
+func (m *ModelPricingMutation) ResetDisplayName() {
+	m.display_name = nil
+	delete(m.clearedFields, modelpricing.FieldDisplayName)
+}
+
+// SetInputPricePerMillion sets the "input_price_per_million" field.
+func (m *ModelPricingMutation) SetInputPricePerMillion(f float64) {
+	m.input_price_per_million = &f
+	m.addinput_price_per_million = nil
+}
+
+// InputPricePerMillion returns the value of the "input_price_per_million" field in the mutation.
+func (m *ModelPricingMutation) InputPricePerMillion() (r float64, exists bool) {
+	v := m.input_price_per_million
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInputPricePerMillion returns the old "input_price_per_million" field's value of the ModelPricing entity.
+// If the ModelPricing object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ModelPricingMutation) OldInputPricePerMillion(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInputPricePerMillion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInputPricePerMillion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInputPricePerMillion: %w", err)
+	}
+	return oldValue.InputPricePerMillion, nil
+}
+
+// AddInputPricePerMillion adds f to the "input_price_per_million" field.
+func (m *ModelPricingMutation) AddInputPricePerMillion(f float64) {
+	if m.addinput_price_per_million != nil {
+		*m.addinput_price_per_million += f
+	} else {
+		m.addinput_price_per_million = &f
+	}
+}
+
+// AddedInputPricePerMillion returns the value that was added to the "input_price_per_million" field in this mutation.
+func (m *ModelPricingMutation) AddedInputPricePerMillion() (r float64, exists bool) {
+	v := m.addinput_price_per_million
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetInputPricePerMillion resets all changes to the "input_price_per_million" field.
+func (m *ModelPricingMutation) ResetInputPricePerMillion() {
+	m.input_price_per_million = nil
+	m.addinput_price_per_million = nil
+}
+
+// SetOutputPricePerMillion sets the "output_price_per_million" field.
+func (m *ModelPricingMutation) SetOutputPricePerMillion(f float64) {
+	m.output_price_per_million = &f
+	m.addoutput_price_per_million = nil
+}
+
+// OutputPricePerMillion returns the value of the "output_price_per_million" field in the mutation.
+func (m *ModelPricingMutation) OutputPricePerMillion() (r float64, exists bool) {
+	v := m.output_price_per_million
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOutputPricePerMillion returns the old "output_price_per_million" field's value of the ModelPricing entity.
+// If the ModelPricing object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ModelPricingMutation) OldOutputPricePerMillion(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOutputPricePerMillion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOutputPricePerMillion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOutputPricePerMillion: %w", err)
+	}
+	return oldValue.OutputPricePerMillion, nil
+}
+
+// AddOutputPricePerMillion adds f to the "output_price_per_million" field.
+func (m *ModelPricingMutation) AddOutputPricePerMillion(f float64) {
+	if m.addoutput_price_per_million != nil {
+		*m.addoutput_price_per_million += f
+	} else {
+		m.addoutput_price_per_million = &f
+	}
+}
+
+// AddedOutputPricePerMillion returns the value that was added to the "output_price_per_million" field in this mutation.
+func (m *ModelPricingMutation) AddedOutputPricePerMillion() (r float64, exists bool) {
+	v := m.addoutput_price_per_million
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetOutputPricePerMillion resets all changes to the "output_price_per_million" field.
+func (m *ModelPricingMutation) ResetOutputPricePerMillion() {
+	m.output_price_per_million = nil
+	m.addoutput_price_per_million = nil
+}
+
+// SetInputPricePerMillionPriority sets the "input_price_per_million_priority" field.
+func (m *ModelPricingMutation) SetInputPricePerMillionPriority(f float64) {
+	m.input_price_per_million_priority = &f
+	m.addinput_price_per_million_priority = nil
+}
+
+// InputPricePerMillionPriority returns the value of the "input_price_per_million_priority" field in the mutation.
+func (m *ModelPricingMutation) InputPricePerMillionPriority() (r float64, exists bool) {
+	v := m.input_price_per_million_priority
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInputPricePerMillionPriority returns the old "input_price_per_million_priority" field's value of the ModelPricing entity.
+// If the ModelPricing object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ModelPricingMutation) OldInputPricePerMillionPriority(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInputPricePerMillionPriority is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInputPricePerMillionPriority requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInputPricePerMillionPriority: %w", err)
+	}
+	return oldValue.InputPricePerMillionPriority, nil
+}
+
+// AddInputPricePerMillionPriority adds f to the "input_price_per_million_priority" field.
+func (m *ModelPricingMutation) AddInputPricePerMillionPriority(f float64) {
+	if m.addinput_price_per_million_priority != nil {
+		*m.addinput_price_per_million_priority += f
+	} else {
+		m.addinput_price_per_million_priority = &f
+	}
+}
+
+// AddedInputPricePerMillionPriority returns the value that was added to the "input_price_per_million_priority" field in this mutation.
+func (m *ModelPricingMutation) AddedInputPricePerMillionPriority() (r float64, exists bool) {
+	v := m.addinput_price_per_million_priority
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetInputPricePerMillionPriority resets all changes to the "input_price_per_million_priority" field.
+func (m *ModelPricingMutation) ResetInputPricePerMillionPriority() {
+	m.input_price_per_million_priority = nil
+	m.addinput_price_per_million_priority = nil
+}
+
+// SetOutputPricePerMillionPriority sets the "output_price_per_million_priority" field.
+func (m *ModelPricingMutation) SetOutputPricePerMillionPriority(f float64) {
+	m.output_price_per_million_priority = &f
+	m.addoutput_price_per_million_priority = nil
+}
+
+// OutputPricePerMillionPriority returns the value of the "output_price_per_million_priority" field in the mutation.
+func (m *ModelPricingMutation) OutputPricePerMillionPriority() (r float64, exists bool) {
+	v := m.output_price_per_million_priority
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOutputPricePerMillionPriority returns the old "output_price_per_million_priority" field's value of the ModelPricing entity.
+// If the ModelPricing object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ModelPricingMutation) OldOutputPricePerMillionPriority(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOutputPricePerMillionPriority is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOutputPricePerMillionPriority requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOutputPricePerMillionPriority: %w", err)
+	}
+	return oldValue.OutputPricePerMillionPriority, nil
+}
+
+// AddOutputPricePerMillionPriority adds f to the "output_price_per_million_priority" field.
+func (m *ModelPricingMutation) AddOutputPricePerMillionPriority(f float64) {
+	if m.addoutput_price_per_million_priority != nil {
+		*m.addoutput_price_per_million_priority += f
+	} else {
+		m.addoutput_price_per_million_priority = &f
+	}
+}
+
+// AddedOutputPricePerMillionPriority returns the value that was added to the "output_price_per_million_priority" field in this mutation.
+func (m *ModelPricingMutation) AddedOutputPricePerMillionPriority() (r float64, exists bool) {
+	v := m.addoutput_price_per_million_priority
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetOutputPricePerMillionPriority resets all changes to the "output_price_per_million_priority" field.
+func (m *ModelPricingMutation) ResetOutputPricePerMillionPriority() {
+	m.output_price_per_million_priority = nil
+	m.addoutput_price_per_million_priority = nil
+}
+
+// SetCacheReadPricePerMillion sets the "cache_read_price_per_million" field.
+func (m *ModelPricingMutation) SetCacheReadPricePerMillion(f float64) {
+	m.cache_read_price_per_million = &f
+	m.addcache_read_price_per_million = nil
+}
+
+// CacheReadPricePerMillion returns the value of the "cache_read_price_per_million" field in the mutation.
+func (m *ModelPricingMutation) CacheReadPricePerMillion() (r float64, exists bool) {
+	v := m.cache_read_price_per_million
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCacheReadPricePerMillion returns the old "cache_read_price_per_million" field's value of the ModelPricing entity.
+// If the ModelPricing object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ModelPricingMutation) OldCacheReadPricePerMillion(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCacheReadPricePerMillion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCacheReadPricePerMillion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCacheReadPricePerMillion: %w", err)
+	}
+	return oldValue.CacheReadPricePerMillion, nil
+}
+
+// AddCacheReadPricePerMillion adds f to the "cache_read_price_per_million" field.
+func (m *ModelPricingMutation) AddCacheReadPricePerMillion(f float64) {
+	if m.addcache_read_price_per_million != nil {
+		*m.addcache_read_price_per_million += f
+	} else {
+		m.addcache_read_price_per_million = &f
+	}
+}
+
+// AddedCacheReadPricePerMillion returns the value that was added to the "cache_read_price_per_million" field in this mutation.
+func (m *ModelPricingMutation) AddedCacheReadPricePerMillion() (r float64, exists bool) {
+	v := m.addcache_read_price_per_million
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetCacheReadPricePerMillion resets all changes to the "cache_read_price_per_million" field.
+func (m *ModelPricingMutation) ResetCacheReadPricePerMillion() {
+	m.cache_read_price_per_million = nil
+	m.addcache_read_price_per_million = nil
+}
+
+// SetCacheReadPricePerMillionPriority sets the "cache_read_price_per_million_priority" field.
+func (m *ModelPricingMutation) SetCacheReadPricePerMillionPriority(f float64) {
+	m.cache_read_price_per_million_priority = &f
+	m.addcache_read_price_per_million_priority = nil
+}
+
+// CacheReadPricePerMillionPriority returns the value of the "cache_read_price_per_million_priority" field in the mutation.
+func (m *ModelPricingMutation) CacheReadPricePerMillionPriority() (r float64, exists bool) {
+	v := m.cache_read_price_per_million_priority
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCacheReadPricePerMillionPriority returns the old "cache_read_price_per_million_priority" field's value of the ModelPricing entity.
+// If the ModelPricing object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ModelPricingMutation) OldCacheReadPricePerMillionPriority(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCacheReadPricePerMillionPriority is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCacheReadPricePerMillionPriority requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCacheReadPricePerMillionPriority: %w", err)
+	}
+	return oldValue.CacheReadPricePerMillionPriority, nil
+}
+
+// AddCacheReadPricePerMillionPriority adds f to the "cache_read_price_per_million_priority" field.
+func (m *ModelPricingMutation) AddCacheReadPricePerMillionPriority(f float64) {
+	if m.addcache_read_price_per_million_priority != nil {
+		*m.addcache_read_price_per_million_priority += f
+	} else {
+		m.addcache_read_price_per_million_priority = &f
+	}
+}
+
+// AddedCacheReadPricePerMillionPriority returns the value that was added to the "cache_read_price_per_million_priority" field in this mutation.
+func (m *ModelPricingMutation) AddedCacheReadPricePerMillionPriority() (r float64, exists bool) {
+	v := m.addcache_read_price_per_million_priority
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetCacheReadPricePerMillionPriority resets all changes to the "cache_read_price_per_million_priority" field.
+func (m *ModelPricingMutation) ResetCacheReadPricePerMillionPriority() {
+	m.cache_read_price_per_million_priority = nil
+	m.addcache_read_price_per_million_priority = nil
+}
+
+// SetCacheCreationPricePerMillion sets the "cache_creation_price_per_million" field.
+func (m *ModelPricingMutation) SetCacheCreationPricePerMillion(f float64) {
+	m.cache_creation_price_per_million = &f
+	m.addcache_creation_price_per_million = nil
+}
+
+// CacheCreationPricePerMillion returns the value of the "cache_creation_price_per_million" field in the mutation.
+func (m *ModelPricingMutation) CacheCreationPricePerMillion() (r float64, exists bool) {
+	v := m.cache_creation_price_per_million
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCacheCreationPricePerMillion returns the old "cache_creation_price_per_million" field's value of the ModelPricing entity.
+// If the ModelPricing object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ModelPricingMutation) OldCacheCreationPricePerMillion(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCacheCreationPricePerMillion is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCacheCreationPricePerMillion requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCacheCreationPricePerMillion: %w", err)
+	}
+	return oldValue.CacheCreationPricePerMillion, nil
+}
+
+// AddCacheCreationPricePerMillion adds f to the "cache_creation_price_per_million" field.
+func (m *ModelPricingMutation) AddCacheCreationPricePerMillion(f float64) {
+	if m.addcache_creation_price_per_million != nil {
+		*m.addcache_creation_price_per_million += f
+	} else {
+		m.addcache_creation_price_per_million = &f
+	}
+}
+
+// AddedCacheCreationPricePerMillion returns the value that was added to the "cache_creation_price_per_million" field in this mutation.
+func (m *ModelPricingMutation) AddedCacheCreationPricePerMillion() (r float64, exists bool) {
+	v := m.addcache_creation_price_per_million
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetCacheCreationPricePerMillion resets all changes to the "cache_creation_price_per_million" field.
+func (m *ModelPricingMutation) ResetCacheCreationPricePerMillion() {
+	m.cache_creation_price_per_million = nil
+	m.addcache_creation_price_per_million = nil
+}
+
+// SetEnabled sets the "enabled" field.
+func (m *ModelPricingMutation) SetEnabled(b bool) {
+	m.enabled = &b
+}
+
+// Enabled returns the value of the "enabled" field in the mutation.
+func (m *ModelPricingMutation) Enabled() (r bool, exists bool) {
+	v := m.enabled
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldEnabled returns the old "enabled" field's value of the ModelPricing entity.
+// If the ModelPricing object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ModelPricingMutation) OldEnabled(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldEnabled is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldEnabled requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldEnabled: %w", err)
+	}
+	return oldValue.Enabled, nil
+}
+
+// ResetEnabled resets all changes to the "enabled" field.
+func (m *ModelPricingMutation) ResetEnabled() {
+	m.enabled = nil
+}
+
+// SetNote sets the "note" field.
+func (m *ModelPricingMutation) SetNote(s string) {
+	m.note = &s
+}
+
+// Note returns the value of the "note" field in the mutation.
+func (m *ModelPricingMutation) Note() (r string, exists bool) {
+	v := m.note
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldNote returns the old "note" field's value of the ModelPricing entity.
+// If the ModelPricing object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ModelPricingMutation) OldNote(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldNote is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldNote requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldNote: %w", err)
+	}
+	return oldValue.Note, nil
+}
+
+// ClearNote clears the value of the "note" field.
+func (m *ModelPricingMutation) ClearNote() {
+	m.note = nil
+	m.clearedFields[modelpricing.FieldNote] = struct{}{}
+}
+
+// NoteCleared returns if the "note" field was cleared in this mutation.
+func (m *ModelPricingMutation) NoteCleared() bool {
+	_, ok := m.clearedFields[modelpricing.FieldNote]
+	return ok
+}
+
+// ResetNote resets all changes to the "note" field.
+func (m *ModelPricingMutation) ResetNote() {
+	m.note = nil
+	delete(m.clearedFields, modelpricing.FieldNote)
+}
+
+// Where appends a list predicates to the ModelPricingMutation builder.
+func (m *ModelPricingMutation) Where(ps ...predicate.ModelPricing) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the ModelPricingMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *ModelPricingMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.ModelPricing, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *ModelPricingMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *ModelPricingMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (ModelPricing).
+func (m *ModelPricingMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *ModelPricingMutation) Fields() []string {
+	fields := make([]string, 0, 14)
+	if m.created_at != nil {
+		fields = append(fields, modelpricing.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, modelpricing.FieldUpdatedAt)
+	}
+	if m.deleted_at != nil {
+		fields = append(fields, modelpricing.FieldDeletedAt)
+	}
+	if m.model_key != nil {
+		fields = append(fields, modelpricing.FieldModelKey)
+	}
+	if m.display_name != nil {
+		fields = append(fields, modelpricing.FieldDisplayName)
+	}
+	if m.input_price_per_million != nil {
+		fields = append(fields, modelpricing.FieldInputPricePerMillion)
+	}
+	if m.output_price_per_million != nil {
+		fields = append(fields, modelpricing.FieldOutputPricePerMillion)
+	}
+	if m.input_price_per_million_priority != nil {
+		fields = append(fields, modelpricing.FieldInputPricePerMillionPriority)
+	}
+	if m.output_price_per_million_priority != nil {
+		fields = append(fields, modelpricing.FieldOutputPricePerMillionPriority)
+	}
+	if m.cache_read_price_per_million != nil {
+		fields = append(fields, modelpricing.FieldCacheReadPricePerMillion)
+	}
+	if m.cache_read_price_per_million_priority != nil {
+		fields = append(fields, modelpricing.FieldCacheReadPricePerMillionPriority)
+	}
+	if m.cache_creation_price_per_million != nil {
+		fields = append(fields, modelpricing.FieldCacheCreationPricePerMillion)
+	}
+	if m.enabled != nil {
+		fields = append(fields, modelpricing.FieldEnabled)
+	}
+	if m.note != nil {
+		fields = append(fields, modelpricing.FieldNote)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *ModelPricingMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case modelpricing.FieldCreatedAt:
+		return m.CreatedAt()
+	case modelpricing.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case modelpricing.FieldDeletedAt:
+		return m.DeletedAt()
+	case modelpricing.FieldModelKey:
+		return m.ModelKey()
+	case modelpricing.FieldDisplayName:
+		return m.DisplayName()
+	case modelpricing.FieldInputPricePerMillion:
+		return m.InputPricePerMillion()
+	case modelpricing.FieldOutputPricePerMillion:
+		return m.OutputPricePerMillion()
+	case modelpricing.FieldInputPricePerMillionPriority:
+		return m.InputPricePerMillionPriority()
+	case modelpricing.FieldOutputPricePerMillionPriority:
+		return m.OutputPricePerMillionPriority()
+	case modelpricing.FieldCacheReadPricePerMillion:
+		return m.CacheReadPricePerMillion()
+	case modelpricing.FieldCacheReadPricePerMillionPriority:
+		return m.CacheReadPricePerMillionPriority()
+	case modelpricing.FieldCacheCreationPricePerMillion:
+		return m.CacheCreationPricePerMillion()
+	case modelpricing.FieldEnabled:
+		return m.Enabled()
+	case modelpricing.FieldNote:
+		return m.Note()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *ModelPricingMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case modelpricing.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case modelpricing.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case modelpricing.FieldDeletedAt:
+		return m.OldDeletedAt(ctx)
+	case modelpricing.FieldModelKey:
+		return m.OldModelKey(ctx)
+	case modelpricing.FieldDisplayName:
+		return m.OldDisplayName(ctx)
+	case modelpricing.FieldInputPricePerMillion:
+		return m.OldInputPricePerMillion(ctx)
+	case modelpricing.FieldOutputPricePerMillion:
+		return m.OldOutputPricePerMillion(ctx)
+	case modelpricing.FieldInputPricePerMillionPriority:
+		return m.OldInputPricePerMillionPriority(ctx)
+	case modelpricing.FieldOutputPricePerMillionPriority:
+		return m.OldOutputPricePerMillionPriority(ctx)
+	case modelpricing.FieldCacheReadPricePerMillion:
+		return m.OldCacheReadPricePerMillion(ctx)
+	case modelpricing.FieldCacheReadPricePerMillionPriority:
+		return m.OldCacheReadPricePerMillionPriority(ctx)
+	case modelpricing.FieldCacheCreationPricePerMillion:
+		return m.OldCacheCreationPricePerMillion(ctx)
+	case modelpricing.FieldEnabled:
+		return m.OldEnabled(ctx)
+	case modelpricing.FieldNote:
+		return m.OldNote(ctx)
+	}
+	return nil, fmt.Errorf("unknown ModelPricing field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ModelPricingMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case modelpricing.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case modelpricing.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case modelpricing.FieldDeletedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDeletedAt(v)
+		return nil
+	case modelpricing.FieldModelKey:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetModelKey(v)
+		return nil
+	case modelpricing.FieldDisplayName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDisplayName(v)
+		return nil
+	case modelpricing.FieldInputPricePerMillion:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInputPricePerMillion(v)
+		return nil
+	case modelpricing.FieldOutputPricePerMillion:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOutputPricePerMillion(v)
+		return nil
+	case modelpricing.FieldInputPricePerMillionPriority:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInputPricePerMillionPriority(v)
+		return nil
+	case modelpricing.FieldOutputPricePerMillionPriority:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOutputPricePerMillionPriority(v)
+		return nil
+	case modelpricing.FieldCacheReadPricePerMillion:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCacheReadPricePerMillion(v)
+		return nil
+	case modelpricing.FieldCacheReadPricePerMillionPriority:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCacheReadPricePerMillionPriority(v)
+		return nil
+	case modelpricing.FieldCacheCreationPricePerMillion:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCacheCreationPricePerMillion(v)
+		return nil
+	case modelpricing.FieldEnabled:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetEnabled(v)
+		return nil
+	case modelpricing.FieldNote:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetNote(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ModelPricing field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *ModelPricingMutation) AddedFields() []string {
+	var fields []string
+	if m.addinput_price_per_million != nil {
+		fields = append(fields, modelpricing.FieldInputPricePerMillion)
+	}
+	if m.addoutput_price_per_million != nil {
+		fields = append(fields, modelpricing.FieldOutputPricePerMillion)
+	}
+	if m.addinput_price_per_million_priority != nil {
+		fields = append(fields, modelpricing.FieldInputPricePerMillionPriority)
+	}
+	if m.addoutput_price_per_million_priority != nil {
+		fields = append(fields, modelpricing.FieldOutputPricePerMillionPriority)
+	}
+	if m.addcache_read_price_per_million != nil {
+		fields = append(fields, modelpricing.FieldCacheReadPricePerMillion)
+	}
+	if m.addcache_read_price_per_million_priority != nil {
+		fields = append(fields, modelpricing.FieldCacheReadPricePerMillionPriority)
+	}
+	if m.addcache_creation_price_per_million != nil {
+		fields = append(fields, modelpricing.FieldCacheCreationPricePerMillion)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *ModelPricingMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case modelpricing.FieldInputPricePerMillion:
+		return m.AddedInputPricePerMillion()
+	case modelpricing.FieldOutputPricePerMillion:
+		return m.AddedOutputPricePerMillion()
+	case modelpricing.FieldInputPricePerMillionPriority:
+		return m.AddedInputPricePerMillionPriority()
+	case modelpricing.FieldOutputPricePerMillionPriority:
+		return m.AddedOutputPricePerMillionPriority()
+	case modelpricing.FieldCacheReadPricePerMillion:
+		return m.AddedCacheReadPricePerMillion()
+	case modelpricing.FieldCacheReadPricePerMillionPriority:
+		return m.AddedCacheReadPricePerMillionPriority()
+	case modelpricing.FieldCacheCreationPricePerMillion:
+		return m.AddedCacheCreationPricePerMillion()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *ModelPricingMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case modelpricing.FieldInputPricePerMillion:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddInputPricePerMillion(v)
+		return nil
+	case modelpricing.FieldOutputPricePerMillion:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddOutputPricePerMillion(v)
+		return nil
+	case modelpricing.FieldInputPricePerMillionPriority:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddInputPricePerMillionPriority(v)
+		return nil
+	case modelpricing.FieldOutputPricePerMillionPriority:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddOutputPricePerMillionPriority(v)
+		return nil
+	case modelpricing.FieldCacheReadPricePerMillion:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCacheReadPricePerMillion(v)
+		return nil
+	case modelpricing.FieldCacheReadPricePerMillionPriority:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCacheReadPricePerMillionPriority(v)
+		return nil
+	case modelpricing.FieldCacheCreationPricePerMillion:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddCacheCreationPricePerMillion(v)
+		return nil
+	}
+	return fmt.Errorf("unknown ModelPricing numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *ModelPricingMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(modelpricing.FieldDeletedAt) {
+		fields = append(fields, modelpricing.FieldDeletedAt)
+	}
+	if m.FieldCleared(modelpricing.FieldDisplayName) {
+		fields = append(fields, modelpricing.FieldDisplayName)
+	}
+	if m.FieldCleared(modelpricing.FieldNote) {
+		fields = append(fields, modelpricing.FieldNote)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *ModelPricingMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *ModelPricingMutation) ClearField(name string) error {
+	switch name {
+	case modelpricing.FieldDeletedAt:
+		m.ClearDeletedAt()
+		return nil
+	case modelpricing.FieldDisplayName:
+		m.ClearDisplayName()
+		return nil
+	case modelpricing.FieldNote:
+		m.ClearNote()
+		return nil
+	}
+	return fmt.Errorf("unknown ModelPricing nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *ModelPricingMutation) ResetField(name string) error {
+	switch name {
+	case modelpricing.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case modelpricing.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case modelpricing.FieldDeletedAt:
+		m.ResetDeletedAt()
+		return nil
+	case modelpricing.FieldModelKey:
+		m.ResetModelKey()
+		return nil
+	case modelpricing.FieldDisplayName:
+		m.ResetDisplayName()
+		return nil
+	case modelpricing.FieldInputPricePerMillion:
+		m.ResetInputPricePerMillion()
+		return nil
+	case modelpricing.FieldOutputPricePerMillion:
+		m.ResetOutputPricePerMillion()
+		return nil
+	case modelpricing.FieldInputPricePerMillionPriority:
+		m.ResetInputPricePerMillionPriority()
+		return nil
+	case modelpricing.FieldOutputPricePerMillionPriority:
+		m.ResetOutputPricePerMillionPriority()
+		return nil
+	case modelpricing.FieldCacheReadPricePerMillion:
+		m.ResetCacheReadPricePerMillion()
+		return nil
+	case modelpricing.FieldCacheReadPricePerMillionPriority:
+		m.ResetCacheReadPricePerMillionPriority()
+		return nil
+	case modelpricing.FieldCacheCreationPricePerMillion:
+		m.ResetCacheCreationPricePerMillion()
+		return nil
+	case modelpricing.FieldEnabled:
+		m.ResetEnabled()
+		return nil
+	case modelpricing.FieldNote:
+		m.ResetNote()
+		return nil
+	}
+	return fmt.Errorf("unknown ModelPricing field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *ModelPricingMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *ModelPricingMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *ModelPricingMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *ModelPricingMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *ModelPricingMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *ModelPricingMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *ModelPricingMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown ModelPricing unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *ModelPricingMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown ModelPricing edge %s", name)
 }
 
 // PromoCodeMutation represents an operation that mutates the PromoCode nodes in the graph.
