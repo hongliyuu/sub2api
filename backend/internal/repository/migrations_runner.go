@@ -73,6 +73,14 @@ var migrationChecksumCompatibilityRules = map[string]migrationChecksumCompatibil
 			"222b4a09c797c22e5922b6b172327c824f5463aaa8760e4f621bc5c22e2be0f3": {},
 		},
 	},
+	// 084 在首次提交后经过 code review 修正了 seed 数据和 unique index 策略。
+	// 旧版 seed 数据与 billing_service.go fallback 不一致，已在当前版本修正。
+	"084_model_pricings.sql": {
+		fileChecksum: "513873b0abdca1df251ddd6d10b58f651782133bac174802d868b4e2b353299a",
+		acceptedDBChecksum: map[string]struct{}{
+			"d66d874e9d1e3eee2c29f7847e93c8efb50898cb566b8ddab7631fb73377ba9c": {},
+		},
+	},
 }
 
 // ApplyMigrations 将嵌入的 SQL 迁移文件应用到指定的数据库。
