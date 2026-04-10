@@ -231,6 +231,44 @@
             </span>
           </template>
 
+          <!-- LiteLLM 对比列 -->
+          <template #cell-litellm_compare="{ row }">
+            <div class="flex flex-col gap-0.5 text-xs">
+              <div class="flex items-center gap-1">
+                <span class="w-6 text-gray-400 dark:text-dark-400">In</span>
+                <template v-if="row.litellm">
+                  <span
+                    :class="diffColorClass(calcDiff(row.input_price_per_million, row.litellm.input_per_million))"
+                    :title="diffTooltip(calcDiff(row.input_price_per_million, row.litellm.input_per_million))"
+                    class="font-bold"
+                  >
+                    {{ diffIcon(calcDiff(row.input_price_per_million, row.litellm.input_per_million)) }}
+                  </span>
+                  <span class="font-mono text-gray-500 dark:text-dark-400">
+                    ${{ formatPrice(row.litellm.input_per_million) }}
+                  </span>
+                </template>
+                <span v-else :class="diffColorClass('nodata')" :title="diffTooltip('nodata')">?</span>
+              </div>
+              <div class="flex items-center gap-1">
+                <span class="w-6 text-gray-400 dark:text-dark-400">Out</span>
+                <template v-if="row.litellm">
+                  <span
+                    :class="diffColorClass(calcDiff(row.output_price_per_million, row.litellm.output_per_million))"
+                    :title="diffTooltip(calcDiff(row.output_price_per_million, row.litellm.output_per_million))"
+                    class="font-bold"
+                  >
+                    {{ diffIcon(calcDiff(row.output_price_per_million, row.litellm.output_per_million)) }}
+                  </span>
+                  <span class="font-mono text-gray-500 dark:text-dark-400">
+                    ${{ formatPrice(row.litellm.output_per_million) }}
+                  </span>
+                </template>
+                <span v-else :class="diffColorClass('nodata')" :title="diffTooltip('nodata')">?</span>
+              </div>
+            </div>
+          </template>
+
           <!-- Note -->
           <template #cell-note="{ value }">
             <span class="text-xs text-gray-500 dark:text-dark-400">{{ value || '—' }}</span>
@@ -413,13 +451,14 @@ import modelPricingsAPI, {
   type ModelPricingEntry,
   type UpsertModelPricingRequest,
   type ModelPricingLookup,
+  type ModelPricingCompareItem,
 } from '@/api/admin/modelPricings'
 
 const { t } = useI18n()
 const appStore = useAppStore()
 
 // ── Data ──────────────────────────────────────────────────────────────────────
-const entries = ref<ModelPricingEntry[]>([])
+const entries = ref<ModelPricingCompareItem[]>([])
 const loading = ref(false)
 
 const columns: Column[] = [
@@ -428,6 +467,7 @@ const columns: Column[] = [
   { key: 'output_price_per_million', label: t('admin.modelPricings.outputPrice') },
   { key: 'cache_read_price_per_million', label: '缓存价格' },
   { key: 'enabled', label: t('admin.modelPricings.enabled') },
+  { key: 'litellm_compare', label: t('admin.modelPricings.litellmCompare') },
   { key: 'note', label: t('admin.modelPricings.note') },
   { key: 'actions', label: t('common.actions') }
 ]
@@ -435,7 +475,7 @@ const columns: Column[] = [
 async function loadEntries() {
   loading.value = true
   try {
-    entries.value = await modelPricingsAPI.list()
+    entries.value = await modelPricingsAPI.compare()
   } catch (err: any) {
     appStore.showError(err?.response?.data?.message || err?.message || 'Failed to load')
   } finally {
@@ -584,6 +624,41 @@ function formatPrice(v: number): string {
   if (v === 0) return '0'
   if (v < 0.01) return v.toFixed(4).replace(/\.?0+$/, '')
   return v.toString()
+}
+
+type DiffLevel = 'higher' | 'lower' | 'equal' | 'nodata'
+
+function calcDiff(dbVal: number, litellmVal: number | null | undefined): DiffLevel {
+  if (litellmVal == null || litellmVal === 0) return 'nodata'
+  const ratio = dbVal / litellmVal
+  if (ratio > 1.01) return 'higher'
+  if (ratio < 0.99) return 'lower'
+  return 'equal'
+}
+
+function diffIcon(level: DiffLevel): string {
+  const map: Record<DiffLevel, string> = { higher: '↑', lower: '↓', equal: '=', nodata: '?' }
+  return map[level]
+}
+
+function diffColorClass(level: DiffLevel): string {
+  const map: Record<DiffLevel, string> = {
+    higher: 'text-red-600 dark:text-red-400',
+    lower: 'text-green-600 dark:text-green-400',
+    equal: 'text-gray-400 dark:text-dark-400',
+    nodata: 'text-amber-500 dark:text-amber-400',
+  }
+  return map[level]
+}
+
+function diffTooltip(level: DiffLevel): string {
+  const map: Record<DiffLevel, string> = {
+    higher: t('admin.modelPricings.priceDiffHigher'),
+    lower: t('admin.modelPricings.priceDiffLower'),
+    equal: t('admin.modelPricings.priceDiffEqual'),
+    nodata: t('admin.modelPricings.priceDiffNoData'),
+  }
+  return map[level]
 }
 
 onMounted(loadEntries)
