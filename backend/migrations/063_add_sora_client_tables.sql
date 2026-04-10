@@ -1,11 +1,11 @@
--- Migration: 063_add_sora_client_tables
--- Sora 客户端功能所需的数据库变更：
---   1. 新增 sora_generations 表：记录 Sora 客户端 UI 的生成历史
+-- Migration: 063 (client tables)
+-- 客户端功能所需的数据库变更：
+--   1. 新增生成记录表
 --   2. users 表新增存储配额字段
 --   3. groups 表新增存储配额字段
 
 -- ============================================================
--- 1. sora_generations 表（生成记录）
+-- 1. 生成记录表
 -- ============================================================
 CREATE TABLE IF NOT EXISTS sora_generations (
     id               BIGSERIAL PRIMARY KEY,
@@ -43,14 +43,14 @@ CREATE INDEX IF NOT EXISTS idx_sora_gen_user_status
     ON sora_generations(user_id, status);
 
 -- ============================================================
--- 2. users 表新增 Sora 存储配额字段
+-- 2. users 表新增存储配额字段
 -- ============================================================
 ALTER TABLE users
     ADD COLUMN IF NOT EXISTS sora_storage_quota_bytes BIGINT NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS sora_storage_used_bytes  BIGINT NOT NULL DEFAULT 0;
 
 -- ============================================================
--- 3. groups 表新增 Sora 存储配额字段
+-- 3. groups 表新增存储配额字段
 -- ============================================================
 ALTER TABLE groups
     ADD COLUMN IF NOT EXISTS sora_storage_quota_bytes BIGINT NOT NULL DEFAULT 0;
