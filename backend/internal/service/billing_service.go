@@ -110,7 +110,7 @@ type CostBreakdown struct {
 type BillingService struct {
 	cfg                 *config.Config
 	pricingService      *PricingService
-	modelPricingService *ModelPricingService // 数据库价格缓存（可选）
+	modelPricingService *ModelPricingService     // 数据库价格缓存（可选）
 	fallbackPrices      map[string]*ModelPricing // 硬编码回退价格
 }
 

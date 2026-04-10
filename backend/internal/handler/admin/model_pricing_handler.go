@@ -13,8 +13,8 @@ import (
 // ModelPricingHandler handles admin model pricing management.
 type ModelPricingHandler struct {
 	svc        *service.ModelPricingService
-	pricingSvc *service.PricingService  // 可选，nil 时 LiteLLM 列显示 null
-	billingSvc *service.BillingService  // 新增
+	pricingSvc *service.PricingService // 可选，nil 时 LiteLLM 列显示 null
+	billingSvc *service.BillingService // 新增
 }
 
 func NewModelPricingHandler(svc *service.ModelPricingService) *ModelPricingHandler {
@@ -166,10 +166,10 @@ func entryToResponse(e service.ModelPricingEntry) modelPricingResponse {
 
 // liteLLMPriceSnapshot LiteLLM 动态价格快照（per-million USD）
 type liteLLMPriceSnapshot struct {
-	InputPerMillion         float64 `json:"input_per_million"`
-	OutputPerMillion        float64 `json:"output_per_million"`
-	CacheReadPerMillion     float64 `json:"cache_read_per_million"`
-	CacheCreationPerMillion float64 `json:"cache_creation_per_million"`
+	InputPerMillion          float64 `json:"input_per_million"`
+	OutputPerMillion         float64 `json:"output_per_million"`
+	CacheReadPerMillion      float64 `json:"cache_read_per_million"`
+	CacheCreationPerMillion  float64 `json:"cache_creation_per_million"`
 	InputPriorityPerMillion  float64 `json:"input_priority_per_million"`
 	OutputPriorityPerMillion float64 `json:"output_priority_per_million"`
 }
@@ -220,10 +220,10 @@ func (h *ModelPricingHandler) fetchLiteLLMSnapshot(modelKey string) *liteLLMPric
 
 // priceTier 单层价格数据（per-million USD）
 type priceTier struct {
-	InputPerMillion         float64 `json:"input_per_million"`
-	OutputPerMillion        float64 `json:"output_per_million"`
-	CacheReadPerMillion     float64 `json:"cache_read_per_million"`
-	CacheCreationPerMillion float64 `json:"cache_creation_per_million"`
+	InputPerMillion          float64 `json:"input_per_million"`
+	OutputPerMillion         float64 `json:"output_per_million"`
+	CacheReadPerMillion      float64 `json:"cache_read_per_million"`
+	CacheCreationPerMillion  float64 `json:"cache_creation_per_million"`
 	InputPriorityPerMillion  float64 `json:"input_priority_per_million"`
 	OutputPriorityPerMillion float64 `json:"output_priority_per_million"`
 }
@@ -284,10 +284,10 @@ func (h *ModelPricingHandler) Lookup(c *gin.Context) {
 
 func liteLLMToPriceTier(p *service.LiteLLMModelPricing) *priceTier {
 	return &priceTier{
-		InputPerMillion:         p.InputCostPerToken * toMillion,
-		OutputPerMillion:        p.OutputCostPerToken * toMillion,
-		CacheReadPerMillion:     p.CacheReadInputTokenCost * toMillion,
-		CacheCreationPerMillion: p.CacheCreationInputTokenCost * toMillion,
+		InputPerMillion:          p.InputCostPerToken * toMillion,
+		OutputPerMillion:         p.OutputCostPerToken * toMillion,
+		CacheReadPerMillion:      p.CacheReadInputTokenCost * toMillion,
+		CacheCreationPerMillion:  p.CacheCreationInputTokenCost * toMillion,
 		InputPriorityPerMillion:  p.InputCostPerTokenPriority * toMillion,
 		OutputPriorityPerMillion: p.OutputCostPerTokenPriority * toMillion,
 	}
@@ -295,10 +295,10 @@ func liteLLMToPriceTier(p *service.LiteLLMModelPricing) *priceTier {
 
 func dbEntryToPriceTier(e *service.ModelPricingEntry) *priceTier {
 	return &priceTier{
-		InputPerMillion:         e.InputPricePerMillion,
-		OutputPerMillion:        e.OutputPricePerMillion,
-		CacheReadPerMillion:     e.CacheReadPricePerMillion,
-		CacheCreationPerMillion: e.CacheCreationPricePerMillion,
+		InputPerMillion:          e.InputPricePerMillion,
+		OutputPerMillion:         e.OutputPricePerMillion,
+		CacheReadPerMillion:      e.CacheReadPricePerMillion,
+		CacheCreationPerMillion:  e.CacheCreationPricePerMillion,
 		InputPriorityPerMillion:  e.InputPricePerMillionPriority,
 		OutputPriorityPerMillion: e.OutputPricePerMillionPriority,
 	}
@@ -306,10 +306,10 @@ func dbEntryToPriceTier(e *service.ModelPricingEntry) *priceTier {
 
 func modelPricingToPriceTier(p *service.ModelPricing) *priceTier {
 	return &priceTier{
-		InputPerMillion:         p.InputPricePerToken * toMillion,
-		OutputPerMillion:        p.OutputPricePerToken * toMillion,
-		CacheReadPerMillion:     p.CacheReadPricePerToken * toMillion,
-		CacheCreationPerMillion: p.CacheCreationPricePerToken * toMillion,
+		InputPerMillion:          p.InputPricePerToken * toMillion,
+		OutputPerMillion:         p.OutputPricePerToken * toMillion,
+		CacheReadPerMillion:      p.CacheReadPricePerToken * toMillion,
+		CacheCreationPerMillion:  p.CacheCreationPricePerToken * toMillion,
 		InputPriorityPerMillion:  p.InputPricePerTokenPriority * toMillion,
 		OutputPriorityPerMillion: p.OutputPricePerTokenPriority * toMillion,
 	}
