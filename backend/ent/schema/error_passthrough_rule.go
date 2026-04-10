@@ -16,7 +16,7 @@ import (
 //
 // 错误透传规则用于控制上游错误如何返回给客户端：
 //   - 匹配条件：错误码 + 关键词组合
-//   - 响应行为：透传原始信息 或 自定义错误信息
+//   - 响应行为：返回安全默认文案或自定义错误信息（不再透传原始上游文本）
 //   - 响应状态码：可指定返回给客户端的状态码
 //   - 平台范围：规则适用的平台（Anthropic、OpenAI、Gemini、Antigravity）
 type ErrorPassthroughRule struct {
@@ -93,14 +93,13 @@ func (ErrorPassthroughRule) Fields() []ent.Field {
 			Optional().
 			Nillable(),
 
-		// passthrough_body: 是否透传上游原始错误信息
-		// true: 使用上游返回的错误信息
-		// false: 使用 custom_message 指定的错误信息
+		// passthrough_body: Deprecated.
+		// 该字段为历史兼容保留，运行时强制视为 false（不会透传上游原始错误信息）。
 		field.Bool("passthrough_body").
-			Default(true),
+			Default(false),
 
 		// custom_message: 自定义错误信息
-		// 当 passthrough_body=false 时使用此错误信息
+		// 为空时使用链路默认安全文案
 		field.Text("custom_message").
 			Optional().
 			Nillable(),

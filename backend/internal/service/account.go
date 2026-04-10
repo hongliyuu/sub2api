@@ -971,12 +971,17 @@ func (a *Account) IsOveragesEnabled() bool {
 
 // IsOpenAIPassthroughEnabled 返回 OpenAI 账号是否启用“自动透传（仅替换认证）”。
 //
-// 新字段：accounts.extra.openai_passthrough。
-// 兼容字段：accounts.extra.openai_oauth_passthrough（历史 OAuth 开关）。
+// 新字段：accounts.extra.forward_passthrough_only。
+// 兼容字段：
+// - accounts.extra.openai_passthrough
+// - accounts.extra.openai_oauth_passthrough（历史 OAuth 开关）
 // 字段缺失或类型不正确时，按 false（关闭）处理。
 func (a *Account) IsOpenAIPassthroughEnabled() bool {
 	if a == nil || !a.IsOpenAI() || a.Extra == nil {
 		return false
+	}
+	if enabled, ok := a.Extra["forward_passthrough_only"].(bool); ok {
+		return enabled
 	}
 	if enabled, ok := a.Extra["openai_passthrough"].(bool); ok {
 		return enabled

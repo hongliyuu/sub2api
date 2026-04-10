@@ -1,25 +1,30 @@
 // Package model 定义服务层使用的数据模型。
 package model
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // ErrorPassthroughRule 全局错误透传规则
 // 用于控制上游错误如何返回给客户端
 type ErrorPassthroughRule struct {
-	ID              int64     `json:"id"`
-	Name            string    `json:"name"`             // 规则名称
-	Enabled         bool      `json:"enabled"`          // 是否启用
-	Priority        int       `json:"priority"`         // 优先级（数字越小优先级越高）
-	ErrorCodes      []int     `json:"error_codes"`      // 匹配的错误码列表（OR关系）
-	Keywords        []string  `json:"keywords"`         // 匹配的关键词列表（OR关系）
-	MatchMode       string    `json:"match_mode"`       // "any"(任一条件) 或 "all"(所有条件)
-	Platforms       []string  `json:"platforms"`        // 适用平台列表
-	PassthroughCode bool      `json:"passthrough_code"` // 是否透传原始状态码
-	ResponseCode    *int      `json:"response_code"`    // 自定义状态码（passthrough_code=false 时使用）
-	PassthroughBody bool      `json:"passthrough_body"` // 是否透传原始错误信息
-	CustomMessage   *string   `json:"custom_message"`   // 自定义错误信息（passthrough_body=false 时使用）
-	SkipMonitoring  bool      `json:"skip_monitoring"`  // 是否跳过运维监控记录
-	Description     *string   `json:"description"`      // 规则描述
+	ID              int64    `json:"id"`
+	Name            string   `json:"name"`             // 规则名称
+	Enabled         bool     `json:"enabled"`          // 是否启用
+	Priority        int      `json:"priority"`         // 优先级（数字越小优先级越高）
+	ErrorCodes      []int    `json:"error_codes"`      // 匹配的错误码列表（OR关系）
+	Keywords        []string `json:"keywords"`         // 匹配的关键词列表（OR关系）
+	MatchMode       string   `json:"match_mode"`       // "any"(任一条件) 或 "all"(所有条件)
+	Platforms       []string `json:"platforms"`        // 适用平台列表
+	PassthroughCode bool     `json:"passthrough_code"` // 是否透传原始状态码
+	ResponseCode    *int     `json:"response_code"`    // 自定义状态码（passthrough_code=false 时使用）
+	// Deprecated: passthrough_body 已废弃，规则不再下发上游原始错误文本。
+	// 该字段仅为兼容历史存量配置保留，运行时会被强制视为 false。
+	PassthroughBody bool      `json:"passthrough_body"`
+	CustomMessage   *string   `json:"custom_message"`  // 自定义错误信息（为空时使用链路默认错误文案）
+	SkipMonitoring  bool      `json:"skip_monitoring"` // 是否跳过运维监控记录
+	Description     *string   `json:"description"`     // 规则描述
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 }
@@ -58,8 +63,8 @@ func (r *ErrorPassthroughRule) Validate() error {
 	if !r.PassthroughCode && (r.ResponseCode == nil || *r.ResponseCode <= 0) {
 		return &ValidationError{Field: "response_code", Message: "response_code is required when passthrough_code is false"}
 	}
-	if !r.PassthroughBody && (r.CustomMessage == nil || *r.CustomMessage == "") {
-		return &ValidationError{Field: "custom_message", Message: "custom_message is required when passthrough_body is false"}
+	if r.CustomMessage != nil && strings.TrimSpace(*r.CustomMessage) == "" {
+		return &ValidationError{Field: "custom_message", Message: "custom_message cannot be empty"}
 	}
 	return nil
 }

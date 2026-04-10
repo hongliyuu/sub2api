@@ -219,7 +219,13 @@ func (s *OpenAIGatewayService) handleChatCompletionsErrorResponse(
 	c *gin.Context,
 	account *Account,
 ) (*OpenAIForwardResult, error) {
-	return s.handleCompatErrorResponse(resp, c, account, writeChatCompletionsError)
+	return s.handleCompatErrorResponse(
+		resp,
+		c,
+		account,
+		writeChatCompletionsError,
+		UpstreamFaultFormatOpenAIChatCompletions,
+	)
 }
 
 // handleChatBufferedStreamingResponse reads all Responses SSE events from the

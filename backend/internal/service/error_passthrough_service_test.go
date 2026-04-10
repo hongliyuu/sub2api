@@ -618,12 +618,12 @@ func TestMatchRule_CaseInsensitiveKeyword(t *testing.T) {
 // 测试真实场景
 // =============================================================================
 
-func TestMatchRule_RealWorldScenario_ContextLimitPassthrough(t *testing.T) {
-	// 场景：上游返回 422 + "context limit has been reached"，需要透传给客户端
+func TestMatchRule_RealWorldScenario_ContextLimitRule(t *testing.T) {
+	// 场景：上游返回 422 + "context limit has been reached"，命中规则后返回统一错误契约
 	rules := []*model.ErrorPassthroughRule{
 		{
 			ID:              1,
-			Name:            "Context Limit Passthrough",
+			Name:            "Context Limit Rule",
 			Enabled:         true,
 			Priority:        1,
 			ErrorCodes:      []int{422},
@@ -631,7 +631,7 @@ func TestMatchRule_RealWorldScenario_ContextLimitPassthrough(t *testing.T) {
 			MatchMode:       model.MatchModeAll, // 必须同时满足
 			Platforms:       []string{"anthropic", "antigravity"},
 			PassthroughCode: true,
-			PassthroughBody: true,
+			PassthroughBody: true, // Deprecated: 运行时会被强制关闭
 		},
 	}
 
@@ -643,7 +643,7 @@ func TestMatchRule_RealWorldScenario_ContextLimitPassthrough(t *testing.T) {
 		matched := svc.MatchRule("anthropic", 422, body)
 		require.NotNil(t, matched)
 		assert.True(t, matched.PassthroughCode)
-		assert.True(t, matched.PassthroughBody)
+		assert.False(t, matched.PassthroughBody, "passthrough_body 已废弃，运行时应强制关闭")
 	})
 
 	// 测试 Antigravity 平台
@@ -716,7 +716,7 @@ func TestErrorPassthroughRule_Validate(t *testing.T) {
 		errorField  string
 	}{
 		{
-			name: "有效规则 - 透传模式（含错误码）",
+			name: "有效规则 - 兼容透传字段（含错误码）",
 			rule: &model.ErrorPassthroughRule{
 				Name:            "Valid Rule",
 				MatchMode:       model.MatchModeAny,
@@ -727,7 +727,7 @@ func TestErrorPassthroughRule_Validate(t *testing.T) {
 			expectError: false,
 		},
 		{
-			name: "有效规则 - 透传模式（含关键词）",
+			name: "有效规则 - 兼容透传字段（含关键词）",
 			rule: &model.ErrorPassthroughRule{
 				Name:            "Valid Rule",
 				MatchMode:       model.MatchModeAny,
@@ -815,7 +815,7 @@ func TestErrorPassthroughRule_Validate(t *testing.T) {
 			errorField:  "response_code",
 		},
 		{
-			name: "自定义消息但未提供值",
+			name: "自定义消息可省略（走链路默认文案）",
 			rule: &model.ErrorPassthroughRule{
 				Name:            "Missing Message",
 				MatchMode:       model.MatchModeAny,
@@ -824,8 +824,7 @@ func TestErrorPassthroughRule_Validate(t *testing.T) {
 				PassthroughBody: false,
 				CustomMessage:   nil,
 			},
-			expectError: true,
-			errorField:  "custom_message",
+			expectError: false,
 		},
 		{
 			name: "自定义消息为空字符串",
@@ -855,6 +854,30 @@ func TestErrorPassthroughRule_Validate(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestErrorPassthroughService_Create_NormalizesDeprecatedPassthroughBody(t *testing.T) {
+	ctx := context.Background()
+	repo := &mockErrorPassthroughRepo{}
+	cache := newMockErrorPassthroughCache(nil, false)
+	svc := &ErrorPassthroughService{repo: repo, cache: cache}
+
+	rule := &model.ErrorPassthroughRule{
+		Name:            "legacy-rule",
+		Enabled:         true,
+		Priority:        1,
+		ErrorCodes:      []int{422},
+		MatchMode:       model.MatchModeAny,
+		PassthroughCode: true,
+		PassthroughBody: true,
+	}
+
+	created, err := svc.Create(ctx, rule)
+	require.NoError(t, err)
+	require.NotNil(t, created)
+	require.False(t, created.PassthroughBody)
+	require.NotEmpty(t, repo.rules)
+	require.False(t, repo.rules[0].PassthroughBody)
 }
 
 // =============================================================================

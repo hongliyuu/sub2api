@@ -224,7 +224,13 @@ func (s *OpenAIGatewayService) handleAnthropicErrorResponse(
 	c *gin.Context,
 	account *Account,
 ) (*OpenAIForwardResult, error) {
-	return s.handleCompatErrorResponse(resp, c, account, writeAnthropicError)
+	return s.handleCompatErrorResponse(
+		resp,
+		c,
+		account,
+		writeAnthropicError,
+		UpstreamFaultFormatAnthropicMessages,
+	)
 }
 
 // handleAnthropicBufferedStreamingResponse reads all Responses SSE events from

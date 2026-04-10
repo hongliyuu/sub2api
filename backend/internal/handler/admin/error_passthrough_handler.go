@@ -30,7 +30,7 @@ type CreateErrorPassthroughRuleRequest struct {
 	Platforms       []string `json:"platforms"`
 	PassthroughCode *bool    `json:"passthrough_code"`
 	ResponseCode    *int     `json:"response_code"`
-	PassthroughBody *bool    `json:"passthrough_body"`
+	PassthroughBody *bool    `json:"passthrough_body"` // Deprecated: ignored, always treated as false
 	CustomMessage   *string  `json:"custom_message"`
 	SkipMonitoring  *bool    `json:"skip_monitoring"`
 	Description     *string  `json:"description"`
@@ -47,7 +47,7 @@ type UpdateErrorPassthroughRuleRequest struct {
 	Platforms       []string `json:"platforms"`
 	PassthroughCode *bool    `json:"passthrough_code"`
 	ResponseCode    *int     `json:"response_code"`
-	PassthroughBody *bool    `json:"passthrough_body"`
+	PassthroughBody *bool    `json:"passthrough_body"` // Deprecated: ignored, always treated as false
 	CustomMessage   *string  `json:"custom_message"`
 	SkipMonitoring  *bool    `json:"skip_monitoring"`
 	Description     *string  `json:"description"`
@@ -119,11 +119,8 @@ func (h *ErrorPassthroughHandler) Create(c *gin.Context) {
 	} else {
 		rule.PassthroughCode = true
 	}
-	if req.PassthroughBody != nil {
-		rule.PassthroughBody = *req.PassthroughBody
-	} else {
-		rule.PassthroughBody = true
-	}
+	// Deprecated capability removed: never passthrough upstream raw error body.
+	rule.PassthroughBody = false
 	if req.SkipMonitoring != nil {
 		rule.SkipMonitoring = *req.SkipMonitoring
 	}
@@ -227,9 +224,8 @@ func (h *ErrorPassthroughHandler) Update(c *gin.Context) {
 	if req.ResponseCode != nil {
 		rule.ResponseCode = req.ResponseCode
 	}
-	if req.PassthroughBody != nil {
-		rule.PassthroughBody = *req.PassthroughBody
-	}
+	// Deprecated capability removed: never passthrough upstream raw error body.
+	rule.PassthroughBody = false
 	if req.CustomMessage != nil {
 		rule.CustomMessage = req.CustomMessage
 	}

@@ -43,7 +43,7 @@ func TestOpenAIWSProtocolResolver_Resolve(t *testing.T) {
 		account := *openAIOAuthEnabled
 		account.Extra = map[string]any{
 			"openai_oauth_responses_websockets_v2_enabled": true,
-			"openai_passthrough":                           true,
+			"forward_passthrough_only":                     true,
 		}
 		decision := NewOpenAIWSProtocolResolver(baseCfg).Resolve(&account)
 		require.Equal(t, OpenAIUpstreamTransportResponsesWebsocketV2, decision.Transport)

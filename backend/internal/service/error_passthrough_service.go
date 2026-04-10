@@ -92,16 +92,29 @@ func NewErrorPassthroughService(
 
 // List 获取所有规则
 func (s *ErrorPassthroughService) List(ctx context.Context) ([]*model.ErrorPassthroughRule, error) {
-	return s.repo.List(ctx)
+	rules, err := s.repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, rule := range rules {
+		normalizeErrorPassthroughRule(rule)
+	}
+	return rules, nil
 }
 
 // GetByID 根据 ID 获取规则
 func (s *ErrorPassthroughService) GetByID(ctx context.Context, id int64) (*model.ErrorPassthroughRule, error) {
-	return s.repo.GetByID(ctx, id)
+	rule, err := s.repo.GetByID(ctx, id)
+	if err != nil || rule == nil {
+		return rule, err
+	}
+	normalizeErrorPassthroughRule(rule)
+	return rule, nil
 }
 
 // Create 创建规则
 func (s *ErrorPassthroughService) Create(ctx context.Context, rule *model.ErrorPassthroughRule) (*model.ErrorPassthroughRule, error) {
+	normalizeErrorPassthroughRule(rule)
 	if err := rule.Validate(); err != nil {
 		return nil, err
 	}
@@ -121,6 +134,7 @@ func (s *ErrorPassthroughService) Create(ctx context.Context, rule *model.ErrorP
 
 // Update 更新规则
 func (s *ErrorPassthroughService) Update(ctx context.Context, rule *model.ErrorPassthroughRule) (*model.ErrorPassthroughRule, error) {
+	normalizeErrorPassthroughRule(rule)
 	if err := rule.Validate(); err != nil {
 		return nil, err
 	}
@@ -239,6 +253,7 @@ func (s *ErrorPassthroughService) reloadRulesFromDB(ctx context.Context) error {
 func (s *ErrorPassthroughService) setLocalCache(rules []*model.ErrorPassthroughRule) {
 	cached := make([]*cachedPassthroughRule, len(rules))
 	for i, r := range rules {
+		normalizeErrorPassthroughRule(r)
 		cr := &cachedPassthroughRule{ErrorPassthroughRule: r}
 		if len(r.Keywords) > 0 {
 			cr.lowerKeywords = make([]string, len(r.Keywords))
@@ -269,6 +284,24 @@ func (s *ErrorPassthroughService) setLocalCache(rules []*model.ErrorPassthroughR
 	s.localCacheMu.Lock()
 	s.localCache = cached
 	s.localCacheMu.Unlock()
+}
+
+func normalizeErrorPassthroughRule(rule *model.ErrorPassthroughRule) {
+	if rule == nil {
+		return
+	}
+	// Deprecated capability removal: never expose upstream raw body text via rules.
+	rule.PassthroughBody = false
+	if rule.CustomMessage != nil {
+		trimmed := strings.TrimSpace(*rule.CustomMessage)
+		if trimmed == "" {
+			rule.CustomMessage = nil
+			return
+		}
+		if trimmed != *rule.CustomMessage {
+			rule.CustomMessage = &trimmed
+		}
+	}
 }
 
 // clearLocalCache 清空本地缓存，避免刷新失败时继续命中陈旧规则。

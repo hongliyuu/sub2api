@@ -528,13 +528,17 @@ func TestOpenAIGatewayService_OAuthPassthrough_UpstreamErrorIncludesPassthroughF
 	_, err := svc.Forward(context.Background(), c, account, originalBody)
 	require.Error(t, err)
 
-	// should append an upstream error event with passthrough=true
+	// Non-failover passthrough errors now use unified gateway error mapping (no raw passthrough body).
+	require.Equal(t, http.StatusBadGateway, rec.Code)
+	require.NotContains(t, rec.Body.String(), `"message":"bad"`)
+
+	// unified path currently records non-passthrough ops events.
 	v, ok := c.Get(OpsUpstreamErrorsKey)
 	require.True(t, ok)
 	arr, ok := v.([]*OpsUpstreamErrorEvent)
 	require.True(t, ok)
 	require.NotEmpty(t, arr)
-	require.True(t, arr[len(arr)-1].Passthrough)
+	require.False(t, arr[len(arr)-1].Passthrough)
 }
 
 func TestOpenAIGatewayService_OAuthPassthrough_429PersistsRateLimit(t *testing.T) {
@@ -579,9 +583,10 @@ func TestOpenAIGatewayService_OAuthPassthrough_429PersistsRateLimit(t *testing.T
 	}
 
 	_, err := svc.Forward(context.Background(), c, account, originalBody)
-	require.Error(t, err)
-	require.Equal(t, http.StatusTooManyRequests, rec.Code)
-	require.Contains(t, rec.Body.String(), "usage_limit_reached")
+	var failoverErr *UpstreamFailoverError
+	require.ErrorAs(t, err, &failoverErr)
+	require.Equal(t, http.StatusTooManyRequests, failoverErr.StatusCode)
+	require.Empty(t, rec.Body.String(), "service layer should not passthrough upstream fault body")
 	require.Len(t, repo.rateLimitCalls, 1)
 	require.WithinDuration(t, time.Unix(resetAt, 0), repo.rateLimitCalls[0], 2*time.Second)
 }

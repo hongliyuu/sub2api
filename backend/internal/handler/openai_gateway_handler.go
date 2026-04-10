@@ -1434,10 +1434,14 @@ func (h *OpenAIGatewayHandler) handleFailoverExhausted(c *gin.Context, failoverE
 				respCode = *rule.ResponseCode
 			}
 
-			// 确定响应消息
-			msg := service.ExtractUpstreamErrorMessage(responseBody)
-			if !rule.PassthroughBody && rule.CustomMessage != nil {
-				msg = *rule.CustomMessage
+			// 确定响应消息（不再透传上游原文）
+			_, _, mappedMsg := h.mapUpstreamError(statusCode)
+			msg := mappedMsg
+			if rule.CustomMessage != nil {
+				custom := strings.TrimSpace(*rule.CustomMessage)
+				if custom != "" {
+					msg = custom
+				}
 			}
 
 			if rule.SkipMonitoring {

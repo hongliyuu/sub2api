@@ -12,13 +12,36 @@ func TestAccount_IsOpenAIPassthroughEnabled(t *testing.T) {
 			Platform: PlatformOpenAI,
 			Type:     AccountTypeAPIKey,
 			Extra: map[string]any{
+				"forward_passthrough_only": true,
+			},
+		}
+		require.True(t, account.IsOpenAIPassthroughEnabled())
+	})
+
+	t.Run("新字段优先于兼容字段", func(t *testing.T) {
+		account := &Account{
+			Platform: PlatformOpenAI,
+			Type:     AccountTypeOAuth,
+			Extra: map[string]any{
+				"forward_passthrough_only": true,
+				"openai_passthrough":       false,
+			},
+		}
+		require.True(t, account.IsOpenAIPassthroughEnabled())
+	})
+
+	t.Run("兼容旧字段 openai_passthrough", func(t *testing.T) {
+		account := &Account{
+			Platform: PlatformOpenAI,
+			Type:     AccountTypeOAuth,
+			Extra: map[string]any{
 				"openai_passthrough": true,
 			},
 		}
 		require.True(t, account.IsOpenAIPassthroughEnabled())
 	})
 
-	t.Run("兼容旧字段", func(t *testing.T) {
+	t.Run("兼容旧字段 openai_oauth_passthrough", func(t *testing.T) {
 		account := &Account{
 			Platform: PlatformOpenAI,
 			Type:     AccountTypeOAuth,
