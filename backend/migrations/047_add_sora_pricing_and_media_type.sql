@@ -1,5 +1,5 @@
--- Migration: 047 (pricing and media type)
--- 新增按次计费字段与 usage_logs.media_type
+-- Migration: 047_add_sora_pricing_and_media_type
+-- 新增 Sora 按次计费字段与 usage_logs.media_type
 
 ALTER TABLE groups
 	ADD COLUMN IF NOT EXISTS sora_image_price_360 decimal(20,8),

@@ -1,8 +1,8 @@
--- Migration: 046 (accounts extension table)
--- 新增账号扩展表，存储账号 OAuth 凭证
+-- Migration: 046_add_sora_accounts
+-- 新增 sora_accounts 扩展表，存储 Sora 账号的 OAuth 凭证
 -- 与 accounts 主表形成双表结构：
 --   - accounts: 统一账号管理和调度
---   - 扩展表: 快速读取和资格校验
+--   - sora_accounts: Sora gateway 快速读取和资格校验
 --
 -- 设计说明：
 --   - account_id 为主键，外键关联 accounts.id
@@ -21,4 +21,4 @@ CREATE TABLE IF NOT EXISTS sora_accounts (
         ON DELETE CASCADE
 );
 
--- 索引说明：主键已自动创建唯一索引，无需额外创建
+-- 索引说明：主键已自动创建唯一索引，无需额外创建 idx_sora_accounts_account_id
