@@ -1,5 +1,168 @@
 <template>
   <AppLayout>
+    <!-- ── Lookup Card（C2）────────────────────────────────────── -->
+    <div class="mb-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm dark:border-dark-600 dark:bg-dark-800">
+      <h3 class="mb-3 text-sm font-semibold text-gray-800 dark:text-white">
+        {{ t('admin.modelPricings.lookupTitle') }}
+      </h3>
+      <div class="flex items-center gap-2">
+        <input
+          v-model="lookupModel"
+          type="text"
+          class="input flex-1"
+          :placeholder="t('admin.modelPricings.lookupPlaceholder')"
+          @keydown.enter="doLookup"
+        />
+        <button
+          @click="doLookup"
+          :disabled="lookupLoading || !lookupModel.trim()"
+          class="btn btn-primary whitespace-nowrap"
+        >
+          {{ lookupLoading ? t('admin.modelPricings.lookupLoading') : t('admin.modelPricings.lookupButton') }}
+        </button>
+      </div>
+
+      <!-- 错误提示 -->
+      <p v-if="lookupError" class="mt-2 text-sm text-red-500">{{ lookupError }}</p>
+
+      <!-- 结果 -->
+      <div v-if="lookupResult" class="mt-4">
+        <div class="mb-2 flex items-center gap-2">
+          <span class="font-mono text-sm font-medium text-gray-700 dark:text-dark-200">
+            {{ lookupResult.model }}
+          </span>
+          <span :class="['badge text-xs', lookupSourceBadgeClass(lookupResult.active_source)]">
+            {{ lookupSourceLabel(lookupResult.active_source) }}
+          </span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-gray-200 dark:border-dark-600">
+                <th class="w-36 py-2 pr-4 text-left text-xs font-medium text-gray-500 dark:text-dark-400">
+                  {{ t('admin.modelPricings.tierLabel') }}
+                </th>
+                <th class="py-2 pr-4 text-left text-xs font-medium text-gray-500 dark:text-dark-400">
+                  {{ t('admin.modelPricings.inputOutput') }}
+                </th>
+                <th class="py-2 pr-4 text-left text-xs font-medium text-gray-500 dark:text-dark-400">
+                  {{ t('admin.modelPricings.cacheReadCreation') }}
+                </th>
+                <th class="py-2 text-left text-xs font-medium text-gray-500 dark:text-dark-400">
+                  {{ t('admin.modelPricings.priorityPrice') }}
+                </th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-100 dark:divide-dark-700">
+              <!-- LiteLLM 行 -->
+              <tr :class="lookupResult.active_source === 'litellm' ? 'bg-blue-50 dark:bg-blue-900/20' : ''">
+                <td class="py-2 pr-4">
+                  <div class="flex items-center gap-1.5">
+                    <span class="font-medium text-blue-700 dark:text-blue-300">LiteLLM</span>
+                    <span v-if="lookupResult.active_source === 'litellm'" class="badge badge-primary text-xs">
+                      {{ t('admin.modelPricings.activeTag') }}
+                    </span>
+                  </div>
+                </td>
+                <td class="py-2 pr-4 font-mono text-xs">
+                  <template v-if="lookupResult.litellm">
+                    ${{ formatPrice(lookupResult.litellm.input_per_million) }} /
+                    ${{ formatPrice(lookupResult.litellm.output_per_million) }}
+                  </template>
+                  <span v-else class="text-gray-400">—</span>
+                </td>
+                <td class="py-2 pr-4 font-mono text-xs">
+                  <template v-if="lookupResult.litellm">
+                    ${{ formatPrice(lookupResult.litellm.cache_read_per_million) }} /
+                    ${{ formatPrice(lookupResult.litellm.cache_creation_per_million) }}
+                  </template>
+                  <span v-else class="text-gray-400">—</span>
+                </td>
+                <td class="py-2 font-mono text-xs">
+                  <template v-if="lookupResult.litellm && lookupResult.litellm.input_priority_per_million > 0">
+                    ${{ formatPrice(lookupResult.litellm.input_priority_per_million) }} /
+                    ${{ formatPrice(lookupResult.litellm.output_priority_per_million) }}
+                  </template>
+                  <span v-else class="text-gray-400">—</span>
+                </td>
+              </tr>
+
+              <!-- 数据库行 -->
+              <tr :class="lookupResult.active_source === 'database' ? 'bg-green-50 dark:bg-green-900/20' : ''">
+                <td class="py-2 pr-4">
+                  <div class="flex items-center gap-1.5">
+                    <span class="font-medium text-green-700 dark:text-green-300">{{ t('admin.modelPricings.dbPrice') }}</span>
+                    <span v-if="lookupResult.active_source === 'database'" class="badge badge-success text-xs">
+                      {{ t('admin.modelPricings.activeTag') }}
+                    </span>
+                  </div>
+                </td>
+                <td class="py-2 pr-4 font-mono text-xs">
+                  <template v-if="lookupResult.database">
+                    ${{ formatPrice(lookupResult.database.input_per_million) }} /
+                    ${{ formatPrice(lookupResult.database.output_per_million) }}
+                  </template>
+                  <span v-else class="text-gray-400">—</span>
+                </td>
+                <td class="py-2 pr-4 font-mono text-xs">
+                  <template v-if="lookupResult.database">
+                    ${{ formatPrice(lookupResult.database.cache_read_per_million) }} /
+                    ${{ formatPrice(lookupResult.database.cache_creation_per_million) }}
+                  </template>
+                  <span v-else class="text-gray-400">—</span>
+                </td>
+                <td class="py-2 font-mono text-xs">
+                  <template v-if="lookupResult.database && lookupResult.database.input_priority_per_million > 0">
+                    ${{ formatPrice(lookupResult.database.input_priority_per_million) }} /
+                    ${{ formatPrice(lookupResult.database.output_priority_per_million) }}
+                  </template>
+                  <span v-else class="text-gray-400">—</span>
+                </td>
+              </tr>
+
+              <!-- Fallback 行 -->
+              <tr :class="lookupResult.active_source === 'fallback' ? 'bg-amber-50 dark:bg-amber-900/20' : ''">
+                <td class="py-2 pr-4">
+                  <div class="flex items-center gap-1.5">
+                    <span class="font-medium text-amber-700 dark:text-amber-300">{{ t('admin.modelPricings.fallbackPrice') }}</span>
+                    <span v-if="lookupResult.active_source === 'fallback'" class="badge badge-warning text-xs">
+                      {{ t('admin.modelPricings.activeTag') }}
+                    </span>
+                  </div>
+                </td>
+                <td class="py-2 pr-4 font-mono text-xs">
+                  <template v-if="lookupResult.fallback">
+                    ${{ formatPrice(lookupResult.fallback.input_per_million) }} /
+                    ${{ formatPrice(lookupResult.fallback.output_per_million) }}
+                  </template>
+                  <span v-else class="text-gray-400">—</span>
+                </td>
+                <td class="py-2 pr-4 font-mono text-xs">
+                  <template v-if="lookupResult.fallback">
+                    ${{ formatPrice(lookupResult.fallback.cache_read_per_million) }} /
+                    ${{ formatPrice(lookupResult.fallback.cache_creation_per_million) }}
+                  </template>
+                  <span v-else class="text-gray-400">—</span>
+                </td>
+                <td class="py-2 font-mono text-xs">
+                  <template v-if="lookupResult.fallback && lookupResult.fallback.input_priority_per_million > 0">
+                    ${{ formatPrice(lookupResult.fallback.input_priority_per_million) }} /
+                    ${{ formatPrice(lookupResult.fallback.output_priority_per_million) }}
+                  </template>
+                  <span v-else class="text-gray-400">—</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 无任何数据 -->
+        <p v-if="lookupResult.active_source === 'none'" class="mt-2 text-sm text-gray-500 dark:text-dark-400">
+          {{ t('admin.modelPricings.lookupNoResult') }}
+        </p>
+      </div>
+    </div>
     <TablePageLayout>
       <template #filters>
         <div class="flex flex-wrap items-center gap-3">
@@ -246,7 +409,11 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import type { Column } from '@/components/common/types'
 import { useAppStore } from '@/stores/app'
-import modelPricingsAPI, { type ModelPricingEntry, type UpsertModelPricingRequest } from '@/api/admin/modelPricings'
+import modelPricingsAPI, {
+  type ModelPricingEntry,
+  type UpsertModelPricingRequest,
+  type ModelPricingLookup,
+} from '@/api/admin/modelPricings'
 
 const { t } = useI18n()
 const appStore = useAppStore()
@@ -369,6 +536,47 @@ async function doDelete() {
   } catch (err: any) {
     appStore.showError(err?.response?.data?.message || err?.message || 'Failed to delete')
   }
+}
+
+// ── Lookup（C2） ─────────────────────────────────────────────────────────────
+const lookupModel = ref('')
+const lookupResult = ref<ModelPricingLookup | null>(null)
+const lookupLoading = ref(false)
+const lookupError = ref('')
+
+async function doLookup() {
+  const model = lookupModel.value.trim()
+  if (!model) return
+  lookupLoading.value = true
+  lookupError.value = ''
+  lookupResult.value = null
+  try {
+    lookupResult.value = await modelPricingsAPI.lookup(model)
+  } catch (err: any) {
+    lookupError.value = err?.response?.data?.message || err?.message || 'Failed'
+  } finally {
+    lookupLoading.value = false
+  }
+}
+
+function lookupSourceLabel(source: string): string {
+  const map: Record<string, string> = {
+    litellm: t('admin.modelPricings.activeSourceLitellm'),
+    database: t('admin.modelPricings.activeSourceDatabase'),
+    fallback: t('admin.modelPricings.activeSourceFallback'),
+    none: t('admin.modelPricings.activeSourceNone'),
+  }
+  return map[source] ?? source
+}
+
+function lookupSourceBadgeClass(source: string): string {
+  const map: Record<string, string> = {
+    litellm: 'badge-primary',
+    database: 'badge-success',
+    fallback: 'badge-warning',
+    none: 'badge-gray',
+  }
+  return map[source] ?? 'badge-gray'
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
