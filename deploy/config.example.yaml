@@ -146,6 +146,14 @@ security:
 # 网关配置
 # =============================================================================
 gateway:
+  # Sanitize fingerprinting content in requests forwarded to the Anthropic API.
+  # Replaces known phrases and keywords (e.g. OpenClaw identity strings) that may
+  # cause Anthropic to fingerprint and block non-CLI traffic.
+  # Set to false to disable and pass through the original request unchanged.
+  # 对转发到 Anthropic API 的请求进行指纹净化（默认开启）。
+  # 替换已知会触发 Anthropic 封锁的特征字符串（系统提示词身份短语 + openclaw 关键词）。
+  # 设为 false 则完全透传原始请求，不做任何替换。
+  sanitize_anthropic_prompt: true
   # Timeout for waiting upstream response headers (seconds)
   # 等待上游响应头超时时间（秒）
   response_header_timeout: 600

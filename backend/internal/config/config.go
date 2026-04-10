@@ -467,6 +467,13 @@ type GatewayConfig struct {
 	// UserMessageQueue: 用户消息串行队列配置
 	// 对 role:"user" 的真实用户消息实施账号级串行化 + RPM 自适应延迟
 	UserMessageQueue UserMessageQueueConfig `mapstructure:"user_message_queue"`
+
+	// SanitizeAnthropicPrompt 对转发到 Anthropic API 的请求启用指纹净化。
+	// 替换已知会触发 Anthropic 封锁的特征字符串：
+	//   - 系统提示词中的特定短语（如 OpenClaw 身份句）
+	//   - 请求体中所有出现的 openclaw 关键词（大小写不敏感）→ myapp
+	// 默认 true（开启）。设为 false 则完全透传原始请求，不做任何替换。
+	SanitizeAnthropicPrompt bool `mapstructure:"sanitize_anthropic_prompt" yaml:"sanitize_anthropic_prompt"`
 }
 
 // UserMessageQueueConfig 用户消息串行队列配置
@@ -1350,6 +1357,7 @@ func setDefaults() {
 	viper.SetDefault("gateway.max_account_switches_gemini", 3)
 	viper.SetDefault("gateway.force_codex_cli", false)
 	viper.SetDefault("gateway.openai_passthrough_allow_timeout_headers", false)
+	viper.SetDefault("gateway.sanitize_anthropic_prompt", true)
 	// OpenAI Responses WebSocket（默认开启；可通过 force_http 紧急回滚）
 	viper.SetDefault("gateway.openai_ws.enabled", true)
 	viper.SetDefault("gateway.openai_ws.mode_router_v2_enabled", false)

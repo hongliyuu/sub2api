@@ -60,6 +60,9 @@ const (
 	claudeMimicDebugInfoKey = "claude_mimic_debug_info"
 )
 
+// openclawyRe 用于大小写不敏感地匹配请求体中所有 openclaw 关键词
+var openclawyRe = regexp.MustCompile(`(?i)openclaw`)
+
 // ForceCacheBillingContextKey 强制缓存计费上下文键
 // 用于粘性会话切换时，将 input_tokens 转为 cache_read_input_tokens 计费
 type forceCacheBillingKeyType struct{}
@@ -900,7 +903,31 @@ func sanitizeSystemText(text string) string {
 		"You are OpenCode, the best coding agent on the planet.",
 		strings.TrimSpace(claudeCodeSystemPrompt),
 	)
+	// OpenClaw identity sentence (confirmed fingerprint trigger, tested 2026-04-05).
+	// Replace the full sentence precisely for a clean result before the keyword sweep.
+	text = strings.ReplaceAll(
+		text,
+		"You are a personal assistant running inside OpenClaw.",
+		"You are a personal assistant.",
+	)
 	return text
+}
+
+// sanitizeAnthropicBodyKeywords 对整个请求体进行关键词净化，
+// 将所有出现的 "openclaw"（大小写不敏感）替换为 "myapp"。
+// 应在 sanitizeSystemText 之后调用，确保特定短语已被精准替换，
+// 此函数作为兜底清理所有剩余的 openclaw 关键词实例。
+// 返回净化后的 body 和是否有实际改动的标志。
+func sanitizeAnthropicBodyKeywords(body []byte) ([]byte, bool) {
+	if len(body) == 0 {
+		return body, false
+	}
+	// 快速预检，避免无谓的 regexp 运算
+	if !bytes.Contains(bytes.ToLower(body), []byte("openclaw")) {
+		return body, false
+	}
+	result := openclawyRe.ReplaceAll(body, []byte("myapp"))
+	return result, true
 }
 
 func marshalAnthropicSystemTextBlock(text string, includeCacheControl bool) ([]byte, error) {
@@ -4106,6 +4133,12 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 
 	if account != nil && account.IsAnthropicAPIKeyPassthroughEnabled() {
 		passthroughBody := parsed.Body
+		// Anthropic 指纹净化（透传路径）：替换已知会触发封锁的关键词
+		if s.cfg != nil && s.cfg.Gateway.SanitizeAnthropicPrompt {
+			if sanitized, changed := sanitizeAnthropicBodyKeywords(passthroughBody); changed {
+				passthroughBody = sanitized
+			}
+		}
 		passthroughModel := parsed.Model
 		if passthroughModel != "" {
 			if mappedModel := account.GetMappedModel(passthroughModel); mappedModel != passthroughModel {
@@ -4233,6 +4266,16 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	// 调试日志：记录即将转发的账号信息
 	logger.LegacyPrintf("service.gateway", "[Forward] Using account: ID=%d Name=%s Platform=%s Type=%s TLSFingerprint=%v Proxy=%s",
 		account.ID, account.Name, account.Platform, account.Type, tlsProfile, proxyURL)
+
+	// Anthropic 指纹净化（主路径，仅 PlatformAnthropic）。
+	// 在 OAuth 归一化（sanitizeSystemText 精准短语替换）之后运行，
+	// 清理所有剩余的 openclaw 关键词，覆盖 OAuth/APIKey/SetupToken 全部账号类型。
+	if s.cfg != nil && s.cfg.Gateway.SanitizeAnthropicPrompt && account.Platform == PlatformAnthropic {
+		if sanitized, changed := sanitizeAnthropicBodyKeywords(body); changed {
+			body = sanitized
+		}
+	}
+
 	// Pre-filter: strip empty text blocks (including nested in tool_result) to prevent upstream 400.
 	body = StripEmptyTextBlocks(body)
 
