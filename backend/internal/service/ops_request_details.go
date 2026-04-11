@@ -64,6 +64,13 @@ type OpsRequestDetail struct {
 
 	// AnomalyTypes is dynamically computed at query layer from duration_ms and token fields.
 	AnomalyTypes []string `json:"anomaly_types,omitempty"`
+
+	// UpstreamModel is the actual model used upstream after mapping.
+	// Nil when no mapping was applied (upstream model == client model).
+	UpstreamModel *string `json:"upstream_model,omitempty"`
+
+	// APIKeyName is the human-readable name of the API key (e.g. "wanggao").
+	APIKeyName *string `json:"api_key_name,omitempty"`
 }
 
 type OpsRequestDetailFilter struct {
