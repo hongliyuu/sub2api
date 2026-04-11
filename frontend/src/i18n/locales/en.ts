@@ -355,7 +355,6 @@ export default {
     mySubscriptions: 'My Subscriptions',
     buySubscription: 'Recharge / Subscription',
     docs: 'Docs',
-    sora: 'Sora Studio',
     myOrders: 'My Orders',
     orderManagement: 'Orders',
     paymentDashboard: 'Payment Dashboard',
@@ -4201,7 +4200,6 @@ export default {
         gateway: 'Gateway',
         email: 'Email',
         backup: 'Backup',
-        data: 'Sora Storage',
         payment: 'Payment',
       },
       emailTabDisabledTitle: 'Email Verification Not Enabled',
@@ -5109,6 +5107,7 @@ export default {
     }
   },
 
+  // Payment System
   payment: {
     title: 'Recharge / Subscription',
     amountLabel: 'Amount',
