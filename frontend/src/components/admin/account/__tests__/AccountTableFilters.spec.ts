@@ -8,7 +8,12 @@ vi.mock('vue-i18n', async () => {
   return {
     ...actual,
     useI18n: () => ({
-      t: (key: string) => key
+      t: (key: string, params?: Record<string, unknown>) => {
+        if (key === 'admin.accounts.planTypesSelected' && params?.count !== undefined) {
+          return `${key}:${params.count}`
+        }
+        return key
+      }
     })
   }
 })
@@ -23,7 +28,8 @@ describe('AccountTableFilters', () => {
           type: '',
           status: '',
           group: '',
-          privacy_mode: ''
+          privacy_mode: '',
+          plan_types: []
         },
         groups: []
       },
@@ -52,5 +58,45 @@ describe('AccountTableFilters', () => {
       { value: 'training_set_cf_blocked', label: 'CF' },
       { value: 'training_set_failed', label: 'Fail' }
     ])
+  })
+
+  it('supports multi-select plan type filters', async () => {
+    const wrapper = mount(AccountTableFilters, {
+      props: {
+        searchQuery: '',
+        filters: {
+          platform: '',
+          type: '',
+          status: '',
+          group: '',
+          privacy_mode: '',
+          plan_types: []
+        },
+        groups: []
+      },
+      global: {
+        stubs: {
+          SearchInput: {
+            template: '<div />'
+          },
+          Select: {
+            props: ['modelValue', 'options'],
+            emits: ['update:modelValue', 'change'],
+            template: '<div class="select-stub" />'
+          }
+        }
+      }
+    })
+
+    await wrapper.get('[data-testid="account-plan-types-trigger"]').trigger('click')
+    await wrapper.get('[data-testid="account-plan-types-option-team"] input').setValue(true)
+
+    const filterEvents = wrapper.emitted('update:filters')
+    expect(filterEvents).toBeTruthy()
+    expect(filterEvents?.at(-1)?.[0]).toMatchObject({ plan_types: ['team'] })
+
+    const changeEvents = wrapper.emitted('change')
+    expect(changeEvents).toBeTruthy()
+    expect(changeEvents?.length).toBeGreaterThan(0)
   })
 })

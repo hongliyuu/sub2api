@@ -168,6 +168,35 @@ type AccountWithConcurrency struct {
 
 const accountListGroupUngroupedQueryValue = "ungrouped"
 
+func parseAccountPlanTypesQuery(c *gin.Context) []string {
+	rawValues := append([]string{}, c.QueryArray("plan_types")...)
+	rawValues = append(rawValues, c.QueryArray("plan_types[]")...)
+	if raw := strings.TrimSpace(c.Query("plan_types")); raw != "" && len(rawValues) == 0 {
+		rawValues = append(rawValues, raw)
+	}
+
+	planTypes := make([]string, 0)
+	seen := make(map[string]struct{})
+	for _, raw := range rawValues {
+		for _, item := range strings.Split(raw, ",") {
+			trimmed := strings.TrimSpace(item)
+			if trimmed == "" {
+				continue
+			}
+			normalized := service.NormalizeAccountPlanTypeFilterValue(trimmed)
+			if normalized == "" {
+				continue
+			}
+			if _, ok := seen[normalized]; ok {
+				continue
+			}
+			seen[normalized] = struct{}{}
+			planTypes = append(planTypes, normalized)
+		}
+	}
+	return planTypes
+}
+
 func (h *AccountHandler) buildAccountResponseWithRuntime(ctx context.Context, account *service.Account) AccountWithConcurrency {
 	item := AccountWithConcurrency{
 		Account:            dto.AccountFromService(account),
@@ -221,6 +250,7 @@ func (h *AccountHandler) List(c *gin.Context) {
 	status := c.Query("status")
 	search := c.Query("search")
 	privacyMode := strings.TrimSpace(c.Query("privacy_mode"))
+	planTypes := parseAccountPlanTypesQuery(c)
 	// 标准化和验证 search 参数
 	search = strings.TrimSpace(search)
 	if len(search) > 100 {
@@ -246,7 +276,7 @@ func (h *AccountHandler) List(c *gin.Context) {
 		}
 	}
 
-	accounts, total, err := h.adminService.ListAccounts(c.Request.Context(), page, pageSize, platform, accountType, status, search, groupID, privacyMode)
+	accounts, total, err := h.adminService.ListAccounts(c.Request.Context(), page, pageSize, platform, accountType, status, search, groupID, privacyMode, planTypes)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -368,7 +398,7 @@ func (h *AccountHandler) List(c *gin.Context) {
 		result[i] = item
 	}
 
-	etag := buildAccountsListETag(result, total, page, pageSize, platform, accountType, status, search, lite)
+	etag := buildAccountsListETag(result, total, page, pageSize, platform, accountType, status, search, c.Query("group"), privacyMode, strings.Join(planTypes, ","), lite)
 	if etag != "" {
 		c.Header("ETag", etag)
 		c.Header("Vary", "If-None-Match")
@@ -385,7 +415,7 @@ func buildAccountsListETag(
 	items []AccountWithConcurrency,
 	total int64,
 	page, pageSize int,
-	platform, accountType, status, search string,
+	platform, accountType, status, search, groupFilter, privacyMode, planTypes string,
 	lite bool,
 ) string {
 	payload := struct {
@@ -396,6 +426,9 @@ func buildAccountsListETag(
 		AccountType string                   `json:"type"`
 		Status      string                   `json:"status"`
 		Search      string                   `json:"search"`
+		GroupFilter string                   `json:"group"`
+		PrivacyMode string                   `json:"privacy_mode"`
+		PlanTypes   string                   `json:"plan_types"`
 		Lite        bool                     `json:"lite"`
 		Items       []AccountWithConcurrency `json:"items"`
 	}{
@@ -406,6 +439,9 @@ func buildAccountsListETag(
 		AccountType: accountType,
 		Status:      status,
 		Search:      search,
+		GroupFilter: groupFilter,
+		PrivacyMode: privacyMode,
+		PlanTypes:   planTypes,
 		Lite:        lite,
 		Items:       items,
 	}
@@ -2029,7 +2065,7 @@ func (h *AccountHandler) BatchRefreshTier(c *gin.Context) {
 	accounts := make([]*service.Account, 0)
 
 	if len(req.AccountIDs) == 0 {
-		allAccounts, _, err := h.adminService.ListAccounts(ctx, 1, 10000, "gemini", "oauth", "", "", 0, "")
+		allAccounts, _, err := h.adminService.ListAccounts(ctx, 1, 10000, "gemini", "oauth", "", "", 0, "", nil)
 		if err != nil {
 			response.ErrorFrom(c, err)
 			return

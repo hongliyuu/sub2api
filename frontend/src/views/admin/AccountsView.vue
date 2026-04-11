@@ -594,7 +594,7 @@ const {
   handlePageSizeChange: baseHandlePageSizeChange
 } = useTableLoader<Account, any>({
   fetchFn: adminAPI.accounts.list,
-  initialParams: { platform: '', type: '', status: '', privacy_mode: '', group: '', search: '' }
+  initialParams: { platform: '', type: '', status: '', privacy_mode: '', group: '', search: '', plan_types: [] }
 })
 
 const {
@@ -774,7 +774,7 @@ const refreshAccountsIncrementally = async () => {
         privacy_mode?: string
         group?: string
         search?: string
-
+        plan_types?: string[]
       },
       { etag: autoRefreshETag.value }
     )
@@ -1103,6 +1103,31 @@ const handleBulkToggleSchedulable = async (schedulable: boolean) => {
 }
 const handleBulkUpdated = () => { showBulkEdit.value = false; clearSelection(); reload() }
 const handleDataImported = () => { showImportData.value = false; reload() }
+
+const normalizePlanTypeFilterValues = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value.map(item => String(item).trim().toLowerCase()).filter(Boolean)
+  }
+  if (typeof value === 'string') {
+    return value
+      .split(',')
+      .map(item => item.trim().toLowerCase())
+      .filter(Boolean)
+  }
+  return []
+}
+
+const normalizeAccountPlanTypeForFilter = (account: Account): string => {
+  const rawPlanType = typeof account.credentials?.plan_type === 'string'
+    ? account.credentials.plan_type.trim().toLowerCase()
+    : ''
+
+  if (!rawPlanType) return 'unknown'
+  if (rawPlanType === 'chatgptpro') return 'pro'
+  if (['free', 'team', 'plus', 'pro'].includes(rawPlanType)) return rawPlanType
+  return 'unknown'
+}
+
 const accountMatchesCurrentFilters = (account: Account) => {
   if (params.platform && account.platform !== params.platform) return false
   if (params.type && account.type !== params.type) return false
@@ -1111,9 +1136,38 @@ const accountMatchesCurrentFilters = (account: Account) => {
       if (!account.rate_limit_reset_at) return false
       const resetAt = new Date(account.rate_limit_reset_at).getTime()
       if (!Number.isFinite(resetAt) || resetAt <= Date.now()) return false
+    } else if (params.status === 'temp_unschedulable') {
+      if (!account.temp_unschedulable_until) return false
+      const tempUnschedUntil = new Date(account.temp_unschedulable_until).getTime()
+      if (!Number.isFinite(tempUnschedUntil) || tempUnschedUntil <= Date.now()) return false
     } else if (account.status !== params.status) {
       return false
     }
+  }
+  if (params.privacy_mode) {
+    const privacyMode = typeof account.extra?.privacy_mode === 'string' ? account.extra.privacy_mode : ''
+    if (params.privacy_mode === '__unset__') {
+      if (privacyMode) return false
+    } else if (privacyMode !== params.privacy_mode) {
+      return false
+    }
+  }
+  if (params.group) {
+    const groupIds = Array.isArray(account.group_ids)
+      ? account.group_ids.map(id => String(id))
+      : Array.isArray(account.groups)
+        ? account.groups.map(group => String(group.id))
+        : []
+    if (params.group === 'ungrouped') {
+      if (groupIds.length > 0) return false
+    } else if (!groupIds.includes(String(params.group))) {
+      return false
+    }
+  }
+  const selectedPlanTypes = normalizePlanTypeFilterValues(params.plan_types)
+  if (selectedPlanTypes.length > 0) {
+    const accountPlanType = normalizeAccountPlanTypeForFilter(account)
+    if (!selectedPlanTypes.includes(accountPlanType)) return false
   }
   const search = String(params.search || '').trim().toLowerCase()
   if (search && !account.name.toLowerCase().includes(search)) return false

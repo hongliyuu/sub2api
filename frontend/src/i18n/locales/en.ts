@@ -1997,8 +1997,17 @@ export default {
       allTypes: 'All Types',
       allStatus: 'All Status',
       allGroups: 'All Groups',
+      allPlanTypes: 'All Plan Types',
+      planTypesSelected: '{count} selected',
       ungroupedGroup: 'Ungrouped',
       oauthType: 'OAuth',
+      planType: {
+        free: 'Free',
+        team: 'Team',
+        plus: 'Plus',
+        pro: 'Pro',
+        unknown: 'Unknown'
+      },
       setupToken: 'Setup Token',
       apiKey: 'API Key',
       // Schedulable toggle
