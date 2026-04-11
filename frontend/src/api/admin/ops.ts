@@ -238,6 +238,11 @@ export interface OpsRequestDetail {
    * 'ok'       — successful request (status < 400)
    */
   fault_owner?: FaultOwner | null
+
+  /** Upstream model after mapping. Only present when upstream model differs from client model. */
+  upstream_model?: string | null
+  /** Human-readable name of the API key (e.g. "wanggao"). */
+  api_key_name?: string | null
 }
 
 export interface OpsRequestDetailsParams {
