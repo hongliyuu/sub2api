@@ -174,7 +174,7 @@ func (s *AccountService) Create(ctx context.Context, req CreateAccountRequest) (
 	}
 
 	// require_oauth_only 检查：apikey 类型账号不可加入限制分组
-	if account.Type == AccountTypeAPIKey && len(req.GroupIDs) > 0 {
+	if (account.Type == AccountTypeAPIKey || account.Type == AccountTypeVertex) && len(req.GroupIDs) > 0 {
 		for _, gid := range req.GroupIDs {
 			g, err := s.groupRepo.GetByID(ctx, gid)
 			if err != nil {
@@ -290,7 +290,7 @@ func (s *AccountService) Update(ctx context.Context, id int64, req UpdateAccount
 	}
 
 	// require_oauth_only 检查
-	if account.Type == AccountTypeAPIKey && req.GroupIDs != nil {
+		if (account.Type == AccountTypeAPIKey || account.Type == AccountTypeVertex) && req.GroupIDs != nil {
 		for _, gid := range *req.GroupIDs {
 			g, err := s.groupRepo.GetByID(ctx, gid)
 			if err != nil {

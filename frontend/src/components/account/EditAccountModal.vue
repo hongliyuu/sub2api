@@ -26,44 +26,210 @@
         <p class="input-hint">{{ t('admin.accounts.notesHint') }}</p>
       </div>
 
-      <!-- API Key fields (only for apikey type) -->
-      <div v-if="account.type === 'apikey'" class="space-y-4">
-        <div>
-          <label class="input-label">{{ t('admin.accounts.baseUrl') }}</label>
-          <input
-            v-model="editBaseUrl"
-            type="text"
-            class="input"
-            :placeholder="
-              account.platform === 'openai'
-                ? 'https://api.openai.com'
-                : account.platform === 'gemini'
-                  ? 'https://generativelanguage.googleapis.com'
-                  : account.platform === 'antigravity'
-                    ? 'https://cloudcode-pa.googleapis.com'
-                    : 'https://api.anthropic.com'
-            "
-          />
-          <p class="input-hint">{{ baseUrlHint }}</p>
-        </div>
-        <div>
-          <label class="input-label">{{ t('admin.accounts.apiKey') }}</label>
-          <input
-            v-model="editApiKey"
-            type="password"
-            class="input font-mono"
-            :placeholder="
-              account.platform === 'openai'
-                ? 'sk-proj-...'
-                : account.platform === 'gemini'
-                  ? 'AIza...'
-                  : account.platform === 'antigravity'
-                    ? 'sk-...'
-                    : 'sk-ant-...'
-            "
-          />
-          <p class="input-hint">{{ t('admin.accounts.leaveEmptyToKeep') }}</p>
-        </div>
+      <!-- API Key / Vertex fields -->
+      <div v-if="account.type === 'apikey' || account.type === 'vertex'" class="space-y-4">
+        <template v-if="account.type === 'apikey'">
+          <div>
+            <label class="input-label">{{ t('admin.accounts.baseUrl') }}</label>
+            <input
+              v-model="editBaseUrl"
+              type="text"
+              class="input"
+              :placeholder="
+                account.platform === 'openai'
+                  ? 'https://api.openai.com'
+                  : account.platform === 'gemini'
+                    ? 'https://generativelanguage.googleapis.com'
+                    : account.platform === 'antigravity'
+                      ? 'https://cloudcode-pa.googleapis.com'
+                      : 'https://api.anthropic.com'
+              "
+            />
+            <p class="input-hint">{{ baseUrlHint }}</p>
+          </div>
+          <div>
+            <label class="input-label">{{ t('admin.accounts.apiKey') }}</label>
+            <input
+              v-model="editApiKey"
+              type="password"
+              class="input font-mono"
+              :placeholder="
+                account.platform === 'openai'
+                  ? 'sk-proj-...'
+                  : account.platform === 'gemini'
+                    ? 'AIza...'
+                    : account.platform === 'antigravity'
+                      ? 'sk-...'
+                      : 'sk-ant-...'
+              "
+            />
+            <p class="input-hint">{{ t('admin.accounts.leaveEmptyToKeep') }}</p>
+          </div>
+        </template>
+        <template v-else>
+          <div class="space-y-5 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-800/40 dark:bg-emerald-900/10">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+                  {{ t('admin.accounts.gemini.vertex.configTitle') }}
+                </h3>
+                <p class="mt-1 text-xs text-gray-600 dark:text-gray-300">
+                  {{ t('admin.accounts.gemini.vertex.configDesc') }}
+                </p>
+              </div>
+              <span class="inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200 dark:bg-dark-800 dark:text-emerald-300 dark:ring-emerald-800/50">
+                {{ t('admin.accounts.gemini.vertex.credentialFormatJson') }}
+              </span>
+            </div>
+
+            <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px]">
+              <div>
+                <label class="input-label">{{ t('admin.accounts.gemini.vertex.credentialModeLabel') }}</label>
+                <div class="mt-2 inline-flex rounded-xl bg-white p-1 shadow-sm ring-1 ring-gray-200 dark:bg-dark-800 dark:ring-dark-600">
+                  <button
+                    type="button"
+                    @click="editVertexCredentialInputMode = 'upload'"
+                    :class="[
+                      'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+                      editVertexCredentialInputMode === 'upload'
+                        ? 'bg-primary-600 text-white'
+                        : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700'
+                    ]"
+                  >
+                    {{ t('admin.accounts.gemini.vertex.credentialModeUpload') }}
+                  </button>
+                  <button
+                    type="button"
+                    @click="editVertexCredentialInputMode = 'manual'"
+                    :class="[
+                      'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+                      editVertexCredentialInputMode === 'manual'
+                        ? 'bg-primary-600 text-white'
+                        : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700'
+                    ]"
+                  >
+                    {{ t('admin.accounts.gemini.vertex.credentialModeManual') }}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label class="input-label">{{ t('admin.accounts.gemini.vertex.locationModeLabel') }}</label>
+                <div class="mt-2 inline-flex rounded-xl bg-white p-1 shadow-sm ring-1 ring-gray-200 dark:bg-dark-800 dark:ring-dark-600">
+                  <button
+                    type="button"
+                    @click="editVertexLocationMode = 'preset'"
+                    :class="[
+                      'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+                      editVertexLocationMode === 'preset'
+                        ? 'bg-emerald-600 text-white'
+                        : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700'
+                    ]"
+                  >
+                    {{ t('admin.accounts.gemini.vertex.locationModePreset') }}
+                  </button>
+                  <button
+                    type="button"
+                    @click="editVertexLocationMode = 'manual'"
+                    :class="[
+                      'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+                      editVertexLocationMode === 'manual'
+                        ? 'bg-emerald-600 text-white'
+                        : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700'
+                    ]"
+                  >
+                    {{ t('admin.accounts.gemini.vertex.locationModeManual') }}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="editVertexCredentialInputMode === 'upload'" class="space-y-3">
+              <label class="input-label">{{ t('admin.accounts.gemini.vertex.serviceAccountJson') }}</label>
+              <input
+                ref="editVertexFileInputRef"
+                type="file"
+                accept=".json,application/json"
+                class="hidden"
+                @change="handleEditVertexServiceAccountFileChange"
+              />
+              <div
+                role="button"
+                tabindex="0"
+                class="rounded-2xl border-2 border-dashed border-emerald-300 bg-white/85 px-6 py-8 text-center transition-colors hover:border-emerald-400 hover:bg-white dark:border-emerald-700/60 dark:bg-dark-800/70 dark:hover:border-emerald-600"
+                @click="editVertexFileInputRef?.click()"
+                @keydown.enter.prevent="editVertexFileInputRef?.click()"
+                @keydown.space.prevent="editVertexFileInputRef?.click()"
+                @dragover.prevent
+                @drop.prevent="handleEditVertexServiceAccountDrop"
+              >
+                <div class="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300">
+                  <Icon name="upload" size="md" />
+                </div>
+                <p class="mt-3 text-sm font-medium text-gray-900 dark:text-white">
+                  {{ t('admin.accounts.gemini.vertex.uploadTitle') }}
+                </p>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.accounts.gemini.vertex.uploadDesc') }}
+                </p>
+              </div>
+              <div
+                v-if="editVertexServiceAccountFileName"
+                class="flex flex-wrap items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm text-gray-700 ring-1 ring-emerald-200 dark:bg-dark-800 dark:text-gray-200 dark:ring-emerald-800/50"
+              >
+                <span class="font-medium">{{ t('admin.accounts.gemini.vertex.selectedFile') }}</span>
+                <span class="font-mono text-xs">{{ editVertexServiceAccountFileName }}</span>
+              </div>
+              <p class="input-hint">
+                {{ t('admin.accounts.gemini.vertex.serviceAccountJsonHint') }}
+                {{ t('admin.accounts.leaveEmptyToKeep') }}
+              </p>
+            </div>
+
+            <div v-else>
+              <label class="input-label">{{ t('admin.accounts.gemini.vertex.serviceAccountJson') }}</label>
+              <textarea
+                v-model="editVertexServiceAccountJson"
+                rows="10"
+                class="input font-mono"
+                :placeholder="t('admin.accounts.gemini.vertex.serviceAccountJsonPlaceholder')"
+              />
+              <p class="input-hint">{{ t('admin.accounts.leaveEmptyToKeep') }}</p>
+            </div>
+
+            <div v-if="editVertexLocationMode === 'preset'" class="space-y-3">
+              <label class="input-label">{{ t('admin.accounts.gemini.vertex.location') }}</label>
+              <div class="flex flex-wrap gap-2">
+                <button
+                  v-for="region in vertexPresetRegions"
+                  :key="region"
+                  type="button"
+                  @click="editVertexLocation = region"
+                  :class="[
+                    'rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
+                    editVertexLocation === region
+                      ? 'border-emerald-500 bg-emerald-500 text-white'
+                      : 'border-emerald-200 bg-white text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50 dark:border-emerald-800/60 dark:bg-dark-800 dark:text-emerald-300 dark:hover:border-emerald-700'
+                  ]"
+                >
+                  {{ region }}
+                </button>
+              </div>
+              <p class="input-hint">{{ t('admin.accounts.gemini.vertex.locationHint') }}</p>
+            </div>
+
+            <div v-else>
+              <label class="input-label">{{ t('admin.accounts.gemini.vertex.location') }}</label>
+              <input
+                v-model="editVertexLocation"
+                type="text"
+                class="input"
+                placeholder="us-central1"
+              />
+              <p class="input-hint">{{ t('admin.accounts.gemini.vertex.locationHint') }}</p>
+            </div>
+          </div>
+        </template>
 
         <!-- Model Restriction Section (不适用于 Antigravity) -->
         <div v-if="account.platform !== 'antigravity'" class="border-t border-gray-200 pt-4 dark:border-dark-600">
@@ -1149,8 +1315,8 @@
         </div>
       </div>
 
-      <!-- API Key / Bedrock 账号配额限制 -->
-      <div v-if="account?.type === 'apikey' || account?.type === 'bedrock'" class="border-t border-gray-200 pt-4 dark:border-dark-600 space-y-4">
+      <!-- API Key / Vertex / Bedrock 账号配额限制 -->
+      <div v-if="account?.type === 'apikey' || account?.type === 'vertex' || account?.type === 'bedrock'" class="border-t border-gray-200 pt-4 dark:border-dark-600 space-y-4">
         <div class="mb-3">
           <h3 class="input-label mb-0 text-base font-semibold">{{ t('admin.accounts.quotaLimit') }}</h3>
           <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -1806,6 +1972,9 @@ const baseUrlHint = computed(() => {
 
 const antigravityPresetMappings = computed(() => getPresetMappingsByPlatform('antigravity'))
 const bedrockPresets = computed(() => getPresetMappingsByPlatform('bedrock'))
+type VertexCredentialInputMode = 'upload' | 'manual'
+type VertexLocationMode = 'preset' | 'manual'
+const vertexPresetRegions = ['global', 'us-central1', 'us-east4', 'us-west1', 'europe-west4', 'asia-northeast1']
 
 // Model mapping type
 interface ModelMapping {
@@ -1824,6 +1993,13 @@ interface TempUnschedRuleForm {
 const submitting = ref(false)
 const editBaseUrl = ref('https://api.anthropic.com')
 const editApiKey = ref('')
+const editVertexProjectId = ref('')
+const editVertexLocation = ref('us-central1')
+const editVertexServiceAccountJson = ref('')
+const editVertexCredentialInputMode = ref<VertexCredentialInputMode>('upload')
+const editVertexLocationMode = ref<VertexLocationMode>('preset')
+const editVertexFileInputRef = ref<HTMLInputElement | null>(null)
+const editVertexServiceAccountFileName = ref('')
 // Bedrock credentials
 const editBedrockAccessKeyId = ref('')
 const editBedrockSecretAccessKey = ref('')
@@ -1891,6 +2067,79 @@ const cacheTTLOverrideEnabled = ref(false)
 const cacheTTLOverrideTarget = ref<string>('5m')
 const customBaseUrlEnabled = ref(false)
 const customBaseUrl = ref('')
+
+const parseVertexServiceAccountJson = (raw: string): { formatted: string; projectId: string } | null => {
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return null
+    }
+
+    return {
+      formatted: JSON.stringify(parsed, null, 2),
+      projectId: typeof parsed.project_id === 'string' ? parsed.project_id.trim() : ''
+    }
+  } catch {
+    return null
+  }
+}
+
+const readTextFile = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.onerror = () => reject(reader.error || new Error('read failed'))
+    reader.readAsText(file)
+  })
+
+const applyEditVertexServiceAccountJson = (raw: string, fileName = ''): boolean => {
+  const parsed = parseVertexServiceAccountJson(raw)
+  if (!parsed) {
+    appStore.showError(t('admin.accounts.gemini.vertex.invalidJson'))
+    return false
+  }
+
+  editVertexServiceAccountJson.value = parsed.formatted
+  editVertexServiceAccountFileName.value = fileName
+  if (parsed.projectId && !editVertexProjectId.value.trim()) {
+    editVertexProjectId.value = parsed.projectId
+  }
+  return true
+}
+
+const resolveVertexProjectId = (projectId: string, serviceAccountJson: string): string => {
+  const trimmedProjectId = projectId.trim()
+  if (trimmedProjectId) return trimmedProjectId
+
+  const parsed = parseVertexServiceAccountJson(serviceAccountJson)
+  return parsed?.projectId || ''
+}
+
+const loadEditVertexServiceAccountFile = async (file: File | null | undefined) => {
+  if (!file) return
+
+  try {
+    const content = await readTextFile(file)
+    if (applyEditVertexServiceAccountJson(content, file.name)) {
+      editVertexCredentialInputMode.value = 'upload'
+    }
+  } catch {
+    appStore.showError(t('admin.accounts.gemini.vertex.readFileFailed'))
+  }
+}
+
+const handleEditVertexServiceAccountFileChange = async (event: Event) => {
+  const input = event.target as HTMLInputElement | null
+  const file = input?.files?.[0]
+  await loadEditVertexServiceAccountFile(file)
+  if (input) {
+    input.value = ''
+  }
+}
+
+const handleEditVertexServiceAccountDrop = async (event: DragEvent) => {
+  await loadEditVertexServiceAccountFile(event.dataTransfer?.files?.[0])
+}
 
 // OpenAI 自动透传开关（OAuth/API Key）
 const openaiPassthroughEnabled = ref(false)
@@ -2048,6 +2297,12 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     : 'active'
   form.group_ids = newAccount.group_ids || []
   form.expires_at = newAccount.expires_at ?? null
+  editVertexProjectId.value = ''
+  editVertexLocation.value = 'us-central1'
+  editVertexServiceAccountJson.value = ''
+  editVertexCredentialInputMode.value = 'upload'
+  editVertexLocationMode.value = 'preset'
+  editVertexServiceAccountFileName.value = ''
 
   // Load intercept warmup requests setting (applies to all account types)
   const credentials = newAccount.credentials as Record<string, unknown> | undefined
@@ -2089,8 +2344,8 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     anthropicPassthroughEnabled.value = extra?.anthropic_passthrough === true
   }
 
-  // Load quota limit for apikey/bedrock accounts (bedrock quota is also loaded in its own branch above)
-  if (newAccount.type === 'apikey' || newAccount.type === 'bedrock') {
+  // Load quota limit for apikey/vertex/bedrock accounts (bedrock quota is also loaded in its own branch above)
+  if (newAccount.type === 'apikey' || newAccount.type === 'vertex' || newAccount.type === 'bedrock') {
     const quotaVal = extra?.quota_limit as number | undefined
     editQuotaLimit.value = (quotaVal && quotaVal > 0) ? quotaVal : null
     const dailyVal = extra?.quota_daily_limit as number | undefined
@@ -2153,7 +2408,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
 
   loadTempUnschedRules(credentials)
 
-  // Initialize API Key fields for apikey type
+  // Initialize direct Gemini/API Key style fields
   if (newAccount.type === 'apikey' && newAccount.credentials) {
     const credentials = newAccount.credentials as Record<string, unknown>
     const platformDefaultUrl =
@@ -2197,6 +2452,45 @@ const syncFormFromAccount = (newAccount: Account | null) => {
     )
 
     // Load custom error codes
+    customErrorCodesEnabled.value = credentials.custom_error_codes_enabled === true
+    const existingErrorCodes = credentials.custom_error_codes as number[] | undefined
+    if (existingErrorCodes && Array.isArray(existingErrorCodes)) {
+      selectedErrorCodes.value = [...existingErrorCodes]
+    } else {
+      selectedErrorCodes.value = []
+    }
+  } else if (newAccount.type === 'vertex' && newAccount.credentials) {
+    const credentials = newAccount.credentials as Record<string, unknown>
+    editVertexProjectId.value = (credentials.project_id as string) || ''
+    editVertexLocation.value = (credentials.location as string) || 'us-central1'
+    editVertexServiceAccountJson.value = ''
+    editVertexLocationMode.value = vertexPresetRegions.includes(editVertexLocation.value) ? 'preset' : 'manual'
+    editVertexCredentialInputMode.value = 'upload'
+    editVertexServiceAccountFileName.value = ''
+
+    const existingMappings = credentials.model_mapping as Record<string, string> | undefined
+    if (existingMappings && typeof existingMappings === 'object') {
+      const entries = Object.entries(existingMappings)
+      const isWhitelistMode = entries.length > 0 && entries.every(([from, to]) => from === to)
+      if (isWhitelistMode) {
+        modelRestrictionMode.value = 'whitelist'
+        allowedModels.value = entries.map(([from]) => from)
+        modelMappings.value = []
+      } else {
+        modelRestrictionMode.value = 'mapping'
+        modelMappings.value = entries.map(([from, to]) => ({ from, to }))
+        allowedModels.value = []
+      }
+    } else {
+      modelRestrictionMode.value = 'whitelist'
+      modelMappings.value = []
+      allowedModels.value = []
+    }
+
+    poolModeEnabled.value = credentials.pool_mode === true
+    poolModeRetryCount.value = normalizePoolModeRetryCount(
+      Number(credentials.pool_mode_retry_count ?? DEFAULT_POOL_MODE_RETRY_COUNT)
+    )
     customErrorCodesEnabled.value = credentials.custom_error_codes_enabled === true
     const existingErrorCodes = credentials.custom_error_codes as number[] | undefined
     if (existingErrorCodes && Array.isArray(existingErrorCodes)) {
@@ -2803,6 +3097,62 @@ const handleSubmit = async () => {
       }
 
       updatePayload.credentials = newCredentials
+    } else if (props.account.type === 'vertex') {
+      const currentCredentials = (props.account.credentials as Record<string, unknown>) || {}
+      const finalServiceAccountJson = editVertexServiceAccountJson.value.trim()
+        || String(currentCredentials.service_account_json || '')
+      const resolvedProjectId = resolveVertexProjectId(
+        editVertexProjectId.value,
+        finalServiceAccountJson
+      )
+      const newCredentials: Record<string, unknown> = {
+        ...currentCredentials,
+        project_id: resolvedProjectId,
+        location: editVertexLocation.value.trim() || 'us-central1'
+      }
+
+      if (!String(newCredentials.project_id || '').trim()) {
+        appStore.showError(t('admin.accounts.gemini.vertex.missingProjectId'))
+        return
+      }
+      editVertexProjectId.value = String(newCredentials.project_id || '')
+
+      if (editVertexServiceAccountJson.value.trim()) {
+        newCredentials.service_account_json = editVertexServiceAccountJson.value.trim()
+      } else if (!currentCredentials.service_account_json) {
+        appStore.showError(t('admin.accounts.gemini.vertex.serviceAccountJsonRequired'))
+        return
+      }
+
+      const modelMapping = buildModelMappingObject(modelRestrictionMode.value, allowedModels.value, modelMappings.value)
+      if (modelMapping) {
+        newCredentials.model_mapping = modelMapping
+      } else {
+        delete newCredentials.model_mapping
+      }
+
+      if (poolModeEnabled.value) {
+        newCredentials.pool_mode = true
+        newCredentials.pool_mode_retry_count = normalizePoolModeRetryCount(poolModeRetryCount.value)
+      } else {
+        delete newCredentials.pool_mode
+        delete newCredentials.pool_mode_retry_count
+      }
+
+      if (customErrorCodesEnabled.value) {
+        newCredentials.custom_error_codes_enabled = true
+        newCredentials.custom_error_codes = [...selectedErrorCodes.value]
+      } else {
+        delete newCredentials.custom_error_codes_enabled
+        delete newCredentials.custom_error_codes
+      }
+
+      applyInterceptWarmup(newCredentials, interceptWarmupRequests.value, 'edit')
+      if (!applyTempUnschedConfig(newCredentials)) {
+        return
+      }
+
+      updatePayload.credentials = newCredentials
     } else if (props.account.type === 'upstream') {
       const currentCredentials = (props.account.credentials as Record<string, unknown>) || {}
       const newCredentials: Record<string, unknown> = { ...currentCredentials }
@@ -3084,8 +3434,8 @@ const handleSubmit = async () => {
       updatePayload.extra = newExtra
     }
 
-    // For apikey/bedrock accounts, handle quota_limit in extra
-    if (props.account.type === 'apikey' || props.account.type === 'bedrock') {
+    // For apikey/vertex/bedrock accounts, handle quota_limit in extra
+    if (props.account.type === 'apikey' || props.account.type === 'vertex' || props.account.type === 'bedrock') {
       const currentExtra = (updatePayload.extra as Record<string, unknown>) ||
         (props.account.extra as Record<string, unknown>) || {}
       const newExtra: Record<string, unknown> = { ...currentExtra }

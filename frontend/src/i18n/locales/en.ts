@@ -2036,6 +2036,7 @@ export default {
         responsesApi: 'Responses API',
         googleOauth: 'Google OAuth',
         codeAssist: 'Code Assist',
+        vertex: 'Vertex',
         antigravityOauth: 'Antigravity OAuth',
         antigravityApikey: 'Connect via Base URL + API Key',
         upstream: 'Upstream',
@@ -2709,8 +2710,38 @@ export default {
           apiKeyDesc: 'Fastest setup. Use an AIza API key.',
           apiKeyNote:
             'Best for light testing. Free tier has strict rate limits and data may be used for training.',
+          vertexTitle: 'Vertex',
+          vertexDesc: 'Use project, location, and a service account JSON key.',
+          vertexNote: 'Best for production-style Vertex routing. Requests use regional Vertex endpoints and service account auth.',
           apiKeyLink: 'Get API Key',
           quotaLink: 'Quota guide'
+        },
+        vertex: {
+          configTitle: 'Vertex Configuration',
+          configDesc: 'Upload a service account JSON or paste it manually, then choose a common region quickly.',
+          projectId: 'Project ID',
+          projectIdPlaceholder: 'my-gcp-project',
+          projectIdHint: 'The Google Cloud project used for Vertex AI requests.',
+          projectIdRequired: 'Please enter the Vertex Project ID',
+          missingProjectId: 'The uploaded service account JSON is missing project_id',
+          location: 'Location',
+          locationHint: 'Regional Vertex endpoint, for example us-central1 or asia-northeast1.',
+          locationModeLabel: 'Location Setup',
+          locationModePreset: 'Common Regions',
+          locationModeManual: 'Manual Input',
+          credentialModeLabel: 'Credential Input',
+          credentialModeUpload: 'Upload File',
+          credentialModeManual: 'Manual Input',
+          credentialFormatJson: 'JSON',
+          serviceAccountJson: 'Service Account JSON',
+          serviceAccountJsonPlaceholder: '{\n  \"type\": \"service_account\",\n  \"project_id\": \"...\",\n  \"private_key\": \"-----BEGIN PRIVATE KEY-----\\n...\"\n}',
+          serviceAccountJsonHint: 'Paste the full Google Cloud service account JSON key. It is used to mint access tokens for Vertex AI.',
+          serviceAccountJsonRequired: 'Please paste the service account JSON',
+          uploadTitle: 'Click to upload or drop your JSON file here',
+          uploadDesc: 'Only Google Cloud service account JSON files are supported',
+          selectedFile: 'Selected file:',
+          invalidJson: 'Invalid service account JSON',
+          readFileFailed: 'Failed to read the service account JSON file'
         },
         oauthType: {
           builtInTitle: 'Built-in OAuth (Gemini CLI / Code Assist)',
@@ -2791,6 +2822,10 @@ export default {
               paid: 'Billing enabled (pay-as-you-go)',
               limitsFree: 'RPD 50; RPM 2 (Pro) / 15 (Flash)',
               limitsPaid: 'RPD unlimited; RPM 1000 (Pro) / 2000 (Flash) (per model)'
+            },
+            vertex: {
+              channel: 'Vertex AI (Service Account)',
+              limits: 'Subject to GCP project and regional quotas; different models and regions may have separate limits. Refer to the official Vertex AI quota page.'
             },
             customOAuth: {
               channel: 'Custom OAuth Client (GCP)',

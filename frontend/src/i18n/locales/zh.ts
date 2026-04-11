@@ -2217,6 +2217,7 @@ export default {
         responsesApi: 'Responses API',
         googleOauth: 'Google OAuth',
         codeAssist: 'Code Assist',
+        vertex: 'Vertex',
         antigravityOauth: 'Antigravity OAuth',
         antigravityApikey: '通过 Base URL + API Key 连接',
         upstream: '对接上游',
@@ -2841,8 +2842,38 @@ export default {
           apiKeyTitle: 'API 密钥（AI Studio）',
           apiKeyDesc: '最快接入方式，使用 AIza API Key。',
           apiKeyNote: '适合轻量测试。免费层限流严格，数据可能用于训练。',
+          vertexTitle: 'Vertex',
+          vertexDesc: '使用项目、地区和 Service Account JSON 鉴权。',
+          vertexNote: '适合正式接入 Vertex。请求会走区域 Vertex endpoint，并使用服务账号换取访问令牌。',
           apiKeyLink: '获取 API Key',
           quotaLink: '配额说明'
+        },
+        vertex: {
+          configTitle: 'Vertex 配置',
+          configDesc: '支持上传服务账号 JSON，或手动粘贴密钥内容，并快速选择常用区域。',
+          projectId: 'Project ID',
+          projectIdPlaceholder: 'my-gcp-project',
+          projectIdHint: '用于发起 Vertex AI 请求的 Google Cloud 项目 ID。',
+          projectIdRequired: '请输入 Vertex Project ID',
+          missingProjectId: '上传的 Service Account JSON 中缺少 project_id',
+          location: '地区',
+          locationHint: 'Vertex 区域，例如 us-central1、asia-northeast1。',
+          locationModeLabel: '地区配置',
+          locationModePreset: '常用区域',
+          locationModeManual: '手动输入',
+          credentialModeLabel: '密钥输入方式',
+          credentialModeUpload: '文件上传',
+          credentialModeManual: '手动输入',
+          credentialFormatJson: 'JSON',
+          serviceAccountJson: 'Service Account JSON',
+          serviceAccountJsonPlaceholder: '{\n  \"type\": \"service_account\",\n  \"project_id\": \"...\",\n  \"private_key\": \"-----BEGIN PRIVATE KEY-----\\n...\"\n}',
+          serviceAccountJsonHint: '粘贴完整的 Google Cloud 服务账号 JSON 密钥，系统会用它为 Vertex AI 生成访问令牌。',
+          serviceAccountJsonRequired: '请粘贴 Service Account JSON',
+          uploadTitle: '点击上传或拖拽 JSON 文件到这里',
+          uploadDesc: '仅支持 Google Cloud Service Account JSON 文件',
+          selectedFile: '已选择文件：',
+          invalidJson: 'Service Account JSON 格式无效',
+          readFileFailed: '读取 Service Account JSON 文件失败'
         },
         oauthType: {
           builtInTitle: '内置授权（Gemini CLI / Code Assist）',
@@ -2923,6 +2954,10 @@ export default {
               paid: '已绑卡（按量付费）',
               limitsFree: 'RPD 50；RPM 2（Pro）/ 15（Flash）',
               limitsPaid: 'RPD 不限；RPM 1000（Pro）/ 2000（Flash）（按模型配额）'
+            },
+            vertex: {
+              channel: 'Vertex AI（Service Account）',
+              limits: '按 GCP 项目与区域配额执行；不同模型 / 不同地区可能有独立额度，请以 Vertex AI 官方配额页为准'
             },
             customOAuth: {
               channel: 'Custom OAuth Client（GCP）',

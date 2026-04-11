@@ -20,6 +20,8 @@ type GeminiTokenProvider struct {
 	accountRepo        AccountRepository
 	tokenCache         GeminiTokenCache
 	geminiOAuthService *GeminiOAuthService
+	httpUpstream       HTTPUpstream
+	proxyRepo          ProxyRepository
 	refreshAPI         *OAuthRefreshAPI
 	executor           OAuthRefreshExecutor
 	refreshPolicy      ProviderRefreshPolicy
@@ -29,11 +31,15 @@ func NewGeminiTokenProvider(
 	accountRepo AccountRepository,
 	tokenCache GeminiTokenCache,
 	geminiOAuthService *GeminiOAuthService,
+	httpUpstream HTTPUpstream,
+	proxyRepo ProxyRepository,
 ) *GeminiTokenProvider {
 	return &GeminiTokenProvider{
 		accountRepo:        accountRepo,
 		tokenCache:         tokenCache,
 		geminiOAuthService: geminiOAuthService,
+		httpUpstream:       httpUpstream,
+		proxyRepo:          proxyRepo,
 		refreshPolicy:      GeminiProviderRefreshPolicy(),
 	}
 }
@@ -53,7 +59,13 @@ func (p *GeminiTokenProvider) GetAccessToken(ctx context.Context, account *Accou
 	if account == nil {
 		return "", errors.New("account is nil")
 	}
-	if account.Platform != PlatformGemini || account.Type != AccountTypeOAuth {
+	if account.Platform != PlatformGemini {
+		return "", errors.New("not a gemini account")
+	}
+	if account.Type == AccountTypeVertex {
+		return p.getVertexAccessToken(ctx, account)
+	}
+	if account.Type != AccountTypeOAuth {
 		return "", errors.New("not a gemini oauth account")
 	}
 
@@ -169,6 +181,9 @@ func (p *GeminiTokenProvider) GetAccessToken(ctx context.Context, account *Accou
 }
 
 func GeminiTokenCacheKey(account *Account) string {
+	if account != nil && account.Type == AccountTypeVertex {
+		return "gemini:vertex:account:" + strconv.FormatInt(account.ID, 10)
+	}
 	projectID := strings.TrimSpace(account.GetCredential("project_id"))
 	if projectID != "" {
 		return "gemini:" + projectID

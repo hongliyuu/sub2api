@@ -153,7 +153,7 @@
       <!-- Account Type Selection (Anthropic) -->
       <div v-if="form.platform === 'anthropic'">
         <label class="input-label">{{ t('admin.accounts.accountType') }}</label>
-        <div class="mt-2 grid grid-cols-3 gap-3" data-tour="account-form-type">
+        <div class="mt-2 grid grid-cols-2 gap-3" data-tour="account-form-type">
           <button
             type="button"
             @click="accountCategory = 'oauth-based'"
@@ -250,7 +250,7 @@
       <!-- Account Type Selection (OpenAI) -->
       <div v-if="form.platform === 'openai'">
         <label class="input-label">{{ t('admin.accounts.accountType') }}</label>
-        <div class="mt-2 grid grid-cols-2 gap-3" data-tour="account-form-type">
+        <div class="mt-2 grid grid-cols-3 gap-3" data-tour="account-form-type">
           <button
             type="button"
             @click="accountCategory = 'oauth-based'"
@@ -302,6 +302,7 @@
               <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.accounts.types.responsesApi') }}</span>
             </div>
           </button>
+
         </div>
       </div>
 
@@ -320,7 +321,7 @@
             {{ t('admin.accounts.gemini.helpButton') }}
           </button>
         </div>
-        <div class="mt-2 grid grid-cols-2 gap-3" data-tour="account-form-type">
+        <div class="mt-2 grid grid-cols-3 gap-3" data-tour="account-form-type">
           <button
             type="button"
             @click="accountCategory = 'oauth-based'"
@@ -392,6 +393,36 @@
               </span>
             </div>
           </button>
+
+          <button
+            type="button"
+            @click="accountCategory = 'vertex'"
+            :class="[
+              'flex items-center gap-3 rounded-lg border-2 p-3 text-left transition-all',
+              accountCategory === 'vertex'
+                ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-900/20'
+                : 'border-gray-200 hover:border-emerald-300 dark:border-dark-600 dark:hover:border-emerald-700'
+            ]"
+          >
+            <div
+              :class="[
+                'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg',
+                accountCategory === 'vertex'
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-gray-100 text-gray-500 dark:bg-dark-600 dark:text-gray-400'
+              ]"
+            >
+              <Icon name="cloud" size="sm" />
+            </div>
+            <div>
+              <span class="block text-sm font-medium text-gray-900 dark:text-white">
+                {{ t('admin.accounts.gemini.accountType.vertexTitle') }}
+              </span>
+              <span class="text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.accounts.gemini.accountType.vertexDesc') }}
+              </span>
+            </div>
+          </button>
         </div>
 
         <div
@@ -409,6 +440,13 @@
               {{ t('admin.accounts.gemini.accountType.apiKeyLink') }}
             </a>
           </div>
+        </div>
+
+        <div
+          v-if="accountCategory === 'vertex'"
+          class="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-800/40 dark:bg-emerald-900/20 dark:text-emerald-200"
+        >
+          <p>{{ t('admin.accounts.gemini.accountType.vertexNote') }}</p>
         </div>
 
         <!-- OAuth Type Selection (only show when oauth-based is selected) -->
@@ -609,40 +647,6 @@
           </div>
         </div>
 
-        <!-- Tier selection (used as fallback when auto-detection is unavailable/fails) -->
-        <div class="mt-4">
-          <label class="input-label">{{ t('admin.accounts.gemini.tier.label') }}</label>
-          <div class="mt-2">
-            <select
-              v-if="geminiOAuthType === 'google_one'"
-              v-model="geminiTierGoogleOne"
-              class="input"
-            >
-              <option value="google_one_free">{{ t('admin.accounts.gemini.tier.googleOne.free') }}</option>
-              <option value="google_ai_pro">{{ t('admin.accounts.gemini.tier.googleOne.pro') }}</option>
-              <option value="google_ai_ultra">{{ t('admin.accounts.gemini.tier.googleOne.ultra') }}</option>
-            </select>
-
-            <select
-              v-else-if="geminiOAuthType === 'code_assist'"
-              v-model="geminiTierGcp"
-              class="input"
-            >
-              <option value="gcp_standard">{{ t('admin.accounts.gemini.tier.gcp.standard') }}</option>
-              <option value="gcp_enterprise">{{ t('admin.accounts.gemini.tier.gcp.enterprise') }}</option>
-            </select>
-
-            <select
-              v-else
-              v-model="geminiTierAIStudio"
-              class="input"
-            >
-              <option value="aistudio_free">{{ t('admin.accounts.gemini.tier.aiStudio.free') }}</option>
-              <option value="aistudio_paid">{{ t('admin.accounts.gemini.tier.aiStudio.paid') }}</option>
-            </select>
-          </div>
-          <p class="input-hint">{{ t('admin.accounts.gemini.tier.hint') }}</p>
-        </div>
       </div>
 
       <!-- Account Type Selection (Antigravity - OAuth or Upstream) -->
@@ -847,51 +851,206 @@
         </div>
       </div>
 
-      <!-- API Key input (only for apikey type, excluding Antigravity which has its own fields) -->
-      <div v-if="form.type === 'apikey' && form.platform !== 'antigravity'" class="space-y-4">
-        <div>
-          <label class="input-label">{{ t('admin.accounts.baseUrl') }}</label>
-          <input
-            v-model="apiKeyBaseUrl"
-            type="text"
-            class="input"
-            :placeholder="
-              form.platform === 'openai'
-                ? 'https://api.openai.com'
-                : form.platform === 'gemini'
-                  ? 'https://generativelanguage.googleapis.com'
-                  : 'https://api.anthropic.com'
-            "
-          />
-          <p class="input-hint">{{ baseUrlHint }}</p>
-        </div>
-        <div>
-          <label class="input-label">{{ t('admin.accounts.apiKeyRequired') }}</label>
-          <input
-            v-model="apiKeyValue"
-            type="password"
-            required
-            class="input font-mono"
-            :placeholder="
-              form.platform === 'openai'
-                ? 'sk-proj-...'
-                : form.platform === 'gemini'
-                  ? 'AIza...'
-                  : 'sk-ant-...'
-            "
-          />
-          <p class="input-hint">{{ apiKeyHint }}</p>
-        </div>
+      <!-- Direct Gemini account input (AI Studio API Key / Vertex) -->
+      <div v-if="(form.type === 'apikey' || form.type === 'vertex') && form.platform !== 'antigravity'" class="space-y-4">
+        <template v-if="form.type === 'apikey'">
+          <div>
+            <label class="input-label">{{ t('admin.accounts.baseUrl') }}</label>
+            <input
+              v-model="apiKeyBaseUrl"
+              type="text"
+              class="input"
+              :placeholder="
+                form.platform === 'openai'
+                  ? 'https://api.openai.com'
+                  : form.platform === 'gemini'
+                    ? 'https://generativelanguage.googleapis.com'
+                    : 'https://api.anthropic.com'
+              "
+            />
+            <p class="input-hint">{{ baseUrlHint }}</p>
+          </div>
+          <div>
+            <label class="input-label">{{ t('admin.accounts.apiKeyRequired') }}</label>
+            <input
+              v-model="apiKeyValue"
+              type="password"
+              required
+              class="input font-mono"
+              :placeholder="
+                form.platform === 'openai'
+                  ? 'sk-proj-...'
+                  : form.platform === 'gemini'
+                    ? 'AIza...'
+                    : 'sk-ant-...'
+              "
+            />
+            <p class="input-hint">{{ apiKeyHint }}</p>
+          </div>
 
-        <!-- Gemini API Key tier selection -->
-        <div v-if="form.platform === 'gemini'">
-          <label class="input-label">{{ t('admin.accounts.gemini.tier.label') }}</label>
-          <select v-model="geminiTierAIStudio" class="input">
-            <option value="aistudio_free">{{ t('admin.accounts.gemini.tier.aiStudio.free') }}</option>
-            <option value="aistudio_paid">{{ t('admin.accounts.gemini.tier.aiStudio.paid') }}</option>
-          </select>
-          <p class="input-hint">{{ t('admin.accounts.gemini.tier.aiStudioHint') }}</p>
-        </div>
+        </template>
+
+        <template v-else-if="form.type === 'vertex'">
+          <div class="space-y-5 rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4 dark:border-emerald-800/40 dark:bg-emerald-900/10">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-white">
+                  {{ t('admin.accounts.gemini.vertex.configTitle') }}
+                </h3>
+                <p class="mt-1 text-xs text-gray-600 dark:text-gray-300">
+                  {{ t('admin.accounts.gemini.vertex.configDesc') }}
+                </p>
+              </div>
+              <span class="inline-flex items-center rounded-full bg-white px-3 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-200 dark:bg-dark-800 dark:text-emerald-300 dark:ring-emerald-800/50">
+                {{ t('admin.accounts.gemini.vertex.credentialFormatJson') }}
+              </span>
+            </div>
+
+            <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px]">
+              <div>
+                <label class="input-label">{{ t('admin.accounts.gemini.vertex.credentialModeLabel') }}</label>
+                <div class="mt-2 inline-flex rounded-xl bg-white p-1 shadow-sm ring-1 ring-gray-200 dark:bg-dark-800 dark:ring-dark-600">
+                  <button
+                    type="button"
+                    @click="vertexCredentialInputMode = 'upload'"
+                    :class="[
+                      'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+                      vertexCredentialInputMode === 'upload'
+                        ? 'bg-primary-600 text-white'
+                        : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700'
+                    ]"
+                  >
+                    {{ t('admin.accounts.gemini.vertex.credentialModeUpload') }}
+                  </button>
+                  <button
+                    type="button"
+                    @click="vertexCredentialInputMode = 'manual'"
+                    :class="[
+                      'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+                      vertexCredentialInputMode === 'manual'
+                        ? 'bg-primary-600 text-white'
+                        : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700'
+                    ]"
+                  >
+                    {{ t('admin.accounts.gemini.vertex.credentialModeManual') }}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label class="input-label">{{ t('admin.accounts.gemini.vertex.locationModeLabel') }}</label>
+                <div class="mt-2 inline-flex rounded-xl bg-white p-1 shadow-sm ring-1 ring-gray-200 dark:bg-dark-800 dark:ring-dark-600">
+                  <button
+                    type="button"
+                    @click="vertexLocationMode = 'preset'"
+                    :class="[
+                      'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+                      vertexLocationMode === 'preset'
+                        ? 'bg-emerald-600 text-white'
+                        : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700'
+                    ]"
+                  >
+                    {{ t('admin.accounts.gemini.vertex.locationModePreset') }}
+                  </button>
+                  <button
+                    type="button"
+                    @click="vertexLocationMode = 'manual'"
+                    :class="[
+                      'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+                      vertexLocationMode === 'manual'
+                        ? 'bg-emerald-600 text-white'
+                        : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700'
+                    ]"
+                  >
+                    {{ t('admin.accounts.gemini.vertex.locationModeManual') }}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="vertexCredentialInputMode === 'upload'" class="space-y-3">
+              <label class="input-label">{{ t('admin.accounts.gemini.vertex.serviceAccountJson') }}</label>
+              <input
+                ref="vertexFileInputRef"
+                type="file"
+                accept=".json,application/json"
+                class="hidden"
+                @change="handleVertexServiceAccountFileChange"
+              />
+              <div
+                role="button"
+                tabindex="0"
+                class="rounded-2xl border-2 border-dashed border-emerald-300 bg-white/85 px-6 py-8 text-center transition-colors hover:border-emerald-400 hover:bg-white dark:border-emerald-700/60 dark:bg-dark-800/70 dark:hover:border-emerald-600"
+                @click="vertexFileInputRef?.click()"
+                @keydown.enter.prevent="vertexFileInputRef?.click()"
+                @keydown.space.prevent="vertexFileInputRef?.click()"
+                @dragover.prevent
+                @drop.prevent="handleVertexServiceAccountDrop"
+              >
+                <div class="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300">
+                  <Icon name="upload" size="md" />
+                </div>
+                <p class="mt-3 text-sm font-medium text-gray-900 dark:text-white">
+                  {{ t('admin.accounts.gemini.vertex.uploadTitle') }}
+                </p>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t('admin.accounts.gemini.vertex.uploadDesc') }}
+                </p>
+              </div>
+              <div
+                v-if="vertexServiceAccountFileName"
+                class="flex flex-wrap items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm text-gray-700 ring-1 ring-emerald-200 dark:bg-dark-800 dark:text-gray-200 dark:ring-emerald-800/50"
+              >
+                <span class="font-medium">{{ t('admin.accounts.gemini.vertex.selectedFile') }}</span>
+                <span class="font-mono text-xs">{{ vertexServiceAccountFileName }}</span>
+              </div>
+              <p class="input-hint">{{ t('admin.accounts.gemini.vertex.serviceAccountJsonHint') }}</p>
+            </div>
+
+            <div v-else>
+              <label class="input-label">{{ t('admin.accounts.gemini.vertex.serviceAccountJson') }}</label>
+              <textarea
+                v-model="vertexServiceAccountJson"
+                rows="10"
+                class="input font-mono"
+                :placeholder="t('admin.accounts.gemini.vertex.serviceAccountJsonPlaceholder')"
+              />
+              <p class="input-hint">{{ t('admin.accounts.gemini.vertex.serviceAccountJsonHint') }}</p>
+            </div>
+
+            <div v-if="vertexLocationMode === 'preset'" class="space-y-3">
+              <label class="input-label">{{ t('admin.accounts.gemini.vertex.location') }}</label>
+              <div class="flex flex-wrap gap-2">
+                <button
+                  v-for="region in vertexPresetRegions"
+                  :key="region"
+                  type="button"
+                  @click="vertexLocation = region"
+                  :class="[
+                    'rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
+                    vertexLocation === region
+                      ? 'border-emerald-500 bg-emerald-500 text-white'
+                      : 'border-emerald-200 bg-white text-emerald-700 hover:border-emerald-300 hover:bg-emerald-50 dark:border-emerald-800/60 dark:bg-dark-800 dark:text-emerald-300 dark:hover:border-emerald-700'
+                  ]"
+                >
+                  {{ region }}
+                </button>
+              </div>
+              <p class="input-hint">{{ t('admin.accounts.gemini.vertex.locationHint') }}</p>
+            </div>
+
+            <div v-else>
+              <label class="input-label">{{ t('admin.accounts.gemini.vertex.location') }}</label>
+              <input
+                v-model="vertexLocation"
+                type="text"
+                class="input"
+                placeholder="us-central1"
+              />
+              <p class="input-hint">{{ t('admin.accounts.gemini.vertex.locationHint') }}</p>
+            </div>
+          </div>
+        </template>
 
         <!-- Model Restriction Section (Antigravity 已在上层条件排除) -->
         <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
@@ -1477,8 +1636,8 @@
         </div>
       </div>
 
-      <!-- API Key / Bedrock 账号配额限制 -->
-      <div v-if="form.type === 'apikey' || form.type === 'bedrock'" class="border-t border-gray-200 pt-4 dark:border-dark-600 space-y-4">
+      <!-- API Key / Vertex / Bedrock 账号配额限制 -->
+      <div v-if="form.type === 'apikey' || form.type === 'vertex' || form.type === 'bedrock'" class="border-t border-gray-200 pt-4 dark:border-dark-600 space-y-4">
         <div class="mb-3">
           <h3 class="input-label mb-0 text-base font-semibold">{{ t('admin.accounts.quotaLimit') }}</h3>
           <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -2950,7 +3109,7 @@ interface TempUnschedRuleForm {
 // State
 const step = ref(1)
 const submitting = ref(false)
-const accountCategory = ref<'oauth-based' | 'apikey' | 'bedrock'>('oauth-based') // UI selection for account category
+const accountCategory = ref<'oauth-based' | 'apikey' | 'vertex' | 'bedrock'>('oauth-based') // UI selection for account category
 const addMethod = ref<AddMethod>('oauth') // For oauth-based: 'oauth' or 'setup-token'
 const apiKeyBaseUrl = ref('https://api.anthropic.com')
 const apiKeyValue = ref('')
@@ -3054,6 +3213,16 @@ const customBaseUrl = ref('')
 const geminiTierGoogleOne = ref<'google_one_free' | 'google_ai_pro' | 'google_ai_ultra'>('google_one_free')
 const geminiTierGcp = ref<'gcp_standard' | 'gcp_enterprise'>('gcp_standard')
 const geminiTierAIStudio = ref<'aistudio_free' | 'aistudio_paid'>('aistudio_free')
+type VertexCredentialInputMode = 'upload' | 'manual'
+type VertexLocationMode = 'preset' | 'manual'
+const vertexPresetRegions = ['global', 'us-central1', 'us-east4', 'us-west1', 'europe-west4', 'asia-northeast1']
+const vertexProjectId = ref('')
+const vertexLocation = ref('us-central1')
+const vertexServiceAccountJson = ref('')
+const vertexCredentialInputMode = ref<VertexCredentialInputMode>('upload')
+const vertexLocationMode = ref<VertexLocationMode>('preset')
+const vertexFileInputRef = ref<HTMLInputElement | null>(null)
+const vertexServiceAccountFileName = ref('')
 
 const geminiSelectedTier = computed(() => {
   if (form.platform !== 'gemini') return ''
@@ -3119,6 +3288,79 @@ const geminiHelpLinks = {
   geminiWebActivation: 'https://gemini.google.com/gems/create?hl=en-US&pli=1',
   countryCheck: 'https://policies.google.com/terms',
   countryChange: 'https://policies.google.com/country-association-form'
+}
+
+const parseVertexServiceAccountJson = (raw: string): { formatted: string; projectId: string } | null => {
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return null
+    }
+
+    return {
+      formatted: JSON.stringify(parsed, null, 2),
+      projectId: typeof parsed.project_id === 'string' ? parsed.project_id.trim() : ''
+    }
+  } catch {
+    return null
+  }
+}
+
+const readTextFile = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(String(reader.result || ''))
+    reader.onerror = () => reject(reader.error || new Error('read failed'))
+    reader.readAsText(file)
+  })
+
+const applyVertexServiceAccountJson = (raw: string, fileName = ''): boolean => {
+  const parsed = parseVertexServiceAccountJson(raw)
+  if (!parsed) {
+    appStore.showError(t('admin.accounts.gemini.vertex.invalidJson'))
+    return false
+  }
+
+  vertexServiceAccountJson.value = parsed.formatted
+  vertexServiceAccountFileName.value = fileName
+  if (parsed.projectId && !vertexProjectId.value.trim()) {
+    vertexProjectId.value = parsed.projectId
+  }
+  return true
+}
+
+const resolveVertexProjectId = (projectId: string, serviceAccountJson: string): string => {
+  const trimmedProjectId = projectId.trim()
+  if (trimmedProjectId) return trimmedProjectId
+
+  const parsed = parseVertexServiceAccountJson(serviceAccountJson)
+  return parsed?.projectId || ''
+}
+
+const loadVertexServiceAccountFile = async (file: File | null | undefined) => {
+  if (!file) return
+
+  try {
+    const content = await readTextFile(file)
+    if (applyVertexServiceAccountJson(content, file.name)) {
+      vertexCredentialInputMode.value = 'upload'
+    }
+  } catch {
+    appStore.showError(t('admin.accounts.gemini.vertex.readFileFailed'))
+  }
+}
+
+const handleVertexServiceAccountFileChange = async (event: Event) => {
+  const input = event.target as HTMLInputElement | null
+  const file = input?.files?.[0]
+  await loadVertexServiceAccountFile(file)
+  if (input) {
+    input.value = ''
+  }
+}
+
+const handleVertexServiceAccountDrop = async (event: DragEvent) => {
+  await loadVertexServiceAccountFile(event.dataTransfer?.files?.[0])
 }
 
 // Computed: current preset mappings based on platform
@@ -3247,6 +3489,10 @@ watch(
     // Bedrock 类型
     if (form.platform === 'anthropic' && category === 'bedrock') {
       form.type = 'bedrock' as AccountType
+      return
+    }
+    if (form.platform === 'gemini' && category === 'vertex') {
+      form.type = 'vertex' as AccountType
       return
     }
     if (category === 'oauth-based') {
@@ -3719,6 +3965,12 @@ const resetForm = () => {
   geminiTierGoogleOne.value = 'google_one_free'
   geminiTierGcp.value = 'gcp_standard'
   geminiTierAIStudio.value = 'aistudio_free'
+  vertexProjectId.value = ''
+  vertexLocation.value = 'us-central1'
+  vertexServiceAccountJson.value = ''
+  vertexCredentialInputMode.value = 'upload'
+  vertexLocationMode.value = 'preset'
+  vertexServiceAccountFileName.value = ''
   oauth.resetState()
   openaiOAuth.resetState()
   geminiOAuth.resetState()
@@ -3939,6 +4191,56 @@ const handleSubmit = async () => {
     return
   }
 
+  if (form.platform === 'gemini' && accountCategory.value === 'vertex') {
+    if (!form.name.trim()) {
+      appStore.showError(t('admin.accounts.pleaseEnterAccountName'))
+      return
+    }
+    if (!vertexServiceAccountJson.value.trim()) {
+      appStore.showError(t('admin.accounts.gemini.vertex.serviceAccountJsonRequired'))
+      return
+    }
+
+    const resolvedProjectId = resolveVertexProjectId(
+      vertexProjectId.value,
+      vertexServiceAccountJson.value
+    )
+    if (!resolvedProjectId) {
+      appStore.showError(t('admin.accounts.gemini.vertex.missingProjectId'))
+      return
+    }
+    vertexProjectId.value = resolvedProjectId
+
+    const credentials: Record<string, unknown> = {
+      project_id: resolvedProjectId,
+      location: vertexLocation.value.trim() || 'us-central1',
+      service_account_json: vertexServiceAccountJson.value.trim()
+    }
+
+    const modelMapping = buildModelMappingObject(
+      modelRestrictionMode.value,
+      allowedModels.value,
+      modelMappings.value
+    )
+    if (modelMapping) {
+      credentials.model_mapping = modelMapping
+    }
+
+    if (poolModeEnabled.value) {
+      credentials.pool_mode = true
+      credentials.pool_mode_retry_count = normalizePoolModeRetryCount(poolModeRetryCount.value)
+    }
+
+    if (customErrorCodesEnabled.value) {
+      credentials.custom_error_codes_enabled = true
+      credentials.custom_error_codes = [...selectedErrorCodes.value]
+    }
+
+    applyInterceptWarmup(credentials, interceptWarmupRequests.value, 'create')
+    await createAccountAndFinish(form.platform, 'vertex' as AccountType, credentials)
+    return
+  }
+
   // For apikey type, create directly
   if (!apiKeyValue.value.trim()) {
     appStore.showError(t('admin.accounts.pleaseEnterApiKey'))
@@ -4051,7 +4353,7 @@ const createAccountAndFinish = async (
   }
   // Inject quota limits for apikey/bedrock accounts
   let finalExtra = extra
-  if (type === 'apikey' || type === 'bedrock') {
+  if (type === 'apikey' || type === 'vertex' || type === 'bedrock') {
     const quotaExtra: Record<string, unknown> = { ...(extra || {}) }
     if (editQuotaLimit.value != null && editQuotaLimit.value > 0) {
       quotaExtra.quota_limit = editQuotaLimit.value

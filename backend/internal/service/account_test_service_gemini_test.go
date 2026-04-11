@@ -3,7 +3,9 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -56,4 +58,30 @@ func TestProcessGeminiStream_EmitsImageEvent(t *testing.T) {
 	require.Contains(t, body, "\"type\":\"image\"")
 	require.Contains(t, body, "\"image_url\":\"data:image/png;base64,QUJD\"")
 	require.Contains(t, body, "\"mime_type\":\"image/png\"")
+}
+
+func TestBuildGeminiVertexRequest(t *testing.T) {
+	t.Parallel()
+
+	svc := &AccountTestService{
+		geminiTokenProvider: &GeminiTokenProvider{
+			tokenCache: &vertexTokenCacheStub{token: "vertex-access-token"},
+		},
+	}
+	account := &Account{
+		Platform: PlatformGemini,
+		Type:     AccountTypeVertex,
+		Credentials: map[string]any{
+			"project_id": "demo-project",
+			"location":   "us-central1",
+		},
+	}
+
+	req, err := svc.buildGeminiVertexRequest(context.Background(), account, "gemini-2.5-flash", []byte(`{"contents":[]}`))
+	require.NoError(t, err)
+	require.NotNil(t, req)
+	require.Equal(t, http.MethodPost, req.Method)
+	require.Equal(t, "Bearer vertex-access-token", req.Header.Get("Authorization"))
+	require.Equal(t, "application/json", req.Header.Get("Content-Type"))
+	require.Contains(t, req.URL.String(), "/v1beta1/projects/demo-project/locations/us-central1/publishers/google/models/gemini-2.5-flash:streamGenerateContent?alt=sse")
 }

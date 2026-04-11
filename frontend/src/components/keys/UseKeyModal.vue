@@ -845,8 +845,8 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
         }
       }
     },
-    'gemini-3-flash-preview': {
-      name: 'Gemini 3 Flash Preview',
+    'gemini-3-flash': {
+      name: 'Gemini 3 Flash',
       limit: {
         context: 1048576,
         output: 65536

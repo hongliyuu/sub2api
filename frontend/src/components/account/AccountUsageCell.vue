@@ -634,11 +634,12 @@ const isGeminiCodeAssist = computed(() => {
   return creds?.oauth_type === 'code_assist' || (!creds?.oauth_type && !!creds?.project_id)
 })
 
-const geminiChannelShort = computed((): 'ai studio' | 'gcp' | 'google one' | 'client' | null => {
+const geminiChannelShort = computed((): 'ai studio' | 'gcp' | 'google one' | 'client' | 'vertex' | null => {
   if (props.account.platform !== 'gemini') return null
 
   // API Key accounts are AI Studio.
   if (props.account.type === 'apikey') return 'ai studio'
+  if (props.account.type === 'vertex') return 'vertex'
 
   if (geminiOAuthType.value === 'google_one') return 'google one'
   if (isGeminiCodeAssist.value) return 'gcp'
@@ -677,6 +678,11 @@ const geminiUserLevel = computed((): string | null => {
     // Backward compatibility
     if (tierUpper.includes('ULTRA') || tierUpper.includes('ENTERPRISE')) return 'enterprise'
     return 'standard'
+  }
+
+  // AI Studio (API Key), Vertex, and Client OAuth
+  if (props.account.type === 'vertex') {
+    return null
   }
 
   // AI Studio (API Key) and Client OAuth: free / paid
@@ -727,6 +733,9 @@ const geminiTierClass = computed(() => {
 
 // Gemini 配额政策信息
 const geminiQuotaPolicyChannel = computed(() => {
+  if (props.account.type === 'vertex') {
+    return t('admin.accounts.gemini.quotaPolicy.rows.vertex.channel')
+  }
   if (geminiOAuthType.value === 'google_one') {
     return t('admin.accounts.gemini.quotaPolicy.rows.googleOne.channel')
   }
@@ -738,6 +747,10 @@ const geminiQuotaPolicyChannel = computed(() => {
 
 const geminiQuotaPolicyLimits = computed(() => {
   const tierLower = (geminiTier.value || '').toString().trim().toLowerCase()
+
+  if (props.account.type === 'vertex') {
+    return t('admin.accounts.gemini.quotaPolicy.rows.vertex.limits')
+  }
 
   if (geminiOAuthType.value === 'google_one') {
     if (tierLower === 'google_ai_ultra' || geminiUserLevel.value === 'ultra') {
@@ -764,6 +777,9 @@ const geminiQuotaPolicyLimits = computed(() => {
 })
 
 const geminiQuotaPolicyDocsUrl = computed(() => {
+  if (props.account.type === 'vertex') {
+    return 'https://cloud.google.com/vertex-ai/generative-ai/docs/quotas'
+  }
   if (geminiOAuthType.value === 'google_one' || isGeminiCodeAssist.value) {
     return 'https://developers.google.com/gemini-code-assist/resources/quotas'
   }
@@ -991,7 +1007,7 @@ const makeQuotaBar = (
 }
 
 const hasApiKeyQuota = computed(() => {
-  if (props.account.type !== 'apikey' && props.account.type !== 'bedrock') return false
+  if (props.account.type !== 'apikey' && props.account.type !== 'vertex' && props.account.type !== 'bedrock') return false
   return (
     (props.account.quota_daily_limit ?? 0) > 0 ||
     (props.account.quota_weekly_limit ?? 0) > 0 ||

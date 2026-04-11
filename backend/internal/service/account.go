@@ -160,6 +160,10 @@ func (a *Account) IsGemini() bool {
 	return a.Platform == PlatformGemini
 }
 
+func (a *Account) IsGeminiVertex() bool {
+	return a.Platform == PlatformGemini && a.Type == AccountTypeVertex
+}
+
 func (a *Account) GeminiOAuthType() string {
 	if a.Platform != PlatformGemini || a.Type != AccountTypeOAuth {
 		return ""
@@ -695,7 +699,7 @@ func matchWildcardMappingResult(mapping map[string]string, requestedModel string
 }
 
 func (a *Account) IsCustomErrorCodesEnabled() bool {
-	if a.Type != AccountTypeAPIKey || a.Credentials == nil {
+	if (a.Type != AccountTypeAPIKey && a.Type != AccountTypeVertex) || a.Credentials == nil {
 		return false
 	}
 	if v, ok := a.Credentials["custom_error_codes_enabled"]; ok {
@@ -833,7 +837,7 @@ func (a *Account) IsBedrockAPIKey() bool {
 
 // IsAPIKeyOrBedrock 返回账号类型是否支持配额和池模式等特性
 func (a *Account) IsAPIKeyOrBedrock() bool {
-	return a.Type == AccountTypeAPIKey || a.Type == AccountTypeBedrock
+	return a.Type == AccountTypeAPIKey || a.Type == AccountTypeVertex || a.Type == AccountTypeBedrock
 }
 
 func (a *Account) IsOpenAI() bool {

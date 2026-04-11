@@ -925,7 +925,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		}
 		oauthIDs := make(map[int64]struct{}, len(accounts))
 		for _, acc := range accounts {
-			if acc.Type != AccountTypeAPIKey {
+			if acc.Type != AccountTypeAPIKey && acc.Type != AccountTypeVertex {
 				oauthIDs[acc.ID] = struct{}{}
 			}
 		}
@@ -1195,7 +1195,7 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 			}
 			oauthIDs := make(map[int64]struct{}, len(accounts))
 			for _, acc := range accounts {
-				if acc.Type != AccountTypeAPIKey {
+				if acc.Type != AccountTypeAPIKey && acc.Type != AccountTypeVertex {
 					oauthIDs[acc.ID] = struct{}{}
 				}
 			}

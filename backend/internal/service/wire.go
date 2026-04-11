@@ -96,9 +96,11 @@ func ProvideGeminiTokenProvider(
 	accountRepo AccountRepository,
 	tokenCache GeminiTokenCache,
 	geminiOAuthService *GeminiOAuthService,
+	httpUpstream HTTPUpstream,
+	proxyRepo ProxyRepository,
 	refreshAPI *OAuthRefreshAPI,
 ) *GeminiTokenProvider {
-	p := NewGeminiTokenProvider(accountRepo, tokenCache, geminiOAuthService)
+	p := NewGeminiTokenProvider(accountRepo, tokenCache, geminiOAuthService, httpUpstream, proxyRepo)
 	executor := NewGeminiTokenRefresher(geminiOAuthService)
 	p.SetRefreshAPI(refreshAPI, executor)
 	p.SetRefreshPolicy(GeminiProviderRefreshPolicy())

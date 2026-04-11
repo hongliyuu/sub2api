@@ -373,6 +373,10 @@ func geminiQuotaTierKeyForAccount(account *Account) string {
 	if account == nil || account.Platform != PlatformGemini {
 		return ""
 	}
+	if account.IsGeminiVertex() {
+		// Vertex 配额策略与 AI Studio / Google One 不同，避免套用错误的本地配额预检。
+		return ""
+	}
 
 	// Note: GeminiOAuthType() already defaults legacy (project_id present) to code_assist.
 	oauthType := strings.ToLower(strings.TrimSpace(account.GeminiOAuthType()))
