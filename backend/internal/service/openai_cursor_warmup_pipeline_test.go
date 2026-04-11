@@ -153,3 +153,43 @@ func TestCursorMixedShape_JSONRoundtrip(t *testing.T) {
 	require.True(t, ok, "input must decode to a Go []any after round-trip")
 	require.Len(t, inputArr, 1)
 }
+
+// TestCursorMixedShape_StripsUnsupportedFields mirrors the strip loop in
+// ForwardAsChatCompletions (isResponsesShape branch). Cursor cloud sends
+// prompt_cache_retention and safety_identifier as top-level Responses API
+// parameters, which Codex upstreams reject. The fix must remove them from
+// the raw body before it is forwarded, for BOTH OAuth and API Key accounts
+// (the previous fix in applyCodexOAuthTransform only covered OAuth).
+func TestCursorMixedShape_StripsUnsupportedFields(t *testing.T) {
+	cursorBody := []byte(`{
+		"model": "gpt-5.4",
+		"stream": true,
+		"prompt_cache_retention": "24h",
+		"safety_identifier": "cursor-user-xyz",
+		"input": [{"role":"user","content":"hi"}]
+	}`)
+
+	// Sanity: the input body actually contains both fields.
+	require.True(t, gjson.GetBytes(cursorBody, "prompt_cache_retention").Exists())
+	require.True(t, gjson.GetBytes(cursorBody, "safety_identifier").Exists())
+
+	// Run the exact same loop as the production code.
+	result := cursorBody
+	for _, field := range cursorResponsesUnsupportedFields {
+		if stripped, err := sjson.DeleteBytes(result, field); err == nil {
+			result = stripped
+		}
+	}
+
+	// Both fields must be gone.
+	assert.False(t, gjson.GetBytes(result, "prompt_cache_retention").Exists(),
+		"prompt_cache_retention must be stripped")
+	assert.False(t, gjson.GetBytes(result, "safety_identifier").Exists(),
+		"safety_identifier must be stripped")
+
+	// Everything else must survive intact.
+	assert.Equal(t, "gpt-5.4", gjson.GetBytes(result, "model").String())
+	assert.Equal(t, true, gjson.GetBytes(result, "stream").Bool())
+	assert.True(t, gjson.GetBytes(result, "input").IsArray())
+	assert.Equal(t, "user", gjson.GetBytes(result, "input.0.role").String())
+}
