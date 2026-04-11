@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/require"
 )
 
@@ -33,6 +34,8 @@ func TestBuildRedisOptions(t *testing.T) {
 	require.Equal(t, 100, opts.PoolSize)
 	require.Equal(t, 10, opts.MinIdleConns)
 	require.Nil(t, opts.TLSConfig)
+	require.Equal(t, defaultRedisPoolTimeout, opts.PoolTimeout)
+	require.Equal(t, defaultRedisConnMaxIdleTime, opts.ConnMaxIdleTime)
 
 	// Test case with TLS enabled
 	cfgTLS := &config.Config{
@@ -44,4 +47,53 @@ func TestBuildRedisOptions(t *testing.T) {
 	optsTLS := buildRedisOptions(cfgTLS)
 	require.NotNil(t, optsTLS.TLSConfig)
 	require.Equal(t, "localhost", optsTLS.TLSConfig.ServerName)
+}
+
+func TestBuildRedisOptions_EnforcesPoolSizeHardLimit(t *testing.T) {
+	cfg := &config.Config{
+		Redis: config.RedisConfig{
+			PoolSize:     8,
+			MinIdleConns: 16,
+		},
+	}
+	opts := buildRedisOptions(cfg)
+	require.Equal(t, 8, opts.PoolSize)
+	require.Equal(t, 8, opts.MinIdleConns)
+}
+
+func TestBuildRedisOptions_DefaultPoolSizeAndTimeouts(t *testing.T) {
+	cfg := &config.Config{}
+	opts := buildRedisOptions(cfg)
+	require.Equal(t, defaultRedisPoolSize, opts.PoolSize)
+	require.Equal(t, defaultRedisPoolTimeout, opts.PoolTimeout)
+	require.Equal(t, defaultRedisConnMaxIdleTime, opts.ConnMaxIdleTime)
+}
+
+func TestSnapshotRedisPoolStatsFromStats(t *testing.T) {
+	stats := redis.PoolStats{
+		Hits:       42,
+		Misses:     3,
+		WaitCount:  7,
+		Timeouts:   1,
+		TotalConns: 20,
+		IdleConns:  5,
+	}
+	snapshot := RedisPoolSnapshotFromStats(&stats)
+	require.Equal(t, RedisPoolSnapshot{
+		Hits:       42,
+		Misses:     3,
+		Stalls:     7,
+		Timeouts:   1,
+		TotalConns: 20,
+		IdleConns:  5,
+	}, snapshot)
+}
+
+func TestSnapshotRedisPoolStatsNilClient(t *testing.T) {
+	require.Equal(t, RedisPoolSnapshot{}, SnapshotRedisPoolStats(nil))
+}
+
+func TestSnapshotDefaultRedisPoolStatsWithoutInit(t *testing.T) {
+	defaultRedisClient.Store(nil)
+	require.Equal(t, RedisPoolSnapshot{}, SnapshotDefaultRedisPoolStats())
 }

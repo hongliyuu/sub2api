@@ -18,6 +18,7 @@ import (
 	"github.com/andybalholm/brotli"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/proxyurl"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/proxyutil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
@@ -49,6 +50,14 @@ const (
 	defaultMaxUpstreamClients = 5000
 	// defaultClientIdleTTLSeconds: 默认客户端空闲回收阈值（15分钟）
 	defaultClientIdleTTLSeconds = 900
+)
+
+const (
+	httpPoolMaxIdleThreshold        = 1024
+	httpPoolMaxIdlePerHostThreshold = 512
+	httpPoolMaxConnsPerHostThreshold = 1024
+	httpPoolMaxIdleRatioWarning     = 0.85
+	httpMaxUpstreamClientsThreshold = 5000
 )
 
 var errUpstreamClientLimitReached = errors.New("upstream client cache limit reached")
@@ -579,6 +588,61 @@ func (s *httpUpstreamService) maxUpstreamClients() int {
 	return defaultMaxUpstreamClients
 }
 
+func evaluateHTTPPoolWarnings(settings poolSettings) []string {
+	var warnings []string
+	if settings.maxIdleConns > httpPoolMaxIdleThreshold {
+		warnings = append(warnings, fmt.Sprintf("max_idle_conns (%d) exceeds %d", settings.maxIdleConns, httpPoolMaxIdleThreshold))
+	}
+	if settings.maxIdleConnsPerHost > httpPoolMaxIdlePerHostThreshold {
+		warnings = append(warnings, fmt.Sprintf("max_idle_conns_per_host (%d) exceeds %d", settings.maxIdleConnsPerHost, httpPoolMaxIdlePerHostThreshold))
+	}
+	if settings.maxConnsPerHost > httpPoolMaxConnsPerHostThreshold {
+		warnings = append(warnings, fmt.Sprintf("max_conns_per_host (%d) exceeds %d", settings.maxConnsPerHost, httpPoolMaxConnsPerHostThreshold))
+	}
+	if settings.maxIdleConns > 0 {
+		ratio := float64(settings.maxIdleConnsPerHost) / float64(settings.maxIdleConns)
+		if ratio >= httpPoolMaxIdleRatioWarning {
+			warnings = append(warnings, fmt.Sprintf("max_idle_conns_per_host (%d) is %.0f%% of max_idle_conns", settings.maxIdleConnsPerHost, ratio*100))
+		}
+	}
+	return warnings
+}
+
+func logHTTPPoolWarnings(warnings []string, settings poolSettings) {
+	if len(warnings) == 0 {
+		return
+	}
+	logger.WriteSinkEvent("warn", "repository.http_upstream", "http pool configuration guard", map[string]any{
+		"warnings": warnings,
+		"config": map[string]any{
+			"max_idle_conns":            settings.maxIdleConns,
+			"max_idle_conns_per_host":   settings.maxIdleConnsPerHost,
+			"max_conns_per_host":        settings.maxConnsPerHost,
+			"idle_conn_timeout_seconds": settings.idleConnTimeout.Seconds(),
+		},
+	})
+}
+
+func evaluateHTTPClientCacheWarnings(maxClients int) []string {
+	var warnings []string
+	if maxClients > httpMaxUpstreamClientsThreshold {
+		warnings = append(warnings, fmt.Sprintf("max_upstream_clients (%d) exceeds %d", maxClients, httpMaxUpstreamClientsThreshold))
+	}
+	return warnings
+}
+
+func logHTTPClientCacheWarnings(warnings []string, maxClients int) {
+	if len(warnings) == 0 {
+		return
+	}
+	logger.WriteSinkEvent("warn", "repository.http_upstream", "http client cache guard", map[string]any{
+		"warnings": warnings,
+		"config": map[string]any{
+			"max_upstream_clients": maxClients,
+		},
+	})
+}
+
 // clientIdleTTL 获取客户端空闲回收阈值
 // 从配置中读取，无效值使用默认值
 func (s *httpUpstreamService) clientIdleTTL() time.Duration {
@@ -732,14 +796,15 @@ func defaultPoolSettings(cfg *config.Config) poolSettings {
 			responseHeaderTimeout = time.Duration(cfg.Gateway.ResponseHeaderTimeout) * time.Second
 		}
 	}
-
-	return poolSettings{
+	settings := poolSettings{
 		maxIdleConns:          maxIdleConns,
 		maxIdleConnsPerHost:   maxIdleConnsPerHost,
 		maxConnsPerHost:       maxConnsPerHost,
 		idleConnTimeout:       idleConnTimeout,
 		responseHeaderTimeout: responseHeaderTimeout,
 	}
+	logHTTPPoolWarnings(evaluateHTTPPoolWarnings(settings), settings)
+	return settings
 }
 
 // buildUpstreamTransport 构建上游请求的 Transport

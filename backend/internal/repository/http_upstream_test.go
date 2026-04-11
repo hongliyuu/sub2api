@@ -281,6 +281,21 @@ func TestHTTPUpstreamSuite(t *testing.T) {
 	suite.Run(t, new(HTTPUpstreamSuite))
 }
 
+func (s *HTTPUpstreamSuite) TestEvaluateHTTPPoolWarnings() {
+	settings := poolSettings{
+		maxIdleConns:        2048,
+		maxIdleConnsPerHost: 1024,
+		maxConnsPerHost:     2048,
+	}
+	warnings := evaluateHTTPPoolWarnings(settings)
+	require.NotEmpty(s.T(), warnings)
+}
+
+func (s *HTTPUpstreamSuite) TestEvaluateHTTPClientCacheWarnings() {
+	warnings := evaluateHTTPClientCacheWarnings(10000)
+	require.NotEmpty(s.T(), warnings)
+}
+
 // mustGetOrCreateClient 测试辅助函数，调用 getOrCreateClient 并断言无错误
 func mustGetOrCreateClient(t *testing.T, svc *httpUpstreamService, proxyURL string, accountID int64, concurrency int) *upstreamClientEntry {
 	t.Helper()

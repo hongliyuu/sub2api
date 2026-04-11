@@ -2,6 +2,7 @@ package repository
 
 import (
 	"database/sql"
+	"strings"
 	"testing"
 	"time"
 
@@ -47,4 +48,27 @@ func TestApplyDBPoolSettings(t *testing.T) {
 	applyDBPoolSettings(db, cfg)
 	stats := db.Stats()
 	require.Equal(t, 40, stats.MaxOpenConnections)
+}
+
+func TestEvaluateDBPoolConfigWarnings(t *testing.T) {
+	warnings := evaluateDBPoolConfigWarnings(dbPoolSettings{
+		MaxOpenConns: 600,
+		MaxIdleConns: 550,
+	})
+	require.NotEmpty(t, warnings)
+	contains := false
+	for _, warn := range warnings {
+		if strings.Contains(warn, "exceeds") {
+			contains = true
+		}
+	}
+	require.True(t, contains)
+}
+
+func TestEvaluateDBPoolStatsWarnings(t *testing.T) {
+	warnings := evaluateDBPoolStatsWarnings(sql.DBStats{
+		MaxOpenConnections: 100,
+		Idle:               90,
+	})
+	require.NotEmpty(t, warnings)
 }
