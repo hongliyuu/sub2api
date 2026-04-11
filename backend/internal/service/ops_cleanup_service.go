@@ -201,10 +201,13 @@ func (s *OpsCleanupService) runCleanupOnce(ctx context.Context) (opsCleanupDelet
 
 	now := time.Now().UTC()
 
+	// Keep row-cap visibility current even when time-based retention is disabled.
+	s.recordMaxRowsSnapshot(ctx, "ops_error_logs", s.cfg.Ops.Cleanup.ErrorLogMaxRows)
+	s.recordMaxRowsSnapshot(ctx, "ops_system_logs", s.cfg.Ops.Cleanup.SystemLogMaxRows)
+
 	// Error-like tables: error logs / retry attempts / alert events.
 	if days := s.cfg.Ops.Cleanup.ErrorLogRetentionDays; days > 0 {
 		cutoff := now.AddDate(0, 0, -days)
-		s.recordMaxRowsSnapshot(ctx, "ops_error_logs", s.cfg.Ops.Cleanup.ErrorLogMaxRows)
 		n, err := deleteOldRowsByID(ctx, s.db, "ops_error_logs", "created_at", cutoff, batchSize, false)
 		if err != nil {
 			return out, err
@@ -223,7 +226,6 @@ func (s *OpsCleanupService) runCleanupOnce(ctx context.Context) (opsCleanupDelet
 		}
 		out.alertEvents = n
 
-		s.recordMaxRowsSnapshot(ctx, "ops_system_logs", s.cfg.Ops.Cleanup.SystemLogMaxRows)
 		n, err = deleteOldRowsByID(ctx, s.db, "ops_system_logs", "created_at", cutoff, batchSize, false)
 		if err != nil {
 			return out, err
@@ -474,4 +476,14 @@ type CleanupStats struct {
 	MaxRowsEnabled bool
 	MaxRowsDryRun  bool
 	MaxRowsHit     bool
+}
+
+func resetCleanupStatsForTest() {
+	cleanupSystemLogRowCount.Store(0)
+	cleanupErrorLogRowCount.Store(0)
+	cleanupMaxRowsTriggered.Store(0)
+	cleanupSystemLogLimit.Store(0)
+	cleanupErrorLogLimit.Store(0)
+	cleanupMaxRowsEnabled.Store(false)
+	cleanupMaxRowsDryRun.Store(false)
 }

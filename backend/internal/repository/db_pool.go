@@ -3,11 +3,14 @@ package repository
 import (
 	"database/sql"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 )
+
+var defaultDBPool atomic.Pointer[sql.DB]
 
 type dbPoolSettings struct {
 	MaxOpenConns    int
@@ -30,6 +33,7 @@ func applyDBPoolSettings(db *sql.DB, cfg *config.Config) {
 		return
 	}
 
+	defaultDBPool.Store(db)
 	settings := buildDBPoolSettings(cfg)
 	db.SetMaxOpenConns(settings.MaxOpenConns)
 	db.SetMaxIdleConns(settings.MaxIdleConns)
@@ -40,10 +44,48 @@ func applyDBPoolSettings(db *sql.DB, cfg *config.Config) {
 }
 
 const (
-	dbPoolStartMaxOpenWarningThreshold    = 500
-	dbPoolStartIdleRatioWarningThreshold  = 0.9
+	dbPoolStartMaxOpenWarningThreshold     = 500
+	dbPoolStartIdleRatioWarningThreshold   = 0.9
 	dbPoolRuntimeIdleRatioWarningThreshold = 0.85
+	dbPoolRuntimeUsageWarningThreshold     = 0.85
 )
+
+type DBPoolSnapshot struct {
+	OpenConnections      int      `json:"open_connections"`
+	InUse                int      `json:"in_use"`
+	Idle                 int      `json:"idle"`
+	MaxOpenConnections   int      `json:"max_open_connections"`
+	WaitCount            int64    `json:"wait_count"`
+	WaitDurationMs       int64    `json:"wait_duration_ms"`
+	UsagePercent         *float64 `json:"usage_percent,omitempty"`
+	InUsePercent         *float64 `json:"in_use_percent,omitempty"`
+	IdleReservationRatio *float64 `json:"idle_reservation_ratio,omitempty"`
+}
+
+func SnapshotDBPoolStats(db *sql.DB) DBPoolSnapshot {
+	if db == nil {
+		return DBPoolSnapshot{}
+	}
+	return dbPoolSnapshotFromStats(db.Stats())
+}
+
+func SnapshotDefaultDBPoolStats() DBPoolSnapshot {
+	return SnapshotDBPoolStats(defaultDBPool.Load())
+}
+
+func dbPoolSnapshotFromStats(stats sql.DBStats) DBPoolSnapshot {
+	return DBPoolSnapshot{
+		OpenConnections:      stats.OpenConnections,
+		InUse:                stats.InUse,
+		Idle:                 stats.Idle,
+		MaxOpenConnections:   stats.MaxOpenConnections,
+		WaitCount:            stats.WaitCount,
+		WaitDurationMs:       stats.WaitDuration.Milliseconds(),
+		UsagePercent:         ratioPercent(stats.OpenConnections, stats.MaxOpenConnections),
+		InUsePercent:         ratioPercent(stats.InUse, stats.MaxOpenConnections),
+		IdleReservationRatio: ratioPercent(stats.Idle, stats.MaxOpenConnections),
+	}
+}
 
 func logDBPoolStartupWarnings(settings dbPoolSettings) {
 	warnings := evaluateDBPoolConfigWarnings(settings)
@@ -51,11 +93,11 @@ func logDBPoolStartupWarnings(settings dbPoolSettings) {
 		return
 	}
 	logger.WriteSinkEvent("warn", "repository.db_pool", "database pool configuration guard", map[string]any{
-		"warnings":        warnings,
-		"max_open_conns":  settings.MaxOpenConns,
-		"max_idle_conns":  settings.MaxIdleConns,
-		"conn_max_life":   settings.ConnMaxLifetime.String(),
-		"conn_max_idle":   settings.ConnMaxIdleTime.String(),
+		"warnings":       warnings,
+		"max_open_conns": settings.MaxOpenConns,
+		"max_idle_conns": settings.MaxIdleConns,
+		"conn_max_life":  settings.ConnMaxLifetime.String(),
+		"conn_max_idle":  settings.ConnMaxIdleTime.String(),
 	})
 }
 
@@ -69,11 +111,11 @@ func logDBPoolRuntimeWarnings(db *sql.DB) {
 		return
 	}
 	logger.WriteSinkEvent("warn", "repository.db_pool", "database pool runtime guard", map[string]any{
-		"warnings":          warnings,
-		"open_connections":  stats.OpenConnections,
-		"idle_connections":  stats.Idle,
-		"max_open_conns":    stats.MaxOpenConnections,
-		"in_use":            stats.InUse,
+		"warnings":         warnings,
+		"open_connections": stats.OpenConnections,
+		"idle_connections": stats.Idle,
+		"max_open_conns":   stats.MaxOpenConnections,
+		"in_use":           stats.InUse,
 	})
 }
 
@@ -101,6 +143,31 @@ func evaluateDBPoolStatsWarnings(stats sql.DBStats) []string {
 		if ratio >= dbPoolRuntimeIdleRatioWarningThreshold {
 			warnings = append(warnings, fmt.Sprintf("idle_connections (%.0f%%) close to max_open_conns", ratio*100))
 		}
+		openRatio := float64(stats.OpenConnections) / float64(stats.MaxOpenConnections)
+		if openRatio >= dbPoolRuntimeUsageWarningThreshold {
+			warnings = append(warnings, fmt.Sprintf("open_connections (%.0f%%) close to max_open_conns", openRatio*100))
+		}
+		if stats.InUse >= stats.MaxOpenConnections {
+			warnings = append(warnings, "in_use connections reached max_open_conns")
+		}
+	}
+	if stats.WaitCount > 0 {
+		warnings = append(warnings, fmt.Sprintf("wait_count=%d indicates pool contention", stats.WaitCount))
 	}
 	return warnings
+}
+
+func ratioPercent(current, limit int) *float64 {
+	if limit <= 0 || current < 0 {
+		return nil
+	}
+	pct := float64(current) / float64(limit) * 100
+	if pct < 0 {
+		pct = 0
+	}
+	if pct > 200 {
+		pct = 200
+	}
+	rounded := float64(int(pct*10+0.5)) / 10
+	return &rounded
 }

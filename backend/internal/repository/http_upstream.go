@@ -26,6 +26,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
 )
 
+var defaultHTTPUpstream atomic.Pointer[httpUpstreamService]
+
 // 默认配置常量
 // 这些值在配置文件未指定时作为回退默认值使用
 const (
@@ -53,11 +55,11 @@ const (
 )
 
 const (
-	httpPoolMaxIdleThreshold        = 1024
-	httpPoolMaxIdlePerHostThreshold = 512
+	httpPoolMaxIdleThreshold         = 1024
+	httpPoolMaxIdlePerHostThreshold  = 512
 	httpPoolMaxConnsPerHostThreshold = 1024
-	httpPoolMaxIdleRatioWarning     = 0.85
-	httpMaxUpstreamClientsThreshold = 5000
+	httpPoolMaxIdleRatioWarning      = 0.85
+	httpMaxUpstreamClientsThreshold  = 5000
 )
 
 var errUpstreamClientLimitReached = errors.New("upstream client cache limit reached")
@@ -114,9 +116,102 @@ type httpUpstreamService struct {
 // 返回:
 //   - service.HTTPUpstream 接口实现
 func NewHTTPUpstream(cfg *config.Config) service.HTTPUpstream {
-	return &httpUpstreamService{
+	svc := &httpUpstreamService{
 		cfg:     cfg,
 		clients: make(map[string]*upstreamClientEntry),
+	}
+	defaultHTTPUpstream.Store(svc)
+	return svc
+}
+
+type HTTPUpstreamRuntimeSnapshot struct {
+	CachedClients           int      `json:"cached_clients"`
+	ActiveClients           int      `json:"active_clients"`
+	IdleClients             int      `json:"idle_clients"`
+	TotalInFlight           int64    `json:"total_inflight"`
+	MaxUpstreamClients      int      `json:"max_upstream_clients"`
+	CacheUsagePercent       *float64 `json:"cache_usage_percent,omitempty"`
+	ActiveClientRatio       *float64 `json:"active_client_ratio,omitempty"`
+	ClientHeadroomPercent   *float64 `json:"client_headroom_percent,omitempty"`
+	ActiveClientLoadPercent *float64 `json:"active_client_load_percent,omitempty"`
+	IsolationMode           string   `json:"isolation_mode,omitempty"`
+	ClientIdleTTL           int      `json:"client_idle_ttl_seconds"`
+}
+
+func SnapshotDefaultHTTPUpstreamRuntime() HTTPUpstreamRuntimeSnapshot {
+	svc := defaultHTTPUpstream.Load()
+	if svc == nil {
+		return HTTPUpstreamRuntimeSnapshot{}
+	}
+	return svc.SnapshotRuntime()
+}
+
+// EvaluateHTTPUpstreamPressure summarizes the HTTP client cache state for home screen resource guards.
+func EvaluateHTTPUpstreamPressure(snapshot HTTPUpstreamRuntimeSnapshot) (string, string) {
+	level := "normal"
+	note := "HTTP upstream cache healthy"
+	if snapshot.ActiveClientLoadPercent != nil {
+		load := *snapshot.ActiveClientLoadPercent
+		if load >= 95 {
+			level = "warning"
+			note = fmt.Sprintf("active client load %.1f%% of max", load)
+		} else if load >= 80 {
+			note = fmt.Sprintf("active client load %.1f%% of max", load)
+		}
+	}
+	if level == "normal" && snapshot.ClientHeadroomPercent != nil && *snapshot.ClientHeadroomPercent <= 15 {
+		level = "warning"
+		note = fmt.Sprintf("client headroom %.1f%% remains", *snapshot.ClientHeadroomPercent)
+	} else if level == "normal" && snapshot.CacheUsagePercent != nil {
+		usage := *snapshot.CacheUsagePercent
+		if usage >= 85 {
+			level = "warning"
+			note = "HTTP client cache near saturation"
+		} else {
+			note = fmt.Sprintf("cache usage %.1f%%", usage)
+		}
+	}
+	return level, note
+}
+
+func (s *httpUpstreamService) SnapshotRuntime() HTTPUpstreamRuntimeSnapshot {
+	if s == nil {
+		return HTTPUpstreamRuntimeSnapshot{}
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var activeClients int
+	var totalInFlight int64
+	for _, entry := range s.clients {
+		if entry == nil {
+			continue
+		}
+		inFlight := atomic.LoadInt64(&entry.inFlight)
+		if inFlight > 0 {
+			activeClients++
+			totalInFlight += inFlight
+		}
+	}
+	cachedClients := len(s.clients)
+	idleClients := cachedClients - activeClients
+	maxClients := s.maxUpstreamClients()
+	headroom := 0
+	if maxClients > cachedClients {
+		headroom = maxClients - cachedClients
+	}
+	return HTTPUpstreamRuntimeSnapshot{
+		CachedClients:           cachedClients,
+		ActiveClients:           activeClients,
+		IdleClients:             idleClients,
+		TotalInFlight:           totalInFlight,
+		MaxUpstreamClients:      maxClients,
+		CacheUsagePercent:       ratioPercent(cachedClients, maxClients),
+		ActiveClientRatio:       ratioPercent(activeClients, cachedClients),
+		ClientHeadroomPercent:   ratioPercent(headroom, maxClients),
+		ActiveClientLoadPercent: ratioPercent(activeClients, maxClients),
+		IsolationMode:           s.getIsolationMode(),
+		ClientIdleTTL:           int(s.clientIdleTTL().Seconds()),
 	}
 }
 

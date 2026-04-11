@@ -118,12 +118,17 @@ func logRedisPoolWarnings(warnings []string, poolSize, minIdle int) {
 
 // RedisPoolSnapshot captures runtime pool metrics that are valuable to ops.
 type RedisPoolSnapshot struct {
-	Hits       int64 `json:"hits"`
-	Misses     int64 `json:"misses"`
-	Stalls     int64 `json:"stalls"`
-	Timeouts   int64 `json:"timeouts"`
-	TotalConns int64 `json:"total_conns"`
-	IdleConns  int64 `json:"idle_conns"`
+	Hits                      int64    `json:"hits"`
+	Misses                    int64    `json:"misses"`
+	Stalls                    int64    `json:"stalls"`
+	Timeouts                  int64    `json:"timeouts"`
+	TotalConns                int64    `json:"total_conns"`
+	IdleConns                 int64    `json:"idle_conns"`
+	UsagePercent              *float64 `json:"usage_percent,omitempty"`
+	IdleReservationRatio      *float64 `json:"idle_reservation_ratio,omitempty"`
+	HitRatePercent            *float64 `json:"hit_rate_percent,omitempty"`
+	ConnectionPressurePercent *float64 `json:"connection_pressure_percent,omitempty"`
+	PoolHeadroomPercent       *float64 `json:"pool_headroom_percent,omitempty"`
 }
 
 // SnapshotRedisPoolStats returns pool metrics from the given client.
@@ -131,7 +136,11 @@ func SnapshotRedisPoolStats(client *redis.Client) RedisPoolSnapshot {
 	if client == nil {
 		return RedisPoolSnapshot{}
 	}
-	return RedisPoolSnapshotFromStats(client.PoolStats())
+	poolSize := 0
+	if client.Options() != nil {
+		poolSize = client.Options().PoolSize
+	}
+	return RedisPoolSnapshotFromStats(client.PoolStats(), poolSize)
 }
 
 // SnapshotDefaultRedisPoolStats returns pool stats for the default initialized client.
@@ -140,18 +149,100 @@ func SnapshotDefaultRedisPoolStats() RedisPoolSnapshot {
 }
 
 // RedisPoolSnapshotFromStats converts go-redis stats into our snapshot structure.
-func RedisPoolSnapshotFromStats(stats *redis.PoolStats) RedisPoolSnapshot {
+func RedisPoolSnapshotFromStats(stats *redis.PoolStats, poolSize int) RedisPoolSnapshot {
 	if stats == nil {
 		return RedisPoolSnapshot{}
+	}
+	totalLookups := stats.Hits + stats.Misses
+	poolSize64 := int64(poolSize)
+	headroom := poolSize64 - int64(stats.TotalConns)
+	if headroom < 0 {
+		headroom = 0
 	}
 	return RedisPoolSnapshot{
 		Hits:   int64(stats.Hits),
 		Misses: int64(stats.Misses),
 		// go-redis v9 exposes wait count instead of a direct "stalls" field.
 		// We keep the outward-facing name stable for existing ops payloads.
-		Stalls:     int64(stats.WaitCount),
-		Timeouts:   int64(stats.Timeouts),
-		TotalConns: int64(stats.TotalConns),
-		IdleConns:  int64(stats.IdleConns),
+		Stalls:                    int64(stats.WaitCount),
+		Timeouts:                  int64(stats.Timeouts),
+		TotalConns:                int64(stats.TotalConns),
+		IdleConns:                 int64(stats.IdleConns),
+		UsagePercent:              ratioPercentInt64(int64(stats.TotalConns), poolSize64),
+		IdleReservationRatio:      ratioPercentInt64(int64(stats.IdleConns), poolSize64),
+		HitRatePercent:            ratioPercentInt64(int64(stats.Hits), int64(totalLookups)),
+		ConnectionPressurePercent: ratioPercentInt64(int64(stats.TotalConns), poolSize64),
+		PoolHeadroomPercent:       ratioPercentInt64(headroom, poolSize64),
 	}
+}
+
+// EvaluateRedisPressure summarizes Redis pool pressure for quick resource checks.
+func EvaluateRedisPressure(snapshot RedisPoolSnapshot) (string, string) {
+	state := "normal"
+	note := "Redis pool healthy"
+	if snapshot.Timeouts > 0 {
+		state = "critical"
+		note = fmt.Sprintf("redis timeouts=%d", snapshot.Timeouts)
+		return state, note
+	}
+	if snapshot.Stalls > 0 {
+		state = "warning"
+		note = fmt.Sprintf("redis stalls=%d", snapshot.Stalls)
+	}
+	if snapshot.ConnectionPressurePercent != nil {
+		pressure := *snapshot.ConnectionPressurePercent
+		if pressure >= 95 {
+			state = "warning"
+			note = fmt.Sprintf("connections at %.1f%% of pool", pressure)
+		}
+	}
+	if state == "normal" && snapshot.UsagePercent != nil {
+		usage := *snapshot.UsagePercent
+		if usage >= 90 {
+			state = "warning"
+			note = fmt.Sprintf("usage %.1f%%", usage)
+		}
+	}
+	return state, note
+}
+
+// SummarizeRedisPressureTrend provides a short trend narrative for ops dashboards.
+func SummarizeRedisPressureTrend(snapshot RedisPoolSnapshot) (string, string) {
+	if snapshot.Timeouts > 0 {
+		return "critical", fmt.Sprintf("timeouts=%d breaches, autorepair recommended", snapshot.Timeouts)
+	}
+	if snapshot.Stalls > 0 {
+		return "warning", fmt.Sprintf("stalls=%d, backpressure rising", snapshot.Stalls)
+	}
+	if snapshot.ConnectionPressurePercent != nil {
+		pressure := *snapshot.ConnectionPressurePercent
+		if pressure >= 85 {
+			return "warning", fmt.Sprintf("connections at %.1f%% of pool", pressure)
+		}
+		if pressure >= 70 {
+			return "info", fmt.Sprintf("connections at %.1f%%", pressure)
+		}
+	}
+	if snapshot.UsagePercent != nil {
+		usage := *snapshot.UsagePercent
+		if usage >= 80 {
+			return "info", fmt.Sprintf("usage %.1f%%, monitor trends", usage)
+		}
+	}
+	return "stable", "pressure normal"
+}
+
+func ratioPercentInt64(current, limit int64) *float64 {
+	if limit <= 0 || current < 0 {
+		return nil
+	}
+	pct := float64(current) / float64(limit) * 100
+	if pct < 0 {
+		pct = 0
+	}
+	if pct > 200 {
+		pct = 200
+	}
+	rounded := float64(int(pct*10+0.5)) / 10
+	return &rounded
 }

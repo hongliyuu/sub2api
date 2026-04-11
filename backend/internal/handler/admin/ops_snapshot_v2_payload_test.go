@@ -50,6 +50,89 @@ func TestUsageLogNotPersistedPayload_ExposesOpsSearchTemplate(t *testing.T) {
 	require.False(t, hasLastDetail)
 }
 
+func TestBuildSnapshotFailureSplitSummaryPayload_UsesOverviewSummary(t *testing.T) {
+	summary := buildSnapshotFailureSplitSummaryPayload(&service.OpsDashboardOverview{
+		FailureSplitSummary: &service.OpsFailureSplitSummary{
+			ProtocolOrRequestShape: 3,
+			AccountOrAuth:          1,
+			LikelyPrimary:          "protocol_or_request_shape",
+			Suggestion:             "Validate protocol shape first.",
+			OperatorAction:         "Pause failover changes until request shape is validated.",
+		},
+	})
+
+	require.NotNil(t, summary)
+	require.Equal(t, int64(3), summary.ProtocolOrRequestShape)
+	require.Equal(t, "protocol_or_request_shape", summary.LikelyPrimary)
+}
+
+func TestBuildFailureSplitGuidancePayload_IncludesTotals(t *testing.T) {
+	payload := buildFailureSplitGuidancePayload(&service.OpsDashboardOverview{
+		FailureSplitSummary: &service.OpsFailureSplitSummary{
+			ProtocolOrRequestShape: 2,
+			AccountOrAuth:          1,
+			ProviderOrUpstream:     1,
+			LocalProcessing:        0,
+			LikelyPrimary:          "protocol_or_request_shape",
+			Suggestion:             "Check protocol shape first.",
+			OperatorAction:         "Pause failover changes until protocol shape is confirmed.",
+		},
+	})
+
+	require.NotNil(t, payload)
+	require.Contains(t, payload, "totals")
+	totals, ok := payload["totals"].(gin.H)
+	require.True(t, ok)
+	require.Equal(t, int64(2), totals["protocol_or_request_shape"])
+	require.Equal(t, int64(1), totals["account_or_auth"])
+	require.Equal(t, "protocol_or_request_shape", payload["likely_primary"])
+	require.Equal(t, "Check protocol shape first.", payload["suggestion"])
+	require.Equal(t, "Pause failover changes until protocol shape is confirmed.", payload["operator_action"])
+	require.Contains(t, payload, "focus_hint")
+	require.Contains(t, payload, "investigation_order")
+	require.Contains(t, payload, "correlation_hint")
+}
+
+func TestBuildOperatorActionPlan_IncludesFailureAndDriftActions(t *testing.T) {
+	plan := buildOperatorActionPlan(&service.OpsFailureSplitSummary{
+		LikelyPrimary:  "protocol_or_request_shape",
+		Suggestion:     "Check protocol shape first.",
+		OperatorAction: "Pause failover changes until protocol shape is confirmed.",
+	}, gin.H{"severity": "warning"})
+
+	require.NotNil(t, plan)
+	require.NotEmpty(t, plan.FailureSplitActions)
+	require.NotEmpty(t, plan.ProtocolDiagnostics)
+	require.NotEmpty(t, plan.ControlPlaneDrift)
+}
+
+func TestBuildSnapshotOperatorAndDriftSummaries(t *testing.T) {
+	planSummary := buildSnapshotOperatorActionPlanSummary(&service.OpsOperatorActionPlan{
+		FailureSplitActions: []string{"check request shape"},
+		ProtocolDiagnostics: []string{"open requests"},
+		ControlPlaneDrift:   []string{"check sticky first"},
+	})
+	require.NotNil(t, planSummary)
+	require.Equal(t, 1, planSummary["failure_split_action_count"])
+	require.Equal(t, "check request shape", planSummary["primary_action"])
+
+	driftSummary := buildSnapshotDriftTrendSummary(
+		gin.H{
+			"severity":          "warning",
+			"likely_root_cause": "sticky_and_scheduler_drift",
+			"summary":           "control-plane drift active",
+		},
+		gin.H{
+			"status": "degrading",
+			"detail": "backlog=3 lag=7s",
+		},
+	)
+	require.NotNil(t, driftSummary)
+	require.Equal(t, "degrading", driftSummary["trend_status"])
+	require.Equal(t, "warning", driftSummary["severity"])
+	require.Equal(t, "sticky_and_scheduler_drift", driftSummary["likely_root_cause"])
+}
+
 func TestEnrichBillingCompensationFallback_UsesPersistedSummaryHint(t *testing.T) {
 	now := time.Now().UTC()
 	repo := &opsBillingCompensationRepoStub{

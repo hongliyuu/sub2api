@@ -78,14 +78,19 @@ func TestSnapshotRedisPoolStatsFromStats(t *testing.T) {
 		TotalConns: 20,
 		IdleConns:  5,
 	}
-	snapshot := RedisPoolSnapshotFromStats(&stats)
+	snapshot := RedisPoolSnapshotFromStats(&stats, 40)
 	require.Equal(t, RedisPoolSnapshot{
-		Hits:       42,
-		Misses:     3,
-		Stalls:     7,
-		Timeouts:   1,
-		TotalConns: 20,
-		IdleConns:  5,
+		Hits:                      42,
+		Misses:                    3,
+		Stalls:                    7,
+		Timeouts:                  1,
+		TotalConns:                20,
+		IdleConns:                 5,
+		UsagePercent:              float64PtrRedis(50),
+		IdleReservationRatio:      float64PtrRedis(12.5),
+		HitRatePercent:            float64PtrRedis(93.3),
+		ConnectionPressurePercent: float64PtrRedis(50),
+		PoolHeadroomPercent:       float64PtrRedis(50),
 	}, snapshot)
 }
 
@@ -96,4 +101,34 @@ func TestSnapshotRedisPoolStatsNilClient(t *testing.T) {
 func TestSnapshotDefaultRedisPoolStatsWithoutInit(t *testing.T) {
 	defaultRedisClient.Store(nil)
 	require.Equal(t, RedisPoolSnapshot{}, SnapshotDefaultRedisPoolStats())
+}
+
+func float64PtrRedis(v float64) *float64 { return &v }
+
+func TestSummarizeRedisPressureTrend(t *testing.T) {
+	base := RedisPoolSnapshot{
+		Hits:                      100,
+		Misses:                    10,
+		Stalls:                    0,
+		Timeouts:                  0,
+		TotalConns:                50,
+		IdleConns:                 10,
+		UsagePercent:              float64PtrRedis(60),
+		ConnectionPressurePercent: float64PtrRedis(60),
+	}
+	state, note := SummarizeRedisPressureTrend(base)
+	require.Equal(t, "stable", state)
+	require.Equal(t, "pressure normal", note)
+
+	warningSnapshot := base
+	warningSnapshot.Stalls = 5
+	state, note = SummarizeRedisPressureTrend(warningSnapshot)
+	require.Equal(t, "warning", state)
+	require.Contains(t, note, "stalls=5")
+
+	criticalSnapshot := base
+	criticalSnapshot.Timeouts = 2
+	state, note = SummarizeRedisPressureTrend(criticalSnapshot)
+	require.Equal(t, "critical", state)
+	require.Contains(t, note, "timeouts=2")
 }

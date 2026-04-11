@@ -38,6 +38,9 @@ func TestPollOutbox_SkipsPoisonEvent(t *testing.T) {
 	if metrics.PoisonTotal != 1 {
 		t.Fatalf("expected poison total to be 1, got %d", metrics.PoisonTotal)
 	}
+	if metrics.LastRedisWatermark != 12 {
+		t.Fatalf("expected last redis watermark 12, got %d", metrics.LastRedisWatermark)
+	}
 	if metrics.LastPoison == nil || metrics.LastPoison.ID != 11 {
 		t.Fatalf("expected last poison event id=11, got %#v", metrics.LastPoison)
 	}
@@ -46,6 +49,8 @@ func TestPollOutbox_SkipsPoisonEvent(t *testing.T) {
 type stubPoisonSchedulerCache struct {
 	watermark int64
 	failGet   bool
+	lockOK    bool
+	lockSet   bool
 }
 
 func (c *stubPoisonSchedulerCache) GetSnapshot(ctx context.Context, bucket SchedulerBucket) ([]*Account, bool, error) {
@@ -73,6 +78,9 @@ func (c *stubPoisonSchedulerCache) UpdateLastUsed(ctx context.Context, updates m
 }
 
 func (c *stubPoisonSchedulerCache) TryLockBucket(ctx context.Context, bucket SchedulerBucket, ttl time.Duration) (bool, error) {
+	if c.lockSet {
+		return c.lockOK, nil
+	}
 	return true, nil
 }
 
@@ -184,6 +192,51 @@ func TestPollOutbox_AdvancesWatermarkPastSuccessfulEventsBeforeTransient(t *test
 	metrics := SnapshotSchedulerOutboxRuntimeMetrics()
 	if metrics.TransientTotal != 1 {
 		t.Fatalf("expected transient total to be 1, got %d", metrics.TransientTotal)
+	}
+}
+
+func TestSnapshotSchedulerOutboxRuntimeMetricsSummaries(t *testing.T) {
+	resetSchedulerOutboxRuntimeMetricsForTest()
+	schedulerOutboxRuntimeMu.Lock()
+	schedulerOutboxBlockedEvent = &SchedulerOutboxBlockedEvent{
+		ID:        101,
+		EventType: SchedulerOutboxEventAccountChanged,
+		Reason:    "lock_contention",
+		Attempts:  2,
+	}
+	schedulerOutboxRuntimeMu.Unlock()
+	schedulerOutboxCheckpointFallbackStreak.Store(2)
+	schedulerOutboxCheckpointLastFallbackReason = "redis_down"
+	schedulerOutboxLagFailureStreak.Store(3)
+	schedulerOutboxLagSeconds.Store(45)
+	schedulerOutboxLagRebuildTotal.Store(1)
+	schedulerOutboxBucketRebuildSuccessTotal.Store(1)
+	schedulerOutboxBucketRebuildFailureTotal.Store(1)
+	schedulerOutboxBucketRebuildLockContention.Store(1)
+	schedulerOutboxLastBucketRebuildStatus = "lock_contention"
+	schedulerOutboxLastBucketRebuildReason = "busy"
+	metrics := SnapshotSchedulerOutboxRuntimeMetrics()
+	expectedBlocked := "blocked id=101 | reason=lock_contention | attempts=2 | age=0s"
+	if metrics.BlockedEventSummary != expectedBlocked {
+		t.Fatalf("blocked summary mismatch: %q", metrics.BlockedEventSummary)
+	}
+	if metrics.CheckpointFallbackSummary != "streak=2 reason=redis_down" {
+		t.Fatalf("checkpoint summary mismatch: %q", metrics.CheckpointFallbackSummary)
+	}
+	if metrics.LagStreakSummary != "streak=3 lag=45s rebuilds=1" {
+		t.Fatalf("lag summary mismatch: %q", metrics.LagStreakSummary)
+	}
+	if metrics.RebuildContentionSummary != "success=1 fail=1 contention=1 status=lock_contention reason=busy" {
+		t.Fatalf("rebuild summary mismatch: %q", metrics.RebuildContentionSummary)
+	}
+	if metrics.DriftTrendStatus != "degrading" {
+		t.Fatalf("expected drift status degrading, got %q", metrics.DriftTrendStatus)
+	}
+	if metrics.DriftTrendDetail != "lag or checkpoint fallback persisting" {
+		t.Fatalf("expected fallback detail, got %q", metrics.DriftTrendDetail)
+	}
+	if metrics.DriftTrendNarrative != "lag/checkpoint fallback persisting—stacked rebuild/retry" {
+		t.Fatalf("unexpected drift narrative: %q", metrics.DriftTrendNarrative)
 	}
 }
 
@@ -313,6 +366,15 @@ func TestPollOutbox_ClassifiesLockContentionTransient(t *testing.T) {
 	if metrics.LastTransient == nil || metrics.LastTransient.Reason != "lock_contention" {
 		t.Fatalf("expected lock_contention transient reason, got %#v", metrics.LastTransient)
 	}
+	if metrics.BlockedEvent == nil || metrics.BlockedEvent.ID != 61 {
+		t.Fatalf("expected blocked event id=61, got %#v", metrics.BlockedEvent)
+	}
+	if metrics.BlockedEvent.Reason != "lock_contention" {
+		t.Fatalf("expected blocked event reason lock_contention, got %#v", metrics.BlockedEvent)
+	}
+	if metrics.BlockedEvent.Attempts != 1 {
+		t.Fatalf("expected blocked event attempts 1, got %#v", metrics.BlockedEvent)
+	}
 }
 
 func TestPollOutbox_LockContentionCooldownSuppressesImmediateRetry(t *testing.T) {
@@ -342,6 +404,167 @@ func TestPollOutbox_LockContentionCooldownSuppressesImmediateRetry(t *testing.T)
 	metrics := SnapshotSchedulerOutboxRuntimeMetrics()
 	if metrics.TransientTotal != 1 {
 		t.Fatalf("expected transient total to stay at 1 during cooldown, got %d", metrics.TransientTotal)
+	}
+}
+
+func TestPollOutbox_TracksLagAndBacklogRuntimeMetrics(t *testing.T) {
+	resetSchedulerOutboxRuntimeMetricsForTest()
+	cfg := &config.Config{}
+	cfg.Gateway.Scheduling.OutboxLagWarnSeconds = 1
+	cfg.Gateway.Scheduling.OutboxBacklogRebuildRows = 100
+
+	repo := &repeatingPoisonOutboxRepo{
+		events: []SchedulerOutboxEvent{
+			{ID: 81, EventType: SchedulerOutboxEventAccountChanged, CreatedAt: time.Now().Add(-5 * time.Second)},
+		},
+	}
+	cache := &stubPoisonSchedulerCache{watermark: 70}
+	svc := NewSchedulerSnapshotService(cache, repo, nil, nil, nil, cfg)
+	svc.outboxEventHandler = func(ctx context.Context, event SchedulerOutboxEvent) error {
+		return wrapOutboxRetryable(errors.New("db load failed: timeout"))
+	}
+
+	svc.pollOutbox()
+
+	metrics := SnapshotSchedulerOutboxRuntimeMetrics()
+	if metrics.BacklogRows != 11 {
+		t.Fatalf("expected backlog rows 11, got %d", metrics.BacklogRows)
+	}
+	if metrics.LagSeconds < 1 {
+		t.Fatalf("expected lag seconds >= 1, got %d", metrics.LagSeconds)
+	}
+}
+
+func TestPollOutbox_ClearsBlockedEventLifecycle(t *testing.T) {
+	resetSchedulerOutboxRuntimeMetricsForTest()
+	repo := &repeatingPoisonOutboxRepo{
+		events: []SchedulerOutboxEvent{
+			{ID: 181, EventType: SchedulerOutboxEventAccountChanged},
+		},
+	}
+	cache := &stubPoisonSchedulerCache{}
+	svc := NewSchedulerSnapshotService(cache, repo, nil, nil, nil, nil)
+	calls := 0
+	svc.outboxEventHandler = func(ctx context.Context, event SchedulerOutboxEvent) error {
+		calls++
+		if calls == 1 {
+			return wrapOutboxRetryable(errors.New("lock contention while rebuilding bucket"))
+		}
+		return nil
+	}
+
+	svc.pollOutbox()
+	svc.clearOutboxRetryState(181)
+	svc.pollOutbox()
+
+	metrics := SnapshotSchedulerOutboxRuntimeMetrics()
+	if metrics.BlockedEvent != nil {
+		t.Fatalf("expected blocked event to be cleared after recovery, got %#v", metrics.BlockedEvent)
+	}
+	if metrics.BlockedEventClearTotal != 1 {
+		t.Fatalf("expected blocked event clear total 1, got %d", metrics.BlockedEventClearTotal)
+	}
+	if metrics.BlockedEventLastClearedID != 181 {
+		t.Fatalf("expected cleared blocked event id 181, got %d", metrics.BlockedEventLastClearedID)
+	}
+	if metrics.BlockedEventLastClearReason != "recovered" {
+		t.Fatalf("expected blocked event clear reason recovered, got %q", metrics.BlockedEventLastClearReason)
+	}
+	if metrics.BlockedEventLastClearedAt == "" {
+		t.Fatal("expected blocked event last cleared at to be recorded")
+	}
+}
+
+func TestPollOutbox_TracksCheckpointTimestamps(t *testing.T) {
+	resetSchedulerOutboxRuntimeMetricsForTest()
+
+	readFailSvc := NewSchedulerSnapshotService(nil, nil, nil, nil, &stubSchedulerCheckpointRepo{failRead: true}, nil)
+	_, _ = readFailSvc.loadCheckpointWatermark(context.Background())
+
+	writeFailSvc := NewSchedulerSnapshotService(nil, nil, nil, nil, &stubSchedulerCheckpointRepo{failWrite: true}, nil)
+	writeFailSvc.persistCheckpointWatermark(context.Background(), 77)
+
+	fallbackSvc := NewSchedulerSnapshotService(nil, nil, nil, nil, &stubSchedulerCheckpointRepo{watermark: 66}, nil)
+	_, _ = fallbackSvc.loadCheckpointWatermark(context.Background())
+
+	metrics := SnapshotSchedulerOutboxRuntimeMetrics()
+	if metrics.CheckpointLastReadFailureAt == "" {
+		t.Fatal("expected checkpoint read failure timestamp")
+	}
+	if metrics.CheckpointLastWriteFailureAt == "" {
+		t.Fatal("expected checkpoint write failure timestamp")
+	}
+	if metrics.CheckpointLastFallbackAt == "" {
+		t.Fatal("expected checkpoint fallback timestamp")
+	}
+	if metrics.CheckpointFallbackStreak != 1 {
+		t.Fatalf("expected checkpoint fallback streak 1, got %d", metrics.CheckpointFallbackStreak)
+	}
+	if metrics.CheckpointLastFallbackReason != "redis_watermark_unavailable" {
+		t.Fatalf("expected checkpoint fallback reason redis_watermark_unavailable, got %q", metrics.CheckpointLastFallbackReason)
+	}
+}
+
+func TestPollOutbox_TracksLagRebuildLifecycle(t *testing.T) {
+	resetSchedulerOutboxRuntimeMetricsForTest()
+	cfg := &config.Config{}
+	cfg.Gateway.Scheduling.OutboxLagWarnSeconds = 1
+	cfg.Gateway.Scheduling.OutboxLagRebuildSeconds = 1
+	cfg.Gateway.Scheduling.OutboxLagRebuildFailures = 2
+
+	repo := &repeatingPoisonOutboxRepo{
+		events: []SchedulerOutboxEvent{
+			{ID: 191, EventType: SchedulerOutboxEventAccountChanged, CreatedAt: time.Now().Add(-5 * time.Second)},
+		},
+	}
+	cache := &stubPoisonSchedulerCache{}
+	svc := NewSchedulerSnapshotService(cache, repo, nil, nil, nil, cfg)
+	svc.outboxEventHandler = func(ctx context.Context, event SchedulerOutboxEvent) error {
+		return wrapOutboxRetryable(errors.New("db load failed: timeout"))
+	}
+
+	svc.pollOutbox()
+	metrics := SnapshotSchedulerOutboxRuntimeMetrics()
+	if metrics.LagFailureStreak != 1 {
+		t.Fatalf("expected lag failure streak 1 after first poll, got %d", metrics.LagFailureStreak)
+	}
+
+	svc.pollOutbox()
+	metrics = SnapshotSchedulerOutboxRuntimeMetrics()
+	if metrics.LagRebuildTotal != 1 {
+		t.Fatalf("expected lag rebuild total 1, got %d", metrics.LagRebuildTotal)
+	}
+	if metrics.LastLagRebuildAt == "" {
+		t.Fatal("expected last lag rebuild timestamp")
+	}
+	if metrics.LagFailureStreak != 0 {
+		t.Fatalf("expected lag failure streak reset after rebuild trigger, got %d", metrics.LagFailureStreak)
+	}
+}
+
+func TestRebuildBucket_TracksLockContentionAndRecoverySignals(t *testing.T) {
+	resetSchedulerOutboxRuntimeMetricsForTest()
+	cache := &stubPoisonSchedulerCache{lockSet: true, lockOK: false}
+	svc := NewSchedulerSnapshotService(cache, nil, nil, nil, nil, nil)
+	bucket := SchedulerBucket{GroupID: 1, Platform: PlatformOpenAI, Mode: SchedulerModeSingle}
+
+	err := svc.rebuildBucket(context.Background(), bucket, "unit_test")
+	if err == nil {
+		t.Fatal("expected lock contention error")
+	}
+
+	metrics := SnapshotSchedulerOutboxRuntimeMetrics()
+	if metrics.BucketRebuildFailureTotal != 1 {
+		t.Fatalf("expected bucket rebuild failure total 1, got %d", metrics.BucketRebuildFailureTotal)
+	}
+	if metrics.BucketRebuildLockContention != 1 {
+		t.Fatalf("expected bucket rebuild lock contention total 1, got %d", metrics.BucketRebuildLockContention)
+	}
+	if metrics.LastBucketRebuildStatus != "lock_contention" {
+		t.Fatalf("expected last bucket rebuild status lock_contention, got %q", metrics.LastBucketRebuildStatus)
+	}
+	if metrics.LastBucketRebuildBucket != bucket.String() {
+		t.Fatalf("expected last bucket rebuild bucket %s, got %q", bucket.String(), metrics.LastBucketRebuildBucket)
 	}
 }
 
@@ -400,6 +623,21 @@ func TestLoadCheckpointWatermark_ReadFailureTracked(t *testing.T) {
 	}
 	if metrics.CheckpointFallbackTotal != 0 {
 		t.Fatalf("expected checkpoint fallback total 0 after read failure, got %d", metrics.CheckpointFallbackTotal)
+	}
+}
+
+func TestRecordSchedulerOutboxRedisWatermark_ResetsFallbackStreak(t *testing.T) {
+	resetSchedulerOutboxRuntimeMetricsForTest()
+	schedulerOutboxCheckpointFallbackStreak.Store(3)
+
+	recordSchedulerOutboxRedisWatermark(88)
+
+	metrics := SnapshotSchedulerOutboxRuntimeMetrics()
+	if metrics.CheckpointFallbackStreak != 0 {
+		t.Fatalf("expected checkpoint fallback streak reset to 0, got %d", metrics.CheckpointFallbackStreak)
+	}
+	if metrics.LastRedisWatermark != 88 {
+		t.Fatalf("expected last redis watermark 88, got %d", metrics.LastRedisWatermark)
 	}
 }
 

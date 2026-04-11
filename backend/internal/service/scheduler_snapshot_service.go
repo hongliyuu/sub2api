@@ -39,6 +39,20 @@ type SchedulerOutboxRuntimeEvent struct {
 	PayloadDecodeError string    `json:"payload_decode_error,omitempty"`
 }
 
+type SchedulerOutboxBlockedEvent struct {
+	Timestamp          time.Time `json:"timestamp"`
+	FirstSeenAt        string    `json:"first_seen_at,omitempty"`
+	LastSeenAt         string    `json:"last_seen_at,omitempty"`
+	AgeSeconds         int64     `json:"age_seconds,omitempty"`
+	ID                 int64     `json:"id"`
+	EventType          string    `json:"event_type"`
+	Reason             string    `json:"reason"`
+	Attempts           int       `json:"attempts"`
+	NextAttemptAt      string    `json:"next_attempt_at,omitempty"`
+	Error              string    `json:"error,omitempty"`
+	PayloadDecodeError string    `json:"payload_decode_error,omitempty"`
+}
+
 type SchedulerOutboxRuntimeMetrics struct {
 	PoisonTotal                  int64                        `json:"poison_total"`
 	TransientTotal               int64                        `json:"transient_total"`
@@ -50,11 +64,44 @@ type SchedulerOutboxRuntimeMetrics struct {
 	CacheTransientTotal          int64                        `json:"cache_transient_total"`
 	OtherTransientTotal          int64                        `json:"other_transient_total"`
 	CheckpointFallbackTotal      int64                        `json:"checkpoint_fallback_total"`
+	CheckpointFallbackStreak     int64                        `json:"checkpoint_fallback_streak"`
 	CheckpointReadFailureTotal   int64                        `json:"checkpoint_read_failure_total"`
 	CheckpointWriteFailureTotal  int64                        `json:"checkpoint_write_failure_total"`
+	CheckpointLastFallbackAt     string                       `json:"checkpoint_last_fallback_at,omitempty"`
+	CheckpointLastFallbackReason string                       `json:"checkpoint_last_fallback_reason,omitempty"`
+	CheckpointLastReadFailureAt  string                       `json:"checkpoint_last_read_failure_at,omitempty"`
+	CheckpointLastWriteFailureAt string                       `json:"checkpoint_last_write_failure_at,omitempty"`
+	LastRedisWatermark           int64                        `json:"last_redis_watermark"`
 	LastCheckpointWatermark      int64                        `json:"last_checkpoint_watermark"`
+	WatermarkDrift               int64                        `json:"watermark_drift"`
+	BacklogRows                  int64                        `json:"backlog_rows"`
+	LagSeconds                   int64                        `json:"lag_seconds"`
+	LagFailureStreak             int64                        `json:"lag_failure_streak"`
+	LagRebuildTotal              int64                        `json:"lag_rebuild_total"`
+	BacklogRebuildTotal          int64                        `json:"backlog_rebuild_total"`
+	LastLagRebuildAt             string                       `json:"last_lag_rebuild_at,omitempty"`
+	LastBacklogRebuildAt         string                       `json:"last_backlog_rebuild_at,omitempty"`
+	BlockedEventClearTotal       int64                        `json:"blocked_event_clear_total"`
+	BlockedEventLastClearedID    int64                        `json:"blocked_event_last_cleared_id,omitempty"`
+	BlockedEventLastClearedAt    string                       `json:"blocked_event_last_cleared_at,omitempty"`
+	BlockedEventLastClearReason  string                       `json:"blocked_event_last_clear_reason,omitempty"`
+	BucketRebuildSuccessTotal    int64                        `json:"bucket_rebuild_success_total"`
+	BucketRebuildFailureTotal    int64                        `json:"bucket_rebuild_failure_total"`
+	BucketRebuildLockContention  int64                        `json:"bucket_rebuild_lock_contention_total"`
+	LastBucketRebuildAt          string                       `json:"last_bucket_rebuild_at,omitempty"`
+	LastBucketRebuildReason      string                       `json:"last_bucket_rebuild_reason,omitempty"`
+	LastBucketRebuildStatus      string                       `json:"last_bucket_rebuild_status,omitempty"`
+	LastBucketRebuildBucket      string                       `json:"last_bucket_rebuild_bucket,omitempty"`
+	BlockedEvent                 *SchedulerOutboxBlockedEvent `json:"blocked_event,omitempty"`
 	LastPoison                   *SchedulerOutboxRuntimeEvent `json:"last_poison,omitempty"`
 	LastTransient                *SchedulerOutboxRuntimeEvent `json:"last_transient,omitempty"`
+	BlockedEventSummary          string                       `json:"blocked_event_summary,omitempty"`
+	CheckpointFallbackSummary    string                       `json:"checkpoint_fallback_summary,omitempty"`
+	LagStreakSummary             string                       `json:"lag_streak_summary,omitempty"`
+	RebuildContentionSummary     string                       `json:"rebuild_contention_summary,omitempty"`
+	DriftTrendStatus             string                       `json:"drift_trend_status,omitempty"`
+	DriftTrendDetail             string                       `json:"drift_trend_detail,omitempty"`
+	DriftTrendNarrative          string                       `json:"drift_trend_narrative,omitempty"`
 }
 
 var (
@@ -68,12 +115,38 @@ var (
 	schedulerOutboxCacheTransientTotal          atomic.Int64
 	schedulerOutboxOtherTransientTotal          atomic.Int64
 	schedulerOutboxCheckpointFallbackTotal      atomic.Int64
+	schedulerOutboxCheckpointFallbackStreak     atomic.Int64
 	schedulerOutboxCheckpointReadFailureTotal   atomic.Int64
 	schedulerOutboxCheckpointWriteFailureTotal  atomic.Int64
+	schedulerOutboxLastRedisWatermark           atomic.Int64
 	schedulerOutboxLastCheckpointWatermark      atomic.Int64
+	schedulerOutboxWatermarkDrift               atomic.Int64
+	schedulerOutboxBacklogRows                  atomic.Int64
+	schedulerOutboxLagSeconds                   atomic.Int64
+	schedulerOutboxLagFailureStreak             atomic.Int64
+	schedulerOutboxLagRebuildTotal              atomic.Int64
+	schedulerOutboxBacklogRebuildTotal          atomic.Int64
+	schedulerOutboxBlockedEventClearTotal       atomic.Int64
+	schedulerOutboxBucketRebuildSuccessTotal    atomic.Int64
+	schedulerOutboxBucketRebuildFailureTotal    atomic.Int64
+	schedulerOutboxBucketRebuildLockContention  atomic.Int64
 	schedulerOutboxRuntimeMu                    sync.Mutex
+	schedulerOutboxBlockedEvent                 *SchedulerOutboxBlockedEvent
 	schedulerOutboxLastPoison                   *SchedulerOutboxRuntimeEvent
 	schedulerOutboxLastTransient                *SchedulerOutboxRuntimeEvent
+	schedulerOutboxCheckpointLastFallbackAt     string
+	schedulerOutboxCheckpointLastFallbackReason string
+	schedulerOutboxCheckpointLastReadFailureAt  string
+	schedulerOutboxCheckpointLastWriteFailureAt string
+	schedulerOutboxLastLagRebuildAt             string
+	schedulerOutboxLastBacklogRebuildAt         string
+	schedulerOutboxBlockedEventLastClearedAt    string
+	schedulerOutboxBlockedEventLastClearReason  string
+	schedulerOutboxBlockedEventLastClearedID    int64
+	schedulerOutboxLastBucketRebuildAt          string
+	schedulerOutboxLastBucketRebuildReason      string
+	schedulerOutboxLastBucketRebuildStatus      string
+	schedulerOutboxLastBucketRebuildBucket      string
 )
 
 const (
@@ -88,6 +161,9 @@ type schedulerOutboxRetryState struct {
 	NextAttemptAt time.Time
 	Attempts      int
 	LastReason    string
+	FirstSeenAt   time.Time
+	LastSeenAt    time.Time
+	LastError     string
 }
 
 func markOutboxPoison(err error) error {
@@ -125,9 +201,38 @@ func SnapshotSchedulerOutboxRuntimeMetrics() SchedulerOutboxRuntimeMetrics {
 		CacheTransientTotal:          schedulerOutboxCacheTransientTotal.Load(),
 		OtherTransientTotal:          schedulerOutboxOtherTransientTotal.Load(),
 		CheckpointFallbackTotal:      schedulerOutboxCheckpointFallbackTotal.Load(),
+		CheckpointFallbackStreak:     schedulerOutboxCheckpointFallbackStreak.Load(),
 		CheckpointReadFailureTotal:   schedulerOutboxCheckpointReadFailureTotal.Load(),
 		CheckpointWriteFailureTotal:  schedulerOutboxCheckpointWriteFailureTotal.Load(),
+		LastRedisWatermark:           schedulerOutboxLastRedisWatermark.Load(),
 		LastCheckpointWatermark:      schedulerOutboxLastCheckpointWatermark.Load(),
+		WatermarkDrift:               schedulerOutboxWatermarkDrift.Load(),
+		BacklogRows:                  schedulerOutboxBacklogRows.Load(),
+		LagSeconds:                   schedulerOutboxLagSeconds.Load(),
+		LagFailureStreak:             schedulerOutboxLagFailureStreak.Load(),
+		LagRebuildTotal:              schedulerOutboxLagRebuildTotal.Load(),
+		BacklogRebuildTotal:          schedulerOutboxBacklogRebuildTotal.Load(),
+		BlockedEventClearTotal:       schedulerOutboxBlockedEventClearTotal.Load(),
+		BucketRebuildSuccessTotal:    schedulerOutboxBucketRebuildSuccessTotal.Load(),
+		BucketRebuildFailureTotal:    schedulerOutboxBucketRebuildFailureTotal.Load(),
+		BucketRebuildLockContention:  schedulerOutboxBucketRebuildLockContention.Load(),
+	}
+	snapshot.CheckpointLastFallbackAt = schedulerOutboxCheckpointLastFallbackAt
+	snapshot.CheckpointLastFallbackReason = schedulerOutboxCheckpointLastFallbackReason
+	snapshot.CheckpointLastReadFailureAt = schedulerOutboxCheckpointLastReadFailureAt
+	snapshot.CheckpointLastWriteFailureAt = schedulerOutboxCheckpointLastWriteFailureAt
+	snapshot.LastLagRebuildAt = schedulerOutboxLastLagRebuildAt
+	snapshot.LastBacklogRebuildAt = schedulerOutboxLastBacklogRebuildAt
+	snapshot.BlockedEventLastClearedAt = schedulerOutboxBlockedEventLastClearedAt
+	snapshot.BlockedEventLastClearReason = schedulerOutboxBlockedEventLastClearReason
+	snapshot.BlockedEventLastClearedID = schedulerOutboxBlockedEventLastClearedID
+	snapshot.LastBucketRebuildAt = schedulerOutboxLastBucketRebuildAt
+	snapshot.LastBucketRebuildReason = schedulerOutboxLastBucketRebuildReason
+	snapshot.LastBucketRebuildStatus = schedulerOutboxLastBucketRebuildStatus
+	snapshot.LastBucketRebuildBucket = schedulerOutboxLastBucketRebuildBucket
+	if schedulerOutboxBlockedEvent != nil {
+		last := *schedulerOutboxBlockedEvent
+		snapshot.BlockedEvent = &last
 	}
 	if schedulerOutboxLastPoison != nil {
 		last := *schedulerOutboxLastPoison
@@ -137,6 +242,14 @@ func SnapshotSchedulerOutboxRuntimeMetrics() SchedulerOutboxRuntimeMetrics {
 		last := *schedulerOutboxLastTransient
 		snapshot.LastTransient = &last
 	}
+	snapshot.BlockedEventSummary = buildBlockedEventSummary(&snapshot)
+	snapshot.CheckpointFallbackSummary = buildCheckpointFallbackSummary(&snapshot)
+	snapshot.LagStreakSummary = buildLagStreakSummary(&snapshot)
+	snapshot.RebuildContentionSummary = buildRebuildContentionSummary(&snapshot)
+	status, detail := buildDriftTrendSummary(&snapshot)
+	snapshot.DriftTrendStatus = status
+	snapshot.DriftTrendDetail = detail
+	snapshot.DriftTrendNarrative = buildDriftNarrative(&snapshot)
 	return snapshot
 }
 
@@ -199,12 +312,38 @@ func resetSchedulerOutboxRuntimeMetricsForTest() {
 	schedulerOutboxCacheTransientTotal.Store(0)
 	schedulerOutboxOtherTransientTotal.Store(0)
 	schedulerOutboxCheckpointFallbackTotal.Store(0)
+	schedulerOutboxCheckpointFallbackStreak.Store(0)
 	schedulerOutboxCheckpointReadFailureTotal.Store(0)
 	schedulerOutboxCheckpointWriteFailureTotal.Store(0)
+	schedulerOutboxLastRedisWatermark.Store(0)
 	schedulerOutboxLastCheckpointWatermark.Store(0)
+	schedulerOutboxWatermarkDrift.Store(0)
+	schedulerOutboxBacklogRows.Store(0)
+	schedulerOutboxLagSeconds.Store(0)
+	schedulerOutboxLagFailureStreak.Store(0)
+	schedulerOutboxLagRebuildTotal.Store(0)
+	schedulerOutboxBacklogRebuildTotal.Store(0)
+	schedulerOutboxBlockedEventClearTotal.Store(0)
+	schedulerOutboxBucketRebuildSuccessTotal.Store(0)
+	schedulerOutboxBucketRebuildFailureTotal.Store(0)
+	schedulerOutboxBucketRebuildLockContention.Store(0)
 	schedulerOutboxRuntimeMu.Lock()
+	schedulerOutboxBlockedEvent = nil
 	schedulerOutboxLastPoison = nil
 	schedulerOutboxLastTransient = nil
+	schedulerOutboxCheckpointLastFallbackAt = ""
+	schedulerOutboxCheckpointLastFallbackReason = ""
+	schedulerOutboxCheckpointLastReadFailureAt = ""
+	schedulerOutboxCheckpointLastWriteFailureAt = ""
+	schedulerOutboxLastLagRebuildAt = ""
+	schedulerOutboxLastBacklogRebuildAt = ""
+	schedulerOutboxBlockedEventLastClearedAt = ""
+	schedulerOutboxBlockedEventLastClearReason = ""
+	schedulerOutboxBlockedEventLastClearedID = 0
+	schedulerOutboxLastBucketRebuildAt = ""
+	schedulerOutboxLastBucketRebuildReason = ""
+	schedulerOutboxLastBucketRebuildStatus = ""
+	schedulerOutboxLastBucketRebuildBucket = ""
 	schedulerOutboxRuntimeMu.Unlock()
 }
 
@@ -249,6 +388,110 @@ func errorString(err error) string {
 		return ""
 	}
 	return err.Error()
+}
+
+func buildBlockedEventSummary(metrics *SchedulerOutboxRuntimeMetrics) string {
+	if metrics == nil {
+		return "no blocked event"
+	}
+	if metrics.BlockedEvent != nil {
+		e := metrics.BlockedEvent
+		parts := []string{
+			fmt.Sprintf("blocked id=%d", e.ID),
+			fmt.Sprintf("reason=%s", nonEmpty(e.Reason, "unknown")),
+			fmt.Sprintf("attempts=%d", e.Attempts),
+			fmt.Sprintf("age=%ds", e.AgeSeconds),
+		}
+		if e.NextAttemptAt != "" {
+			parts = append(parts, "next="+e.NextAttemptAt)
+		}
+		return strings.Join(parts, " | ")
+	}
+	if metrics.BlockedEventLastClearedID != 0 {
+		return fmt.Sprintf("cleared id=%d reason=%s", metrics.BlockedEventLastClearedID, nonEmpty(metrics.BlockedEventLastClearReason, "unknown"))
+	}
+	return "no blocked event"
+}
+
+func buildCheckpointFallbackSummary(metrics *SchedulerOutboxRuntimeMetrics) string {
+	if metrics == nil {
+		return "no checkpoint fallback"
+	}
+	if metrics.CheckpointFallbackStreak > 0 {
+		return fmt.Sprintf("streak=%d reason=%s", metrics.CheckpointFallbackStreak, nonEmpty(metrics.CheckpointLastFallbackReason, "unknown"))
+	}
+	if metrics.CheckpointFallbackTotal > 0 {
+		return fmt.Sprintf("total=%d last=%s", metrics.CheckpointFallbackTotal, nonEmpty(metrics.CheckpointLastFallbackReason, "unknown"))
+	}
+	return "no checkpoint fallback"
+}
+
+func buildLagStreakSummary(metrics *SchedulerOutboxRuntimeMetrics) string {
+	if metrics == nil {
+		return "no lag streak"
+	}
+	if metrics.LagFailureStreak > 0 {
+		return fmt.Sprintf("streak=%d lag=%ds rebuilds=%d", metrics.LagFailureStreak, metrics.LagSeconds, metrics.LagRebuildTotal)
+	}
+	if metrics.LagSeconds > 0 {
+		return fmt.Sprintf("lag=%ds", metrics.LagSeconds)
+	}
+	return "no lag streak"
+}
+
+func buildRebuildContentionSummary(metrics *SchedulerOutboxRuntimeMetrics) string {
+	if metrics == nil {
+		return "no rebuild activity"
+	}
+	total := metrics.BucketRebuildSuccessTotal + metrics.BucketRebuildFailureTotal
+	if total == 0 {
+		return "no rebuild activity"
+	}
+	return fmt.Sprintf("success=%d fail=%d contention=%d status=%s reason=%s", metrics.BucketRebuildSuccessTotal, metrics.BucketRebuildFailureTotal, metrics.BucketRebuildLockContention, nonEmpty(metrics.LastBucketRebuildStatus, "unknown"), nonEmpty(metrics.LastBucketRebuildReason, "unknown"))
+}
+
+func buildDriftTrendSummary(metrics *SchedulerOutboxRuntimeMetrics) (string, string) {
+	if metrics == nil {
+		return "stable", "no drift"
+	}
+	if metrics.LagFailureStreak > 0 || metrics.CheckpointFallbackStreak > 0 {
+		return "degrading", "lag or checkpoint fallback persisting"
+	}
+	if metrics.BacklogRows > 0 || metrics.LagSeconds > 0 {
+		return "degrading", fmt.Sprintf("backlog=%d lag=%ds", metrics.BacklogRows, metrics.LagSeconds)
+	}
+	if metrics.BlockedEvent != nil {
+		return "flapping", "blocked event retrying"
+	}
+	if metrics.WatermarkDrift != 0 {
+		return "worsening", fmt.Sprintf("watermark drift=%d", metrics.WatermarkDrift)
+	}
+	return "stable", "no drift"
+}
+
+func buildDriftNarrative(metrics *SchedulerOutboxRuntimeMetrics) string {
+	if metrics == nil {
+		return "no actionable drift"
+	}
+	switch {
+	case metrics.LagFailureStreak > 0 || metrics.CheckpointFallbackStreak > 0:
+		return "lag/checkpoint fallback persisting—stacked rebuild/retry"
+	case metrics.BacklogRows > 0 || metrics.LagSeconds > 0:
+		return fmt.Sprintf("backlog=%d lag=%ds, pressure building", metrics.BacklogRows, metrics.LagSeconds)
+	case metrics.BlockedEvent != nil:
+		return "blocked event holding watermark, awaiting resolution"
+	case metrics.WatermarkDrift != 0:
+		return fmt.Sprintf("watermark drift=%d ahead of checkpoint", metrics.WatermarkDrift)
+	default:
+		return "drift stable—no anomalies detected"
+	}
+}
+
+func nonEmpty(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
 }
 
 const outboxEventTimeout = 2 * time.Minute
@@ -478,6 +721,8 @@ func (s *SchedulerSnapshotService) pollOutbox() {
 		} else {
 			return
 		}
+	} else {
+		recordSchedulerOutboxRedisWatermark(watermark)
 	}
 
 	events, err := s.outboxRepo.ListAfter(ctx, watermark, 200)
@@ -486,6 +731,10 @@ func (s *SchedulerSnapshotService) pollOutbox() {
 		return
 	}
 	if len(events) == 0 {
+		schedulerOutboxBacklogRows.Store(0)
+		schedulerOutboxLagSeconds.Store(0)
+		schedulerOutboxLagFailureStreak.Store(0)
+		clearSchedulerOutboxBlockedEvent("queue_drained")
 		return
 	}
 
@@ -503,7 +752,8 @@ func (s *SchedulerSnapshotService) pollOutbox() {
 			lastAdvanceID = event.ID
 			continue
 		}
-		if s.shouldBackoffOutboxEvent(event.ID) {
+		if retryState, blocked := s.peekOutboxRetryState(event.ID); blocked {
+			s.recordBlockedOutboxEvent(event, retryState, nil)
 			blockedEvent = &event
 			break
 		}
@@ -519,6 +769,8 @@ func (s *SchedulerSnapshotService) pollOutbox() {
 			}
 			s.markOutboxRetryState(event.ID, classifySchedulerOutboxTransientReason(err))
 			s.reportTransientOutboxError(event, err)
+			retryState, _ := s.peekOutboxRetryState(event.ID)
+			s.recordBlockedOutboxEvent(event, retryState, err)
 			blockedEvent = &event
 			break
 		}
@@ -531,6 +783,7 @@ func (s *SchedulerSnapshotService) pollOutbox() {
 			logger.LegacyPrintf("service.scheduler_snapshot", "[Scheduler] outbox watermark write failed: %v", err)
 		} else {
 			watermarkForCheck = lastAdvanceID
+			recordSchedulerOutboxRedisWatermark(lastAdvanceID)
 			s.clearOutboxRetryStateUpTo(lastAdvanceID)
 			s.persistCheckpointWatermark(ctx, lastAdvanceID)
 		}
@@ -540,6 +793,7 @@ func (s *SchedulerSnapshotService) pollOutbox() {
 		s.checkOutboxLag(ctx, *blockedEvent, watermarkForCheck)
 		return
 	}
+	clearSchedulerOutboxBlockedEvent("recovered")
 
 	s.checkOutboxLag(ctx, events[0], watermarkForCheck)
 }
@@ -796,6 +1050,7 @@ func (s *SchedulerSnapshotService) rebuildBucket(ctx context.Context, bucket Sch
 	}
 	release, err := s.acquireBucketLock(ctx, bucket)
 	if err != nil {
+		recordSchedulerOutboxBucketRebuild(bucket, reason, classifySchedulerOutboxTransientReason(err))
 		return err
 	}
 	if release != nil {
@@ -808,14 +1063,67 @@ func (s *SchedulerSnapshotService) rebuildBucket(ctx context.Context, bucket Sch
 	accounts, err := s.loadAccountsFromDB(rebuildCtx, bucket, bucket.Mode == SchedulerModeMixed)
 	if err != nil {
 		logger.LegacyPrintf("service.scheduler_snapshot", "[Scheduler] rebuild failed: bucket=%s reason=%s err=%v", bucket.String(), reason, err)
+		recordSchedulerOutboxBucketRebuild(bucket, reason, "db_failure")
 		return wrapOutboxRetryable(fmt.Errorf("db load failed: %w", err))
 	}
 	if err := s.cache.SetSnapshot(rebuildCtx, bucket, accounts); err != nil {
 		logger.LegacyPrintf("service.scheduler_snapshot", "[Scheduler] rebuild cache failed: bucket=%s reason=%s err=%v", bucket.String(), reason, err)
+		recordSchedulerOutboxBucketRebuild(bucket, reason, "cache_failure")
 		return wrapOutboxRetryable(fmt.Errorf("cache write failed: %w", err))
 	}
 	slog.Debug("[Scheduler] rebuild ok", "bucket", bucket.String(), "reason", reason, "size", len(accounts))
+	recordSchedulerOutboxBucketRebuild(bucket, reason, "success")
 	return nil
+}
+
+func recordSchedulerOutboxCheckpointFallback(reason string) {
+	schedulerOutboxRuntimeMu.Lock()
+	defer schedulerOutboxRuntimeMu.Unlock()
+	schedulerOutboxCheckpointLastFallbackAt = time.Now().UTC().Format(time.RFC3339)
+	schedulerOutboxCheckpointLastFallbackReason = strings.TrimSpace(reason)
+}
+
+func recordSchedulerOutboxCheckpointReadFailure() {
+	schedulerOutboxRuntimeMu.Lock()
+	defer schedulerOutboxRuntimeMu.Unlock()
+	schedulerOutboxCheckpointLastReadFailureAt = time.Now().UTC().Format(time.RFC3339)
+}
+
+func recordSchedulerOutboxCheckpointWriteFailure() {
+	schedulerOutboxRuntimeMu.Lock()
+	defer schedulerOutboxRuntimeMu.Unlock()
+	schedulerOutboxCheckpointLastWriteFailureAt = time.Now().UTC().Format(time.RFC3339)
+}
+
+func recordSchedulerOutboxLagRebuild() {
+	schedulerOutboxRuntimeMu.Lock()
+	defer schedulerOutboxRuntimeMu.Unlock()
+	schedulerOutboxLastLagRebuildAt = time.Now().UTC().Format(time.RFC3339)
+}
+
+func recordSchedulerOutboxBacklogRebuild() {
+	schedulerOutboxRuntimeMu.Lock()
+	defer schedulerOutboxRuntimeMu.Unlock()
+	schedulerOutboxLastBacklogRebuildAt = time.Now().UTC().Format(time.RFC3339)
+}
+
+func recordSchedulerOutboxBucketRebuild(bucket SchedulerBucket, reason string, status string) {
+	switch status {
+	case "success":
+		schedulerOutboxBucketRebuildSuccessTotal.Add(1)
+	case "lock_contention":
+		schedulerOutboxBucketRebuildFailureTotal.Add(1)
+		schedulerOutboxBucketRebuildLockContention.Add(1)
+	default:
+		schedulerOutboxBucketRebuildFailureTotal.Add(1)
+	}
+
+	schedulerOutboxRuntimeMu.Lock()
+	defer schedulerOutboxRuntimeMu.Unlock()
+	schedulerOutboxLastBucketRebuildAt = time.Now().UTC().Format(time.RFC3339)
+	schedulerOutboxLastBucketRebuildReason = strings.TrimSpace(reason)
+	schedulerOutboxLastBucketRebuildStatus = strings.TrimSpace(status)
+	schedulerOutboxLastBucketRebuildBucket = bucket.String()
 }
 
 func (s *SchedulerSnapshotService) acquireBucketLock(ctx context.Context, bucket SchedulerBucket) (func(), error) {
@@ -856,19 +1164,24 @@ func newSchedulerBucketLockOwner() string {
 }
 
 func (s *SchedulerSnapshotService) shouldBackoffOutboxEvent(eventID int64) bool {
+	_, blocked := s.peekOutboxRetryState(eventID)
+	return blocked
+}
+
+func (s *SchedulerSnapshotService) peekOutboxRetryState(eventID int64) (schedulerOutboxRetryState, bool) {
 	if s == nil || eventID <= 0 {
-		return false
+		return schedulerOutboxRetryState{}, false
 	}
 	s.outboxRetryMu.Lock()
 	defer s.outboxRetryMu.Unlock()
 	state, ok := s.outboxRetryState[eventID]
 	if !ok {
-		return false
+		return schedulerOutboxRetryState{}, false
 	}
 	if time.Now().Before(state.NextAttemptAt) {
-		return true
+		return state, true
 	}
-	return false
+	return state, false
 }
 
 func (s *SchedulerSnapshotService) markOutboxRetryState(eventID int64, reason string) {
@@ -881,9 +1194,14 @@ func (s *SchedulerSnapshotService) markOutboxRetryState(eventID int64, reason st
 	if state.LastReason != reason {
 		state.Attempts = 0
 	}
+	now := time.Now()
+	if state.FirstSeenAt.IsZero() {
+		state.FirstSeenAt = now
+	}
 	state.Attempts++
 	state.LastReason = reason
-	state.NextAttemptAt = time.Now().Add(outboxRetryBackoff(reason, state.Attempts))
+	state.LastSeenAt = now
+	state.NextAttemptAt = now.Add(outboxRetryBackoff(reason, state.Attempts))
 	s.outboxRetryState[eventID] = state
 }
 
@@ -957,6 +1275,7 @@ func (s *SchedulerSnapshotService) checkOutboxLag(ctx context.Context, oldest Sc
 	}
 
 	lag := time.Since(oldest.CreatedAt)
+	schedulerOutboxLagSeconds.Store(int64(lag.Seconds()))
 	if lagSeconds := int(lag.Seconds()); lagSeconds >= s.cfg.Gateway.Scheduling.OutboxLagWarnSeconds && s.cfg.Gateway.Scheduling.OutboxLagWarnSeconds > 0 {
 		logger.LegacyPrintf("service.scheduler_snapshot", "[Scheduler] outbox lag warning: %ds", lagSeconds)
 	}
@@ -966,12 +1285,16 @@ func (s *SchedulerSnapshotService) checkOutboxLag(ctx context.Context, oldest Sc
 		s.lagFailures++
 		failures := s.lagFailures
 		s.lagMu.Unlock()
+		schedulerOutboxLagFailureStreak.Store(int64(failures))
 
 		if failures >= s.cfg.Gateway.Scheduling.OutboxLagRebuildFailures {
 			logger.LegacyPrintf("service.scheduler_snapshot", "[Scheduler] outbox lag rebuild triggered: lag=%s failures=%d", lag, failures)
+			schedulerOutboxLagRebuildTotal.Add(1)
+			recordSchedulerOutboxLagRebuild()
 			s.lagMu.Lock()
 			s.lagFailures = 0
 			s.lagMu.Unlock()
+			schedulerOutboxLagFailureStreak.Store(0)
 			if err := s.triggerFullRebuild("outbox_lag"); err != nil {
 				logger.LegacyPrintf("service.scheduler_snapshot", "[Scheduler] outbox lag rebuild failed: %v", err)
 			}
@@ -980,6 +1303,7 @@ func (s *SchedulerSnapshotService) checkOutboxLag(ctx context.Context, oldest Sc
 		s.lagMu.Lock()
 		s.lagFailures = 0
 		s.lagMu.Unlock()
+		schedulerOutboxLagFailureStreak.Store(0)
 	}
 
 	threshold := s.cfg.Gateway.Scheduling.OutboxBacklogRebuildRows
@@ -990,8 +1314,11 @@ func (s *SchedulerSnapshotService) checkOutboxLag(ctx context.Context, oldest Sc
 	if err != nil {
 		return
 	}
+	schedulerOutboxBacklogRows.Store(maxID - watermark)
 	if maxID-watermark >= int64(threshold) {
 		logger.LegacyPrintf("service.scheduler_snapshot", "[Scheduler] outbox backlog rebuild triggered: backlog=%d", maxID-watermark)
+		schedulerOutboxBacklogRebuildTotal.Add(1)
+		recordSchedulerOutboxBacklogRebuild()
 		if err := s.triggerFullRebuild("outbox_backlog"); err != nil {
 			logger.LegacyPrintf("service.scheduler_snapshot", "[Scheduler] outbox backlog rebuild failed: %v", err)
 		}
@@ -1058,10 +1385,14 @@ func (s *SchedulerSnapshotService) loadCheckpointWatermark(ctx context.Context) 
 	watermark, err := s.checkpointRepo.GetCheckpointWatermark(ctx)
 	if err != nil {
 		schedulerOutboxCheckpointReadFailureTotal.Add(1)
+		recordSchedulerOutboxCheckpointReadFailure()
 		return 0, err
 	}
 	schedulerOutboxCheckpointFallbackTotal.Add(1)
+	schedulerOutboxCheckpointFallbackStreak.Add(1)
+	recordSchedulerOutboxCheckpointFallback("redis_watermark_unavailable")
 	schedulerOutboxLastCheckpointWatermark.Store(watermark)
+	syncSchedulerOutboxWatermarkDrift()
 	return watermark, nil
 }
 
@@ -1071,10 +1402,68 @@ func (s *SchedulerSnapshotService) persistCheckpointWatermark(ctx context.Contex
 	}
 	if err := s.checkpointRepo.SetCheckpointWatermark(ctx, watermark); err != nil {
 		schedulerOutboxCheckpointWriteFailureTotal.Add(1)
+		recordSchedulerOutboxCheckpointWriteFailure()
 		logger.LegacyPrintf("service.scheduler_snapshot", "[Scheduler] checkpoint watermark write failed: %v", err)
 		return
 	}
 	schedulerOutboxLastCheckpointWatermark.Store(watermark)
+	syncSchedulerOutboxWatermarkDrift()
+}
+
+func recordSchedulerOutboxRedisWatermark(watermark int64) {
+	schedulerOutboxLastRedisWatermark.Store(watermark)
+	schedulerOutboxCheckpointFallbackStreak.Store(0)
+	syncSchedulerOutboxWatermarkDrift()
+}
+
+func syncSchedulerOutboxWatermarkDrift() {
+	redisWatermark := schedulerOutboxLastRedisWatermark.Load()
+	checkpointWatermark := schedulerOutboxLastCheckpointWatermark.Load()
+	schedulerOutboxWatermarkDrift.Store(redisWatermark - checkpointWatermark)
+}
+
+func (s *SchedulerSnapshotService) recordBlockedOutboxEvent(event SchedulerOutboxEvent, retryState schedulerOutboxRetryState, err error) {
+	schedulerOutboxRuntimeMu.Lock()
+	defer schedulerOutboxRuntimeMu.Unlock()
+
+	blocked := &SchedulerOutboxBlockedEvent{
+		Timestamp:          time.Now(),
+		ID:                 event.ID,
+		EventType:          event.EventType,
+		Reason:             strings.TrimSpace(retryState.LastReason),
+		Attempts:           retryState.Attempts,
+		Error:              errorString(err),
+		PayloadDecodeError: event.PayloadDecodeError,
+	}
+	if retryState.FirstSeenAt.After(time.Time{}) {
+		blocked.FirstSeenAt = retryState.FirstSeenAt.UTC().Format(time.RFC3339)
+		blocked.AgeSeconds = int64(time.Since(retryState.FirstSeenAt).Seconds())
+		if blocked.AgeSeconds < 0 {
+			blocked.AgeSeconds = 0
+		}
+	}
+	if retryState.LastSeenAt.After(time.Time{}) {
+		blocked.LastSeenAt = retryState.LastSeenAt.UTC().Format(time.RFC3339)
+	}
+	if blocked.Reason == "" && err != nil {
+		blocked.Reason = classifySchedulerOutboxTransientReason(err)
+	}
+	if retryState.NextAttemptAt.After(time.Time{}) {
+		blocked.NextAttemptAt = retryState.NextAttemptAt.UTC().Format(time.RFC3339)
+	}
+	schedulerOutboxBlockedEvent = blocked
+}
+
+func clearSchedulerOutboxBlockedEvent(reason string) {
+	schedulerOutboxRuntimeMu.Lock()
+	defer schedulerOutboxRuntimeMu.Unlock()
+	if schedulerOutboxBlockedEvent != nil {
+		schedulerOutboxBlockedEventClearTotal.Add(1)
+		schedulerOutboxBlockedEventLastClearedID = schedulerOutboxBlockedEvent.ID
+		schedulerOutboxBlockedEventLastClearedAt = time.Now().UTC().Format(time.RFC3339)
+		schedulerOutboxBlockedEventLastClearReason = strings.TrimSpace(reason)
+	}
+	schedulerOutboxBlockedEvent = nil
 }
 
 func (s *SchedulerSnapshotService) loadAccountsFromDB(ctx context.Context, bucket SchedulerBucket, useMixed bool) ([]Account, error) {

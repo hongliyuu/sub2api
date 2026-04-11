@@ -68,7 +68,32 @@ func TestEvaluateDBPoolConfigWarnings(t *testing.T) {
 func TestEvaluateDBPoolStatsWarnings(t *testing.T) {
 	warnings := evaluateDBPoolStatsWarnings(sql.DBStats{
 		MaxOpenConnections: 100,
+		OpenConnections:    90,
+		InUse:              100,
 		Idle:               90,
+		WaitCount:          3,
 	})
 	require.NotEmpty(t, warnings)
+}
+
+func TestDBPoolSnapshotFromStats(t *testing.T) {
+	snapshot := dbPoolSnapshotFromStats(sql.DBStats{
+		MaxOpenConnections: 100,
+		OpenConnections:    40,
+		InUse:              25,
+		Idle:               15,
+		WaitCount:          8,
+		WaitDuration:       3 * time.Second,
+	})
+	require.Equal(t, 40, snapshot.OpenConnections)
+	require.Equal(t, 25, snapshot.InUse)
+	require.Equal(t, 15, snapshot.Idle)
+	require.Equal(t, int64(8), snapshot.WaitCount)
+	require.Equal(t, int64(3000), snapshot.WaitDurationMs)
+	require.NotNil(t, snapshot.UsagePercent)
+	require.Equal(t, 40.0, *snapshot.UsagePercent)
+	require.NotNil(t, snapshot.InUsePercent)
+	require.Equal(t, 25.0, *snapshot.InUsePercent)
+	require.NotNil(t, snapshot.IdleReservationRatio)
+	require.Equal(t, 15.0, *snapshot.IdleReservationRatio)
 }

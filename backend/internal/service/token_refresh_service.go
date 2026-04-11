@@ -236,8 +236,9 @@ func (s *TokenRefreshService) processRefresh() {
 	}
 }
 
-// listActiveAccounts 获取所有active状态的账号
-// 使用ListActive确保刷新所有活跃账号的token（包括临时禁用的）
+// listActiveAccounts 获取所有 active 状态的账号。
+// 对 OAuth 账号，即便处于 temp_unsched 也允许后台刷新继续尝试恢复；
+// 但已明确永久坏号的账号会被跳过，避免持续刷新风暴。
 func (s *TokenRefreshService) listActiveAccounts(ctx context.Context) ([]Account, error) {
 	accounts, err := s.accountRepo.ListActive(ctx)
 	if err != nil {
@@ -250,7 +251,9 @@ func (s *TokenRefreshService) listActiveAccounts(ctx context.Context) ([]Account
 	filtered := make([]Account, 0, len(accounts))
 	for _, account := range accounts {
 		if account.TempUnschedulableUntil != nil && now.Before(*account.TempUnschedulableUntil) {
-			continue
+			if account.Type != AccountTypeOAuth || hasPermanentAccountAuthFailure(&account) {
+				continue
+			}
 		}
 		filtered = append(filtered, account)
 	}
@@ -294,6 +297,7 @@ func (s *TokenRefreshService) refreshWithRetry(ctx context.Context, account *Acc
 		if err == nil {
 			s.postRefreshActions(ctx, account)
 			s.clearTokenRefreshFailure(ctx, account.ID)
+			clearAccountAuthState(ctx, s.accountRepo, account.ID)
 			return nil
 		}
 
@@ -301,6 +305,7 @@ func (s *TokenRefreshService) refreshWithRetry(ctx context.Context, account *Acc
 		if reason, ok := getNonRetryableRefreshReason(err); ok {
 			recordShadowPermanentFailure(account.ID, reason)
 			s.markTokenRefreshFailure(ctx, account.ID, reason)
+			markAccountAuthState(ctx, s.accountRepo, account.ID, reason, accountAuthClassPermanent, accountAuthSourceTokenRefresh)
 			errorMsg := fmt.Sprintf("Token refresh failed (non-retryable): %v", err)
 			if setErr := s.accountRepo.SetError(ctx, account.ID, errorMsg); setErr != nil {
 				slog.Error("token_refresh.set_error_status_failed",
@@ -356,6 +361,7 @@ func (s *TokenRefreshService) refreshWithRetry(ctx context.Context, account *Acc
 			"error", setErr,
 		)
 	} else {
+		markAccountAuthState(ctx, s.accountRepo, account.ID, "refresh_retry_exhausted", accountAuthClassTemporary, accountAuthSourceTokenRefresh)
 		slog.Info("token_refresh.temp_unschedulable_set",
 			"account_id", account.ID,
 			"until", until.Format(time.RFC3339),

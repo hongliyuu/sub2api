@@ -1456,30 +1456,31 @@ func (s *OpenAIGatewayService) tryStickySessionHit(ctx context.Context, groupID 
 	if err != nil {
 		return nil
 	}
+	schedGroup := s.getOpenAIStickySchedulingGroup(ctx, groupID)
 
 	// 检查账号是否需要清理粘性会话
 	// Check if sticky session should be cleared
 	if shouldClearStickySession(account, requestedModel) {
-		_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
+		_ = s.deleteStickySessionAccountIDIfMatch(ctx, groupID, sessionHash, accountID, stickyCleanupReasonClearedUnschedulable)
+		return nil
+	}
+	if invalidationReason := s.classifyOpenAIStickySessionInvalidation(ctx, groupID, schedGroup, account, requestedModel, OpenAIUpstreamTransportAny, false); invalidationReason != "" {
+		_ = s.deleteStickySessionAccountIDIfMatch(ctx, groupID, sessionHash, accountID, stickyCleanupReasonForInvalidation(invalidationReason))
 		return nil
 	}
 
 	// 验证账号是否可用于当前请求
 	// Verify account is usable for current request
-	if !account.IsSchedulable() || !account.IsOpenAI() {
-		return nil
-	}
-	if requestedModel != "" && !account.IsModelSupported(requestedModel) {
+	if !account.IsSchedulable() || !account.IsOpenAI() || (requestedModel != "" && !account.IsModelSupported(requestedModel)) {
 		return nil
 	}
 	account = s.recheckSelectedOpenAIAccountFromDB(ctx, account, requestedModel)
 	if account == nil {
-		_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
+		_ = s.deleteStickySessionAccountIDIfMatch(ctx, groupID, sessionHash, accountID, stickyCleanupReasonDBRuntimeRecheck)
 		return nil
 	}
-	if groupID != nil && s.needsUpstreamChannelRestrictionCheck(ctx, groupID) &&
-		s.isUpstreamModelRestrictedByChannel(ctx, *groupID, account, requestedModel) {
-		_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
+	if invalidationReason := s.classifyOpenAIStickySessionInvalidation(ctx, groupID, schedGroup, account, requestedModel, OpenAIUpstreamTransportAny, true); invalidationReason != "" {
+		_ = s.deleteStickySessionAccountIDIfMatch(ctx, groupID, sessionHash, accountID, stickyCleanupReasonForInvalidation(invalidationReason))
 		return nil
 	}
 
@@ -1497,6 +1498,7 @@ func (s *OpenAIGatewayService) tryStickySessionHit(ctx context.Context, groupID 
 func (s *OpenAIGatewayService) selectBestAccount(ctx context.Context, groupID *int64, accounts []Account, requestedModel string, excludedIDs map[int64]struct{}) *Account {
 	var selected *Account
 	needsUpstreamCheck := s.needsUpstreamChannelRestrictionCheck(ctx, groupID)
+	schedGroup := s.getOpenAIStickySchedulingGroup(ctx, groupID)
 
 	for i := range accounts {
 		acc := &accounts[i]
@@ -1511,8 +1513,14 @@ func (s *OpenAIGatewayService) selectBestAccount(ctx context.Context, groupID *i
 		if fresh == nil {
 			continue
 		}
+		if schedGroup != nil && schedGroup.RequirePrivacySet && !fresh.IsPrivacySet() {
+			continue
+		}
 		fresh = s.recheckSelectedOpenAIAccountFromDB(ctx, fresh, requestedModel)
 		if fresh == nil {
+			continue
+		}
+		if schedGroup != nil && schedGroup.RequirePrivacySet && !fresh.IsPrivacySet() {
 			continue
 		}
 		if needsUpstreamCheck && s.isUpstreamModelRestrictedByChannel(ctx, *groupID, fresh, requestedModel) {
@@ -1578,6 +1586,7 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 
 	cfg := s.schedulingConfig()
 	needsUpstreamCheck := s.needsUpstreamChannelRestrictionCheck(ctx, groupID)
+	schedGroup := s.getOpenAIStickySchedulingGroup(ctx, groupID)
 	var stickyAccountID int64
 	if sessionHash != "" && s.cache != nil {
 		if accountID, err := s.getStickySessionAccountID(ctx, groupID, sessionHash); err == nil {
@@ -1596,6 +1605,7 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 		if stickyAccountID > 0 && stickyAccountID == account.ID && s.concurrencyService != nil {
 			waitingCount, _ := s.concurrencyService.GetAccountWaitingCount(ctx, account.ID)
 			if waitingCount < cfg.StickySessionMaxWaiting {
+				_ = s.refreshStickySessionTTL(ctx, groupID, sessionHash, openaiStickySessionTTL)
 				return s.newSelectionResult(ctx, account, false, nil, &AccountWaitPlan{
 					AccountID:      account.ID,
 					MaxConcurrency: account.Concurrency,
@@ -1636,15 +1646,21 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 			if err == nil {
 				clearSticky := shouldClearStickySession(account, requestedModel)
 				if clearSticky {
-					_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
+					_ = s.deleteStickySessionAccountIDIfMatch(ctx, groupID, sessionHash, accountID, stickyCleanupReasonClearedUnschedulable)
+				}
+				if !clearSticky {
+					if invalidationReason := s.classifyOpenAIStickySessionInvalidation(ctx, groupID, schedGroup, account, requestedModel, OpenAIUpstreamTransportAny, false); invalidationReason != "" {
+						_ = s.deleteStickySessionAccountIDIfMatch(ctx, groupID, sessionHash, accountID, stickyCleanupReasonForInvalidation(invalidationReason))
+						clearSticky = true
+					}
 				}
 				if !clearSticky && account.IsSchedulable() && account.IsOpenAI() &&
 					(requestedModel == "" || account.IsModelSupported(requestedModel)) {
 					account = s.recheckSelectedOpenAIAccountFromDB(ctx, account, requestedModel)
 					if account == nil {
-						_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
-					} else if needsUpstreamCheck && s.isUpstreamModelRestrictedByChannel(ctx, *groupID, account, requestedModel) {
-						_ = s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
+						_ = s.deleteStickySessionAccountIDIfMatch(ctx, groupID, sessionHash, accountID, stickyCleanupReasonDBRuntimeRecheck)
+					} else if invalidationReason := s.classifyOpenAIStickySessionInvalidation(ctx, groupID, schedGroup, account, requestedModel, OpenAIUpstreamTransportAny, true); invalidationReason != "" {
+						_ = s.deleteStickySessionAccountIDIfMatch(ctx, groupID, sessionHash, accountID, stickyCleanupReasonForInvalidation(invalidationReason))
 					} else {
 						result, err := s.tryAcquireAccountSlot(ctx, accountID, account.Concurrency)
 						if err == nil && result.Acquired {
@@ -1654,6 +1670,7 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 
 						waitingCount, _ := s.concurrencyService.GetAccountWaitingCount(ctx, accountID)
 						if waitingCount < cfg.StickySessionMaxWaiting {
+							_ = s.refreshStickySessionTTL(ctx, groupID, sessionHash, openaiStickySessionTTL)
 							return s.newSelectionResult(ctx, account, false, nil, &AccountWaitPlan{
 								AccountID:      accountID,
 								MaxConcurrency: account.Concurrency,
@@ -1678,6 +1695,9 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 		// re-check schedulability here so recently rate-limited/overloaded accounts
 		// are not selected again before the bucket is rebuilt.
 		if !acc.IsSchedulable() {
+			continue
+		}
+		if schedGroup != nil && schedGroup.RequirePrivacySet && !acc.IsPrivacySet() {
 			continue
 		}
 		if requestedModel != "" && !acc.IsModelSupported(requestedModel) {
@@ -1796,6 +1816,47 @@ func (s *OpenAIGatewayService) SelectAccountWithLoadAwareness(ctx context.Contex
 	}
 
 	return nil, ErrNoAvailableAccounts
+}
+
+func (s *OpenAIGatewayService) getOpenAIStickySchedulingGroup(ctx context.Context, groupID *int64) *Group {
+	if s == nil || groupID == nil || s.schedulerSnapshot == nil {
+		return nil
+	}
+	group, err := s.schedulerSnapshot.GetGroupByID(ctx, *groupID)
+	if err != nil {
+		return nil
+	}
+	return group
+}
+
+func (s *OpenAIGatewayService) classifyOpenAIStickySessionInvalidation(ctx context.Context, groupID *int64, schedGroup *Group, account *Account, requestedModel string, requiredTransport OpenAIUpstreamTransport, includeChannelRestriction bool) string {
+	if account == nil {
+		return ""
+	}
+	if schedGroup == nil {
+		schedGroup = s.getOpenAIStickySchedulingGroup(ctx, groupID)
+	}
+	return classifyStickySessionInvalidationReasonWithContext(account, stickySessionInvalidationContext{
+		RequestedModel:    requestedModel,
+		RequiredPlatform:  PlatformOpenAI,
+		InGroup:           isStickySessionAccountInGroup(account, groupID),
+		TransportMismatch: !s.isOpenAIAccountTransportCompatible(account, requiredTransport),
+		PrivacyRequired:   schedGroup != nil && schedGroup.RequirePrivacySet && !account.IsPrivacySet(),
+		ChannelRestricted: includeChannelRestriction &&
+			groupID != nil &&
+			s.needsUpstreamChannelRestrictionCheck(ctx, groupID) &&
+			s.isUpstreamModelRestrictedByChannel(ctx, *groupID, account, requestedModel),
+	})
+}
+
+func (s *OpenAIGatewayService) isOpenAIAccountTransportCompatible(account *Account, requiredTransport OpenAIUpstreamTransport) bool {
+	if requiredTransport == OpenAIUpstreamTransportAny || requiredTransport == OpenAIUpstreamTransportHTTPSSE {
+		return true
+	}
+	if s == nil || account == nil {
+		return false
+	}
+	return s.getOpenAIWSProtocolResolver().Resolve(account).Transport == requiredTransport
 }
 
 func (s *OpenAIGatewayService) listSchedulableAccounts(ctx context.Context, groupID *int64) ([]Account, error) {

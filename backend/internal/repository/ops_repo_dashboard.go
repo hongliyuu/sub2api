@@ -129,6 +129,9 @@ func (r *opsRepository) getDashboardOverviewRaw(ctx context.Context, filter *ser
 		EndTime:   end,
 		Platform:  strings.TrimSpace(filter.Platform),
 		GroupID:   filter.GroupID,
+		DataSource: &service.OpsDataSourceSummary{
+			Mode: string(service.OpsQueryModeRaw),
+		},
 
 		SuccessCount:         successCount,
 		ErrorCountTotal:      errorTotal,
@@ -309,6 +312,9 @@ func (r *opsRepository) getDashboardOverviewPreaggregated(ctx context.Context, f
 		EndTime:   end,
 		Platform:  strings.TrimSpace(filter.Platform),
 		GroupID:   filter.GroupID,
+		DataSource: &service.OpsDataSourceSummary{
+			Mode: string(service.OpsQueryModePreagg),
+		},
 
 		SuccessCount:         successCount,
 		ErrorCountTotal:      errorTotal,

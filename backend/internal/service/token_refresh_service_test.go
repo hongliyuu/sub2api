@@ -542,11 +542,15 @@ func TestTokenRefreshService_MarksTokenFailureExtras(t *testing.T) {
 
 	err := service.refreshWithRetry(context.Background(), account, refresher, refresher, time.Hour)
 	require.Error(t, err)
-	require.Equal(t, 1, repo.updateExtraCalls)
-	require.Len(t, repo.lastExtraUpdates, 1)
+	require.Equal(t, 2, repo.updateExtraCalls)
+	require.Len(t, repo.lastExtraUpdates, 2)
 	require.Equal(t, "token_revoked", repo.lastExtraUpdates[0]["token_refresh_failure_reason"])
 	require.Equal(t, "permanent", repo.lastExtraUpdates[0]["token_refresh_failure_class"])
 	require.NotEmpty(t, repo.lastExtraUpdates[0]["token_refresh_failed_at"])
+	require.Equal(t, "token_revoked", repo.lastExtraUpdates[1][accountAuthFailureReasonKey])
+	require.Equal(t, accountAuthClassPermanent, repo.lastExtraUpdates[1][accountAuthFailureClassKey])
+	require.Equal(t, accountAuthSourceTokenRefresh, repo.lastExtraUpdates[1][accountAuthFailureSourceKey])
+	require.Equal(t, accountAuthStateReauthorizeRequired, repo.lastExtraUpdates[1][accountAuthStateKey])
 }
 
 func TestTokenRefreshService_ClearsTokenFailureExtrasOnSuccess(t *testing.T) {
@@ -571,11 +575,15 @@ func TestTokenRefreshService_ClearsTokenFailureExtrasOnSuccess(t *testing.T) {
 
 	err := service.refreshWithRetry(context.Background(), account, refresher, refresher, time.Hour)
 	require.NoError(t, err)
-	require.Equal(t, 1, repo.updateExtraCalls)
-	require.Len(t, repo.lastExtraUpdates, 1)
+	require.Equal(t, 2, repo.updateExtraCalls)
+	require.Len(t, repo.lastExtraUpdates, 2)
 	require.Nil(t, repo.lastExtraUpdates[0]["token_refresh_failure_reason"])
 	require.Nil(t, repo.lastExtraUpdates[0]["token_refresh_failure_class"])
 	require.Nil(t, repo.lastExtraUpdates[0]["token_refresh_failed_at"])
+	require.Nil(t, repo.lastExtraUpdates[1][accountAuthFailureReasonKey])
+	require.Nil(t, repo.lastExtraUpdates[1][accountAuthFailureClassKey])
+	require.Nil(t, repo.lastExtraUpdates[1][accountAuthFailureSourceKey])
+	require.Nil(t, repo.lastExtraUpdates[1][accountAuthStateKey])
 }
 
 func TestTokenRefreshService_RefreshWithRetry_NoRefreshTokenDoesNotTempUnschedule(t *testing.T) {
@@ -603,12 +611,25 @@ func TestTokenRefreshService_RefreshWithRetry_NoRefreshTokenDoesNotTempUnschedul
 	require.Equal(t, 1, repo.setErrorCalls, "missing refresh token should be treated as a non-retryable credential state")
 }
 
-func TestTokenRefreshService_ListActiveAccountsSkipsTempUnschedulable(t *testing.T) {
+func TestTokenRefreshService_ListActiveAccountsSkipsOnlyPermanentTempUnschedulable(t *testing.T) {
 	repo := &tokenRefreshAccountRepo{}
 	now := time.Now()
 	repo.activeAccounts = []Account{
 		{ID: 1, TempUnschedulableUntil: nil},
-		{ID: 2, TempUnschedulableUntil: ptrTime(now.Add(10 * time.Minute))},
+		{ID: 2, Type: AccountTypeAPIKey, TempUnschedulableUntil: ptrTime(now.Add(10 * time.Minute))},
+		{
+			ID:                     3,
+			Type:                   AccountTypeOAuth,
+			TempUnschedulableUntil: ptrTime(now.Add(10 * time.Minute)),
+		},
+		{
+			ID:                     4,
+			Type:                   AccountTypeOAuth,
+			TempUnschedulableUntil: ptrTime(now.Add(10 * time.Minute)),
+			Extra: map[string]any{
+				accountAuthFailureClassKey: accountAuthClassPermanent,
+			},
+		},
 	}
 	service := NewTokenRefreshService(repo, nil, nil, nil, nil, nil, nil, &config.Config{
 		TokenRefresh: config.TokenRefreshConfig{MaxRetries: 1},
@@ -616,8 +637,9 @@ func TestTokenRefreshService_ListActiveAccountsSkipsTempUnschedulable(t *testing
 
 	accounts, err := service.listActiveAccounts(context.Background())
 	require.NoError(t, err)
-	require.Len(t, accounts, 1)
+	require.Len(t, accounts, 2)
 	require.Equal(t, int64(1), accounts[0].ID)
+	require.Equal(t, int64(3), accounts[1].ID)
 }
 
 // TestIsNonRetryableRefreshError 测试不可重试错误判断

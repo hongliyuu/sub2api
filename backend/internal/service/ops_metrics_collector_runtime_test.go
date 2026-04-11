@@ -9,10 +9,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestOpsMetricsCollectorPersistRuntimeAnomalySummary_BaselineThenDelta(t *testing.T) {
+func resetOpsRuntimeAnomalySummaryTestState() {
 	resetUsageLogNotPersistedAlertsForTest()
 	resetBillingCompensationCandidatesForTest()
 	resetSchedulerOutboxRuntimeMetricsForTest()
+	resetLatestStorageGovernanceRuntimeForTest()
+	resetLatestErrorFamilySummaryForTest()
+	resetCleanupStatsForTest()
+	resetUsageCleanupStatsForTest()
+	defaultUsageRecordWorkerPool.Store(nil)
+}
+
+func TestOpsMetricsCollectorPersistRuntimeAnomalySummary_BaselineThenDelta(t *testing.T) {
+	resetOpsRuntimeAnomalySummaryTestState()
 
 	var captured []*OpsInsertSystemLogInput
 	repo := &opsRepoMock{
@@ -66,9 +75,7 @@ func TestOpsMetricsCollectorPersistRuntimeAnomalySummary_BaselineThenDelta(t *te
 }
 
 func TestOpsMetricsCollectorPersistRuntimeAnomalySummary_NoDuplicateWhenNoNewDelta(t *testing.T) {
-	resetUsageLogNotPersistedAlertsForTest()
-	resetBillingCompensationCandidatesForTest()
-	resetSchedulerOutboxRuntimeMetricsForTest()
+	resetOpsRuntimeAnomalySummaryTestState()
 
 	callCount := 0
 	repo := &opsRepoMock{
@@ -116,9 +123,7 @@ func TestOpsMetricsCollectorDBConnWaitingCapturedByDelta(t *testing.T) {
 }
 
 func TestOpsMetricsCollectorPersistRuntimeAnomalySummary_UsageWorkerAndRedis(t *testing.T) {
-	resetUsageLogNotPersistedAlertsForTest()
-	resetBillingCompensationCandidatesForTest()
-	resetSchedulerOutboxRuntimeMetricsForTest()
+	resetOpsRuntimeAnomalySummaryTestState()
 
 	var captured []*OpsInsertSystemLogInput
 	repo := &opsRepoMock{
@@ -170,9 +175,7 @@ func TestOpsMetricsCollectorPersistRuntimeAnomalySummary_UsageWorkerAndRedis(t *
 }
 
 func TestOpsMetricsCollectorPersistRuntimeAnomalySummary_StorageGovernanceRisk(t *testing.T) {
-	resetUsageLogNotPersistedAlertsForTest()
-	resetBillingCompensationCandidatesForTest()
-	resetSchedulerOutboxRuntimeMetricsForTest()
+	resetOpsRuntimeAnomalySummaryTestState()
 
 	var captured []*OpsInsertSystemLogInput
 	repo := &opsRepoMock{
@@ -259,9 +262,7 @@ func TestOpsMetricsCollectorPersistRuntimeAnomalySummary_StorageGovernanceRisk(t
 }
 
 func TestOpsMetricsCollectorPersistRuntimeAnomalySummary_StorageGovernanceNoDuplicateAndRecovery(t *testing.T) {
-	resetUsageLogNotPersistedAlertsForTest()
-	resetBillingCompensationCandidatesForTest()
-	resetSchedulerOutboxRuntimeMetricsForTest()
+	resetOpsRuntimeAnomalySummaryTestState()
 
 	var captured []*OpsInsertSystemLogInput
 	repo := &opsRepoMock{
@@ -323,6 +324,103 @@ func TestOpsMetricsCollectorPersistRuntimeAnomalySummary_StorageGovernanceNoDupl
 	require.Len(t, captured, 1)
 	require.Equal(t, "info", captured[0].Level)
 	require.Equal(t, opsRuntimeStorageGovernanceSummaryComponent, captured[0].Component)
+}
+
+func TestOpsMetricsCollectorPersistRuntimeAnomalySummary_ErrorFamilySummary(t *testing.T) {
+	resetOpsRuntimeAnomalySummaryTestState()
+
+	var captured []*OpsInsertSystemLogInput
+	repo := &opsRepoMock{
+		BatchInsertSystemLogsFn: func(ctx context.Context, inputs []*OpsInsertSystemLogInput) (int64, error) {
+			captured = append(captured, inputs...)
+			return int64(len(inputs)), nil
+		},
+	}
+	call := 0
+	collector := &OpsMetricsCollector{
+		opsRepo: repo,
+		errorFamilyStatsFn: func(ctx context.Context, start, end time.Time) (opsRuntimeErrorFamilySummary, error) {
+			call++
+			switch call {
+			case 1:
+				return opsRuntimeErrorFamilySummary{
+					Kind:          "summary",
+					WindowMinutes: int(opsErrorFamilyWindow / time.Minute),
+					TotalErrors:   6,
+					Families: []opsRuntimeErrorFamilyItem{
+						{Phase: "upstream", Type: "api_error", Owner: "provider", StatusCode: 503, InboundEndpoint: "/v1/chat/completions", Count: 4, SharePercent: 66.7},
+						{Phase: "request", Type: "bad_request", Owner: "client", StatusCode: 400, InboundEndpoint: "/v1/messages", Count: 2, SharePercent: 33.3},
+					},
+				}, nil
+			default:
+				return opsRuntimeErrorFamilySummary{
+					Kind:          "summary",
+					WindowMinutes: int(opsErrorFamilyWindow / time.Minute),
+					TotalErrors:   6,
+					Families: []opsRuntimeErrorFamilyItem{
+						{Phase: "upstream", Type: "api_error", Owner: "provider", StatusCode: 503, InboundEndpoint: "/v1/chat/completions", Count: 4, SharePercent: 66.7},
+						{Phase: "request", Type: "bad_request", Owner: "client", StatusCode: 400, InboundEndpoint: "/v1/messages", Count: 2, SharePercent: 33.3},
+					},
+				}, nil
+			}
+		},
+	}
+
+	now := time.Now().UTC()
+	require.NoError(t, collector.persistRuntimeAnomalySummary(context.Background(), now))
+	require.Empty(t, captured)
+
+	require.NoError(t, collector.persistRuntimeAnomalySummary(context.Background(), now.Add(opsErrorFamilySampleInterval)))
+	require.Len(t, captured, 1)
+	require.Equal(t, opsRuntimeErrorFamilySummaryComponent, captured[0].Component)
+
+	var extra map[string]any
+	require.NoError(t, json.Unmarshal([]byte(captured[0].ExtraJSON), &extra))
+	require.Equal(t, float64(6), extra["total_errors"])
+	require.Equal(t, float64(15), extra["window_minutes"])
+	families, ok := extra["families"].([]any)
+	require.True(t, ok)
+	require.Len(t, families, 2)
+
+	summary, sampledAt := snapshotLatestErrorFamilySummary()
+	require.NotNil(t, summary)
+	require.NotNil(t, sampledAt)
+	require.Equal(t, int64(6), summary.TotalErrors)
+
+	require.NoError(t, collector.persistRuntimeAnomalySummary(context.Background(), now.Add(2*opsErrorFamilySampleInterval)))
+	require.Len(t, captured, 1)
+}
+
+func TestOpsMetricsCollectorPersistRuntimeAnomalySummary_SchedulerCheckpointWithoutPoisonStillPersists(t *testing.T) {
+	resetOpsRuntimeAnomalySummaryTestState()
+
+	var captured []*OpsInsertSystemLogInput
+	repo := &opsRepoMock{
+		BatchInsertSystemLogsFn: func(ctx context.Context, inputs []*OpsInsertSystemLogInput) (int64, error) {
+			captured = append(captured, inputs...)
+			return int64(len(inputs)), nil
+		},
+	}
+	collector := &OpsMetricsCollector{opsRepo: repo}
+	now := time.Now().UTC()
+
+	require.NoError(t, collector.persistRuntimeAnomalySummary(context.Background(), now))
+	require.Empty(t, captured)
+
+	schedulerOutboxCheckpointFallbackTotal.Store(2)
+	schedulerOutboxCheckpointReadFailureTotal.Store(1)
+	schedulerOutboxLastCheckpointWatermark.Store(99)
+
+	require.NoError(t, collector.persistRuntimeAnomalySummary(context.Background(), now.Add(time.Minute)))
+	require.Len(t, captured, 1)
+	require.Equal(t, OpsRuntimeSchedulerOutboxSummaryComponent, captured[0].Component)
+
+	var extra map[string]any
+	require.NoError(t, json.Unmarshal([]byte(captured[0].ExtraJSON), &extra))
+	require.Equal(t, float64(0), extra["poison_delta"])
+	require.Equal(t, float64(0), extra["transient_delta"])
+	require.Equal(t, float64(2), extra["checkpoint_fallback_total"])
+	require.Equal(t, float64(1), extra["checkpoint_read_failure_total"])
 }
 
 type captureOpsRepo struct {

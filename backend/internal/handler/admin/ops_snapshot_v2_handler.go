@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
+	"github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/sync/errgroup"
@@ -19,16 +20,22 @@ var opsDashboardSnapshotV2Cache = newSnapshotCache(30 * time.Second)
 type opsDashboardSnapshotV2Response struct {
 	GeneratedAt string `json:"generated_at"`
 
-	Overview             *service.OpsDashboardOverview        `json:"overview"`
-	ThroughputTrend      *service.OpsThroughputTrendResponse  `json:"throughput_trend"`
-	ErrorTrend           *service.OpsErrorTrendResponse       `json:"error_trend"`
-	BillingCompensation  gin.H                                `json:"billing_compensation"`
-	UsageLogNotPersisted gin.H                                `json:"usage_log_not_persisted"`
-	TokenRefreshSummary  gin.H                                `json:"token_refresh_summary"`
-	SchedulerCheckpoint  gin.H                                `json:"scheduler_checkpoint"`
-	CleanupStats         service.CleanupStats                 `json:"cleanup_stats"`
-	UsageCleanupStats    service.UsageCleanupStats            `json:"usage_cleanup_stats"`
-	StorageGovernance    *service.OpsStorageGovernanceSummary `json:"storage_governance,omitempty"`
+	Overview                  *service.OpsDashboardOverview        `json:"overview"`
+	ThroughputTrend           *service.OpsThroughputTrendResponse  `json:"throughput_trend"`
+	ErrorTrend                *service.OpsErrorTrendResponse       `json:"error_trend"`
+	BillingCompensation       gin.H                                `json:"billing_compensation"`
+	UsageLogNotPersisted      gin.H                                `json:"usage_log_not_persisted"`
+	TokenRefreshSummary       gin.H                                `json:"token_refresh_summary"`
+	SchedulerCheckpoint       gin.H                                `json:"scheduler_checkpoint"`
+	CleanupStats              service.CleanupStats                 `json:"cleanup_stats"`
+	UsageCleanupStats         service.UsageCleanupStats            `json:"usage_cleanup_stats"`
+	StorageGovernance         *service.OpsStorageGovernanceSummary `json:"storage_governance,omitempty"`
+	FailureSplitSummary       *service.OpsFailureSplitSummary      `json:"failure_split_summary,omitempty"`
+	FailureSplitGuidance      gin.H                                `json:"failure_split_guidance,omitempty"`
+	OperatorActionPlan        *service.OpsOperatorActionPlan       `json:"operator_action_plan,omitempty"`
+	OperatorActionPlanSummary gin.H                                `json:"operator_action_plan_summary,omitempty"`
+	DriftTrendSummary         gin.H                                `json:"drift_trend_summary,omitempty"`
+	ControlPlaneDrift         gin.H                                `json:"control_plane_drift,omitempty"`
 }
 
 type opsDashboardSnapshotV2CacheKey struct {
@@ -147,18 +154,35 @@ func (h *OpsHandler) GetDashboardSnapshotV2(c *gin.Context) {
 
 	tokenSummary := buildTokenRefreshSummaryPayload(c.Request.Context(), h.opsService, filter.Platform, filter.GroupID)
 	schedulerCheckpoint := buildSchedulerCheckpointPayload()
+	stickyMetrics := service.SnapshotStickyConsistencyMetrics()
+	schedulerMetrics := service.SnapshotSchedulerOutboxRuntimeMetrics()
+	redisMetrics := repository.SnapshotDefaultRedisPoolStats()
+	controlPlaneDrift := buildControlPlaneDriftPayload(
+		stickyMetrics,
+		schedulerMetrics,
+		redisMetrics,
+	)
+	driftTrendPayload := buildDriftTrendPayload(schedulerMetrics)
+	driftTrendSummary := buildSnapshotDriftTrendSummary(controlPlaneDrift, driftTrendPayload)
+	plan := buildOperatorActionPlan(overview.FailureSplitSummary, controlPlaneDrift)
 	resp := &opsDashboardSnapshotV2Response{
-		GeneratedAt:          time.Now().UTC().Format(time.RFC3339),
-		Overview:             overview,
-		ThroughputTrend:      trend,
-		ErrorTrend:           errTrend,
-		BillingCompensation:  billingCompensationSnapshot,
-		UsageLogNotPersisted: usageLogSnapshot,
-		CleanupStats:         cleanupStats,
-		UsageCleanupStats:    usageCleanupStats,
-		StorageGovernance:    h.opsService.StorageGovernanceSummary(cleanupStats, usageCleanupStats, overview.JobHeartbeats),
-		TokenRefreshSummary:  tokenSummary,
-		SchedulerCheckpoint:  schedulerCheckpoint,
+		GeneratedAt:               time.Now().UTC().Format(time.RFC3339),
+		Overview:                  overview,
+		ThroughputTrend:           trend,
+		ErrorTrend:                errTrend,
+		BillingCompensation:       billingCompensationSnapshot,
+		UsageLogNotPersisted:      usageLogSnapshot,
+		CleanupStats:              cleanupStats,
+		UsageCleanupStats:         usageCleanupStats,
+		StorageGovernance:         h.opsService.StorageGovernanceSummary(cleanupStats, usageCleanupStats, overview.JobHeartbeats),
+		TokenRefreshSummary:       tokenSummary,
+		SchedulerCheckpoint:       schedulerCheckpoint,
+		FailureSplitSummary:       buildSnapshotFailureSplitSummaryPayload(overview),
+		FailureSplitGuidance:      buildFailureSplitGuidancePayload(overview),
+		OperatorActionPlan:        plan,
+		OperatorActionPlanSummary: buildSnapshotOperatorActionPlanSummary(plan),
+		DriftTrendSummary:         driftTrendSummary,
+		ControlPlaneDrift:         controlPlaneDrift,
 	}
 
 	cached := opsDashboardSnapshotV2Cache.Set(cacheKey, resp)
@@ -568,6 +592,53 @@ func buildTokenRefreshSummaryPayload(ctx context.Context, opsSvc *service.OpsSer
 	}
 }
 
+func buildSnapshotFailureSplitSummaryPayload(overview *service.OpsDashboardOverview) *service.OpsFailureSplitSummary {
+	if overview == nil || overview.FailureSplitSummary == nil {
+		return nil
+	}
+	return overview.FailureSplitSummary
+}
+
+func buildFailureSplitGuidancePayload(overview *service.OpsDashboardOverview) gin.H {
+	if overview == nil || overview.FailureSplitSummary == nil {
+		return nil
+	}
+	summary := overview.FailureSplitSummary
+	return gin.H{
+		"totals": gin.H{
+			"protocol_or_request_shape": summary.ProtocolOrRequestShape,
+			"account_or_auth":           summary.AccountOrAuth,
+			"provider_or_upstream":      summary.ProviderOrUpstream,
+			"local_processing":          summary.LocalProcessing,
+		},
+		"likely_primary":  summary.LikelyPrimary,
+		"suggestion":      summary.Suggestion,
+		"operator_action": summary.OperatorAction,
+		"investigation_order": []string{
+			"Open /api/v1/admin/ops/requests?kind=error&sort=duration_desc to identify the leading request_id and error duration.",
+			"Inspect /api/v1/admin/ops/request-errors/:id for the client-visible failure and correlation identifiers.",
+			"Inspect /api/v1/admin/ops/request-errors/:id/upstream-errors?include_detail=true to trace requested->mapped->upstream transitions.",
+		},
+		"focus_hint":       failureSplitFocusHint(summary.LikelyPrimary),
+		"correlation_hint": "Correlate request_id, client_request_id, and upstream identifiers before adjusting dispatch or increasing failover pressure.",
+	}
+}
+
+func failureSplitFocusHint(primary string) string {
+	switch strings.TrimSpace(primary) {
+	case "protocol_or_request_shape":
+		return "Confirm requested->mapped->upstream transitions and request schema before touching account health."
+	case "account_or_auth":
+		return "Isolate the credential, keep it out of dispatch, and focus on refresh/manual reauth workflows."
+	case "provider_or_upstream":
+		return "Inspect account health, saturation, and upstream limits before changing request validation."
+	case "local_processing":
+		return "Inspect sticky/session drift, scheduler backlog, and Redis signals before adjusting failover."
+	default:
+		return "Use the failure split totals to choose whether protocol, account, upstream, or control-plane investigation should lead."
+	}
+}
+
 func buildSchedulerCheckpointPayload() gin.H {
 	summary := service.SchedulerCheckpointSummary()
 	if summary == nil {
@@ -579,4 +650,44 @@ func buildSchedulerCheckpointPayload() gin.H {
 		"checkpoint_read_failure_total":  summary.CheckpointReadFailures,
 		"checkpoint_write_failure_total": summary.CheckpointWriteFailures,
 	}
+}
+
+func buildSnapshotOperatorActionPlanSummary(plan *service.OpsOperatorActionPlan) gin.H {
+	if plan == nil {
+		return nil
+	}
+	summary := gin.H{}
+	if len(plan.FailureSplitActions) > 0 {
+		summary["primary_action"] = plan.FailureSplitActions[0]
+		summary["failure_split_action_count"] = len(plan.FailureSplitActions)
+	}
+	if len(plan.ProtocolDiagnostics) > 0 {
+		summary["protocol_diagnostic"] = plan.ProtocolDiagnostics[0]
+	}
+	if len(plan.ControlPlaneDrift) > 0 {
+		summary["control_plane_hint"] = plan.ControlPlaneDrift[0]
+	}
+	return summary
+}
+
+func buildSnapshotDriftTrendSummary(controlPlaneDrift, trend gin.H) gin.H {
+	if len(controlPlaneDrift) == 0 && len(trend) == 0 {
+		return nil
+	}
+	summary := gin.H{}
+	if severity, ok := controlPlaneDrift["severity"]; ok {
+		summary["severity"] = severity
+	}
+	if cause, ok := controlPlaneDrift["likely_root_cause"]; ok {
+		summary["likely_root_cause"] = cause
+	}
+	if trend != nil {
+		if status, ok := trend["status"]; ok && status != "" {
+			summary["trend_status"] = status
+		}
+		if detail, ok := trend["detail"]; ok && detail != "" {
+			summary["trend_detail"] = detail
+		}
+	}
+	return summary
 }
