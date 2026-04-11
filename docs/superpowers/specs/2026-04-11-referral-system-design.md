@@ -1,4 +1,4 @@
-# 分销邀请系统设计文档（v2）
+# 分销邀请系统设计文档（v3）
 
 **日期**: 2026-04-11  
 **状态**: 待实现  
@@ -390,7 +390,7 @@ applyUsageBilling 成功（billing applied=true）且 BalanceCost > 0
 ### 7.1 用户端 API（所有登录用户）
 
 #### `GET /api/v1/user/referral`
-获取当前用户邀请码和基础统计。
+获取当前用户邀请码、基础统计，以及分销员申请状态（如有）。
 
 ```json
 {
@@ -400,9 +400,16 @@ applyUsageBilling 成功（billing applied=true）且 BalanceCost > 0
     "total_invitees": 3,
     "total_signup_bonus": 6.00,
     "total_commission": 0.00
+  },
+  "application": {
+    "status": "pending",
+    "reviewed_at": null,
+    "admin_notes": null
   }
 }
 ```
+
+> `application` 字段：`user` 角色有申请记录时返回；`distributor` 角色返回 `null`（已通过，无需展示申请流程）；从未申请时返回 `null`。
 
 #### `POST /api/v1/user/referral/apply-distributor`
 提交分销员申请（仅 `user` 角色，有 `pending` 申请时拒绝重复提交）。
