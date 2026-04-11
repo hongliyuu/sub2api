@@ -481,6 +481,26 @@ func TestExtractSystemMessagesFromInput(t *testing.T) {
 	})
 }
 
+// TestApplyCodexOAuthTransform_StripsPromptCacheRetention 回归测试:
+// Cursor 发的 /v1/chat/completions body 会带 prompt_cache_retention 参数,
+// 但 Codex 上游(ChatGPT internal endpoint)不支持,必须在 transform 里剥掉,
+// 否则上游返回 "Unsupported parameter: prompt_cache_retention"。
+func TestApplyCodexOAuthTransform_StripsPromptCacheRetention(t *testing.T) {
+	reqBody := map[string]any{
+		"model":                  "gpt-5.1",
+		"prompt_cache_retention": "24h",
+		"input": []any{
+			map[string]any{"role": "user", "content": "hi"},
+		},
+	}
+
+	applyCodexOAuthTransform(reqBody, false, false)
+
+	_, stillThere := reqBody["prompt_cache_retention"]
+	require.False(t, stillThere,
+		"prompt_cache_retention must be stripped before forwarding to Codex upstream")
+}
+
 func TestApplyCodexOAuthTransform_ExtractsSystemMessages(t *testing.T) {
 	reqBody := map[string]any{
 		"model": "gpt-5.1",
