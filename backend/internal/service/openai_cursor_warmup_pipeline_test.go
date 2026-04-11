@@ -167,13 +167,15 @@ func TestCursorMixedShape_StripsUnsupportedFields(t *testing.T) {
 		"prompt_cache_retention": "24h",
 		"safety_identifier": "cursor-user-xyz",
 		"metadata": {"trace_id":"abc","caller":"cursor"},
+		"stream_options": {"include_usage": true},
 		"input": [{"role":"user","content":"hi"}]
 	}`)
 
-	// Sanity: the input body actually contains all three fields.
-	require.True(t, gjson.GetBytes(cursorBody, "prompt_cache_retention").Exists())
-	require.True(t, gjson.GetBytes(cursorBody, "safety_identifier").Exists())
-	require.True(t, gjson.GetBytes(cursorBody, "metadata").Exists())
+	// Sanity: the input body actually contains all unsupported fields.
+	for _, field := range cursorResponsesUnsupportedFields {
+		require.True(t, gjson.GetBytes(cursorBody, field).Exists(),
+			"test fixture must contain %s", field)
+	}
 
 	// Run the exact same loop as the production code.
 	result := cursorBody
@@ -184,7 +186,7 @@ func TestCursorMixedShape_StripsUnsupportedFields(t *testing.T) {
 	}
 
 	// All unsupported fields must be gone.
-	for _, field := range []string{"prompt_cache_retention", "safety_identifier", "metadata"} {
+	for _, field := range cursorResponsesUnsupportedFields {
 		assert.False(t, gjson.GetBytes(result, field).Exists(),
 			"%s must be stripped", field)
 	}
@@ -194,4 +196,13 @@ func TestCursorMixedShape_StripsUnsupportedFields(t *testing.T) {
 	assert.Equal(t, true, gjson.GetBytes(result, "stream").Bool())
 	assert.True(t, gjson.GetBytes(result, "input").IsArray())
 	assert.Equal(t, "user", gjson.GetBytes(result, "input.0.role").String())
+}
+
+// TestCollectTopLevelKeys verifies the diagnostic helper used in
+// ForwardAsChatCompletions to log the full set of top-level fields a Cursor
+// request carries. A single log line should reveal every field name.
+func TestCollectTopLevelKeys(t *testing.T) {
+	body := []byte(`{"model":"gpt-5.4","stream":true,"input":[],"metadata":{},"tools":[]}`)
+	keys := collectTopLevelKeys(body)
+	assert.ElementsMatch(t, []string{"model", "stream", "input", "metadata", "tools"}, keys)
 }

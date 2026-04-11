@@ -30,6 +30,19 @@ var cursorResponsesUnsupportedFields = []string{
 	"prompt_cache_retention",
 	"safety_identifier",
 	"metadata",
+	"stream_options",
+}
+
+// collectTopLevelKeys returns the list of top-level JSON object keys in body.
+// Used for diagnostic logging of the Cursor raw-body path so we can see the
+// full set of fields Cursor sends with a single log line.
+func collectTopLevelKeys(body []byte) []string {
+	var keys []string
+	gjson.ParseBytes(body).ForEach(func(k, _ gjson.Result) bool {
+		keys = append(keys, k.String())
+		return true
+	})
+	return keys
 }
 
 // ForwardAsChatCompletions accepts a Chat Completions request body, converts it
@@ -161,20 +174,17 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 		}
 	}
 
-	// Diagnostic: for Cursor's Responses-shape raw-body path, dump the first
-	// 2KB of the final upstream body at debug level so that unknown unsupported
-	// parameters can be identified without re-running tcpdump. Only fires for
-	// the Cursor path (isResponsesShape) and only at debug level, so there is
-	// no cost in production where level is info or higher.
+	// Diagnostic: for Cursor's Responses-shape raw-body path, list the
+	// top-level JSON keys of the final upstream body at debug level. This
+	// lets us identify unknown unsupported parameters without re-running
+	// tcpdump — one log line gives the full set of fields Cursor sends,
+	// instead of a 2KB prefix that only covers the system prompt.
 	if isResponsesShape {
-		preview := responsesBody
-		if len(preview) > 2048 {
-			preview = preview[:2048]
-		}
-		logger.L().Debug("openai chat_completions: cursor responses-shape upstream body preview",
+		topKeys := collectTopLevelKeys(responsesBody)
+		logger.L().Debug("openai chat_completions: cursor responses-shape upstream body keys",
 			zap.Int64("account_id", account.ID),
 			zap.Int("body_bytes", len(responsesBody)),
-			zap.String("body_preview", string(preview)),
+			zap.Strings("top_level_keys", topKeys),
 		)
 	}
 
