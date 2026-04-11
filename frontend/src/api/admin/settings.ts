@@ -136,6 +136,11 @@ export interface SystemSettings {
   payment_cancel_rate_limit_window: number
   payment_cancel_rate_limit_unit: string
   payment_cancel_rate_limit_window_mode: string
+
+  // Balance & quota notification
+  balance_low_notify_enabled: boolean
+  balance_low_notify_threshold: number
+  account_quota_notify_emails: string[]
 }
 
 export interface UpdateSettingsRequest {
@@ -237,6 +242,10 @@ export interface UpdateSettingsRequest {
   payment_cancel_rate_limit_window?: number
   payment_cancel_rate_limit_unit?: string
   payment_cancel_rate_limit_window_mode?: string
+  // Balance & quota notification
+  balance_low_notify_enabled?: boolean
+  balance_low_notify_threshold?: number
+  account_quota_notify_emails?: string[]
 }
 
 /**
