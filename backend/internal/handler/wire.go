@@ -35,6 +35,7 @@ func ProvideAdminHandlers(
 	scheduledTestHandler *admin.ScheduledTestHandler,
 	copilotAnalyticsHandler *admin.CopilotAnalyticsHandler,
 	modelPricingHandler *admin.ModelPricingHandler,
+	copilotPlatformConfigHandler *admin.CopilotPlatformConfigHandler,
 ) *AdminHandlers {
 	return &AdminHandlers{
 		Dashboard:        dashboardHandler,
@@ -63,6 +64,7 @@ func ProvideAdminHandlers(
 		ScheduledTest:    scheduledTestHandler,
 		CopilotAnalytics: copilotAnalyticsHandler,
 		ModelPricing:     modelPricingHandler,
+		CopilotPlatformConfig: copilotPlatformConfigHandler,
 	}
 }
 
@@ -158,6 +160,8 @@ var ProviderSet = wire.NewSet(
 	admin.NewAdminAPIKeyHandler,
 	admin.NewScheduledTestHandler,
 	admin.NewCopilotAnalyticsHandler,
+	admin.NewModelPricingHandler,
+	admin.NewCopilotPlatformConfigHandler,
 
 	// AdminHandlers and Handlers constructors
 	ProvideAdminHandlers,

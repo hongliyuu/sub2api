@@ -93,6 +93,9 @@ func RegisterAdminRoutes(
 
 		// 模型计费价格管理
 		registerModelPricingRoutes(admin, h)
+
+		// Copilot 平台配置
+		registerCopilotPlatformConfigRoutes(admin, h)
 	}
 }
 
@@ -628,5 +631,16 @@ func registerModelPricingRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		pricings.POST("", h.Admin.ModelPricing.Create)
 		pricings.PUT("/:id", h.Admin.ModelPricing.Update)
 		pricings.DELETE("/:id", h.Admin.ModelPricing.Delete)
+	}
+}
+
+func registerCopilotPlatformConfigRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+	if h.Admin.CopilotPlatformConfig == nil {
+		return
+	}
+	copilot := admin.Group("/copilot")
+	{
+		copilot.GET("/platform-config", h.Admin.CopilotPlatformConfig.List)
+		copilot.PUT("/platform-config/:plan_type", h.Admin.CopilotPlatformConfig.Update)
 	}
 }

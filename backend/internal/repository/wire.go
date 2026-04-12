@@ -74,6 +74,7 @@ var ProviderSet = wire.NewSet(
 	NewUserAttributeValueRepository,
 	NewUserGroupRateRepository,
 	NewErrorPassthroughRepository,
+	NewCopilotPlatformConfigRepository,
 
 	// Cache implementations
 	NewGatewayCache,

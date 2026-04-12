@@ -32,6 +32,7 @@ type AdminHandlers struct {
 	ScheduledTest    *admin.ScheduledTestHandler
 	CopilotAnalytics *admin.CopilotAnalyticsHandler
 	ModelPricing     *admin.ModelPricingHandler
+	CopilotPlatformConfig *admin.CopilotPlatformConfigHandler
 }
 
 // Handlers contains all HTTP handlers
