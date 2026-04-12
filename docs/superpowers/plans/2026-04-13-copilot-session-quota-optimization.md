@@ -65,7 +65,7 @@ GitHub Copilot 的 Premium 计费是 **per-request** 的——每次发送 `X-In
 | `backend/internal/service/copilot_gateway_service.go` | 修改 | 在 `CopilotGatewayService` 结构体加 `sessionCache *copilotSessionCache` 字段；在 `NewCopilotGatewayService` 初始化；修改**六个调用点**（`forwardChatCompletionsDirect`、`forwardChatCompletionsViaResponses`、`forwardChatCompletionsViaMessages`、`ForwardResponses`、`ForwardMessages`、`forwardMessagesViaResponses`）接入 session cache；在所有转发函数返回路径填充 `result.Initiator` |
 | `backend/internal/handler/copilot_gateway_handler.go` | 修改（analytics 层） | 三处 `capturedInitiator` 改为读取 `result.Initiator` 以保持 analytics 与上游一致 |
 | `backend/internal/service/copilot_session_cache_test.go` | **新建** | session cache 单元测试 |
-| `backend/internal/service/copilot_gateway_service_test.go` | 修改 | 新增 session 场景的集成测试用例 |
+| `backend/internal/service/copilot_gateway_service_test.go` | 修改 | 新增六个端到端测试（Steps 4.1–4.6），覆盖全部六个分支调用点：三个顶层入口 + `forwardChatCompletionsViaResponses`、`forwardChatCompletionsViaMessages`、`forwardMessagesViaResponses` |
 
 **不需要修改：**
 - `metadata_userid.go`：已有 `ParseMetadataUserID()`，直接复用
@@ -606,7 +606,7 @@ git add backend/internal/service/copilot_gateway_service.go \
 ## Task 3：让 `CopilotForwardResult` 携带实际 Initiator，统一 analytics 口径
 
 **Files:**
-- Modify: `backend/internal/service/copilot_gateway_service.go`（`CopilotForwardResult` struct + 四个转发函数的 return 语句）
+- Modify: `backend/internal/service/copilot_gateway_service.go`（`CopilotForwardResult` struct + 六个调用点的 return 语句）
 - Modify: `backend/internal/handler/copilot_gateway_handler.go`（三处 `capturedInitiator` 计算）
 
 **背景：** handler 层独立调用 `service.CopilotInitiatorFromBody(body)` 计算 analytics 用的 initiator，但这个计算不知道 session cache 的存在，可能与 service 层发往上游的真实 `X-Initiator` 不一致。解决方案：在 `CopilotForwardResult` 加 `Initiator` 字段，让 service 层回传实际值，handler 直接使用。
@@ -660,9 +660,9 @@ return result, err
 ```
 
 > **提示：** 使用 `grep -n "return.*CopilotForwardResult\|return result\b" copilot_gateway_service.go` 找到所有返回点。
-> **注意：** `ForwardResponses` 的 `result.Initiator` 已在 Step 2.3 处填充，此步骤检查其余四个函数。
+> **注意：** `ForwardResponses` 的 `result.Initiator` 已在 Step 2.3 处填充，此步骤核查其余五个调用点。
 
-- [ ] **Step 3.2：五个函数的返回路径补填 Initiator**
+- [ ] **Step 3.2：六个调用点的返回路径均补填 Initiator**
 
 ### Step 3.3：更新 handler 三处 capturedInitiator 计算
 
@@ -730,9 +730,9 @@ git add backend/internal/service/copilot_gateway_service.go \
 **Files:**
 - Test: `backend/internal/service/copilot_gateway_service_test.go`
 
-**设计原则：** 每个测试都走真实 service 函数（`ForwardChatCompletions` / `ForwardResponses` / `ForwardMessages`），以 `httptest.NewTLSServer` 捕获实际发出的 `X-Initiator` header，同时断言 `result.Initiator` 与上游 header 一致。这样才能真正锁住六个调用点不被漏改，以及 `result.Initiator` 填充路径不被遗漏。
+**设计原则：** 每个测试都走真实 service 函数（`ForwardChatCompletions` / `ForwardResponses` / `ForwardMessages`），以 `httptest.NewTLSServer` 捕获实际发出的 `X-Initiator` header，同时断言 `result.Initiator` 与上游 header 一致。这样才能真正锁住六个调用点（含三个内部分支：`forwardChatCompletionsViaResponses`、`forwardChatCompletionsViaMessages`、`forwardMessagesViaResponses`）不被漏改，以及 `result.Initiator` 填充路径不被遗漏。
 
-三个测试函数紧随现有 `TestXInitiatorHeader_*` 系列追加，均放在 `copilot_gateway_service_test.go` 中。
+六个测试函数（Steps 4.1–4.6）紧随现有 `TestXInitiatorHeader_*` 系列追加，均放在 `copilot_gateway_service_test.go` 中。
 
 ### Step 4.1：写 TestCopilotSessionCache_ChatCompletions（真实端到端）
 
@@ -1070,18 +1070,333 @@ func TestCopilotSessionCache_MessagesEndpoint(t *testing.T) {
 
 - [ ] **Step 4.3：写 TestCopilotSessionCache_MessagesEndpoint（端到端，真实 ForwardMessages）**
 
-### Step 4.4：运行新增端到端测试，确认通过
+### Step 4.4：写 TestCopilotSessionCache_ViaResponsesBranch（forwardChatCompletionsViaResponses 分支）
+
+文件上传路径、`/models` 返回 `["/responses"]`，不设 `base_url`（无自定义 base_url） → 触发 `forwardChatCompletionsViaResponses`。
+
+```go
+// TestCopilotSessionCache_ViaResponsesBranch verifies session-cache wiring
+// specifically inside forwardChatCompletionsViaResponses (file attachment path
+// that bridges through /responses). This branch is not exercised by
+// TestCopilotSessionCache_ChatCompletions, which always takes the direct path.
+func TestCopilotSessionCache_ViaResponsesBranch(t *testing.T) {
+    var mu sync.Mutex
+    var capturedInitiators []string
+
+    srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        if r.URL.Path == "/models" {
+            w.Header().Set("Content-Type", "application/json")
+            w.WriteHeader(http.StatusOK)
+            // responses-only: no /chat/completions → triggers forwardChatCompletionsViaResponses
+            _, _ = fmt.Fprint(w, `{"data":[{"id":"gpt-4o","supported_endpoints":["/responses"]}]}`)
+            return
+        }
+        mu.Lock()
+        capturedInitiators = append(capturedInitiators, r.Header.Get("X-Initiator"))
+        mu.Unlock()
+        _, _ = io.ReadAll(r.Body)
+        w.Header().Set("Content-Type", "text/event-stream")
+        w.WriteHeader(http.StatusOK)
+        fmt.Fprint(w, `data: {"type":"response.completed","response":{"id":"r1","status":"completed","model":"gpt-4o","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"summary"}]}],"usage":{"input_tokens":20,"output_tokens":5}}}`, "\n\n")
+        fmt.Fprint(w, "data: [DONE]\n\n")
+    }))
+    defer srv.Close()
+
+    provider := NewCopilotTokenProvider()
+    tok := newCopilotTestToken("tok-via-responses-branch")
+    provider.tokens[1] = &tok
+    provider.tokens[2] = &tok
+
+    svc := NewCopilotGatewayService(provider)
+    svc.httpClient = newRedirectingHTTPClient(srv)
+
+    const sessionUser = "user_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2_account__session_11111111-2222-3333-4444-555555555555"
+
+    // File-containing body triggers the viaResponses branch (no base_url in account).
+    fileBody := []byte(`{"model":"gpt-4o","stream":false,"messages":[{"role":"user","content":[{"type":"text","text":"summarize"},{"type":"file","file":{"filename":"doc.pdf","file_data":"data:application/pdf;base64,JVBERi0x"}}]}],"user":"` + sessionUser + `"}`)
+
+    makeCtx := func(accountID int64) (*gin.Context, *Account) {
+        w := httptest.NewRecorder()
+        c, _ := gin.CreateTestContext(w)
+        c.Request = httptest.NewRequest(http.MethodPost, "/copilot/v1/chat/completions", nil)
+        // No base_url → canonical api.githubcopilot.com path → viaResponses eligible
+        account := &Account{
+            ID:          accountID,
+            Platform:    PlatformCopilot,
+            Type:        AccountTypeAPIKey,
+            Credentials: map[string]any{"github_token": "ghp_test"},
+        }
+        return c, account
+    }
+
+    gin.SetMode(gin.TestMode)
+
+    // request 1: account 1, first → "user"
+    c1, acc1 := makeCtx(1)
+    result1, err := svc.ForwardChatCompletions(context.Background(), c1, acc1, fileBody)
+    if err != nil {
+        t.Fatalf("request 1: ForwardChatCompletions (viaResponses): %v", err)
+    }
+
+    // request 2: account 1, same session, second → "agent"
+    c2, acc2 := makeCtx(1)
+    result2, err := svc.ForwardChatCompletions(context.Background(), c2, acc2, fileBody)
+    if err != nil {
+        t.Fatalf("request 2: ForwardChatCompletions (viaResponses): %v", err)
+    }
+
+    // request 3: account 2, same raw session key → "user" (isolated)
+    c3, acc3 := makeCtx(2)
+    result3, err := svc.ForwardChatCompletions(context.Background(), c3, acc3, fileBody)
+    if err != nil {
+        t.Fatalf("request 3 (account 2): ForwardChatCompletions (viaResponses): %v", err)
+    }
+
+    mu.Lock()
+    got := capturedInitiators
+    mu.Unlock()
+
+    wants := []string{"user", "agent", "user"}
+    if len(got) != len(wants) {
+        t.Fatalf("expected %d upstream requests, got %d (paths hit: check /models vs /responses)", len(wants), len(got))
+    }
+    for i, w := range wants {
+        if got[i] != w {
+            t.Errorf("request %d (viaResponses branch): X-Initiator = %q, want %q", i+1, got[i], w)
+        }
+    }
+    for i, res := range []*CopilotForwardResult{result1, result2, result3} {
+        if res != nil && res.Initiator != got[i] {
+            t.Errorf("result%d.Initiator = %q, want %q", i+1, res.Initiator, got[i])
+        }
+    }
+}
+```
+
+- [ ] **Step 4.4：写 TestCopilotSessionCache_ViaResponsesBranch（forwardChatCompletionsViaResponses 分支）**
+
+### Step 4.5：写 TestCopilotSessionCache_ViaMessagesBranch（forwardChatCompletionsViaMessages 分支）
+
+文件上传路径、`/models` 返回 `["/v1/messages"]`（不含 `/responses`） → 触发 `forwardChatCompletionsViaMessages`，上游为 Anthropic SSE 流。
+
+```go
+// TestCopilotSessionCache_ViaMessagesBranch verifies session-cache wiring inside
+// forwardChatCompletionsViaMessages (file attachment → Anthropic /v1/messages bridge).
+// Triggered when: file in body, no base_url, model only supports /v1/messages.
+func TestCopilotSessionCache_ViaMessagesBranch(t *testing.T) {
+    var mu sync.Mutex
+    var capturedInitiators []string
+
+    srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        if r.URL.Path == "/models" {
+            w.Header().Set("Content-Type", "application/json")
+            w.WriteHeader(http.StatusOK)
+            // Only /v1/messages — not /responses → triggers forwardChatCompletionsViaMessages
+            _, _ = fmt.Fprint(w, `{"data":[{"id":"claude-sonnet-4-5","supported_endpoints":["/v1/messages"]}]}`)
+            return
+        }
+        mu.Lock()
+        capturedInitiators = append(capturedInitiators, r.Header.Get("X-Initiator"))
+        mu.Unlock()
+        _, _ = io.ReadAll(r.Body)
+        // Minimal Anthropic streaming response expected by handleChatViaMessagesStreamingResponse.
+        w.Header().Set("Content-Type", "text/event-stream")
+        w.WriteHeader(http.StatusOK)
+        fmt.Fprint(w, "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg1\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"model\":\"claude-sonnet-4-5\",\"stop_reason\":null,\"usage\":{\"input_tokens\":10,\"output_tokens\":0}}}\n\n")
+        fmt.Fprint(w, "event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"ok\"}}\n\n")
+        fmt.Fprint(w, "event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\"},\"usage\":{\"output_tokens\":3}}\n\n")
+        fmt.Fprint(w, "event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n")
+    }))
+    defer srv.Close()
+
+    provider := NewCopilotTokenProvider()
+    tok := newCopilotTestToken("tok-via-messages-branch")
+    provider.tokens[1] = &tok
+    provider.tokens[2] = &tok
+
+    svc := NewCopilotGatewayService(provider)
+    svc.httpClient = newRedirectingHTTPClient(srv)
+
+    const sessionUser = "user_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2_account__session_aaaabbbb-cccc-dddd-eeee-ffffgggggggg"
+
+    // File body targeting claude-sonnet-4-5 (supports /v1/messages, not /responses).
+    fileBody := []byte(`{"model":"claude-sonnet-4-5","stream":true,"messages":[{"role":"user","content":[{"type":"text","text":"summarize"},{"type":"file","file":{"filename":"doc.pdf","file_data":"data:application/pdf;base64,JVBERi0x"}}]}],"user":"` + sessionUser + `"}`)
+
+    makeCtx := func(accountID int64) (*gin.Context, *Account) {
+        w := httptest.NewRecorder()
+        c, _ := gin.CreateTestContext(w)
+        c.Request = httptest.NewRequest(http.MethodPost, "/copilot/v1/chat/completions", nil)
+        account := &Account{
+            ID:          accountID,
+            Platform:    PlatformCopilot,
+            Type:        AccountTypeAPIKey,
+            Credentials: map[string]any{"github_token": "ghp_test"},
+        }
+        return c, account
+    }
+
+    gin.SetMode(gin.TestMode)
+
+    // request 1: account 1, first → "user"
+    c1, acc1 := makeCtx(1)
+    result1, err := svc.ForwardChatCompletions(context.Background(), c1, acc1, fileBody)
+    if err != nil {
+        t.Fatalf("request 1: ForwardChatCompletions (viaMessages): %v", err)
+    }
+
+    // request 2: account 1, same session, second → "agent"
+    c2, acc2 := makeCtx(1)
+    result2, err := svc.ForwardChatCompletions(context.Background(), c2, acc2, fileBody)
+    if err != nil {
+        t.Fatalf("request 2: ForwardChatCompletions (viaMessages): %v", err)
+    }
+
+    // request 3: account 2, same raw session key → "user" (isolated)
+    c3, acc3 := makeCtx(2)
+    result3, err := svc.ForwardChatCompletions(context.Background(), c3, acc3, fileBody)
+    if err != nil {
+        t.Fatalf("request 3 (account 2): ForwardChatCompletions (viaMessages): %v", err)
+    }
+
+    mu.Lock()
+    got := capturedInitiators
+    mu.Unlock()
+
+    wants := []string{"user", "agent", "user"}
+    if len(got) != len(wants) {
+        t.Fatalf("expected %d upstream requests, got %d", len(wants), len(got))
+    }
+    for i, w := range wants {
+        if got[i] != w {
+            t.Errorf("request %d (viaMessages branch): X-Initiator = %q, want %q", i+1, got[i], w)
+        }
+    }
+    for i, res := range []*CopilotForwardResult{result1, result2, result3} {
+        if res != nil && res.Initiator != got[i] {
+            t.Errorf("result%d.Initiator = %q, want %q", i+1, res.Initiator, got[i])
+        }
+    }
+}
+```
+
+- [ ] **Step 4.5：写 TestCopilotSessionCache_ViaMessagesBranch（forwardChatCompletionsViaMessages 分支）**
+
+### Step 4.6：写 TestCopilotSessionCache_MessagesViaResponsesBranch（forwardMessagesViaResponses 分支）
+
+`ForwardMessages` + `/models` 返回 `["/responses"]` only（触发 `shouldUseResponsesEndpoint`） → 走 `forwardMessagesViaResponses`。
+
+```go
+// TestCopilotSessionCache_MessagesViaResponsesBranch verifies session-cache
+// wiring inside forwardMessagesViaResponses (Anthropic /v1/messages → Responses
+// API bridge). Triggered when: ForwardMessages + model only supports /responses.
+func TestCopilotSessionCache_MessagesViaResponsesBranch(t *testing.T) {
+    var mu sync.Mutex
+    var capturedInitiators []string
+
+    srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        if r.URL.Path == "/models" {
+            w.Header().Set("Content-Type", "application/json")
+            w.WriteHeader(http.StatusOK)
+            // responses-only (no /chat/completions) → shouldUseResponsesEndpoint = true
+            _, _ = fmt.Fprint(w, `{"data":[{"id":"claude-sonnet-4-5","supported_endpoints":["/responses"]}]}`)
+            return
+        }
+        mu.Lock()
+        capturedInitiators = append(capturedInitiators, r.Header.Get("X-Initiator"))
+        mu.Unlock()
+        _, _ = io.ReadAll(r.Body)
+        w.Header().Set("Content-Type", "text/event-stream")
+        w.WriteHeader(http.StatusOK)
+        fmt.Fprint(w, `data: {"type":"response.completed","response":{"id":"r1","status":"completed","model":"claude-sonnet-4-5","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"ok"}]}],"usage":{"input_tokens":10,"output_tokens":3}}}`, "\n\n")
+        fmt.Fprint(w, "data: [DONE]\n\n")
+    }))
+    defer srv.Close()
+
+    provider := NewCopilotTokenProvider()
+    tok := newCopilotTestToken("tok-messages-via-responses-branch")
+    provider.tokens[1] = &tok
+    provider.tokens[2] = &tok
+
+    svc := NewCopilotGatewayService(provider)
+    svc.httpClient = newRedirectingHTTPClient(srv)
+
+    const sessionUserID = "user_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2_account__session_ccccdddd-eeee-ffff-0000-111122223333"
+
+    // Anthropic body with metadata.user_id — provides session key for the viaResponses branch.
+    firstBody := []byte(`{"model":"claude-sonnet-4-5","max_tokens":1024,"messages":[{"role":"user","content":"hello"}],"metadata":{"user_id":"` + sessionUserID + `"}}`)
+
+    makeCtx := func(accountID int64) (*gin.Context, *Account) {
+        w := httptest.NewRecorder()
+        c, _ := gin.CreateTestContext(w)
+        c.Request = httptest.NewRequest(http.MethodPost, "/copilot/v1/messages", nil)
+        c.Request.Header.Set("Accept", "text/event-stream")
+        account := &Account{
+            ID:          accountID,
+            Platform:    PlatformCopilot,
+            Type:        AccountTypeAPIKey,
+            Credentials: map[string]any{"github_token": "ghp_test"},
+        }
+        return c, account
+    }
+
+    gin.SetMode(gin.TestMode)
+
+    // request 1: account 1, first → "user"
+    c1, acc1 := makeCtx(1)
+    result1, err := svc.ForwardMessages(context.Background(), c1, acc1, firstBody)
+    if err != nil {
+        t.Fatalf("request 1: ForwardMessages (viaResponses branch): %v", err)
+    }
+
+    // request 2: account 1, same metadata.user_id session, second → "agent"
+    c2, acc2 := makeCtx(1)
+    result2, err := svc.ForwardMessages(context.Background(), c2, acc2, firstBody)
+    if err != nil {
+        t.Fatalf("request 2: ForwardMessages (viaResponses branch): %v", err)
+    }
+
+    // request 3: account 2, same raw session key → "user" (isolated)
+    c3, acc3 := makeCtx(2)
+    result3, err := svc.ForwardMessages(context.Background(), c3, acc3, firstBody)
+    if err != nil {
+        t.Fatalf("request 3 (account 2): ForwardMessages (viaResponses branch): %v", err)
+    }
+
+    mu.Lock()
+    got := capturedInitiators
+    mu.Unlock()
+
+    wants := []string{"user", "agent", "user"}
+    if len(got) != len(wants) {
+        t.Fatalf("expected %d upstream requests, got %d", len(wants), len(got))
+    }
+    for i, w := range wants {
+        if got[i] != w {
+            t.Errorf("request %d (messagesViaResponses branch): X-Initiator = %q, want %q", i+1, got[i], w)
+        }
+    }
+    for i, res := range []*CopilotForwardResult{result1, result2, result3} {
+        if res != nil && res.Initiator != got[i] {
+            t.Errorf("result%d.Initiator = %q, want %q", i+1, res.Initiator, got[i])
+        }
+    }
+}
+```
+
+- [ ] **Step 4.6：写 TestCopilotSessionCache_MessagesViaResponsesBranch（forwardMessagesViaResponses 分支）**
+
+### Step 4.7：运行全部六个端到端测试，确认通过
 
 ```bash
 cd /Users/ziji/personal/github/sub2api/backend
-go test ./internal/service/ -run "TestCopilotSessionCache_(ChatCompletions|ResponsesEndpoint|MessagesEndpoint)" -tags unit -v -timeout 60s
+go test ./internal/service/ -run "TestCopilotSessionCache_(ChatCompletions|ResponsesEndpoint|MessagesEndpoint|ViaResponsesBranch|ViaMessagesBranch|MessagesViaResponsesBranch)" -tags unit -v -timeout 90s
 ```
 
-期望：三个函数内的所有断言 PASS。
+期望：六个测试函数内的所有断言 PASS。
 
-- [ ] **Step 4.4：确认测试通过**
+- [ ] **Step 4.7：确认六个端到端测试通过**
 
-### Step 4.5：运行全量 XInitiatorHeader 测试，确认无回归
+### Step 4.8：运行全量 XInitiatorHeader 测试，确认无回归
 
 ```bash
 cd /Users/ziji/personal/github/sub2api/backend
@@ -1090,9 +1405,9 @@ go test ./internal/service/ -run "TestXInitiatorHeader|TestCopilotSessionCache|T
 
 期望：无 FAIL。
 
-- [ ] **Step 4.5：确认无回归**
+- [ ] **Step 4.8：确认无回归**
 
-### Step 4.6：提交
+### Step 4.9：提交
 
 ```bash
 git add backend/internal/service/copilot_gateway_service_test.go \
@@ -1100,7 +1415,7 @@ git add backend/internal/service/copilot_gateway_service_test.go \
 # 按仓库提交协议提交（类型: Feature，中文描述）
 ```
 
-- [ ] **Step 4.6：提交**
+- [ ] **Step 4.9：提交**
 
 ---
 
