@@ -45,6 +45,17 @@ func parseOpsAPIKeyAndGroupID(apiKeyRaw, groupRaw string) (apiKeyID, groupID *in
 	return apiKeyID, groupID, "", nil
 }
 
+func parseExactTotalQuery(c *gin.Context) (bool, error) {
+	if c == nil {
+		return false, nil
+	}
+	raw := strings.TrimSpace(c.Query("exact_total"))
+	if raw == "" {
+		return false, nil
+	}
+	return strconv.ParseBool(raw)
+}
+
 // applyOptionalFilters checks an API key or group ID against the log's extra fields.
 func applyOptionalFilters(logExtra map[string]any, key string, target *int64) bool {
 	if target == nil {

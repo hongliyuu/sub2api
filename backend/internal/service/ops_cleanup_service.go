@@ -195,6 +195,7 @@ func (s *OpsCleanupService) runCleanupOnce(ctx context.Context) (opsCleanupDelet
 		return out, nil
 	}
 
+	cleanupMaxRowsTriggered.Store(0)
 	s.updateMaxRowsConfig()
 
 	batchSize := 5000
@@ -284,21 +285,7 @@ func deleteOldRowsByID(
 		batchSize = 5000
 	}
 
-	where := fmt.Sprintf("%s < $1", timeColumn)
-	if castCutoffToDate {
-		where = fmt.Sprintf("%s < $1::date", timeColumn)
-	}
-
-	q := fmt.Sprintf(`
-WITH batch AS (
-  SELECT id FROM %s
-  WHERE %s
-  ORDER BY id
-  LIMIT $2
-)
-DELETE FROM %s
-WHERE id IN (SELECT id FROM batch)
-`, table, where, table)
+	q := buildDeleteOldRowsByIDQuery(table, timeColumn, castCutoffToDate)
 
 	var total int64
 	for {
@@ -320,6 +307,24 @@ WHERE id IN (SELECT id FROM batch)
 		}
 	}
 	return total, nil
+}
+
+func buildDeleteOldRowsByIDQuery(table string, timeColumn string, castCutoffToDate bool) string {
+	where := fmt.Sprintf("%s < $1", timeColumn)
+	if castCutoffToDate {
+		where = fmt.Sprintf("%s < $1::date", timeColumn)
+	}
+	return fmt.Sprintf(`
+WITH batch AS (
+  SELECT ctid FROM %s
+  WHERE %s
+  ORDER BY %s ASC, id ASC
+  LIMIT $2
+)
+DELETE FROM %s AS t
+USING batch
+WHERE t.ctid = batch.ctid
+`, table, where, timeColumn, table)
 }
 
 func (s *OpsCleanupService) tryAcquireLeaderLock(ctx context.Context) (func(), bool) {

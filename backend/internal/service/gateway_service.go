@@ -3853,13 +3853,22 @@ const (
 )
 
 func (s *GatewayService) shouldRetryUpstreamError(account *Account, statusCode int) bool {
+	if account == nil {
+		return false
+	}
+
 	// OAuth/Setup Token 账号：仅 403 重试
 	if account.IsOAuth() {
 		return statusCode == 403
 	}
 
-	// API Key 账号：未配置的错误码重试
-	return !account.ShouldHandleErrorCode(statusCode)
+	// 自定义错误码未命中时，仅对真正的瞬时上游故障做同账号重试，
+	// 避免 404/422 这类确定性错误被无意义放大成长尾请求。
+	if account.IsCustomErrorCodesEnabled() && !account.ShouldHandleErrorCode(statusCode) {
+		return isGatewayTransientRetryStatus(statusCode)
+	}
+
+	return false
 }
 
 // shouldFailoverUpstreamError determines whether an upstream error should trigger account failover.
@@ -3870,6 +3879,58 @@ func (s *GatewayService) shouldFailoverUpstreamError(statusCode int) bool {
 	default:
 		return statusCode >= 500
 	}
+}
+
+func isGatewayTransientRetryStatus(statusCode int) bool {
+	switch statusCode {
+	case http.StatusTooManyRequests,
+		http.StatusInternalServerError,
+		http.StatusBadGateway,
+		http.StatusServiceUnavailable,
+		http.StatusGatewayTimeout,
+		529:
+		return true
+	default:
+		return false
+	}
+}
+
+func retryBackoffDelayForResponse(resp *http.Response, attempt int) time.Duration {
+	delay := retryBackoffDelay(attempt)
+	if resp == nil {
+		return delay
+	}
+	retryAfter := parseRetryAfterHeader(resp.Header.Get("Retry-After"), time.Now())
+	if retryAfter <= 0 {
+		return delay
+	}
+	if retryAfter > retryMaxDelay {
+		return retryMaxDelay
+	}
+	return retryAfter
+}
+
+func parseRetryAfterHeader(raw string, now time.Time) time.Duration {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0
+	}
+	if secs, err := strconv.Atoi(raw); err == nil {
+		if secs <= 0 {
+			return 0
+		}
+		return time.Duration(secs) * time.Second
+	}
+	if retryAt, err := http.ParseTime(raw); err == nil {
+		if now.IsZero() {
+			now = time.Now()
+		}
+		if !retryAt.After(now) {
+			return 0
+		}
+		return retryAt.Sub(now)
+	}
+	return 0
 }
 
 func retryBackoffDelay(attempt int) time.Duration {
@@ -4655,7 +4716,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 					break
 				}
 
-				delay := retryBackoffDelay(attempt)
+				delay := retryBackoffDelayForResponse(resp, attempt)
 				remaining := maxRetryElapsed - elapsed
 				if delay > remaining {
 					delay = remaining
@@ -4969,7 +5030,7 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 					break
 				}
 
-				delay := retryBackoffDelay(attempt)
+				delay := retryBackoffDelayForResponse(resp, attempt)
 				remaining := maxRetryElapsed - elapsed
 				if delay > remaining {
 					delay = remaining
@@ -5686,7 +5747,7 @@ func (s *GatewayService) executeBedrockUpstream(
 					break
 				}
 
-				delay := retryBackoffDelay(attempt)
+				delay := retryBackoffDelayForResponse(resp, attempt)
 				remaining := maxRetryElapsed - elapsed
 				if delay > remaining {
 					delay = remaining
@@ -7981,6 +8042,7 @@ func logUsageLogNotPersisted(logKey string, usageLog *UsageLog, err error) {
 		"model":           strings.TrimSpace(usageLog.Model),
 		"requested_model": strings.TrimSpace(usageLog.RequestedModel),
 		"upstream_model":  usageLog.UpstreamModel,
+		"provider":        usageLog.Provider,
 		"billing_type":    usageLog.BillingType,
 		"request_type":    usageLog.RequestType,
 		"total_cost":      usageLog.TotalCost,
@@ -8513,6 +8575,7 @@ func (s *GatewayService) buildRecordUsageLog(
 		Model:                 result.Model,
 		RequestedModel:        requestedModel,
 		UpstreamModel:         optionalNonEqualStringPtr(result.UpstreamModel, result.Model),
+		Provider:              usageLogProviderFromAccount(account),
 		ReasoningEffort:       result.ReasoningEffort,
 		InboundEndpoint:       optionalTrimmedStringPtr(input.InboundEndpoint),
 		UpstreamEndpoint:      optionalTrimmedStringPtr(input.UpstreamEndpoint),

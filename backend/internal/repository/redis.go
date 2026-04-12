@@ -1,7 +1,9 @@
 package repository
 
 import (
+	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -13,6 +15,8 @@ import (
 )
 
 var defaultRedisClient atomic.Pointer[redis.Client]
+
+var ErrRedisClientNotInitialized = errors.New("redis client not initialized")
 
 // InitRedis 初始化 Redis 客户端
 //
@@ -84,12 +88,16 @@ const (
 	redisPoolSizeWarningThreshold      = 512
 	redisMinIdleRatioWarningThreshold  = 0.8
 	redisMinIdleHardLimitWarningThresh = 1.0
+	redisMinIdleAbsoluteWarningThresh  = 64
 )
 
 func evaluateRedisPoolWarnings(poolSize, minIdle int) []string {
 	var warnings []string
 	if poolSize > redisPoolSizeWarningThreshold {
 		warnings = append(warnings, fmt.Sprintf("pool_size (%d) exceeds %d threshold", poolSize, redisPoolSizeWarningThreshold))
+	}
+	if minIdle > redisMinIdleAbsoluteWarningThresh {
+		warnings = append(warnings, fmt.Sprintf("min_idle_conns (%d) exceeds conservative threshold %d", minIdle, redisMinIdleAbsoluteWarningThresh))
 	}
 	if poolSize > 0 {
 		ratio := float64(minIdle) / float64(poolSize)
@@ -146,6 +154,20 @@ func SnapshotRedisPoolStats(client *redis.Client) RedisPoolSnapshot {
 // SnapshotDefaultRedisPoolStats returns pool stats for the default initialized client.
 func SnapshotDefaultRedisPoolStats() RedisPoolSnapshot {
 	return SnapshotRedisPoolStats(defaultRedisClient.Load())
+}
+
+func ProbeRedis(ctx context.Context, client *redis.Client) error {
+	if client == nil {
+		return ErrRedisClientNotInitialized
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return client.Ping(ctx).Err()
+}
+
+func ProbeDefaultRedis(ctx context.Context) error {
+	return ProbeRedis(ctx, defaultRedisClient.Load())
 }
 
 // RedisPoolSnapshotFromStats converts go-redis stats into our snapshot structure.

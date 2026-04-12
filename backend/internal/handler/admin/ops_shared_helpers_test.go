@@ -1,8 +1,10 @@
 package admin
 
 import (
+	"net/http"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
 
@@ -64,6 +66,27 @@ func TestParseOpsAPIKeyAndGroupID(t *testing.T) {
 	require.Equal(t, "group_id", invalidField)
 	require.Nil(t, apiKeyID)
 	require.Nil(t, groupID)
+}
+
+func TestParseExactTotalQuery(t *testing.T) {
+	ginCtx := func(rawQuery string) *gin.Context {
+		c, _ := gin.CreateTestContext(nil)
+		req, _ := http.NewRequest("GET", "/?"+rawQuery, nil)
+		c.Request = req
+		return c
+	}
+
+	value, err := parseExactTotalQuery(ginCtx(""))
+	require.NoError(t, err)
+	require.False(t, value)
+
+	value, err = parseExactTotalQuery(ginCtx("exact_total=true"))
+	require.NoError(t, err)
+	require.True(t, value)
+
+	value, err = parseExactTotalQuery(ginCtx("exact_total=bad"))
+	require.Error(t, err)
+	require.False(t, value)
 }
 
 func TestApplyOptionalFilters(t *testing.T) {

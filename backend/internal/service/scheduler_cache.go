@@ -73,3 +73,10 @@ type SchedulerOwnedBucketLockCache interface {
 	TryLockBucketWithOwner(ctx context.Context, bucket SchedulerBucket, owner string, ttl time.Duration) (bool, error)
 	ReleaseBucketLock(ctx context.Context, bucket SchedulerBucket, owner string) error
 }
+
+// SchedulerBucketRegistrySyncCache is an optional cache capability used by
+// full rebuild flows to reconcile the bucket registry with the authoritative
+// active bucket set and drop stale registry entries.
+type SchedulerBucketRegistrySyncCache interface {
+	ReplaceBuckets(ctx context.Context, buckets []SchedulerBucket) error
+}

@@ -218,8 +218,11 @@ type OpsSchedulerOutboxRuntimeSummary struct {
 	BacklogRows                  int64                        `json:"backlog_rows"`
 	LagSeconds                   int64                        `json:"lag_seconds"`
 	LagFailureStreak             int64                        `json:"lag_failure_streak"`
+	CoalescedBatchTotal          int64                        `json:"coalesced_batch_total"`
+	CoalescedEventSavedTotal     int64                        `json:"coalesced_event_saved_total"`
 	LagRebuildTotal              int64                        `json:"lag_rebuild_total"`
 	BacklogRebuildTotal          int64                        `json:"backlog_rebuild_total"`
+	RebuildCooldownSkipTotal     int64                        `json:"rebuild_cooldown_skip_total"`
 	LastLagRebuildAt             string                       `json:"last_lag_rebuild_at,omitempty"`
 	LastBacklogRebuildAt         string                       `json:"last_backlog_rebuild_at,omitempty"`
 	BlockedEventClearTotal       int64                        `json:"blocked_event_clear_total"`
@@ -229,6 +232,7 @@ type OpsSchedulerOutboxRuntimeSummary struct {
 	BucketRebuildSuccessTotal    int64                        `json:"bucket_rebuild_success_total"`
 	BucketRebuildFailureTotal    int64                        `json:"bucket_rebuild_failure_total"`
 	BucketRebuildLockContention  int64                        `json:"bucket_rebuild_lock_contention_total"`
+	BusyBucketSkipTotal          int64                        `json:"busy_bucket_skip_total"`
 	LastBucketRebuildAt          string                       `json:"last_bucket_rebuild_at,omitempty"`
 	LastBucketRebuildReason      string                       `json:"last_bucket_rebuild_reason,omitempty"`
 	LastBucketRebuildStatus      string                       `json:"last_bucket_rebuild_status,omitempty"`

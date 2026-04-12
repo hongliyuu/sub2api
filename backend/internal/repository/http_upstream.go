@@ -3,6 +3,7 @@ package repository
 import (
 	"compress/flate"
 	"compress/gzip"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -47,6 +48,14 @@ const (
 	// defaultResponseHeaderTimeout: 默认等待响应头超时时间（5分钟）
 	// LLM 请求可能排队较久，需要较长超时
 	defaultResponseHeaderTimeout = 300 * time.Second
+	// defaultConnectTimeout: 默认 TCP 建连超时时间
+	defaultConnectTimeout = 10 * time.Second
+	// defaultTLSHandshakeTimeout: 默认 TLS 握手超时时间
+	defaultTLSHandshakeTimeout = 10 * time.Second
+	// defaultExpectContinueTimeout: 默认等待 100-continue 超时时间
+	defaultExpectContinueTimeout = 1 * time.Second
+	// defaultDialKeepAlive: 默认 TCP keepalive
+	defaultDialKeepAlive = 30 * time.Second
 	// defaultMaxUpstreamClients: 默认最大客户端缓存数量
 	// 超出后会淘汰最久未使用的客户端
 	defaultMaxUpstreamClients = 5000
@@ -72,6 +81,9 @@ type poolSettings struct {
 	maxConnsPerHost       int           // 每主机最大连接数（含活跃）
 	idleConnTimeout       time.Duration // 空闲连接超时时间
 	responseHeaderTimeout time.Duration // 等待响应头超时时间
+	connectTimeout        time.Duration // TCP 建连超时时间
+	tlsHandshakeTimeout   time.Duration // TLS 握手超时时间
+	expectContinueTimeout time.Duration // 100-continue 超时时间
 }
 
 // upstreamClientEntry 上游客户端缓存条目
@@ -873,6 +885,9 @@ func defaultPoolSettings(cfg *config.Config) poolSettings {
 	maxConnsPerHost := defaultMaxConnsPerHost
 	idleConnTimeout := defaultIdleConnTimeout
 	responseHeaderTimeout := defaultResponseHeaderTimeout
+	connectTimeout := defaultConnectTimeout
+	tlsHandshakeTimeout := defaultTLSHandshakeTimeout
+	expectContinueTimeout := defaultExpectContinueTimeout
 
 	if cfg != nil {
 		if cfg.Gateway.MaxIdleConns > 0 {
@@ -890,6 +905,15 @@ func defaultPoolSettings(cfg *config.Config) poolSettings {
 		if cfg.Gateway.ResponseHeaderTimeout > 0 {
 			responseHeaderTimeout = time.Duration(cfg.Gateway.ResponseHeaderTimeout) * time.Second
 		}
+		if cfg.Gateway.ConnectTimeoutSeconds > 0 {
+			connectTimeout = time.Duration(cfg.Gateway.ConnectTimeoutSeconds) * time.Second
+		}
+		if cfg.Gateway.TLSHandshakeTimeoutSeconds > 0 {
+			tlsHandshakeTimeout = time.Duration(cfg.Gateway.TLSHandshakeTimeoutSeconds) * time.Second
+		}
+		if cfg.Gateway.ExpectContinueTimeoutSeconds > 0 {
+			expectContinueTimeout = time.Duration(cfg.Gateway.ExpectContinueTimeoutSeconds) * time.Second
+		}
 	}
 	settings := poolSettings{
 		maxIdleConns:          maxIdleConns,
@@ -897,6 +921,9 @@ func defaultPoolSettings(cfg *config.Config) poolSettings {
 		maxConnsPerHost:       maxConnsPerHost,
 		idleConnTimeout:       idleConnTimeout,
 		responseHeaderTimeout: responseHeaderTimeout,
+		connectTimeout:        connectTimeout,
+		tlsHandshakeTimeout:   tlsHandshakeTimeout,
+		expectContinueTimeout: expectContinueTimeout,
 	}
 	logHTTPPoolWarnings(evaluateHTTPPoolWarnings(settings), settings)
 	return settings
@@ -920,16 +947,24 @@ func defaultPoolSettings(cfg *config.Config) poolSettings {
 //   - IdleConnTimeout: 空闲连接超时（超时后关闭）
 //   - ResponseHeaderTimeout: 等待响应头超时（不影响流式传输）
 func buildUpstreamTransport(settings poolSettings, proxyURL *url.URL) (*http.Transport, error) {
+	baseDialer := &net.Dialer{
+		Timeout:   settings.connectTimeout,
+		KeepAlive: defaultDialKeepAlive,
+	}
 	transport := &http.Transport{
 		MaxIdleConns:          settings.maxIdleConns,
 		MaxIdleConnsPerHost:   settings.maxIdleConnsPerHost,
 		MaxConnsPerHost:       settings.maxConnsPerHost,
 		IdleConnTimeout:       settings.idleConnTimeout,
 		ResponseHeaderTimeout: settings.responseHeaderTimeout,
+		TLSHandshakeTimeout:   settings.tlsHandshakeTimeout,
+		ExpectContinueTimeout: settings.expectContinueTimeout,
+		DialContext:           baseDialer.DialContext,
 	}
 	if err := proxyutil.ConfigureTransportProxy(transport, proxyURL); err != nil {
 		return nil, err
 	}
+	transport.DialContext = wrapDialContextWithTimeout(transport.DialContext, settings.connectTimeout)
 	return transport, nil
 }
 
@@ -950,12 +985,19 @@ func buildUpstreamTransport(settings poolSettings, proxyURL *url.URL) (*http.Tra
 //   - http/https: HTTP 代理，使用 HTTPProxyDialer（CONNECT 隧道 + utls 握手）
 //   - socks5: SOCKS5 代理，使用 SOCKS5ProxyDialer（SOCKS5 隧道 + utls 握手）
 func buildUpstreamTransportWithTLSFingerprint(settings poolSettings, proxyURL *url.URL, profile *tlsfingerprint.Profile) (*http.Transport, error) {
+	baseDialer := &net.Dialer{
+		Timeout:   settings.connectTimeout,
+		KeepAlive: defaultDialKeepAlive,
+	}
 	transport := &http.Transport{
 		MaxIdleConns:          settings.maxIdleConns,
 		MaxIdleConnsPerHost:   settings.maxIdleConnsPerHost,
 		MaxConnsPerHost:       settings.maxConnsPerHost,
 		IdleConnTimeout:       settings.idleConnTimeout,
 		ResponseHeaderTimeout: settings.responseHeaderTimeout,
+		TLSHandshakeTimeout:   settings.tlsHandshakeTimeout,
+		ExpectContinueTimeout: settings.expectContinueTimeout,
+		DialContext:           baseDialer.DialContext,
 		// 禁用默认的 TLS，我们使用自定义的 DialTLSContext
 		ForceAttemptHTTP2: false,
 	}
@@ -987,8 +1029,50 @@ func buildUpstreamTransportWithTLSFingerprint(settings poolSettings, proxyURL *u
 			}
 		}
 	}
+	transport.DialContext = wrapDialContextWithTimeout(transport.DialContext, settings.connectTimeout)
+	transport.DialTLSContext = wrapDialTLSContextWithTimeout(transport.DialTLSContext, settings.tlsHandshakeTimeout)
 
 	return transport, nil
+}
+
+func wrapDialContextWithTimeout(base func(context.Context, string, string) (net.Conn, error), timeout time.Duration) func(context.Context, string, string) (net.Conn, error) {
+	if base == nil {
+		base = (&net.Dialer{Timeout: timeout, KeepAlive: defaultDialKeepAlive}).DialContext
+	}
+	if timeout <= 0 {
+		return base
+	}
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		if _, ok := ctx.Deadline(); ok {
+			return base(ctx, network, addr)
+		}
+		timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+		return base(timeoutCtx, network, addr)
+	}
+}
+
+func wrapDialTLSContextWithTimeout(base func(context.Context, string, string) (net.Conn, error), timeout time.Duration) func(context.Context, string, string) (net.Conn, error) {
+	if base == nil {
+		return nil
+	}
+	if timeout <= 0 {
+		return base
+	}
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		if _, ok := ctx.Deadline(); ok {
+			return base(ctx, network, addr)
+		}
+		timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+		return base(timeoutCtx, network, addr)
+	}
 }
 
 // trackedBody 带跟踪功能的响应体包装器

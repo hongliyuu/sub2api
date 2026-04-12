@@ -45,90 +45,150 @@ func (h *OpsHandler) ListBillingCompensation(c *gin.Context) {
 		EndTime:   endTime,
 		Platform:  strings.TrimSpace(c.Query("platform")),
 	}
-	perComponentLimit := page * pageSize
-	if perComponentLimit < 50 {
-		perComponentLimit = 50
-	}
-	if perComponentLimit > 200 {
-		perComponentLimit = 200
-	}
-
-	logs := collectPersistedBillingLogsWithLimit(c.Request.Context(), h.opsService, filter, perComponentLimit)
 	requestID := strings.TrimSpace(c.Query("request_id"))
-
-	items := make([]gin.H, 0, len(logs))
-	for _, log := range logs {
-		if !matchesBillingCompensationFilters(log, requestID, apiKeyID, groupID) {
-			continue
-		}
-		if entry := buildBillingCompensationLogEntry(log); entry != nil {
-			items = append(items, entry)
-		}
-	}
-
+	items, total := listBillingCompensationEntries(c.Request.Context(), h.opsService, filter, requestID, apiKeyID, groupID, page*pageSize)
 	sort.SliceStable(items, func(i, j int) bool {
 		return strings.Compare(asString(items[i]["created_at"]), asString(items[j]["created_at"])) > 0
 	})
 
-	total := len(items)
 	start := (page - 1) * pageSize
-	if start > total {
-		start = total
+	if start > len(items) {
+		start = len(items)
 	}
 	end := start + pageSize
-	if end > total {
-		end = total
+	if end > len(items) {
+		end = len(items)
 	}
 
-	response.Paginated(c, items[start:end], int64(total), page, pageSize)
+	response.Paginated(c, items[start:end], total, page, pageSize)
 }
 
-func collectPersistedBillingLogsWithLimit(ctx context.Context, opsSvc *service.OpsService, filter *service.OpsDashboardFilter, perComponentLimit int) []*service.OpsSystemLog {
-	if perComponentLimit <= 0 {
-		perComponentLimit = 50
+func listBillingCompensationEntries(
+	ctx context.Context,
+	opsSvc *service.OpsService,
+	filter *service.OpsDashboardFilter,
+	requestID string,
+	apiKeyID, groupID *int64,
+	limit int,
+) ([]gin.H, int64) {
+	logs, total := collectPersistedBillingCompensationLogs(ctx, opsSvc, filter, requestID, apiKeyID, groupID, limit)
+	items := make([]gin.H, 0, len(logs))
+	for _, log := range logs {
+		if entry := buildBillingCompensationLogEntry(log); entry != nil {
+			items = append(items, entry)
+		}
 	}
-	if perComponentLimit > 200 {
-		perComponentLimit = 200
-	}
+	return items, total
+}
+
+func collectPersistedBillingCompensationLogs(
+	ctx context.Context,
+	opsSvc *service.OpsService,
+	filter *service.OpsDashboardFilter,
+	requestID string,
+	apiKeyID, groupID *int64,
+	limit int,
+) ([]*service.OpsSystemLog, int64) {
 	if opsSvc == nil {
-		return nil
+		return nil, 0
 	}
 	components := []string{
 		service.OpsRuntimeBillingCompensationComponent,
 		service.OpsRuntimeBillingCompensationSummaryComponent,
 	}
-	result := make([]*service.OpsSystemLog, 0, len(components)*perComponentLimit)
+	result := make([]*service.OpsSystemLog, 0, len(components)*50)
+	var total int64
 	for _, component := range components {
-		entries := fetchRuntimeLogsForComponent(ctx, opsSvc, filter, component, perComponentLimit)
+		entries, componentTotal := fetchBillingCompensationLogsForComponent(ctx, opsSvc, filter, component, requestID, apiKeyID, groupID, limit)
+		total += componentTotal
 		if len(entries) == 0 {
 			continue
 		}
 		result = append(result, entries...)
 	}
-	return result
+	return result, total
+}
+
+func fetchBillingCompensationLogsForComponent(
+	ctx context.Context,
+	opsSvc *service.OpsService,
+	base *service.OpsDashboardFilter,
+	component string,
+	requestID string,
+	apiKeyID, groupID *int64,
+	limit int,
+) ([]*service.OpsSystemLog, int64) {
+	if opsSvc == nil {
+		return nil, 0
+	}
+	pageSize := billingCompensationPageSize(limit)
+
+	collected := make([]*service.OpsSystemLog, 0, pageSize)
+	var total int64
+	for page := 1; ; page++ {
+		filter := buildRuntimeLogFilter(base, component, pageSize)
+		applyBillingCompensationLogFilters(filter, requestID, apiKeyID, groupID)
+		filter.ExactTotal = true
+		filter.Page = page
+		result, err := opsSvc.ListSystemLogs(ctx, filter)
+		if err != nil || result == nil || len(result.Logs) == 0 {
+			break
+		}
+		if page == 1 {
+			total = int64(result.Total)
+		}
+		collected = append(collected, result.Logs...)
+		if shouldStopBillingLogScan(result, len(collected), limit) {
+			break
+		}
+	}
+	return collected, total
+}
+
+func billingCompensationPageSize(limit int) int {
+	switch {
+	case limit <= 0:
+		return 200
+	case limit < 50:
+		return 50
+	case limit > 200:
+		return 200
+	default:
+		return limit
+	}
+}
+
+func applyBillingCompensationLogFilters(filter *service.OpsSystemLogFilter, requestID string, apiKeyID, groupID *int64) {
+	if filter == nil {
+		return
+	}
+	filter.ResolvedRequestID = strings.TrimSpace(requestID)
+	filter.ExtraAPIKeyID = apiKeyID
+	filter.ExtraGroupID = groupID
+}
+
+func shouldStopBillingLogScan(page *service.OpsSystemLogList, collected int, limit int) bool {
+	if page == nil {
+		return true
+	}
+	if page.PageSize <= 0 {
+		page.PageSize = len(page.Logs)
+	}
+	if page.Page <= 0 {
+		page.Page = 1
+	}
+	if limit > 0 && collected >= limit {
+		return true
+	}
+	if page.Total > 0 && page.Page*page.PageSize >= page.Total {
+		return true
+	}
+	return false
 }
 
 func matchesBillingCompensationFilters(log *service.OpsSystemLog, requestID string, apiKeyID, groupID *int64) bool {
 	if log == nil {
 		return false
-	}
-	if requestID != "" {
-		resolvedRequestID := resolveBillingCompensationRequestID(log)
-		if !strings.EqualFold(resolvedRequestID, requestID) {
-			return false
-		}
-	}
-	if apiKeyID != nil {
-		value, ok := extractBillingCompensationInt64(log, "api_key_id")
-		if !ok || value != *apiKeyID {
-			return false
-		}
-	}
-	if groupID != nil {
-		value, ok := extractBillingCompensationInt64(log, "group_id")
-		if !ok || value != *groupID {
-			return false
-		}
 	}
 	return true
 }
@@ -255,17 +315,7 @@ func (h *OpsHandler) GetBillingCompensationDetail(c *gin.Context) {
 		return
 	}
 
-	logs := collectPersistedBillingLogsWithLimit(c.Request.Context(), h.opsService, filter, 50)
-
-	entries := make([]gin.H, 0, len(logs))
-	for _, log := range logs {
-		if !matchesBillingCompensationFilters(log, requestID, apiKeyID, groupID) {
-			continue
-		}
-		if entry := buildBillingCompensationLogEntry(log); entry != nil {
-			entries = append(entries, entry)
-		}
-	}
+	entries, _ := listBillingCompensationEntries(c.Request.Context(), h.opsService, filter, requestID, apiKeyID, groupID, 0)
 
 	if len(entries) == 0 {
 		response.NotFound(c, "billing compensation entry not found")

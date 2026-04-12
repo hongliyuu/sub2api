@@ -1,7 +1,9 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"sync/atomic"
 	"time"
@@ -11,6 +13,8 @@ import (
 )
 
 var defaultDBPool atomic.Pointer[sql.DB]
+
+var ErrDBPoolNotInitialized = errors.New("database pool not initialized")
 
 type dbPoolSettings struct {
 	MaxOpenConns    int
@@ -45,6 +49,8 @@ func applyDBPoolSettings(db *sql.DB, cfg *config.Config) {
 
 const (
 	dbPoolStartMaxOpenWarningThreshold     = 500
+	dbPoolStartConservativeOpenThreshold   = 128
+	dbPoolStartConservativeIdleThreshold   = 64
 	dbPoolStartIdleRatioWarningThreshold   = 0.9
 	dbPoolRuntimeIdleRatioWarningThreshold = 0.85
 	dbPoolRuntimeUsageWarningThreshold     = 0.85
@@ -71,6 +77,20 @@ func SnapshotDBPoolStats(db *sql.DB) DBPoolSnapshot {
 
 func SnapshotDefaultDBPoolStats() DBPoolSnapshot {
 	return SnapshotDBPoolStats(defaultDBPool.Load())
+}
+
+func ProbeDB(ctx context.Context, db *sql.DB) error {
+	if db == nil {
+		return ErrDBPoolNotInitialized
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return db.PingContext(ctx)
+}
+
+func ProbeDefaultDB(ctx context.Context) error {
+	return ProbeDB(ctx, defaultDBPool.Load())
 }
 
 func dbPoolSnapshotFromStats(stats sql.DBStats) DBPoolSnapshot {
@@ -123,6 +143,12 @@ func evaluateDBPoolConfigWarnings(settings dbPoolSettings) []string {
 	var warnings []string
 	if settings.MaxOpenConns > dbPoolStartMaxOpenWarningThreshold {
 		warnings = append(warnings, fmt.Sprintf("max_open_conns (%d) exceeds %d safety threshold", settings.MaxOpenConns, dbPoolStartMaxOpenWarningThreshold))
+	}
+	if settings.MaxOpenConns > dbPoolStartConservativeOpenThreshold {
+		warnings = append(warnings, fmt.Sprintf("max_open_conns (%d) exceeds conservative threshold %d; verify against postgres max_connections", settings.MaxOpenConns, dbPoolStartConservativeOpenThreshold))
+	}
+	if settings.MaxIdleConns > dbPoolStartConservativeIdleThreshold {
+		warnings = append(warnings, fmt.Sprintf("max_idle_conns (%d) exceeds conservative threshold %d", settings.MaxIdleConns, dbPoolStartConservativeIdleThreshold))
 	}
 	if settings.MaxOpenConns > 0 && settings.MaxIdleConns > 0 {
 		ratio := float64(settings.MaxIdleConns) / float64(settings.MaxOpenConns)

@@ -8,7 +8,7 @@ import (
 
 func TestBuildHourlyMetricsFilter_DefaultGroupNull(t *testing.T) {
 	clause, args, nextIdx := buildHourlyMetricsFilter("", nil, 3)
-	require.Equal(t, " AND group_id IS NULL", clause)
+	require.Equal(t, " AND platform IS NULL AND group_id IS NULL", clause)
 	require.Equal(t, 0, len(args))
 	require.Equal(t, 3, nextIdx)
 }

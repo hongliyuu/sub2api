@@ -3,8 +3,10 @@ package admin
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,14 +24,122 @@ type opsBillingCompensationRepoStub struct {
 }
 
 func (s *opsBillingCompensationRepoStub) ListSystemLogs(ctx context.Context, filter *service.OpsSystemLogFilter) (*service.OpsSystemLogList, error) {
+	match := func(log *service.OpsSystemLog) bool {
+		if log == nil {
+			return false
+		}
+		if filter.Component != "" && log.Component != filter.Component {
+			return false
+		}
+		if filter.ResolvedRequestID != "" {
+			requestID := strings.TrimSpace(log.RequestID)
+			if requestID == "" {
+				requestID = strings.TrimSpace(asStringFromExtra(log.Extra, "request_id"))
+			}
+			if requestID != filter.ResolvedRequestID {
+				return false
+			}
+		}
+		if filter.ExtraAPIKeyID != nil {
+			value, ok := extractInt64FromExtra(log.Extra, "api_key_id")
+			if !ok || value != *filter.ExtraAPIKeyID {
+				return false
+			}
+		}
+		if filter.ExtraGroupID != nil {
+			value, ok := extractInt64FromExtra(log.Extra, "group_id")
+			if !ok || value != *filter.ExtraGroupID {
+				return false
+			}
+		}
+		return true
+	}
+	selectPage := func(src []*service.OpsSystemLog) *service.OpsSystemLogList {
+		filtered := make([]*service.OpsSystemLog, 0, len(src))
+		for _, item := range src {
+			if match(item) {
+				filtered = append(filtered, item)
+			}
+		}
+		page := filter.Page
+		if page <= 0 {
+			page = 1
+		}
+		pageSize := filter.PageSize
+		if pageSize <= 0 {
+			pageSize = 50
+		}
+		start := (page - 1) * pageSize
+		if start > len(filtered) {
+			start = len(filtered)
+		}
+		end := start + pageSize
+		if end > len(filtered) {
+			end = len(filtered)
+		}
+		return &service.OpsSystemLogList{
+			Logs:     filtered[start:end],
+			Total:    len(filtered),
+			Page:     page,
+			PageSize: pageSize,
+		}
+	}
 	switch filter.Component {
 	case service.OpsRuntimeBillingCompensationComponent:
-		return &service.OpsSystemLogList{Logs: s.candidateLogs, Total: len(s.candidateLogs), Page: 1, PageSize: filter.PageSize}, nil
+		return selectPage(s.candidateLogs), nil
 	case service.OpsRuntimeBillingCompensationSummaryComponent:
-		return &service.OpsSystemLogList{Logs: s.summaryLogs, Total: len(s.summaryLogs), Page: 1, PageSize: filter.PageSize}, nil
+		return selectPage(s.summaryLogs), nil
 	default:
-		return &service.OpsSystemLogList{Logs: []*service.OpsSystemLog{}, Total: 0, Page: 1, PageSize: filter.PageSize}, nil
+		return selectPage(nil), nil
 	}
+}
+
+func asStringFromExtra(extra map[string]any, key string) string {
+	if extra == nil || key == "" {
+		return ""
+	}
+	if value, ok := extra[key]; ok {
+		if str, ok := value.(string); ok {
+			return str
+		}
+	}
+	if lastRaw, ok := extra["last"]; ok {
+		if last, ok := lastRaw.(map[string]any); ok {
+			if value, ok := last[key]; ok {
+				if str, ok := value.(string); ok {
+					return str
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func extractInt64FromExtra(extra map[string]any, key string) (int64, bool) {
+	if extra == nil || key == "" {
+		return 0, false
+	}
+	if value, ok := extra[key]; ok {
+		switch v := value.(type) {
+		case int64:
+			return v, true
+		case float64:
+			return int64(v), true
+		}
+	}
+	if lastRaw, ok := extra["last"]; ok {
+		if last, ok := lastRaw.(map[string]any); ok {
+			if value, ok := last[key]; ok {
+				switch v := value.(type) {
+				case int64:
+					return v, true
+				case float64:
+					return int64(v), true
+				}
+			}
+		}
+	}
+	return 0, false
 }
 
 func TestOpsBillingCompensationHandler_ListAndFilter(t *testing.T) {
@@ -379,4 +489,177 @@ func TestOpsBillingCompensationHandler_DetailNotFound(t *testing.T) {
 	rec := httptest.NewRecorder()
 	router.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestOpsBillingCompensationHandler_ListPaginationScansBeyondFirstComponentPage(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	now := time.Now().UTC()
+	candidateLogs := make([]*service.OpsSystemLog, 0, 240)
+	for i := 0; i < 240; i++ {
+		candidateLogs = append(candidateLogs, &service.OpsSystemLog{
+			ID:        int64(i + 1),
+			Component: service.OpsRuntimeBillingCompensationComponent,
+			Message:   fmt.Sprintf("candidate-%03d", i),
+			CreatedAt: now.Add(-time.Duration(i) * time.Second),
+			RequestID: fmt.Sprintf("req-%03d", i),
+			Extra: map[string]any{
+				"request_id": fmt.Sprintf("req-%03d", i),
+			},
+		})
+	}
+	repo := &opsBillingCompensationRepoStub{candidateLogs: candidateLogs}
+	opsSvc := service.NewOpsService(repo, nil, &config.Config{Ops: config.OpsConfig{Enabled: true}}, nil, nil, nil, nil, nil, nil, nil, nil)
+	handler := NewOpsHandler(opsSvc)
+	router := gin.New()
+	router.GET("/admin/ops/billing-compensation", handler.ListBillingCompensation)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/ops/billing-compensation?page=3&page_size=100", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var envelope response.Response
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
+	raw, err := json.Marshal(envelope.Data)
+	require.NoError(t, err)
+
+	var payload struct {
+		Items []map[string]any `json:"items"`
+		Total int64            `json:"total"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &payload))
+	require.Equal(t, int64(240), payload.Total)
+	require.Len(t, payload.Items, 40)
+	require.Equal(t, "req-200", payload.Items[0]["request_id"])
+}
+
+func TestOpsBillingCompensationHandler_ListReportsExactTotalOnEarlyPages(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	now := time.Now().UTC()
+	candidateLogs := make([]*service.OpsSystemLog, 0, 240)
+	for i := 0; i < 240; i++ {
+		candidateLogs = append(candidateLogs, &service.OpsSystemLog{
+			ID:        int64(i + 1),
+			Component: service.OpsRuntimeBillingCompensationComponent,
+			Message:   fmt.Sprintf("candidate-%03d", i),
+			CreatedAt: now.Add(-time.Duration(i) * time.Second),
+			RequestID: fmt.Sprintf("req-%03d", i),
+			Extra: map[string]any{
+				"request_id": fmt.Sprintf("req-%03d", i),
+			},
+		})
+	}
+	repo := &opsBillingCompensationRepoStub{candidateLogs: candidateLogs}
+	opsSvc := service.NewOpsService(repo, nil, &config.Config{Ops: config.OpsConfig{Enabled: true}}, nil, nil, nil, nil, nil, nil, nil, nil)
+	handler := NewOpsHandler(opsSvc)
+	router := gin.New()
+	router.GET("/admin/ops/billing-compensation", handler.ListBillingCompensation)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/ops/billing-compensation?page=1&page_size=50", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var envelope response.Response
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
+	raw, err := json.Marshal(envelope.Data)
+	require.NoError(t, err)
+
+	var payload struct {
+		Items []map[string]any `json:"items"`
+		Total int64            `json:"total"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &payload))
+	require.Equal(t, int64(240), payload.Total)
+	require.Len(t, payload.Items, 50)
+	require.Equal(t, "req-000", payload.Items[0]["request_id"])
+}
+
+func TestOpsBillingCompensationHandler_DetailScansBeyondInitialWindow(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	now := time.Now().UTC()
+	candidateLogs := make([]*service.OpsSystemLog, 0, 75)
+	for i := 0; i < 75; i++ {
+		requestID := fmt.Sprintf("req-%02d", i)
+		candidateLogs = append(candidateLogs, &service.OpsSystemLog{
+			ID:        int64(i + 1),
+			Component: service.OpsRuntimeBillingCompensationComponent,
+			Message:   requestID,
+			CreatedAt: now.Add(-time.Duration(i) * time.Second),
+			RequestID: requestID,
+			Extra: map[string]any{
+				"request_id": requestID,
+			},
+		})
+	}
+	repo := &opsBillingCompensationRepoStub{candidateLogs: candidateLogs}
+	opsSvc := service.NewOpsService(repo, nil, &config.Config{Ops: config.OpsConfig{Enabled: true}}, nil, nil, nil, nil, nil, nil, nil, nil)
+	handler := NewOpsHandler(opsSvc)
+	router := gin.New()
+	router.GET("/admin/ops/billing-compensation/:request_id", handler.GetBillingCompensationDetail)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/ops/billing-compensation/req-60", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var envelope response.Response
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
+	raw, err := json.Marshal(envelope.Data)
+	require.NoError(t, err)
+
+	var payload struct {
+		RequestID string `json:"request_id"`
+		Count     int    `json:"count"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &payload))
+	require.Equal(t, "req-60", payload.RequestID)
+	require.Equal(t, 1, payload.Count)
+}
+
+func TestOpsBillingCompensationHandler_ListFiltersScanBeyondInitialWindow(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	now := time.Now().UTC()
+	candidateLogs := make([]*service.OpsSystemLog, 0, 75)
+	for i := 0; i < 75; i++ {
+		extra := map[string]any{
+			"request_id": fmt.Sprintf("req-%02d", i),
+		}
+		if i == 60 {
+			extra["api_key_id"] = int64(777)
+		}
+		candidateLogs = append(candidateLogs, &service.OpsSystemLog{
+			ID:        int64(i + 1),
+			Component: service.OpsRuntimeBillingCompensationComponent,
+			Message:   fmt.Sprintf("candidate-%02d", i),
+			CreatedAt: now.Add(-time.Duration(i) * time.Second),
+			RequestID: fmt.Sprintf("req-%02d", i),
+			Extra:     extra,
+		})
+	}
+	repo := &opsBillingCompensationRepoStub{candidateLogs: candidateLogs}
+	opsSvc := service.NewOpsService(repo, nil, &config.Config{Ops: config.OpsConfig{Enabled: true}}, nil, nil, nil, nil, nil, nil, nil, nil)
+	handler := NewOpsHandler(opsSvc)
+	router := gin.New()
+	router.GET("/admin/ops/billing-compensation", handler.ListBillingCompensation)
+
+	req := httptest.NewRequest(http.MethodGet, "/admin/ops/billing-compensation?page=1&page_size=50&api_key_id=777", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var envelope response.Response
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &envelope))
+	raw, err := json.Marshal(envelope.Data)
+	require.NoError(t, err)
+
+	var payload struct {
+		Items []map[string]any `json:"items"`
+		Total int64            `json:"total"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &payload))
+	require.Equal(t, int64(1), payload.Total)
+	require.Len(t, payload.Items, 1)
+	require.Equal(t, "req-60", payload.Items[0]["request_id"])
+	require.Equal(t, float64(777), payload.Items[0]["api_key_id"])
 }

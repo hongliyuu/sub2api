@@ -118,3 +118,41 @@ func TestSchedulerCacheBucketLockWithOwnerRelease(t *testing.T) {
 	_, err = rdb.Get(ctx, "sched:lock:4:openai:single").Result()
 	require.ErrorIs(t, err, redis.Nil)
 }
+
+func TestSchedulerCacheReplaceBucketsPrunesStaleRegistry(t *testing.T) {
+	ctx := context.Background()
+	rdb := testRedis(t)
+	cache := NewSchedulerCache(rdb)
+
+	syncer, ok := cache.(service.SchedulerBucketRegistrySyncCache)
+	require.True(t, ok, "scheduler cache should support bucket registry sync")
+
+	stale := service.SchedulerBucket{GroupID: 9, Platform: service.PlatformOpenAI, Mode: service.SchedulerModeSingle}
+	desired := service.SchedulerBucket{GroupID: 3, Platform: service.PlatformAnthropic, Mode: service.SchedulerModeMixed}
+
+	require.NoError(t, cache.SetSnapshot(ctx, stale, nil))
+	require.NoError(t, cache.SetSnapshot(ctx, desired, nil))
+
+	activeKey := "sched:active:" + stale.String()
+	activeVersion, err := rdb.Get(ctx, activeKey).Result()
+	require.NoError(t, err)
+	require.NotEmpty(t, activeVersion)
+
+	require.NoError(t, syncer.ReplaceBuckets(ctx, []service.SchedulerBucket{desired}))
+
+	buckets, err := cache.ListBuckets(ctx)
+	require.NoError(t, err)
+	require.Equal(t, []service.SchedulerBucket{desired}, buckets)
+
+	_, err = rdb.Get(ctx, "sched:ready:"+stale.String()).Result()
+	require.ErrorIs(t, err, redis.Nil)
+	_, err = rdb.Get(ctx, activeKey).Result()
+	require.ErrorIs(t, err, redis.Nil)
+	_, err = rdb.Get(ctx, "sched:ver:"+stale.String()).Result()
+	require.ErrorIs(t, err, redis.Nil)
+	_, err = rdb.Get(ctx, "sched:lock:"+stale.String()).Result()
+	require.ErrorIs(t, err, redis.Nil)
+	_, err = rdb.ZRange(ctx, "sched:"+stale.String()+":v"+activeVersion, 0, -1).Result()
+	require.NoError(t, err)
+	require.Equal(t, int64(0), rdb.Exists(ctx, "sched:"+stale.String()+":v"+activeVersion).Val())
+}

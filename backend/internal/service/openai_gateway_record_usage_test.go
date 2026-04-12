@@ -259,7 +259,7 @@ func TestOpenAIGatewayServiceRecordUsage_IncludesEndpointMetadata(t *testing.T) 
 			Group: &Group{RateMultiplier: 1},
 		},
 		User:             &User{ID: 2002},
-		Account:          &Account{ID: 3002},
+		Account:          &Account{ID: 3002, Platform: PlatformOpenAI},
 		InboundEndpoint:  " /v1/chat/completions ",
 		UpstreamEndpoint: " /v1/responses ",
 	})
@@ -270,6 +270,8 @@ func TestOpenAIGatewayServiceRecordUsage_IncludesEndpointMetadata(t *testing.T) 
 	require.Equal(t, "/v1/chat/completions", *usageRepo.lastLog.InboundEndpoint)
 	require.NotNil(t, usageRepo.lastLog.UpstreamEndpoint)
 	require.Equal(t, "/v1/responses", *usageRepo.lastLog.UpstreamEndpoint)
+	require.NotNil(t, usageRepo.lastLog.Provider)
+	require.Equal(t, PlatformOpenAI, *usageRepo.lastLog.Provider)
 }
 
 func TestOpenAIGatewayServiceRecordUsage_ImageOnlyTokens(t *testing.T) {

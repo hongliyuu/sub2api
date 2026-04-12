@@ -34,13 +34,13 @@ func (h *OpsHandler) ListUsageLogNotPersisted(c *gin.Context) {
 	}
 
 	filter := &service.OpsSystemLogFilter{
-		Page:      page,
-		PageSize:  pageSize,
-		StartTime: &startTime,
-		EndTime:   &endTime,
-		Level:     "warn",
-		Component: service.OpsRuntimeUsageLogComponent,
-		RequestID: strings.TrimSpace(c.Query("request_id")),
+		Page:       page,
+		PageSize:   pageSize,
+		StartTime:  &startTime,
+		EndTime:    &endTime,
+		Level:      "warn",
+		Component:  service.OpsRuntimeUsageLogComponent,
+		ExactTotal: true,
 	}
 
 	apiKeyID, groupID, invalidField, parseErr := parseOpsAPIKeyAndGroupID(c.Query("api_key_id"), c.Query("group_id"))
@@ -48,6 +48,9 @@ func (h *OpsHandler) ListUsageLogNotPersisted(c *gin.Context) {
 		response.BadRequest(c, "Invalid "+invalidField)
 		return
 	}
+	filter.ResolvedRequestID = strings.TrimSpace(c.Query("request_id"))
+	filter.ExtraAPIKeyID = apiKeyID
+	filter.ExtraGroupID = groupID
 
 	logs, err := h.opsService.ListSystemLogs(c.Request.Context(), filter)
 	if err != nil {
@@ -56,7 +59,7 @@ func (h *OpsHandler) ListUsageLogNotPersisted(c *gin.Context) {
 	}
 
 	items := make([]gin.H, 0, len(logs.Logs))
-	for _, log := range filterUsageLogEntries(logs.Logs, apiKeyID, groupID) {
+	for _, log := range logs.Logs {
 		if entry := describeUsageLogEntry(log); entry != nil {
 			items = append(items, entry)
 		}
@@ -66,7 +69,7 @@ func (h *OpsHandler) ListUsageLogNotPersisted(c *gin.Context) {
 		"component": filter.Component,
 		"page":      logs.Page,
 		"page_size": logs.PageSize,
-		"total":     len(items),
+		"total":     logs.Total,
 		"raw_total": logs.Total,
 		"filters": gin.H{
 			"request_id": strings.TrimSpace(c.Query("request_id")),
@@ -104,32 +107,6 @@ func describeUsageLogEntry(log *service.OpsSystemLog) gin.H {
 		entry["manual_hint"] = hint
 	}
 	return entry
-}
-
-func filterUsageLogEntries(logs []*service.OpsSystemLog, apiKeyID, groupID *int64) []*service.OpsSystemLog {
-	if len(logs) == 0 || (apiKeyID == nil && groupID == nil) {
-		return logs
-	}
-	result := make([]*service.OpsSystemLog, 0, len(logs))
-	for _, log := range logs {
-		if matchesUsageLogFilters(log, apiKeyID, groupID) {
-			result = append(result, log)
-		}
-	}
-	return result
-}
-
-func matchesUsageLogFilters(log *service.OpsSystemLog, apiKeyID, groupID *int64) bool {
-	if log == nil {
-		return false
-	}
-	if !applyOptionalFilters(log.Extra, "api_key_id", apiKeyID) {
-		return false
-	}
-	if !applyOptionalFilters(log.Extra, "group_id", groupID) {
-		return false
-	}
-	return true
 }
 
 func extractUsageLogField(log *service.OpsSystemLog, key string) (any, bool) {
@@ -205,20 +182,23 @@ func (h *OpsHandler) GetUsageLogNotPersistedDetail(c *gin.Context) {
 	}
 
 	filter := &service.OpsSystemLogFilter{
-		Page:      1,
-		PageSize:  25,
-		StartTime: &startTime,
-		EndTime:   &endTime,
-		Level:     "warn",
-		Component: service.OpsRuntimeUsageLogComponent,
-		RequestID: requestID,
+		Page:              1,
+		PageSize:          25,
+		StartTime:         &startTime,
+		EndTime:           &endTime,
+		Level:             "warn",
+		Component:         service.OpsRuntimeUsageLogComponent,
+		ResolvedRequestID: requestID,
+		ExactTotal:        true,
 	}
-
 	apiKeyID, groupID, invalidField, parseErr := parseOpsAPIKeyAndGroupID(c.Query("api_key_id"), c.Query("group_id"))
 	if parseErr != nil {
 		response.BadRequest(c, "Invalid "+invalidField)
 		return
 	}
+
+	filter.ExtraAPIKeyID = apiKeyID
+	filter.ExtraGroupID = groupID
 
 	logs, err := h.opsService.ListSystemLogs(c.Request.Context(), filter)
 	if err != nil {
@@ -226,13 +206,12 @@ func (h *OpsHandler) GetUsageLogNotPersistedDetail(c *gin.Context) {
 		return
 	}
 
-	filtered := filterUsageLogEntries(logs.Logs, apiKeyID, groupID)
-	if len(filtered) == 0 {
+	if len(logs.Logs) == 0 {
 		response.NotFound(c, "usage log not persisted entry not found")
 		return
 	}
 
-	if entry := describeUsageLogEntry(filtered[0]); entry != nil {
+	if entry := describeUsageLogEntry(logs.Logs[0]); entry != nil {
 		response.Success(c, gin.H{
 			"entry": entry,
 			"filters": gin.H{
@@ -242,7 +221,7 @@ func (h *OpsHandler) GetUsageLogNotPersistedDetail(c *gin.Context) {
 				"start_time": startTime.UTC().Format(time.RFC3339),
 				"end_time":   endTime.UTC().Format(time.RFC3339),
 			},
-			"count": len(filtered),
+			"count": logs.Total,
 		})
 		return
 	}

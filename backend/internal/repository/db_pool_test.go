@@ -57,12 +57,22 @@ func TestEvaluateDBPoolConfigWarnings(t *testing.T) {
 	})
 	require.NotEmpty(t, warnings)
 	contains := false
+	conservativeOpen := false
+	conservativeIdle := false
 	for _, warn := range warnings {
 		if strings.Contains(warn, "exceeds") {
 			contains = true
 		}
+		if strings.Contains(warn, "verify against postgres max_connections") {
+			conservativeOpen = true
+		}
+		if strings.Contains(warn, "max_idle_conns (550) exceeds conservative threshold") {
+			conservativeIdle = true
+		}
 	}
 	require.True(t, contains)
+	require.True(t, conservativeOpen)
+	require.True(t, conservativeIdle)
 }
 
 func TestEvaluateDBPoolStatsWarnings(t *testing.T) {
@@ -96,4 +106,13 @@ func TestDBPoolSnapshotFromStats(t *testing.T) {
 	require.Equal(t, 25.0, *snapshot.InUsePercent)
 	require.NotNil(t, snapshot.IdleReservationRatio)
 	require.Equal(t, 15.0, *snapshot.IdleReservationRatio)
+}
+
+func TestProbeDBNil(t *testing.T) {
+	require.ErrorIs(t, ProbeDB(nil, nil), ErrDBPoolNotInitialized)
+}
+
+func TestProbeDefaultDBWithoutInit(t *testing.T) {
+	defaultDBPool.Store(nil)
+	require.ErrorIs(t, ProbeDefaultDB(nil), ErrDBPoolNotInitialized)
 }

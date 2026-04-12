@@ -69,6 +69,19 @@ func TestBuildRedisOptions_DefaultPoolSizeAndTimeouts(t *testing.T) {
 	require.Equal(t, defaultRedisConnMaxIdleTime, opts.ConnMaxIdleTime)
 }
 
+func TestEvaluateRedisPoolWarnings_ReportsAbsoluteMinIdle(t *testing.T) {
+	warnings := evaluateRedisPoolWarnings(512, 128)
+	require.NotEmpty(t, warnings)
+	found := false
+	for _, warning := range warnings {
+		if warning == "min_idle_conns (128) exceeds conservative threshold 64" {
+			found = true
+			break
+		}
+	}
+	require.True(t, found)
+}
+
 func TestSnapshotRedisPoolStatsFromStats(t *testing.T) {
 	stats := redis.PoolStats{
 		Hits:       42,
@@ -101,6 +114,15 @@ func TestSnapshotRedisPoolStatsNilClient(t *testing.T) {
 func TestSnapshotDefaultRedisPoolStatsWithoutInit(t *testing.T) {
 	defaultRedisClient.Store(nil)
 	require.Equal(t, RedisPoolSnapshot{}, SnapshotDefaultRedisPoolStats())
+}
+
+func TestProbeRedisNil(t *testing.T) {
+	require.ErrorIs(t, ProbeRedis(nil, nil), ErrRedisClientNotInitialized)
+}
+
+func TestProbeDefaultRedisWithoutInit(t *testing.T) {
+	defaultRedisClient.Store(nil)
+	require.ErrorIs(t, ProbeDefaultRedis(nil), ErrRedisClientNotInitialized)
 }
 
 func float64PtrRedis(v float64) *float64 { return &v }

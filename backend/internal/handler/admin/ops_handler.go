@@ -91,6 +91,11 @@ func (h *OpsHandler) GetErrorLogs(c *gin.Context) {
 	if pageSize > 500 {
 		pageSize = 500
 	}
+	exactTotal, err := parseExactTotalQuery(c)
+	if err != nil {
+		response.BadRequest(c, "Invalid exact_total value, use true or false")
+		return
+	}
 
 	startTime, endTime, err := parseOpsTimeRange(c, "1h")
 	if err != nil {
@@ -98,7 +103,7 @@ func (h *OpsHandler) GetErrorLogs(c *gin.Context) {
 		return
 	}
 
-	filter := &service.OpsErrorLogFilter{Page: page, PageSize: pageSize}
+	filter := &service.OpsErrorLogFilter{Page: page, PageSize: pageSize, ExactTotal: exactTotal}
 
 	if !startTime.IsZero() {
 		filter.StartTime = &startTime
@@ -202,13 +207,18 @@ func (h *OpsHandler) ListRequestErrors(c *gin.Context) {
 	if pageSize > 500 {
 		pageSize = 500
 	}
+	exactTotal, err := parseExactTotalQuery(c)
+	if err != nil {
+		response.BadRequest(c, "Invalid exact_total value, use true or false")
+		return
+	}
 	startTime, endTime, err := parseOpsTimeRange(c, "1h")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
 	}
 
-	filter := &service.OpsErrorLogFilter{Page: page, PageSize: pageSize}
+	filter := &service.OpsErrorLogFilter{Page: page, PageSize: pageSize, ExactTotal: exactTotal}
 	if !startTime.IsZero() {
 		filter.StartTime = &startTime
 	}
@@ -332,6 +342,11 @@ func (h *OpsHandler) ListRequestErrorUpstreamErrors(c *gin.Context) {
 	if pageSize > 500 {
 		pageSize = 500
 	}
+	exactTotal, err := parseExactTotalQuery(c)
+	if err != nil {
+		response.BadRequest(c, "Invalid exact_total value, use true or false")
+		return
+	}
 
 	// Keep correlation window wide enough so linked upstream errors
 	// are discoverable even when UI defaults to 1h elsewhere.
@@ -341,7 +356,7 @@ func (h *OpsHandler) ListRequestErrorUpstreamErrors(c *gin.Context) {
 		return
 	}
 
-	filter := &service.OpsErrorLogFilter{Page: page, PageSize: pageSize}
+	filter := &service.OpsErrorLogFilter{Page: page, PageSize: pageSize, ExactTotal: exactTotal}
 	if !startTime.IsZero() {
 		filter.StartTime = &startTime
 	}
@@ -495,13 +510,18 @@ func (h *OpsHandler) ListUpstreamErrors(c *gin.Context) {
 	if pageSize > 500 {
 		pageSize = 500
 	}
+	exactTotal, err := parseExactTotalQuery(c)
+	if err != nil {
+		response.BadRequest(c, "Invalid exact_total value, use true or false")
+		return
+	}
 	startTime, endTime, err := parseOpsTimeRange(c, "1h")
 	if err != nil {
 		response.BadRequest(c, err.Error())
 		return
 	}
 
-	filter := &service.OpsErrorLogFilter{Page: page, PageSize: pageSize}
+	filter := &service.OpsErrorLogFilter{Page: page, PageSize: pageSize, ExactTotal: exactTotal}
 	if !startTime.IsZero() {
 		filter.StartTime = &startTime
 	}

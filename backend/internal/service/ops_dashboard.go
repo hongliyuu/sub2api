@@ -621,12 +621,16 @@ func SchedulerOutboxRuntimeSummary() *OpsSchedulerOutboxRuntimeSummary {
 		metrics.BacklogRows == 0 &&
 		metrics.LagSeconds == 0 &&
 		metrics.LagFailureStreak == 0 &&
+		metrics.CoalescedBatchTotal == 0 &&
+		metrics.CoalescedEventSavedTotal == 0 &&
 		metrics.LagRebuildTotal == 0 &&
 		metrics.BacklogRebuildTotal == 0 &&
+		metrics.RebuildCooldownSkipTotal == 0 &&
 		metrics.BlockedEventClearTotal == 0 &&
 		metrics.BucketRebuildSuccessTotal == 0 &&
 		metrics.BucketRebuildFailureTotal == 0 &&
 		metrics.BucketRebuildLockContention == 0 &&
+		metrics.BusyBucketSkipTotal == 0 &&
 		metrics.CheckpointLastFallbackAt == "" &&
 		metrics.CheckpointLastReadFailureAt == "" &&
 		metrics.CheckpointLastWriteFailureAt == "" &&
@@ -645,8 +649,11 @@ func SchedulerOutboxRuntimeSummary() *OpsSchedulerOutboxRuntimeSummary {
 		BacklogRows:                  metrics.BacklogRows,
 		LagSeconds:                   metrics.LagSeconds,
 		LagFailureStreak:             metrics.LagFailureStreak,
+		CoalescedBatchTotal:          metrics.CoalescedBatchTotal,
+		CoalescedEventSavedTotal:     metrics.CoalescedEventSavedTotal,
 		LagRebuildTotal:              metrics.LagRebuildTotal,
 		BacklogRebuildTotal:          metrics.BacklogRebuildTotal,
+		RebuildCooldownSkipTotal:     metrics.RebuildCooldownSkipTotal,
 		LastLagRebuildAt:             metrics.LastLagRebuildAt,
 		LastBacklogRebuildAt:         metrics.LastBacklogRebuildAt,
 		BlockedEventClearTotal:       metrics.BlockedEventClearTotal,
@@ -656,6 +663,7 @@ func SchedulerOutboxRuntimeSummary() *OpsSchedulerOutboxRuntimeSummary {
 		BucketRebuildSuccessTotal:    metrics.BucketRebuildSuccessTotal,
 		BucketRebuildFailureTotal:    metrics.BucketRebuildFailureTotal,
 		BucketRebuildLockContention:  metrics.BucketRebuildLockContention,
+		BusyBucketSkipTotal:          metrics.BusyBucketSkipTotal,
 		LastBucketRebuildAt:          metrics.LastBucketRebuildAt,
 		LastBucketRebuildReason:      metrics.LastBucketRebuildReason,
 		LastBucketRebuildStatus:      metrics.LastBucketRebuildStatus,

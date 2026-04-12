@@ -488,7 +488,7 @@ func buildHourlyMetricsFilter(platform string, groupID *int64, idx int) (string,
 		args = append(args, platform)
 		idx++
 	default:
-		clause += " AND group_id IS NULL"
+		clause += " AND platform IS NULL AND group_id IS NULL"
 	}
 
 	return clause, args, idx

@@ -195,6 +195,93 @@ func TestPollOutbox_AdvancesWatermarkPastSuccessfulEventsBeforeTransient(t *test
 	}
 }
 
+func TestPollOutbox_CoalescesAdjacentAccountChangeEvents(t *testing.T) {
+	resetSchedulerOutboxRuntimeMetricsForTest()
+	accountID := int64(42)
+	repo := &stubPoisonOutboxRepo{
+		events: []SchedulerOutboxEvent{
+			{ID: 101, EventType: SchedulerOutboxEventAccountChanged, AccountID: &accountID, Payload: map[string]any{"group_ids": []any{int64(1)}}},
+			{ID: 102, EventType: SchedulerOutboxEventAccountChanged, AccountID: &accountID, Payload: map[string]any{"group_ids": []any{int64(2)}}},
+		},
+	}
+	cache := &stubPoisonSchedulerCache{}
+	svc := NewSchedulerSnapshotService(cache, repo, nil, nil, nil, nil)
+	calls := 0
+	var got SchedulerOutboxEvent
+	svc.outboxEventHandler = func(ctx context.Context, event SchedulerOutboxEvent) error {
+		calls++
+		got = event
+		return nil
+	}
+
+	svc.pollOutbox()
+
+	if calls != 1 {
+		t.Fatalf("expected adjacent account changes to be coalesced into one handler call, got %d", calls)
+	}
+	if cache.watermark != 102 {
+		t.Fatalf("expected watermark 102 after coalesced success, got %d", cache.watermark)
+	}
+	if got.ID != 102 {
+		t.Fatalf("expected merged event id 102, got %d", got.ID)
+	}
+	if groups := parseInt64Slice(got.Payload["group_ids"]); len(groups) != 2 || groups[0] != 1 || groups[1] != 2 {
+		t.Fatalf("expected merged group ids [1 2], got %#v", got.Payload["group_ids"])
+	}
+	metrics := SnapshotSchedulerOutboxRuntimeMetrics()
+	if metrics.CoalescedBatchTotal != 1 {
+		t.Fatalf("expected coalesced batch total 1, got %d", metrics.CoalescedBatchTotal)
+	}
+	if metrics.CoalescedEventSavedTotal != 1 {
+		t.Fatalf("expected coalesced event saved total 1, got %d", metrics.CoalescedEventSavedTotal)
+	}
+}
+
+func TestPollOutbox_DoesNotCoalesceNonAdjacentEvents(t *testing.T) {
+	resetSchedulerOutboxRuntimeMetricsForTest()
+	accountID := int64(52)
+	groupID := int64(7)
+	repo := &stubPoisonOutboxRepo{
+		events: []SchedulerOutboxEvent{
+			{ID: 111, EventType: SchedulerOutboxEventAccountChanged, AccountID: &accountID},
+			{ID: 112, EventType: SchedulerOutboxEventGroupChanged, GroupID: &groupID},
+			{ID: 113, EventType: SchedulerOutboxEventAccountChanged, AccountID: &accountID},
+		},
+	}
+	cache := &stubPoisonSchedulerCache{}
+	svc := NewSchedulerSnapshotService(cache, repo, nil, nil, nil, nil)
+	calls := 0
+	svc.outboxEventHandler = func(ctx context.Context, event SchedulerOutboxEvent) error {
+		calls++
+		return nil
+	}
+
+	svc.pollOutbox()
+
+	if calls != 3 {
+		t.Fatalf("expected non-adjacent events to stay separate, got %d handler calls", calls)
+	}
+}
+
+func TestResolveSchedulerAccountEventGroupIDs_MergesPayloadAndCurrentGroups(t *testing.T) {
+	account := &Account{GroupIDs: []int64{2, 3}}
+	payload := map[string]any{"group_ids": []int64{1, 2}}
+
+	got := resolveSchedulerAccountEventGroupIDs(account, payload)
+
+	if len(got) != 3 || got[0] != 1 || got[1] != 2 || got[2] != 3 {
+		t.Fatalf("expected merged group ids [1 2 3], got %#v", got)
+	}
+}
+
+func TestParseInt64Slice_AcceptsInt64Slices(t *testing.T) {
+	got := parseInt64Slice([]int64{3, 3, 7, -1})
+
+	if len(got) != 2 || got[0] != 3 || got[1] != 7 {
+		t.Fatalf("expected parsed ids [3 7], got %#v", got)
+	}
+}
+
 func TestSnapshotSchedulerOutboxRuntimeMetricsSummaries(t *testing.T) {
 	resetSchedulerOutboxRuntimeMetricsForTest()
 	schedulerOutboxRuntimeMu.Lock()
@@ -505,6 +592,32 @@ func TestPollOutbox_TracksCheckpointTimestamps(t *testing.T) {
 	}
 }
 
+func TestPollOutbox_UsesFreshCommitContextAfterSlowEventHandling(t *testing.T) {
+	resetSchedulerOutboxRuntimeMetricsForTest()
+	repo := &stubPoisonOutboxRepo{
+		events: []SchedulerOutboxEvent{
+			{ID: 171, EventType: SchedulerOutboxEventAccountChanged},
+		},
+	}
+	cache := &timeoutAwareSchedulerCache{}
+	svc := NewSchedulerSnapshotService(cache, repo, nil, nil, nil, nil)
+	svc.outboxPollTimeout = 5 * time.Millisecond
+	svc.outboxCommitTimeout = 50 * time.Millisecond
+	svc.outboxEventHandler = func(ctx context.Context, event SchedulerOutboxEvent) error {
+		time.Sleep(20 * time.Millisecond)
+		return nil
+	}
+
+	svc.pollOutbox()
+
+	if cache.watermark != 171 {
+		t.Fatalf("expected watermark to advance with fresh commit context, got %d", cache.watermark)
+	}
+	if cache.setErr != nil {
+		t.Fatalf("expected watermark write to use a fresh context, got %v", cache.setErr)
+	}
+}
+
 func TestPollOutbox_TracksLagRebuildLifecycle(t *testing.T) {
 	resetSchedulerOutboxRuntimeMetricsForTest()
 	cfg := &config.Config{}
@@ -539,6 +652,142 @@ func TestPollOutbox_TracksLagRebuildLifecycle(t *testing.T) {
 	}
 	if metrics.LagFailureStreak != 0 {
 		t.Fatalf("expected lag failure streak reset after rebuild trigger, got %d", metrics.LagFailureStreak)
+	}
+}
+
+func TestPollOutbox_LagRebuildCooldownSuppressesRepeatedTriggers(t *testing.T) {
+	resetSchedulerOutboxRuntimeMetricsForTest()
+	cfg := &config.Config{}
+	cfg.Gateway.Scheduling.OutboxLagWarnSeconds = 1
+	cfg.Gateway.Scheduling.OutboxLagRebuildSeconds = 1
+	cfg.Gateway.Scheduling.OutboxLagRebuildFailures = 1
+	cfg.Gateway.Scheduling.OutboxRebuildCooldownSeconds = 60
+
+	repo := &repeatingPoisonOutboxRepo{
+		events: []SchedulerOutboxEvent{
+			{ID: 291, EventType: SchedulerOutboxEventAccountChanged, CreatedAt: time.Now().Add(-5 * time.Second)},
+		},
+	}
+	cache := &stubPoisonSchedulerCache{}
+	svc := NewSchedulerSnapshotService(cache, repo, nil, nil, nil, cfg)
+	svc.outboxEventHandler = func(ctx context.Context, event SchedulerOutboxEvent) error {
+		return wrapOutboxRetryable(errors.New("db load failed: timeout"))
+	}
+
+	svc.pollOutbox()
+	svc.pollOutbox()
+
+	metrics := SnapshotSchedulerOutboxRuntimeMetrics()
+	if metrics.LagRebuildTotal != 1 {
+		t.Fatalf("expected lag rebuild total to stay at 1 during cooldown, got %d", metrics.LagRebuildTotal)
+	}
+	if metrics.RebuildCooldownSkipTotal != 1 {
+		t.Fatalf("expected rebuild cooldown skip total 1, got %d", metrics.RebuildCooldownSkipTotal)
+	}
+}
+
+func TestPollOutbox_BacklogRebuildCooldownSuppressesRepeatedTriggers(t *testing.T) {
+	resetSchedulerOutboxRuntimeMetricsForTest()
+	cfg := &config.Config{}
+	cfg.Gateway.Scheduling.OutboxBacklogRebuildRows = 1
+	cfg.Gateway.Scheduling.OutboxRebuildCooldownSeconds = 60
+
+	repo := &repeatingPoisonOutboxRepo{
+		events: []SchedulerOutboxEvent{
+			{ID: 391, EventType: SchedulerOutboxEventAccountChanged, CreatedAt: time.Now().Add(-5 * time.Second)},
+		},
+	}
+	cache := &stubPoisonSchedulerCache{}
+	svc := NewSchedulerSnapshotService(cache, repo, nil, nil, nil, cfg)
+	svc.outboxEventHandler = func(ctx context.Context, event SchedulerOutboxEvent) error {
+		return wrapOutboxRetryable(errors.New("db load failed: timeout"))
+	}
+
+	svc.pollOutbox()
+	svc.pollOutbox()
+
+	metrics := SnapshotSchedulerOutboxRuntimeMetrics()
+	if metrics.BacklogRebuildTotal != 1 {
+		t.Fatalf("expected backlog rebuild total to stay at 1 during cooldown, got %d", metrics.BacklogRebuildTotal)
+	}
+	if metrics.RebuildCooldownSkipTotal != 1 {
+		t.Fatalf("expected rebuild cooldown skip total 1, got %d", metrics.RebuildCooldownSkipTotal)
+	}
+}
+
+func TestTriggerFullRebuild_SkipsConcurrentRebuilds(t *testing.T) {
+	cache := &blockingBucketListSchedulerCache{
+		replaceStarted: make(chan struct{}),
+		releaseReplace: make(chan struct{}),
+	}
+	svc := NewSchedulerSnapshotService(cache, nil, nil, nil, nil, nil)
+
+	firstErrCh := make(chan error, 1)
+	go func() {
+		firstErrCh <- svc.triggerFullRebuild("interval")
+	}()
+
+	select {
+	case <-cache.replaceStarted:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("expected first rebuild to start syncing bucket registry")
+	}
+
+	skippedErrCh := make(chan error, 1)
+	go func() {
+		skippedErrCh <- svc.triggerFullRebuild("outbox_lag")
+	}()
+
+	select {
+	case err := <-skippedErrCh:
+		if err != nil {
+			t.Fatalf("expected concurrent rebuild to be skipped without error, got %v", err)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("expected concurrent rebuild to return immediately")
+	}
+
+	close(cache.releaseReplace)
+	if err := <-firstErrCh; err == nil {
+		t.Fatal("expected first rebuild to return cache list failure")
+	}
+	if cache.replaceCalls != 1 {
+		t.Fatalf("expected only one registry sync call, got %d", cache.replaceCalls)
+	}
+}
+
+func TestRebuildBuckets_IgnoresLockContentionForFullRebuildSummary(t *testing.T) {
+	resetSchedulerOutboxRuntimeMetricsForTest()
+	cache := &stubPoisonSchedulerCache{lockSet: true, lockOK: false}
+	svc := NewSchedulerSnapshotService(cache, nil, nil, nil, nil, nil)
+
+	err := svc.rebuildBuckets(context.Background(), []SchedulerBucket{
+		{GroupID: 1, Platform: PlatformOpenAI, Mode: SchedulerModeSingle},
+		{GroupID: 2, Platform: PlatformOpenAI, Mode: SchedulerModeSingle},
+	}, "interval")
+	if err != nil {
+		t.Fatalf("expected full rebuild summary to ignore pure lock contention, got %v", err)
+	}
+
+	metrics := SnapshotSchedulerOutboxRuntimeMetrics()
+	if metrics.BucketRebuildLockContention != 2 {
+		t.Fatalf("expected bucket rebuild lock contention total 2, got %d", metrics.BucketRebuildLockContention)
+	}
+	if metrics.BusyBucketSkipTotal != 2 {
+		t.Fatalf("expected busy bucket skip total 2, got %d", metrics.BusyBucketSkipTotal)
+	}
+}
+
+func TestRebuildBuckets_StillReturnsNonLockFailures(t *testing.T) {
+	resetSchedulerOutboxRuntimeMetricsForTest()
+	cache := &stubPoisonSchedulerCache{}
+	svc := NewSchedulerSnapshotService(cache, nil, nil, nil, nil, nil)
+
+	err := svc.rebuildBuckets(context.Background(), []SchedulerBucket{
+		{GroupID: 1, Platform: PlatformOpenAI, Mode: SchedulerModeSingle},
+	}, "interval")
+	if err == nil {
+		t.Fatal("expected non-lock rebuild failure to still be returned")
 	}
 }
 
@@ -676,4 +925,34 @@ func (r *stubSchedulerCheckpointRepo) SetCheckpointWatermark(ctx context.Context
 	}
 	r.setWatermark = watermark
 	return nil
+}
+
+type timeoutAwareSchedulerCache struct {
+	stubPoisonSchedulerCache
+	setErr error
+}
+
+func (c *timeoutAwareSchedulerCache) SetOutboxWatermark(ctx context.Context, id int64) error {
+	if err := ctx.Err(); err != nil {
+		c.setErr = err
+		return err
+	}
+	c.watermark = id
+	return nil
+}
+
+type blockingBucketListSchedulerCache struct {
+	stubPoisonSchedulerCache
+	replaceStarted chan struct{}
+	releaseReplace chan struct{}
+	replaceCalls   int
+}
+
+func (c *blockingBucketListSchedulerCache) ReplaceBuckets(ctx context.Context, buckets []SchedulerBucket) error {
+	c.replaceCalls++
+	if c.replaceCalls == 1 {
+		close(c.replaceStarted)
+	}
+	<-c.releaseReplace
+	return errors.New("bucket registry sync failed")
 }
