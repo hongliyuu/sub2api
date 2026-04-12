@@ -48,3 +48,44 @@ func TestGatewayServiceIsModelSupportedByAccount_CopilotMappingDoesNotActAsAllow
 		}
 	}
 }
+
+// TestGatewayServiceIsModelSupportedByAccount_CopilotWhitelistFilters 验证
+// 当账号设置了 model_whitelist 时，只有白名单内的模型被允许。
+func TestGatewayServiceIsModelSupportedByAccount_CopilotWhitelistFilters(t *testing.T) {
+	svc := &GatewayService{}
+	account := &Account{
+		Platform: PlatformCopilot,
+		Credentials: map[string]any{
+			"model_whitelist": []interface{}{"claude-sonnet-4.6", "gpt-4o"},
+		},
+	}
+	allowed := []string{"claude-sonnet-4.6", "gpt-4o"}
+	blocked := []string{"claude-opus-4.6", "claude-haiku-4.5"}
+	for _, m := range allowed {
+		if !svc.isModelSupportedByAccount(account, m) {
+			t.Errorf("model %q should be allowed by whitelist", m)
+		}
+	}
+	for _, m := range blocked {
+		if svc.isModelSupportedByAccount(account, m) {
+			t.Errorf("model %q should be blocked by whitelist", m)
+		}
+	}
+}
+
+// TestGatewayServiceIsModelSupportedByAccount_CopilotEmptyWhitelistAllowsAll 验证
+// 当账号 model_whitelist 为空时允许所有模型。
+func TestGatewayServiceIsModelSupportedByAccount_CopilotEmptyWhitelistAllowsAll(t *testing.T) {
+	svc := &GatewayService{}
+	account := &Account{
+		Platform: PlatformCopilot,
+		Credentials: map[string]any{
+			// model_whitelist 未设置
+		},
+	}
+	for _, m := range []string{"claude-sonnet-4.6", "gpt-4o", "claude-opus-4.6"} {
+		if !svc.isModelSupportedByAccount(account, m) {
+			t.Errorf("model %q should be allowed when whitelist is empty", m)
+		}
+	}
+}

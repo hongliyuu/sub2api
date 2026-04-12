@@ -602,6 +602,31 @@ func (a *Account) GetMaxBodyBytes() int {
 	return a.GetExtraInt("max_body_bytes")
 }
 
+// GetCopilotModelWhitelist 返回 Copilot 账号的模型白名单（从 credentials.model_whitelist 读取）。
+// 返回 nil 表示未设置，返回空切片表示白名单为空（不允许任何模型）。
+func (a *Account) GetCopilotModelWhitelist() []string {
+	if a.Credentials == nil {
+		return nil
+	}
+	raw, ok := a.Credentials["model_whitelist"]
+	if !ok || raw == nil {
+		return nil
+	}
+	switch v := raw.(type) {
+	case []string:
+		return v
+	case []interface{}:
+		result := make([]string, 0, len(v))
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				result = append(result, s)
+			}
+		}
+		return result
+	}
+	return nil
+}
+
 func (a *Account) GetClaudeUserID() string {
 	if v := strings.TrimSpace(a.GetExtraString("claude_user_id")); v != "" {
 		return v

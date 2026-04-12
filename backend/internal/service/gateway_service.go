@@ -557,12 +557,13 @@ type GatewayService struct {
 	deferredService       *DeferredService
 	concurrencyService    *ConcurrencyService
 	claudeTokenProvider   *ClaudeTokenProvider
-	sessionLimitCache     SessionLimitCache // 会话数量限制缓存（仅 Anthropic OAuth/SetupToken）
-	rpmCache              RPMCache          // RPM 计数缓存（仅 Anthropic OAuth/SetupToken）
-	userGroupRateResolver *userGroupRateResolver
-	userGroupRateCache    *gocache.Cache
-	userGroupRateSF       singleflight.Group
-	modelsListCache       *gocache.Cache
+	sessionLimitCache          SessionLimitCache // 会话数量限制缓存（仅 Anthropic OAuth/SetupToken）
+	rpmCache                   RPMCache          // RPM 计数缓存（仅 Anthropic OAuth/SetupToken）
+	userGroupRateResolver      *userGroupRateResolver
+	userGroupRateCache         *gocache.Cache
+	userGroupRateSF            singleflight.Group
+	modelsListCache            *gocache.Cache
+	copilotPlatformConfigSvc   *CopilotPlatformConfigService
 	modelsListCacheTTL    time.Duration
 	settingService        *SettingService
 	responseHeaderFilter  *responseheaders.CompiledHeaderFilter
@@ -636,6 +637,11 @@ func NewGatewayService(
 	svc.debugModelRouting.Store(parseDebugEnvBool(os.Getenv("SUB2API_DEBUG_MODEL_ROUTING")))
 	svc.debugClaudeMimic.Store(parseDebugEnvBool(os.Getenv("SUB2API_DEBUG_CLAUDE_MIMIC")))
 	return svc
+}
+
+// SetCopilotPlatformConfigService 注入平台配置服务，供 whitelist 继承逻辑使用。
+func (s *GatewayService) SetCopilotPlatformConfigService(svc *CopilotPlatformConfigService) {
+	s.copilotPlatformConfigSvc = svc
 }
 
 // GenerateSessionHash 从预解析请求计算粘性会话 hash
@@ -3475,10 +3481,10 @@ func (s *GatewayService) isModelSupportedByAccount(account *Account, requestedMo
 		_, ok := ResolveBedrockModelID(account, requestedModel)
 		return ok
 	}
-	// Copilot 账号的 model_mapping 仅用于转发时的名称重写（由 rewriteCopilotUpstreamModel 处理），
-	// 不应在账号选择阶段充当白名单过滤器。Copilot 账号支持所有模型，始终可调度。
+	// Copilot 账号的 model_mapping 仅用于转发时的名称重写，不作为白名单。
+	// model_whitelist 才是白名单：账号级优先，平台级 fallback，均为空则允许所有模型。
 	if account.Platform == PlatformCopilot {
-		return true
+		return s.isCopilotModelInWhitelist(account, requestedModel)
 	}
 	// OAuth/SetupToken 账号使用 Anthropic 标准映射（短ID → 长ID）
 	if account.Platform == PlatformAnthropic && account.Type != AccountTypeAPIKey {
@@ -3524,6 +3530,41 @@ func (s *GatewayService) isSoraModelSupportedByAccount(account *Account, request
 		return true
 	}
 
+	return false
+}
+
+// isCopilotModelInWhitelist 检查 requestedModel 是否在 Copilot 账号的白名单中。
+// 优先级：账号级 model_whitelist > 平台配置 model_whitelist > 允许所有（return true）。
+func (s *GatewayService) isCopilotModelInWhitelist(account *Account, requestedModel string) bool {
+	if requestedModel == "" {
+		return true
+	}
+	// 层 1：账号级 model_whitelist
+	accountWhitelist := account.GetCopilotModelWhitelist()
+	if len(accountWhitelist) > 0 {
+		return containsString(accountWhitelist, requestedModel)
+	}
+	// 层 2：平台配置 model_whitelist（通过 plan_type 查询）
+	if s.copilotPlatformConfigSvc != nil {
+		planType := account.GetCredential("plan_type")
+		if planType != "" {
+			cfg, err := s.copilotPlatformConfigSvc.GetByPlanType(context.Background(), planType)
+			if err == nil && cfg != nil && len(cfg.ModelWhitelist) > 0 {
+				return containsString(cfg.ModelWhitelist, requestedModel)
+			}
+		}
+	}
+	// 层 3：无白名单，允许所有
+	return true
+}
+
+// containsString 检查 slice 中是否包含 s（精确匹配）。
+func containsString(slice []string, s string) bool {
+	for _, v := range slice {
+		if v == s {
+			return true
+		}
+	}
 	return false
 }
 

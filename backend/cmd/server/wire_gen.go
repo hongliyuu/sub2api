@@ -230,6 +230,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	copilotPlatformConfigRepository := repository.NewCopilotPlatformConfigRepository(client)
 	copilotPlatformConfigService := service.NewCopilotPlatformConfigService(copilotPlatformConfigRepository)
 	copilotGatewayService.SetPlatformConfigService(copilotPlatformConfigService)
+	gatewayService.SetCopilotPlatformConfigService(copilotPlatformConfigService)
 	copilotPlatformConfigHandler := admin.NewCopilotPlatformConfigHandler(copilotPlatformConfigService)
 	adminHandlers := handler.ProvideAdminHandlers(dashboardHandler, adminUserHandler, groupHandler, accountHandler, adminAnnouncementHandler, dataManagementHandler, backupHandler, oAuthHandler, openAIOAuthHandler, geminiOAuthHandler, antigravityOAuthHandler, copilotOAuthHandler, proxyHandler, adminRedeemHandler, promoHandler, settingHandler, opsHandler, systemHandler, adminSubscriptionHandler, adminUsageHandler, userAttributeHandler, errorPassthroughHandler, adminAPIKeyHandler, scheduledTestHandler, copilotAnalyticsHandler, modelPricingHandler, copilotPlatformConfigHandler)
 	usageRecordWorkerPool := service.NewUsageRecordWorkerPool(configConfig)
