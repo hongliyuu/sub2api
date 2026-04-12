@@ -48,6 +48,10 @@ func (h *CopilotPlatformConfigHandler) List(c *gin.Context) {
 }
 
 // Update 处理 PUT /admin/copilot/platform-config/:plan_type
+//
+// 语义：全量覆盖（replace）。请求体中的所有字段均会写入数据库，null 表示清除该字段。
+// 调用方（前端卡片保存）每次均提交该 plan_type 的完整状态，不支持部分字段更新。
+// 若需要部分更新语义，应使用 PATCH 请求并在此处区分"字段缺失"与"显式传 null"。
 func (h *CopilotPlatformConfigHandler) Update(c *gin.Context) {
 	planType := c.Param("plan_type")
 	if !isValidCopilotPlanType(planType) {
