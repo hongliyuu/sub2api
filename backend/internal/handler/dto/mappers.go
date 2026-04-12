@@ -139,6 +139,7 @@ func GroupFromServiceAdmin(g *service.Group) *AdminGroup {
 		MCPXMLInject:                  g.MCPXMLInject,
 		DefaultMappedModel:            g.DefaultMappedModel,
 		ProxyBucketLoadBalanceEnabled: g.ProxyBucketLoadBalanceEnabled,
+		MessagesDispatchModelConfig:   g.MessagesDispatchModelConfig,
 		SupportedModelScopes:          g.SupportedModelScopes,
 		AccountCount:                  g.AccountCount,
 		ActiveAccountCount:            g.ActiveAccountCount,

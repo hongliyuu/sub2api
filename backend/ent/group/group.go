@@ -8,6 +8,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 )
 
 const (
@@ -75,6 +76,8 @@ const (
 	FieldDefaultMappedModel = "default_mapped_model"
 	// FieldProxyBucketLoadBalanceEnabled holds the string denoting the proxy_bucket_load_balance_enabled field in the database.
 	FieldProxyBucketLoadBalanceEnabled = "proxy_bucket_load_balance_enabled"
+	// FieldMessagesDispatchModelConfig holds the string denoting the messages_dispatch_model_config field in the database.
+	FieldMessagesDispatchModelConfig = "messages_dispatch_model_config"
 	// EdgeAPIKeys holds the string denoting the api_keys edge name in mutations.
 	EdgeAPIKeys = "api_keys"
 	// EdgeRedeemCodes holds the string denoting the redeem_codes edge name in mutations.
@@ -180,6 +183,7 @@ var Columns = []string{
 	FieldRequirePrivacySet,
 	FieldDefaultMappedModel,
 	FieldProxyBucketLoadBalanceEnabled,
+	FieldMessagesDispatchModelConfig,
 }
 
 var (
@@ -257,6 +261,8 @@ var (
 	DefaultMappedModelValidator func(string) error
 	// DefaultProxyBucketLoadBalanceEnabled holds the default value on creation for the "proxy_bucket_load_balance_enabled" field.
 	DefaultProxyBucketLoadBalanceEnabled bool
+	// DefaultMessagesDispatchModelConfig holds the default value on creation for the "messages_dispatch_model_config" field.
+	DefaultMessagesDispatchModelConfig domain.OpenAIMessagesDispatchModelConfig
 )
 
 // OrderOption defines the ordering options for the Group queries.
