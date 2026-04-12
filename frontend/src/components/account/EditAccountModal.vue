@@ -452,7 +452,7 @@
             type="text"
             inputmode="numeric"
             class="input font-mono"
-            placeholder="8192"
+            placeholder="0"
           />
           <p class="input-hint">{{ t('admin.accounts.copilot.maxOutputTokensHint') }}</p>
         </div>
@@ -2983,9 +2983,8 @@ const handleSubmit = async () => {
           delete (newCredentials as Record<string, unknown>).model_whitelist
         }
         const maxOutRaw = copilotMaxOutputTokens.value.trim()
-        if (maxOutRaw === '') {
-          delete (newCredentials as Record<string, unknown>).copilot_max_output_tokens
-        } else if (maxOutRaw === '0') {
+        if (maxOutRaw === '' || maxOutRaw === '0') {
+          // 空值或 0 均表示不限制
           newCredentials.copilot_max_output_tokens = 0
         } else {
           const n = parseInt(maxOutRaw, 10)

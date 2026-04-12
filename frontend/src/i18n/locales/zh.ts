@@ -2986,7 +2986,7 @@ export default {
         baseUrlHint: '留空自动根据账号类型选择端点；仅在使用私有/代理端点时填写。',
         maxOutputTokensLabel: 'Sonnet/Opus 输出上限 (max_tokens)',
         maxOutputTokensHint:
-          '选填。经 Copilot 转发时，对 Claude Sonnet/Opus 在调用 GitHub 前限制 completion 的 max_tokens（留空默认 8192）。填 0 表示不限制（可能再次触发上游 400）。Haiku 不经过此限制。',
+          '选填。经 Copilot 转发时，对 Claude Sonnet/Opus 限制 completion 的 max_tokens。0 或留空均表示不限制（默认）。填正整数则限制为该值。Haiku 不受此限制。',
         maxOutputTokensInvalid: '请输入非负整数作为输出上限，或填 0 表示不限制。',
         maxBodyBytesLabel: '请求体大小上限 (KB)',
         maxBodyBytesHint: '单次请求体超过此限制时直接拒绝并提示用户缩减上下文。留空使用系统默认 400 KB。',
