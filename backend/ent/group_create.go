@@ -18,6 +18,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 )
 
 // GroupCreate is the builder for creating a Group entity.
@@ -410,16 +411,16 @@ func (_c *GroupCreate) SetNillableDefaultMappedModel(v *string) *GroupCreate {
 	return _c
 }
 
-// SetProxyBucketLoadBalanceEnabled sets the "proxy_bucket_load_balance_enabled" field.
-func (_c *GroupCreate) SetProxyBucketLoadBalanceEnabled(v bool) *GroupCreate {
-	_c.mutation.SetProxyBucketLoadBalanceEnabled(v)
+// SetMessagesDispatchModelConfig sets the "messages_dispatch_model_config" field.
+func (_c *GroupCreate) SetMessagesDispatchModelConfig(v domain.OpenAIMessagesDispatchModelConfig) *GroupCreate {
+	_c.mutation.SetMessagesDispatchModelConfig(v)
 	return _c
 }
 
-// SetNillableProxyBucketLoadBalanceEnabled sets the "proxy_bucket_load_balance_enabled" field if the given value is not nil.
-func (_c *GroupCreate) SetNillableProxyBucketLoadBalanceEnabled(v *bool) *GroupCreate {
+// SetNillableMessagesDispatchModelConfig sets the "messages_dispatch_model_config" field if the given value is not nil.
+func (_c *GroupCreate) SetNillableMessagesDispatchModelConfig(v *domain.OpenAIMessagesDispatchModelConfig) *GroupCreate {
 	if v != nil {
-		_c.SetProxyBucketLoadBalanceEnabled(*v)
+		_c.SetMessagesDispatchModelConfig(*v)
 	}
 	return _c
 }
@@ -625,9 +626,9 @@ func (_c *GroupCreate) defaults() error {
 		v := group.DefaultDefaultMappedModel
 		_c.mutation.SetDefaultMappedModel(v)
 	}
-	if _, ok := _c.mutation.ProxyBucketLoadBalanceEnabled(); !ok {
-		v := group.DefaultProxyBucketLoadBalanceEnabled
-		_c.mutation.SetProxyBucketLoadBalanceEnabled(v)
+	if _, ok := _c.mutation.MessagesDispatchModelConfig(); !ok {
+		v := group.DefaultMessagesDispatchModelConfig
+		_c.mutation.SetMessagesDispatchModelConfig(v)
 	}
 	return nil
 }
@@ -713,8 +714,8 @@ func (_c *GroupCreate) check() error {
 			return &ValidationError{Name: "default_mapped_model", err: fmt.Errorf(`ent: validator failed for field "Group.default_mapped_model": %w`, err)}
 		}
 	}
-	if _, ok := _c.mutation.ProxyBucketLoadBalanceEnabled(); !ok {
-		return &ValidationError{Name: "proxy_bucket_load_balance_enabled", err: errors.New(`ent: missing required field "Group.proxy_bucket_load_balance_enabled"`)}
+	if _, ok := _c.mutation.MessagesDispatchModelConfig(); !ok {
+		return &ValidationError{Name: "messages_dispatch_model_config", err: errors.New(`ent: missing required field "Group.messages_dispatch_model_config"`)}
 	}
 	return nil
 }
@@ -859,9 +860,9 @@ func (_c *GroupCreate) createSpec() (*Group, *sqlgraph.CreateSpec) {
 		_spec.SetField(group.FieldDefaultMappedModel, field.TypeString, value)
 		_node.DefaultMappedModel = value
 	}
-	if value, ok := _c.mutation.ProxyBucketLoadBalanceEnabled(); ok {
-		_spec.SetField(group.FieldProxyBucketLoadBalanceEnabled, field.TypeBool, value)
-		_node.ProxyBucketLoadBalanceEnabled = value
+	if value, ok := _c.mutation.MessagesDispatchModelConfig(); ok {
+		_spec.SetField(group.FieldMessagesDispatchModelConfig, field.TypeJSON, value)
+		_node.MessagesDispatchModelConfig = value
 	}
 	if nodes := _c.mutation.APIKeysIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -1487,15 +1488,15 @@ func (u *GroupUpsert) UpdateDefaultMappedModel() *GroupUpsert {
 	return u
 }
 
-// SetProxyBucketLoadBalanceEnabled sets the "proxy_bucket_load_balance_enabled" field.
-func (u *GroupUpsert) SetProxyBucketLoadBalanceEnabled(v bool) *GroupUpsert {
-	u.Set(group.FieldProxyBucketLoadBalanceEnabled, v)
+// SetMessagesDispatchModelConfig sets the "messages_dispatch_model_config" field.
+func (u *GroupUpsert) SetMessagesDispatchModelConfig(v domain.OpenAIMessagesDispatchModelConfig) *GroupUpsert {
+	u.Set(group.FieldMessagesDispatchModelConfig, v)
 	return u
 }
 
-// UpdateProxyBucketLoadBalanceEnabled sets the "proxy_bucket_load_balance_enabled" field to the value that was provided on create.
-func (u *GroupUpsert) UpdateProxyBucketLoadBalanceEnabled() *GroupUpsert {
-	u.SetExcluded(group.FieldProxyBucketLoadBalanceEnabled)
+// UpdateMessagesDispatchModelConfig sets the "messages_dispatch_model_config" field to the value that was provided on create.
+func (u *GroupUpsert) UpdateMessagesDispatchModelConfig() *GroupUpsert {
+	u.SetExcluded(group.FieldMessagesDispatchModelConfig)
 	return u
 }
 
@@ -2090,17 +2091,17 @@ func (u *GroupUpsertOne) UpdateDefaultMappedModel() *GroupUpsertOne {
 	})
 }
 
-// SetProxyBucketLoadBalanceEnabled sets the "proxy_bucket_load_balance_enabled" field.
-func (u *GroupUpsertOne) SetProxyBucketLoadBalanceEnabled(v bool) *GroupUpsertOne {
+// SetMessagesDispatchModelConfig sets the "messages_dispatch_model_config" field.
+func (u *GroupUpsertOne) SetMessagesDispatchModelConfig(v domain.OpenAIMessagesDispatchModelConfig) *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
-		s.SetProxyBucketLoadBalanceEnabled(v)
+		s.SetMessagesDispatchModelConfig(v)
 	})
 }
 
-// UpdateProxyBucketLoadBalanceEnabled sets the "proxy_bucket_load_balance_enabled" field to the value that was provided on create.
-func (u *GroupUpsertOne) UpdateProxyBucketLoadBalanceEnabled() *GroupUpsertOne {
+// UpdateMessagesDispatchModelConfig sets the "messages_dispatch_model_config" field to the value that was provided on create.
+func (u *GroupUpsertOne) UpdateMessagesDispatchModelConfig() *GroupUpsertOne {
 	return u.Update(func(s *GroupUpsert) {
-		s.UpdateProxyBucketLoadBalanceEnabled()
+		s.UpdateMessagesDispatchModelConfig()
 	})
 }
 
@@ -2861,17 +2862,17 @@ func (u *GroupUpsertBulk) UpdateDefaultMappedModel() *GroupUpsertBulk {
 	})
 }
 
-// SetProxyBucketLoadBalanceEnabled sets the "proxy_bucket_load_balance_enabled" field.
-func (u *GroupUpsertBulk) SetProxyBucketLoadBalanceEnabled(v bool) *GroupUpsertBulk {
+// SetMessagesDispatchModelConfig sets the "messages_dispatch_model_config" field.
+func (u *GroupUpsertBulk) SetMessagesDispatchModelConfig(v domain.OpenAIMessagesDispatchModelConfig) *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
-		s.SetProxyBucketLoadBalanceEnabled(v)
+		s.SetMessagesDispatchModelConfig(v)
 	})
 }
 
-// UpdateProxyBucketLoadBalanceEnabled sets the "proxy_bucket_load_balance_enabled" field to the value that was provided on create.
-func (u *GroupUpsertBulk) UpdateProxyBucketLoadBalanceEnabled() *GroupUpsertBulk {
+// UpdateMessagesDispatchModelConfig sets the "messages_dispatch_model_config" field to the value that was provided on create.
+func (u *GroupUpsertBulk) UpdateMessagesDispatchModelConfig() *GroupUpsertBulk {
 	return u.Update(func(s *GroupUpsert) {
-		s.UpdateProxyBucketLoadBalanceEnabled()
+		s.UpdateMessagesDispatchModelConfig()
 	})
 }
 
