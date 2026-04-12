@@ -561,6 +561,20 @@
         </div>
       </div>
 
+      <!-- Copilot model whitelist (独立于 model_mapping) -->
+      <div v-if="account.platform === 'copilot'" class="border-t border-gray-200 pt-4 dark:border-dark-600">
+        <label class="input-label">{{ t('admin.accounts.copilot.modelWhitelist') }}</label>
+        <div class="mb-3 rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
+          <p class="text-xs text-blue-700 dark:text-blue-400">
+            {{ t('admin.accounts.copilot.modelWhitelistHint') }}
+          </p>
+        </div>
+        <ModelWhitelistSelector
+          v-model="copilotModelWhitelist"
+          platform="copilot"
+        />
+      </div>
+
       <!-- OpenAI OAuth Model Mapping (OAuth 类型没有 apikey 容器，需要独立的模型映射区域) -->
       <div
         v-if="account.platform === 'openai' && account.type === 'oauth'"
@@ -1986,6 +2000,7 @@ const antigravityModelRestrictionMode = ref<'whitelist' | 'mapping'>('whitelist'
 const antigravityWhitelistModels = ref<string[]>([])
 const antigravityModelMappings = ref<ModelMapping[]>([])
 const copilotModelMappings = ref<ModelMapping[]>([])
+const copilotModelWhitelist = ref<string[]>([])
 const tempUnschedEnabled = ref(false)
 const tempUnschedRules = ref<TempUnschedRuleForm[]>([])
 const getModelMappingKey = createStableObjectKeyResolver<ModelMapping>('edit-model-mapping')
@@ -2319,6 +2334,13 @@ const syncFormFromAccount = (newAccount: Account | null) => {
           } else {
             copilotModelMappings.value = []
           }
+          // Load copilot model whitelist
+          const rawWhitelist = credentials.model_whitelist
+          if (Array.isArray(rawWhitelist)) {
+            copilotModelWhitelist.value = rawWhitelist.filter((m): m is string => typeof m === 'string')
+          } else {
+            copilotModelWhitelist.value = []
+          }
           const rawMaxOut = credentials.copilot_max_output_tokens
           if (rawMaxOut === 0 || rawMaxOut === '0') {
             copilotMaxOutputTokens.value = '0'
@@ -2463,6 +2485,7 @@ const syncFormFromAccount = (newAccount: Account | null) => {
         modelMappings.value = []
         allowedModels.value = []
         copilotModelMappings.value = []
+        copilotModelWhitelist.value = []
         customErrorCodesEnabled.value = false
         selectedErrorCodes.value = []
       }
@@ -2952,6 +2975,12 @@ const handleSubmit = async () => {
         const copilotMapping = buildModelMappingObject('mapping', [], copilotModelMappings.value)
         if (copilotMapping) {
           newCredentials.model_mapping = copilotMapping
+        }
+        // Save copilot model whitelist
+        if (copilotModelWhitelist.value.length > 0) {
+          newCredentials.model_whitelist = copilotModelWhitelist.value
+        } else {
+          delete (newCredentials as Record<string, unknown>).model_whitelist
         }
         const maxOutRaw = copilotMaxOutputTokens.value.trim()
         if (maxOutRaw === '') {

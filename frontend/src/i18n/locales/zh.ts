@@ -3009,6 +3009,8 @@ export default {
         pleaseCompleteAuth: '请先完成 GitHub 认证',
         modelMapping: 'Copilot 模型映射',
         modelMappingHint: '将请求模型名映射到 Copilot 实际模型名（如将 claude-sonnet-4-5 映射到 claude-sonnet-4.5）。留空则使用内置默认映射（自动横杠↔点转换）。',
+        modelWhitelist: '模型白名单',
+        modelWhitelistHint: '只有白名单内的模型才会被路由到此账号。留空表示允许所有模型。',
         quota: {
           title: 'Copilot 使用量',
           plan: '套餐类型',

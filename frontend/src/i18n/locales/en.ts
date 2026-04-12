@@ -2876,6 +2876,8 @@ export default {
         pleaseCompleteAuth: 'Please complete GitHub authentication first',
         modelMapping: 'Copilot Model Mapping',
         modelMappingHint: 'Map request model names to Copilot actual model names (e.g. claude-sonnet-4-5 → claude-sonnet-4.5). Leave empty to use built-in default mapping (automatic dash↔dot conversion).',
+        modelWhitelist: 'Model Whitelist',
+        modelWhitelistHint: 'Only whitelisted models are routed to this account. Leave empty to allow all.',
         quota: {
           title: 'Copilot Usage',
           plan: 'Plan',
