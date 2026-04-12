@@ -124,6 +124,11 @@ git commit -m "Feature: 新增 Copilot 平台配置 i18n 词条"
 
 - [ ] **Step 1: 创建 API 文件**
 
+**重要：** `apiClient` 的响应拦截器（`frontend/src/api/client.ts:87`）已将标准包裹响应
+`{ code, message, data }` 解包为 `response.data = apiResponse.data`，调用方只需
+`const { data } = await apiClient.get(...)` 即可直接得到数据，**禁止** `res.data.data`
+双层解包。参见 `copilotAnalytics.ts` 中所有函数的写法。
+
 ```ts
 /**
  * Admin Copilot Platform Config API
@@ -165,12 +170,14 @@ export const COPILOT_PLAN_TYPES: CopilotPlanType[] = [
 
 /**
  * 获取全部 5 个 plan_type 的平台配置。
+ * apiClient 拦截器已自动解包 { code, message, data }，
+ * 直接解构 { data } 即可得到数组。
  */
 export async function listCopilotPlatformConfigs(): Promise<CopilotPlatformConfigEntry[]> {
-  const res = await apiClient.get<{ data: CopilotPlatformConfigEntry[] }>(
+  const { data } = await apiClient.get<CopilotPlatformConfigEntry[]>(
     '/admin/copilot/platform-config'
   )
-  return res.data.data
+  return data
 }
 
 /**
@@ -182,11 +189,11 @@ export async function updateCopilotPlatformConfig(
   planType: CopilotPlanType,
   payload: UpdateCopilotPlatformConfigRequest
 ): Promise<CopilotPlatformConfigEntry> {
-  const res = await apiClient.put<{ data: CopilotPlatformConfigEntry }>(
+  const { data } = await apiClient.put<CopilotPlatformConfigEntry>(
     `/admin/copilot/platform-config/${planType}`,
     payload
   )
-  return res.data.data
+  return data
 }
 ```
 
@@ -319,3 +326,93 @@ import { CogIcon } from '@heroicons/vue/24/outline'
 git add frontend/src/components/layout/AppSidebar.vue
 git commit -m "Feature: 侧边栏 Copilot 分组重组，新增平台配置和账户列表入口"
 ```
+
+---
+
+### Task 16b: 在 useModelWhitelist.ts 中添加 copilot 模型集
+
+**背景：** `getModelsByPlatform('copilot')` 当前落入 `default: return claudeModels`，导致
+Copilot 白名单选择器显示的是 Anthropic Claude 模型集，而非 Copilot 实际支持的模型。
+需要新增 `copilot` case，使用后端 `backend/internal/pkg/copilot/types.go:DefaultModels`
+中的 15 个模型 ID。
+
+**Files:**
+- Modify: `frontend/src/composables/useModelWhitelist.ts`
+
+- [ ] **Step 1: 在文件顶部模型常量区域（约第 1 行到 375 行之间）添加 copilot 模型常量**
+
+找到其他平台模型数组的定义位置（如 `const openaiModels = [...]`），在其后添加：
+
+```ts
+const copilotModels: string[] = [
+  'gpt-4o',
+  'gpt-4o-mini',
+  'gpt-4.1',
+  'gpt-4.1-mini',
+  'gpt-4.1-nano',
+  'o4-mini',
+  'o3-mini',
+  'claude-sonnet-4',
+  'claude-sonnet-4-5',
+  'claude-sonnet-4-6',
+  'claude-opus-4-5',
+  'claude-opus-4-6',
+  'claude-haiku-4-5',
+  'claude-3.5-sonnet',
+  'gemini-2.0-flash-001',
+]
+```
+
+说明：这些 ID 与后端 `DefaultModels` 保持一致（使用 Claude Code 接受的短横线格式，
+如 `claude-sonnet-4-5`，而非 Copilot API 内部的点格式 `claude-sonnet-4.5`）。
+
+- [ ] **Step 2: 在 getModelsByPlatform 中添加 copilot case**
+
+找到 `getModelsByPlatform` 函数（约第 382 行），在 `default: return claudeModels` 之前添加：
+
+```ts
+case 'copilot': return copilotModels
+```
+
+完整修改后的 switch 末尾（供参考）：
+
+```ts
+    case 'copilot': return copilotModels
+    default: return claudeModels
+```
+
+- [ ] **Step 3: 编译检查**
+
+```bash
+cd frontend && npm run type-check 2>/dev/null || echo "ok"
+```
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add frontend/src/composables/useModelWhitelist.ts
+git commit -m "Feature: useModelWhitelist 新增 copilot 模型集"
+```
+
+---
+
+### Task 16c: 修正 batch-6 CopilotPlatformConfigView 中的 i18n key
+
+**背景：** `batch-6` 的 `CopilotPlatformConfigView.vue` 模板中使用了
+`t('admin.accounts.copilot.addMapping')`，但实际存在的 key 是
+`t('admin.accounts.addMapping')`（见 `zh.ts:2456`）。
+
+此 Task 是一个提醒：在实施 Task 18（创建 CopilotPlatformConfigView.vue）时，
+确保将模板中的以下行：
+
+```ts
++ {{ t('admin.accounts.copilot.addMapping') }}
+```
+
+替换为：
+
+```ts
++ {{ t('admin.accounts.addMapping') }}
+```
+
+不需要单独提交；该修改在 Task 18 的 Step 3 提交中一并包含。

@@ -132,6 +132,10 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
+// 注意：GetAll 不使用 copilotplatformconfig.FieldPlanType 排序；
+// 若编译报 "imported and not used"，删除 copilotplatformconfig import 即可。
+// Upsert 方法中仍使用 copilotplatformconfig.PlanType(planType)，所以 import 会保留。
+
 type copilotPlatformConfigRepository struct {
 	client *dbent.Client
 }
@@ -142,15 +146,21 @@ func NewCopilotPlatformConfigRepository(client *dbent.Client) service.CopilotPla
 }
 
 func (r *copilotPlatformConfigRepository) GetAll(ctx context.Context) ([]service.CopilotPlatformConfigEntry, error) {
-	rows, err := r.client.CopilotPlatformConfig.Query().
-		Order(dbent.Asc(copilotplatformconfig.FieldPlanType)).
-		All(ctx)
+	// 从数据库拉取全部行（字母序），返回时按 AllCopilotPlanTypes 固定顺序重排。
+	// 不依赖数据库排序，避免按字母序导致卡片展示为 business → enterprise → individual_*。
+	rows, err := r.client.CopilotPlatformConfig.Query().All(ctx)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]service.CopilotPlatformConfigEntry, 0, len(rows))
+	byPlanType := make(map[string]service.CopilotPlatformConfigEntry, len(rows))
 	for _, row := range rows {
-		out = append(out, entToServiceConfig(row))
+		byPlanType[row.PlanType] = entToServiceConfig(row)
+	}
+	out := make([]service.CopilotPlatformConfigEntry, 0, len(service.AllCopilotPlanTypes))
+	for _, pt := range service.AllCopilotPlanTypes {
+		if e, ok := byPlanType[pt]; ok {
+			out = append(out, e)
+		}
 	}
 	return out, nil
 }

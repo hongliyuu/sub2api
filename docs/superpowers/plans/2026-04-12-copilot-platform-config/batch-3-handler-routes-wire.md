@@ -243,6 +243,10 @@ NewCopilotPlatformConfigRepository,
 
 - [ ] **Step 4: 手动更新 wire_gen.go**
 
+**说明：** 本仓库采用混合 Wire 策略。`wire.go` 定义了 ProviderSet，但以下场景的依赖链**手动维护** `wire_gen.go`（与 `CopilotAnalyticsService`、`ModelPricingService` 处理方式一致）：
+- 需要 setter 注入（`SetPlatformConfigService`、`SetCopilotPlatformConfigService`）的服务，Wire 无法自动解析 setter 注入链。
+- 因此不运行 `wire gen`，直接手动 patch。
+
 `backend/cmd/server/wire_gen.go` 是手动维护的生成文件。
 在 `modelPricingHandler := admin.NewModelPricingHandler(modelPricingService)` 之后（约第 227 行），添加以下三行：
 

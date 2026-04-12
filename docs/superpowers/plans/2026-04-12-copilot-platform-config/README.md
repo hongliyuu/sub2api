@@ -19,7 +19,7 @@
 | 1 | [batch-1-db-ent.md](batch-1-db-ent.md) | DB 迁移 + Ent Schema | Task 1-2 |
 | 2 | [batch-2-repo-service.md](batch-2-repo-service.md) | Repository + Service | Task 3-5 |
 | 3 | [batch-3-handler-routes-wire.md](batch-3-handler-routes-wire.md) | Handler + Routes + Wire | Task 6-9 |
-| 4 | [batch-4-inheritance-whitelist.md](batch-4-inheritance-whitelist.md) | 继承逻辑 + model_whitelist 账号选择 | Task 10-12 |
+| 4 | [batch-4-inheritance-whitelist.md](batch-4-inheritance-whitelist.md) | 继承逻辑 + model_whitelist 账号选择 + max_body_kb 继承 | Task 10-12, 11b |
 | 5 | [batch-5-frontend-routes-sidebar-api.md](batch-5-frontend-routes-sidebar-api.md) | 前端路由 + 侧边栏 + API + i18n | Task 13-16 |
 | 6 | [batch-6-views-modal.md](batch-6-views-modal.md) | CopilotPlatformConfigView + EditAccountModal | Task 17-20 |
 
@@ -42,9 +42,10 @@ Batch 5 → 6（前端，依赖后端 API 但可并行开发）
 - `backend/internal/handler/handler.go`（添加 CopilotPlatformConfig 字段）
 - `backend/internal/handler/wire.go`（ProvideAdminHandlers）
 - `backend/internal/repository/wire.go`（ProviderSet）
-- `backend/cmd/server/wire_gen.go`（手动注入 3 行 + SetPlatformConfigService + SetCopilotPlatformConfigService）
+- `backend/cmd/server/wire_gen.go`（手动注入 3 行 + SetPlatformConfigService + SetCopilotPlatformConfigService + copilotGatewayHandler.SetPlatformConfigService）
 - `backend/internal/server/routes/admin.go`（新增 registerCopilotPlatformConfigRoutes）
 - `backend/internal/service/copilot_gateway_service.go`（继承逻辑 + setter）
+- `backend/internal/handler/copilot_gateway_handler.go`（max_body_kb 继承逻辑 + setter）
 - `backend/internal/service/gateway_service.go`（whitelist 逻辑 + setter）
 - `backend/internal/service/account.go`（GetCopilotModelWhitelist）
 
@@ -57,4 +58,6 @@ Batch 5 → 6（前端，依赖后端 API 但可并行开发）
 - `frontend/src/router/index.ts`（路由重组）
 - `frontend/src/components/layout/AppSidebar.vue`（菜单重组）
 - `frontend/src/components/account/EditAccountModal.vue`（whitelist 字段）
+- `frontend/src/views/admin/AccountsView.vue`（新增 route query 初始化，支持 `?platform=copilot` 预筛）
+- `frontend/src/composables/useModelWhitelist.ts`（新增 copilot 模型集）
 - `frontend/src/i18n/locales/zh.ts` + `en.ts`（新词条）
