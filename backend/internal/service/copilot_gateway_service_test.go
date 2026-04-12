@@ -167,25 +167,29 @@ func TestCopilotModelUsesMaxOutputClamp(t *testing.T) {
 }
 
 func TestEffectiveCopilotMaxOutputTokensCap(t *testing.T) {
-	cap, clamp := effectiveCopilotMaxOutputTokensCap(nil)
+	svc := &CopilotGatewayService{}
+	ctx := context.Background()
+	cap, clamp := svc.effectiveCopilotMaxOutputTokensCap(ctx, nil)
 	if !clamp || cap != defaultCopilotMaxOutputTokens {
 		t.Fatalf("nil account: cap=%d clamp=%v", cap, clamp)
 	}
 	acc := &Account{Credentials: map[string]any{"copilot_max_output_tokens": json.Number("16384")}}
-	cap, clamp = effectiveCopilotMaxOutputTokensCap(acc)
+	cap, clamp = svc.effectiveCopilotMaxOutputTokensCap(ctx, acc)
 	if !clamp || cap != 16384 {
 		t.Fatalf("custom 16384: cap=%d clamp=%v", cap, clamp)
 	}
 	off := &Account{Credentials: map[string]any{"copilot_max_output_tokens": 0}}
-	cap, clamp = effectiveCopilotMaxOutputTokensCap(off)
+	cap, clamp = svc.effectiveCopilotMaxOutputTokensCap(ctx, off)
 	if clamp || cap != 0 {
 		t.Fatalf("explicit 0: cap=%d clamp=%v", cap, clamp)
 	}
 }
 
 func TestClampCopilotUpstreamMaxTokens(t *testing.T) {
+	svc := &CopilotGatewayService{}
+	ctx := context.Background()
 	raw := `{"model":"claude-sonnet-4.6","max_tokens":32000,"messages":[{"role":"user","content":"hi"}],"stream":true}`
-	out := clampCopilotUpstreamMaxTokens([]byte(raw), nil)
+	out := svc.clampCopilotUpstreamMaxTokens(ctx, []byte(raw), nil)
 	var parsed struct {
 		Model     string `json:"model"`
 		MaxTokens int    `json:"max_tokens"`
@@ -198,7 +202,7 @@ func TestClampCopilotUpstreamMaxTokens(t *testing.T) {
 	}
 
 	custom := &Account{Credentials: map[string]any{"copilot_max_output_tokens": float64(4096)}}
-	out2 := clampCopilotUpstreamMaxTokens([]byte(raw), custom)
+	out2 := svc.clampCopilotUpstreamMaxTokens(ctx, []byte(raw), custom)
 	var p2 struct {
 		MaxTokens int `json:"max_tokens"`
 	}
@@ -208,7 +212,7 @@ func TestClampCopilotUpstreamMaxTokens(t *testing.T) {
 	}
 
 	off := &Account{Credentials: map[string]any{"copilot_max_output_tokens": 0}}
-	out3 := clampCopilotUpstreamMaxTokens([]byte(raw), off)
+	out3 := svc.clampCopilotUpstreamMaxTokens(ctx, []byte(raw), off)
 	var p3 struct {
 		MaxTokens int `json:"max_tokens"`
 	}
@@ -217,7 +221,7 @@ func TestClampCopilotUpstreamMaxTokens(t *testing.T) {
 		t.Fatalf("clamp off max_tokens = %d, want 32000", p3.MaxTokens)
 	}
 
-	unchanged := clampCopilotUpstreamMaxTokens([]byte(`{"model":"claude-haiku-4.5","max_tokens":32000,"stream":true}`), nil)
+	unchanged := svc.clampCopilotUpstreamMaxTokens(ctx, []byte(`{"model":"claude-haiku-4.5","max_tokens":32000,"stream":true}`), nil)
 	var p4 struct {
 		MaxTokens int `json:"max_tokens"`
 	}

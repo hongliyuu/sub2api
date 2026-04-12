@@ -221,7 +221,7 @@ func (s *CopilotGatewayService) forwardChatCompletionsDirect(
 	body = mergeConsecutiveSameRoleMessagesInOpenAIBody(body)
 
 	body, logModel := rewriteCopilotUpstreamModel(body, account)
-	body = clampCopilotUpstreamMaxTokens(body, account)
+	body = s.clampCopilotUpstreamMaxTokens(ctx, body, account)
 
 	// Remember whether the client originally requested usage in the stream,
 	// before ensureStreamIncludeUsage may add it.
@@ -366,7 +366,7 @@ func (s *CopilotGatewayService) forwardChatCompletionsViaResponses(
 
 	body = mergeConsecutiveSameRoleMessagesInOpenAIBody(body)
 	body, logModel := rewriteCopilotUpstreamModel(body, account)
-	body = clampCopilotUpstreamMaxTokens(body, account)
+	body = s.clampCopilotUpstreamMaxTokens(ctx, body, account)
 
 	var chatReq apicompat.ChatCompletionsRequest
 	if err := json.Unmarshal(body, &chatReq); err != nil {
@@ -524,7 +524,7 @@ func (s *CopilotGatewayService) forwardChatCompletionsViaMessages(
 
 	body = mergeConsecutiveSameRoleMessagesInOpenAIBody(body)
 	body, logModel := rewriteCopilotUpstreamModel(body, account)
-	body = clampCopilotUpstreamMaxTokens(body, account)
+	body = s.clampCopilotUpstreamMaxTokens(ctx, body, account)
 
 	clientWantsStream := gjson.GetBytes(body, "stream").Bool()
 
@@ -1960,7 +1960,7 @@ func (s *CopilotGatewayService) ForwardMessages(
 	// translator merges most cases in sanitizeOpenAIMessages; this pass catches any
 	// remaining edge cases after model rewrite (matches ericc-ch/copilot-api chat path).
 	openAIBody = mergeConsecutiveSameRoleMessagesInOpenAIBody(openAIBody)
-	openAIBody = clampCopilotUpstreamMaxTokens(openAIBody, account)
+	openAIBody = s.clampCopilotUpstreamMaxTokens(ctx, openAIBody, account)
 
 	upstreamSent := strings.TrimSpace(extractModelFromBody(openAIBody))
 	translatedBodyBytes := len(openAIBody)
@@ -3031,17 +3031,23 @@ func copilotModelUsesMaxOutputClamp(model string) bool {
 }
 
 // effectiveCopilotMaxOutputTokensCap returns the ceiling for max_tokens and whether
-// clamping applies. Per-account credentials.copilot_max_output_tokens:
-//   - absent → defaultCopilotMaxOutputTokens (8192)
-//   - <= 0 (explicit 0) → do not clamp (may trigger upstream 400 again)
+// clamping applies. Three-layer priority:
+//  1. 账号级 credentials.copilot_max_output_tokens（最高优先级）
+//  2. 平台配置 CopilotPlatformConfig.max_output_tokens（按 plan_type 匹配）
+//  3. 系统默认 defaultCopilotMaxOutputTokens（兜底）
+//
+// Special cases:
+//   - absent at all layers → defaultCopilotMaxOutputTokens (8192), clamp=true
+//   - account-level <= 0 (explicit 0) → do not clamp (may trigger upstream 400 again)
 //   - > 0 → use that value (capped at copilotMaxOutputTokensSanityUpperBound)
-func effectiveCopilotMaxOutputTokensCap(account *Account) (cap int, clamp bool) {
+func (s *CopilotGatewayService) effectiveCopilotMaxOutputTokensCap(ctx context.Context, account *Account) (cap int, clamp bool) {
 	if account == nil || account.Credentials == nil {
-		return defaultCopilotMaxOutputTokens, true
+		return s.platformOrSystemMaxOutputTokens(ctx, account)
 	}
 	raw, ok := account.Credentials[copilotMaxOutputTokensCredentialKey]
 	if !ok || raw == nil {
-		return defaultCopilotMaxOutputTokens, true
+		// 层 2：查平台配置
+		return s.platformOrSystemMaxOutputTokens(ctx, account)
 	}
 	v := account.GetCredentialAsInt64(copilotMaxOutputTokensCredentialKey)
 	if v <= 0 {
@@ -3053,9 +3059,30 @@ func effectiveCopilotMaxOutputTokensCap(account *Account) (cap int, clamp bool) 
 	return int(v), true
 }
 
+// platformOrSystemMaxOutputTokens 先查平台配置，再回退到系统默认。
+func (s *CopilotGatewayService) platformOrSystemMaxOutputTokens(ctx context.Context, account *Account) (int, bool) {
+	if s.platformConfigSvc != nil && account != nil {
+		planType := account.GetCredential("plan_type")
+		if planType != "" {
+			cfg, err := s.platformConfigSvc.GetByPlanType(ctx, planType)
+			if err == nil && cfg != nil && cfg.MaxOutputTokens != nil {
+				v := *cfg.MaxOutputTokens
+				if v <= 0 {
+					return 0, false
+				}
+				if v > copilotMaxOutputTokensSanityUpperBound {
+					v = copilotMaxOutputTokensSanityUpperBound
+				}
+				return int(v), true
+			}
+		}
+	}
+	return defaultCopilotMaxOutputTokens, true
+}
+
 // clampCopilotUpstreamMaxTokens lowers max_tokens when the model is Sonnet/Opus and
-// the account requests clamping (default 8192 unless overridden in credentials).
-func clampCopilotUpstreamMaxTokens(body []byte, account *Account) []byte {
+// the account requests clamping (default 8192 unless overridden in credentials or platform config).
+func (s *CopilotGatewayService) clampCopilotUpstreamMaxTokens(ctx context.Context, body []byte, account *Account) []byte {
 	if len(body) == 0 {
 		return body
 	}
@@ -3071,7 +3098,7 @@ func clampCopilotUpstreamMaxTokens(body []byte, account *Account) []byte {
 	if max <= 0 {
 		return body
 	}
-	capTok, doClamp := effectiveCopilotMaxOutputTokensCap(account)
+	capTok, doClamp := s.effectiveCopilotMaxOutputTokensCap(ctx, account)
 	if !doClamp || max <= capTok {
 		return body
 	}
