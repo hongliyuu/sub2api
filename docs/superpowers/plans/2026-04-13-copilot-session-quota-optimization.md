@@ -62,7 +62,7 @@ GitHub Copilot 的 Premium 计费是 **per-request** 的——每次发送 `X-In
 | 文件 | 操作 | 说明 |
 |------|------|------|
 | `backend/internal/service/copilot_session_cache.go` | **新建** | session 缓存独立文件：`copilotSessionCache` 类型、TTL 清理逻辑、`extractSessionKey` 辅助函数 |
-| `backend/internal/service/copilot_gateway_service.go` | 修改 | 在 `CopilotGatewayService` 结构体加 `sessionCache *copilotSessionCache` 字段；在 `NewCopilotGatewayService` 初始化；修改**五处**转发函数（含 `ForwardResponses`）接入 session cache；在所有转发函数返回路径填充 `result.Initiator` |
+| `backend/internal/service/copilot_gateway_service.go` | 修改 | 在 `CopilotGatewayService` 结构体加 `sessionCache *copilotSessionCache` 字段；在 `NewCopilotGatewayService` 初始化；修改**六个调用点**（`forwardChatCompletionsDirect`、`forwardChatCompletionsViaResponses`、`forwardChatCompletionsViaMessages`、`ForwardResponses`、`ForwardMessages`、`forwardMessagesViaResponses`）接入 session cache；在所有转发函数返回路径填充 `result.Initiator` |
 | `backend/internal/handler/copilot_gateway_handler.go` | 修改（analytics 层） | 三处 `capturedInitiator` 改为读取 `result.Initiator` 以保持 analytics 与上游一致 |
 | `backend/internal/service/copilot_session_cache_test.go` | **新建** | session cache 单元测试 |
 | `backend/internal/service/copilot_gateway_service_test.go` | 修改 | 新增 session 场景的集成测试用例 |
@@ -214,10 +214,9 @@ import (
 // The first request within a session pays the Premium quota (X-Initiator: user);
 // all subsequent requests in the same session are free (X-Initiator: agent).
 //
-// Implementation uses a sync.Map with per-entry expiry timestamps. A background
-// goroutine is NOT started deliberately — eviction is lazy (on write) plus an
-// explicit evictExpired() call that callers can invoke periodically. This keeps
-// the cache self-contained and easy to test without goroutine leaks.
+// Implementation uses a sync.Mutex + map with per-entry expiry timestamps.
+// Periodic eviction is handled by a background ticker goroutine started in
+// NewCopilotGatewayService; evictExpired() is also exposed for tests.
 type copilotSessionCache struct {
 	mu      sync.Mutex
 	entries map[string]time.Time // key → expiry
@@ -438,17 +437,18 @@ git add backend/internal/service/copilot_gateway_service.go
 
 ---
 
-## Task 2：在五个转发函数内接入 session cache
+## Task 2：在六个调用点接入 session cache
 
 **Files:**
-- Modify: `backend/internal/service/copilot_gateway_service.go`（五处转发函数中的 initiator 计算）
+- Modify: `backend/internal/service/copilot_gateway_service.go`（六个调用点中的 initiator 计算）
 
-五处位置：
+六个调用点（全部列出，避免遗漏）：
 - `forwardChatCompletionsDirect`（约第 280 行）：OpenAI body，读 `user` 字段 + `X-Session-ID` header
 - `forwardChatCompletionsViaResponses`（约第 436 行）：同上
 - `forwardChatCompletionsViaMessages`（约第 576 行）：同上
 - `ForwardResponses`（约第 1848 行）：使用 `copilotInitiatorFromResponsesBody(body)` 作为基础 initiator，再叠加 session cache；从 `user` 字段或 `X-Session-ID` 提取 session key
 - `ForwardMessages`（约第 2062 行）：Anthropic body，读 `metadata.user_id` + `X-Session-ID` header
+- `forwardMessagesViaResponses`（约第 2199 行）：同上（Anthropic body，`metadata.user_id` + `X-Session-ID`）
 
 ### Step 2.1：新增 `sessionKeyFromContext` 辅助函数
 
@@ -633,11 +633,17 @@ type CopilotForwardResult struct {
 
 - [ ] **Step 3.1：添加 Initiator 字段**
 
-### Step 3.2：在五个转发函数的返回路径上填充 `result.Initiator`
+### Step 3.2：在六个调用点的返回路径上填充 `result.Initiator`
 
 每个转发函数在本地变量 `initiator`（或 `initiatorResp`）确定后，找到该函数返回 `*CopilotForwardResult` 的所有路径，将 `Initiator` 字段赋值。
 
-五个函数：`forwardChatCompletionsDirect`、`forwardChatCompletionsViaResponses`、`forwardChatCompletionsViaMessages`、`ForwardResponses`（已在 Step 2.3 处理）、`ForwardMessages` + `forwardMessagesViaResponses`。
+六个调用点（全部列出）：
+- `forwardChatCompletionsDirect`
+- `forwardChatCompletionsViaResponses`
+- `forwardChatCompletionsViaMessages`
+- `ForwardResponses`（已在 Step 2.3 处处理，此步骤核查）
+- `ForwardMessages`
+- `forwardMessagesViaResponses`
 
 具体做法：以 `forwardChatCompletionsDirect` 为例，找到现有 `return &CopilotForwardResult{...}` 的所有点，加入 `Initiator: initiator`：
 
@@ -719,181 +725,374 @@ git add backend/internal/service/copilot_gateway_service.go \
 
 ---
 
-## Task 4：集成测试 — session cache 场景
+## Task 4：集成测试 — 在真实 service 调用点验证 session cache 行为
 
 **Files:**
 - Test: `backend/internal/service/copilot_gateway_service_test.go`
 
-新增两组测试：
+**设计原则：** 每个测试都走真实 service 函数（`ForwardChatCompletions` / `ForwardResponses` / `ForwardMessages`），以 `httptest.NewTLSServer` 捕获实际发出的 `X-Initiator` header，同时断言 `result.Initiator` 与上游 header 一致。这样才能真正锁住六个调用点不被漏改，以及 `result.Initiator` 填充路径不被遗漏。
 
-### Step 4.1：写 TestCopilotInitiator_SessionCache_ChatCompletions
+三个测试函数紧随现有 `TestXInitiatorHeader_*` 系列追加，均放在 `copilot_gateway_service_test.go` 中。
 
-在 `TestXInitiatorHeader_ChatCompletions` 所在区域之后追加新函数：
+### Step 4.1：写 TestCopilotSessionCache_ChatCompletions（真实端到端）
+
+在 `TestXInitiatorHeader_ChatCompletions` 之后追加：
 
 ```go
-// TestCopilotInitiator_SessionCache tests that the second request within the
-// same session uses agent quota even when it has no assistant/tool messages.
-func TestCopilotInitiator_SessionCache_ChatCompletions(t *testing.T) {
-    // Build a minimal CopilotGatewayService with a fresh session cache.
-    svc := &CopilotGatewayService{
-        sessionCache: newCopilotSessionCache(2 * time.Hour),
-    }
+// TestCopilotSessionCache_ChatCompletions verifies that ForwardChatCompletions
+// correctly applies session-level quota saving:
+//   - First request in a session → X-Initiator: user (Premium)
+//   - Second request in the same session → X-Initiator: agent (free)
+//   - Same raw session key from a different account → still X-Initiator: user
+//
+// This test calls the real ForwardChatCompletions, not a hand-crafted helper,
+// so it will catch any missed wiring in the actual service code.
+func TestCopilotSessionCache_ChatCompletions(t *testing.T) {
+    // Shared upstream request log.
+    var mu sync.Mutex
+    var capturedInitiators []string
 
-    const accountID = int64(42)
-    // A session key embedded in the OpenAI "user" field (legacy metadata format).
+    srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        mu.Lock()
+        capturedInitiators = append(capturedInitiators, r.Header.Get("X-Initiator"))
+        mu.Unlock()
+        _, _ = io.ReadAll(r.Body)
+        w.Header().Set("Content-Type", "text/event-stream")
+        w.WriteHeader(http.StatusOK)
+        fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n\n")
+        fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"},\"finish_reason\":\"stop\"}]}\n\n")
+        fmt.Fprint(w, "data: {\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":5}}\n\n")
+        fmt.Fprint(w, "data: [DONE]\n\n")
+    }))
+    defer srv.Close()
+
+    provider := NewCopilotTokenProvider()
+    tok := newCopilotTestToken("tok-session-chat")
+    provider.tokens[1] = &tok
+    provider.tokens[2] = &tok
+
+    svc := NewCopilotGatewayService(provider)
+    svc.httpClient = newRedirectingHTTPClient(srv)
+
+    // A valid legacy metadata.user_id with an embedded session UUID.
     const sessionUser = "user_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2_account__session_12345678-1234-1234-1234-123456789abc"
 
-    firstTurnBody := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hello"}],"user":"` + sessionUser + `"}`)
-    secondTurnBody := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"follow-up"}],"user":"` + sessionUser + `"}`)
+    // first-turn body: no assistant/tool messages → would normally be "user"
+    firstBody := []byte(`{"model":"gpt-4o","stream":false,"messages":[{"role":"user","content":"hello"}],"user":"` + sessionUser + `"}`)
 
-    // applySessionCache mimics the session override logic from the service.
-    applySessionCache := func(c *gin.Context, body []byte) string {
-        initiator := copilotInitiator(body)
-        if rawSK := sessionKeyFromHeader(c); rawSK != "" {
-            sk := fmt.Sprintf("%d:%s", accountID, rawSK)
-            if svc.sessionCache.markAndCheckSeen(sk) {
-                initiator = "agent"
-            }
-        } else if rawSK := extractSessionKeyFromOpenAIBody(body); rawSK != "" {
-            sk := fmt.Sprintf("%d:%s", accountID, rawSK)
-            if svc.sessionCache.markAndCheckSeen(sk) {
-                initiator = "agent"
-            }
+    makeCtx := func(accountID int64) (*gin.Context, *Account) {
+        w := httptest.NewRecorder()
+        c, _ := gin.CreateTestContext(w)
+        c.Request = httptest.NewRequest(http.MethodPost, "/copilot/v1/chat/completions", nil)
+        account := &Account{
+            ID:          accountID,
+            Platform:    PlatformCopilot,
+            Type:        AccountTypeAPIKey,
+            Credentials: map[string]any{"github_token": "ghp_test", "base_url": srv.URL},
         }
-        return initiator
+        return c, account
     }
 
-    // Simulate first turn: session cache miss → original copilotInitiator result ("user").
-    w1 := httptest.NewRecorder()
-    c1, _ := gin.CreateTestContext(w1)
-    c1.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
-    if got := applySessionCache(c1, firstTurnBody); got != "user" {
-        t.Fatalf("first turn: want user, got %s", got)
+    gin.SetMode(gin.TestMode)
+
+    // --- sub-test 1: account 1, first request → "user" ---
+    c1, acc1 := makeCtx(1)
+    result1, err := svc.ForwardChatCompletions(context.Background(), c1, acc1, firstBody)
+    if err != nil {
+        t.Fatalf("first request: ForwardChatCompletions: %v", err)
     }
 
-    // Simulate second turn (same session, no assistant message): cache hit → "agent".
-    w2 := httptest.NewRecorder()
-    c2, _ := gin.CreateTestContext(w2)
-    c2.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
-    if got := applySessionCache(c2, secondTurnBody); got != "agent" {
-        t.Fatalf("second turn (same session): want agent, got %s", got)
+    // --- sub-test 2: account 1, second request (same session, no assistant) → "agent" ---
+    c2, acc2 := makeCtx(1)
+    result2, err := svc.ForwardChatCompletions(context.Background(), c2, acc2, firstBody)
+    if err != nil {
+        t.Fatalf("second request: ForwardChatCompletions: %v", err)
+    }
+
+    // --- sub-test 3: account 2, same raw session key, first request → "user" (isolated) ---
+    c3, acc3 := makeCtx(2)
+    result3, err := svc.ForwardChatCompletions(context.Background(), c3, acc3, firstBody)
+    if err != nil {
+        t.Fatalf("third request (account 2): ForwardChatCompletions: %v", err)
+    }
+
+    mu.Lock()
+    got := capturedInitiators
+    mu.Unlock()
+
+    if len(got) != 3 {
+        t.Fatalf("expected 3 upstream requests, got %d", len(got))
+    }
+    if got[0] != "user" {
+        t.Errorf("request 1 (account1 first): X-Initiator = %q, want %q", got[0], "user")
+    }
+    if got[1] != "agent" {
+        t.Errorf("request 2 (account1 second, same session): X-Initiator = %q, want %q", got[1], "agent")
+    }
+    if got[2] != "user" {
+        t.Errorf("request 3 (account2 same key, isolated): X-Initiator = %q, want %q", got[2], "user")
+    }
+
+    // Also verify result.Initiator matches what was actually sent upstream.
+    if result1 != nil && result1.Initiator != got[0] {
+        t.Errorf("result1.Initiator = %q, want %q (must match upstream)", result1.Initiator, got[0])
+    }
+    if result2 != nil && result2.Initiator != got[1] {
+        t.Errorf("result2.Initiator = %q, want %q (must match upstream)", result2.Initiator, got[1])
+    }
+    if result3 != nil && result3.Initiator != got[2] {
+        t.Errorf("result3.Initiator = %q, want %q (must match upstream)", result3.Initiator, got[2])
     }
 }
 ```
 
-- [ ] **Step 4.1：写 session cache 集成测试（ChatCompletions）**
+- [ ] **Step 4.1：写 TestCopilotSessionCache_ChatCompletions（端到端，真实 ForwardChatCompletions）**
 
-### Step 4.2：写 TestCopilotInitiator_SessionCache_XSessionIDHeader 和跨账号隔离测试
+### Step 4.2：写 TestCopilotSessionCache_ResponsesEndpoint（真实端到端）
+
+在 `TestXInitiatorHeader_ResponsesEndpoint` 之后追加：
 
 ```go
-// TestCopilotInitiator_SessionCache_XSessionIDHeader verifies that any client
-// can use X-Session-ID to opt into session-level quota saving.
-func TestCopilotInitiator_SessionCache_XSessionIDHeader(t *testing.T) {
-    svc := &CopilotGatewayService{
-        sessionCache: newCopilotSessionCache(2 * time.Hour),
-    }
+// TestCopilotSessionCache_ResponsesEndpoint verifies that ForwardResponses
+// correctly applies session-level quota saving via the Responses API path
+// (used by Codex CLI). Tests both body.user field and X-Session-ID header.
+func TestCopilotSessionCache_ResponsesEndpoint(t *testing.T) {
+    var mu sync.Mutex
+    var capturedInitiators []string
 
-    const accountID = int64(7)
-    noAssistantBody := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hello"}]}`)
+    srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        mu.Lock()
+        capturedInitiators = append(capturedInitiators, r.Header.Get("X-Initiator"))
+        mu.Unlock()
+        _, _ = io.ReadAll(r.Body)
+        w.Header().Set("Content-Type", "text/event-stream")
+        w.WriteHeader(http.StatusOK)
+        fmt.Fprint(w, `data: {"type":"response.completed","response":{"id":"r1","status":"completed","model":"gpt-4o","output":[{"type":"message","role":"assistant","content":[{"type":"output_text","text":"ok"}]}],"usage":{"input_tokens":10,"output_tokens":5}}}`, "\n\n")
+        fmt.Fprint(w, "data: [DONE]\n\n")
+    }))
+    defer srv.Close()
 
-    newReqWithSession := func() *gin.Context {
+    provider := NewCopilotTokenProvider()
+    tok := newCopilotTestToken("tok-session-responses")
+    provider.tokens[1] = &tok
+    provider.tokens[2] = &tok
+
+    svc := NewCopilotGatewayService(provider)
+    svc.httpClient = newRedirectingHTTPClient(srv)
+
+    const sessionUser = "user_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2_account__session_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
+
+    // first-turn Responses body: no previous_response_id, no tool items → "user"
+    firstBody := []byte(`{"model":"gpt-4o","input":"hello","user":"` + sessionUser + `"}`)
+
+    makeCtx := func(accountID int64, sessionHeader string) (*gin.Context, *Account) {
         w := httptest.NewRecorder()
         c, _ := gin.CreateTestContext(w)
-        c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
-        c.Request.Header.Set("X-Session-ID", "custom-session-xyz")
-        return c
-    }
-
-    applySession := func(c *gin.Context, body []byte) string {
-        initiator := copilotInitiator(body)
-        if rawSK := sessionKeyFromHeader(c); rawSK != "" {
-            sk := fmt.Sprintf("%d:%s", accountID, rawSK)
-            if svc.sessionCache.markAndCheckSeen(sk) {
-                initiator = "agent"
-            }
+        c.Request = httptest.NewRequest(http.MethodPost, "/copilot/v1/responses", nil)
+        if sessionHeader != "" {
+            c.Request.Header.Set("X-Session-ID", sessionHeader)
         }
-        return initiator
-    }
-
-    c1 := newReqWithSession()
-    if got := applySession(c1, noAssistantBody); got != "user" {
-        t.Fatalf("first turn: want user, got %s", got)
-    }
-
-    c2 := newReqWithSession()
-    if got := applySession(c2, noAssistantBody); got != "agent" {
-        t.Fatalf("second turn: want agent, got %s", got)
-    }
-}
-
-// TestCopilotInitiator_SessionCache_AccountIsolation verifies that two different
-// accounts sharing the same X-Session-ID value do NOT pollute each other's cache.
-func TestCopilotInitiator_SessionCache_AccountIsolation(t *testing.T) {
-    svc := &CopilotGatewayService{
-        sessionCache: newCopilotSessionCache(2 * time.Hour),
-    }
-
-    noAssistantBody := []byte(`{"model":"gpt-4o","messages":[{"role":"user","content":"hello"}]}`)
-
-    makeReq := func() *gin.Context {
-        w := httptest.NewRecorder()
-        c, _ := gin.CreateTestContext(w)
-        c.Request = httptest.NewRequest(http.MethodPost, "/v1/chat/completions", nil)
-        c.Request.Header.Set("X-Session-ID", "same-session-id-for-both")
-        return c
-    }
-
-    apply := func(c *gin.Context, body []byte, accountID int64) string {
-        initiator := copilotInitiator(body)
-        if rawSK := sessionKeyFromHeader(c); rawSK != "" {
-            sk := fmt.Sprintf("%d:%s", accountID, rawSK)
-            if svc.sessionCache.markAndCheckSeen(sk) {
-                initiator = "agent"
-            }
+        account := &Account{
+            ID:          accountID,
+            Platform:    PlatformCopilot,
+            Type:        AccountTypeAPIKey,
+            Credentials: map[string]any{"github_token": "ghp_test"},
         }
-        return initiator
+        return c, account
     }
 
-    // Account 1, first request → cache miss → "user"
-    if got := apply(makeReq(), noAssistantBody, 1); got != "user" {
-        t.Fatalf("account1 first: want user, got %s", got)
+    gin.SetMode(gin.TestMode)
+
+    // request 1: account 1, first → "user"
+    c1, acc1 := makeCtx(1, "")
+    result1, err := svc.ForwardResponses(context.Background(), c1, acc1, firstBody)
+    if err != nil {
+        t.Fatalf("request 1: ForwardResponses: %v", err)
     }
-    // Account 2, same session ID, first request → still cache miss (isolated) → "user"
-    if got := apply(makeReq(), noAssistantBody, 2); got != "user" {
-        t.Fatalf("account2 first: want user (isolated from account1), got %s", got)
+
+    // request 2: account 1, second (same body.user session) → "agent"
+    c2, acc2 := makeCtx(1, "")
+    result2, err := svc.ForwardResponses(context.Background(), c2, acc2, firstBody)
+    if err != nil {
+        t.Fatalf("request 2: ForwardResponses: %v", err)
     }
-    // Account 1, second request → cache hit → "agent"
-    if got := apply(makeReq(), noAssistantBody, 1); got != "agent" {
-        t.Fatalf("account1 second: want agent, got %s", got)
+
+    // request 3: account 2, same raw session key → "user" (isolated)
+    c3, acc3 := makeCtx(2, "")
+    result3, err := svc.ForwardResponses(context.Background(), c3, acc3, firstBody)
+    if err != nil {
+        t.Fatalf("request 3 (account 2): ForwardResponses: %v", err)
+    }
+
+    // request 4: account 1, X-Session-ID header, first → "user"
+    c4, acc4 := makeCtx(1, "xsession-codex-42")
+    firstBodyNoUser := []byte(`{"model":"gpt-4o","input":"hello"}`)
+    result4, err := svc.ForwardResponses(context.Background(), c4, acc4, firstBodyNoUser)
+    if err != nil {
+        t.Fatalf("request 4 (X-Session-ID first): ForwardResponses: %v", err)
+    }
+
+    // request 5: account 1, same X-Session-ID header, second → "agent"
+    c5, acc5 := makeCtx(1, "xsession-codex-42")
+    result5, err := svc.ForwardResponses(context.Background(), c5, acc5, firstBodyNoUser)
+    if err != nil {
+        t.Fatalf("request 5 (X-Session-ID second): ForwardResponses: %v", err)
+    }
+
+    mu.Lock()
+    got := capturedInitiators
+    mu.Unlock()
+
+    wants := []string{"user", "agent", "user", "user", "agent"}
+    if len(got) != len(wants) {
+        t.Fatalf("expected %d upstream requests, got %d", len(wants), len(got))
+    }
+    for i, w := range wants {
+        if got[i] != w {
+            t.Errorf("request %d: X-Initiator = %q, want %q", i+1, got[i], w)
+        }
+    }
+
+    // Verify result.Initiator matches upstream header for each result.
+    for i, res := range []*CopilotForwardResult{result1, result2, result3, result4, result5} {
+        if res != nil && res.Initiator != got[i] {
+            t.Errorf("result%d.Initiator = %q, want %q", i+1, res.Initiator, got[i])
+        }
     }
 }
 ```
 
-- [ ] **Step 4.2：写 X-Session-ID header 测试和跨账号隔离测试**
+- [ ] **Step 4.2：写 TestCopilotSessionCache_ResponsesEndpoint（端到端，真实 ForwardResponses）**
 
-### Step 4.3：运行新增测试，确认通过
+### Step 4.3：写 TestCopilotSessionCache_MessagesEndpoint（真实端到端）
 
-```bash
-cd /Users/ziji/personal/github/sub2api/backend
-go test ./internal/service/ -run "TestCopilotInitiator_SessionCache|TestCopilotSessionCache|TestExtractSessionKey" -tags unit -v
+在 `TestXInitiatorHeader_MessagesEndpoint` 之后追加：
+
+```go
+// TestCopilotSessionCache_MessagesEndpoint verifies that ForwardMessages
+// correctly applies session-level quota saving on the Anthropic protocol path
+// (used by Claude Code). Session key comes from metadata.user_id.
+func TestCopilotSessionCache_MessagesEndpoint(t *testing.T) {
+    var mu sync.Mutex
+    var capturedInitiators []string
+
+    srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        if r.URL.Path == "/models" {
+            w.Header().Set("Content-Type", "application/json")
+            w.WriteHeader(http.StatusOK)
+            _, _ = fmt.Fprint(w, `{"data":[{"id":"claude-sonnet-4-5","supported_endpoints":["/chat/completions"]}]}`)
+            return
+        }
+        mu.Lock()
+        capturedInitiators = append(capturedInitiators, r.Header.Get("X-Initiator"))
+        mu.Unlock()
+        _, _ = io.ReadAll(r.Body)
+        w.Header().Set("Content-Type", "text/event-stream")
+        w.WriteHeader(http.StatusOK)
+        fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n\n")
+        fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}\n\n")
+        fmt.Fprint(w, "data: {\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":3}}\n\n")
+        fmt.Fprint(w, "data: [DONE]\n\n")
+    }))
+    defer srv.Close()
+
+    provider := NewCopilotTokenProvider()
+    tok := newCopilotTestToken("tok-session-messages")
+    provider.tokens[1] = &tok
+    provider.tokens[2] = &tok
+
+    svc := NewCopilotGatewayService(provider)
+    svc.httpClient = newRedirectingHTTPClient(srv)
+
+    const sessionUserID = "user_a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2_account__session_99999999-8888-7777-6666-555555555555"
+
+    // first-turn Anthropic body: no assistant → "user"
+    firstBody := []byte(`{"model":"claude-sonnet-4-5","max_tokens":1024,"messages":[{"role":"user","content":"hello"}],"metadata":{"user_id":"` + sessionUserID + `"}}`)
+
+    makeCtx := func(accountID int64) (*gin.Context, *Account) {
+        w := httptest.NewRecorder()
+        c, _ := gin.CreateTestContext(w)
+        c.Request = httptest.NewRequest(http.MethodPost, "/copilot/v1/messages", nil)
+        c.Request.Header.Set("Accept", "text/event-stream")
+        account := &Account{
+            ID:          accountID,
+            Platform:    PlatformCopilot,
+            Type:        AccountTypeAPIKey,
+            Credentials: map[string]any{"github_token": "ghp_test"},
+        }
+        return c, account
+    }
+
+    gin.SetMode(gin.TestMode)
+
+    // request 1: account 1, first → "user"
+    c1, acc1 := makeCtx(1)
+    result1, err := svc.ForwardMessages(context.Background(), c1, acc1, firstBody)
+    if err != nil {
+        t.Fatalf("request 1: ForwardMessages: %v", err)
+    }
+
+    // request 2: account 1, second (same metadata.user_id session) → "agent"
+    c2, acc2 := makeCtx(1)
+    result2, err := svc.ForwardMessages(context.Background(), c2, acc2, firstBody)
+    if err != nil {
+        t.Fatalf("request 2: ForwardMessages: %v", err)
+    }
+
+    // request 3: account 2, same raw session key → "user" (isolated)
+    c3, acc3 := makeCtx(2)
+    result3, err := svc.ForwardMessages(context.Background(), c3, acc3, firstBody)
+    if err != nil {
+        t.Fatalf("request 3 (account 2): ForwardMessages: %v", err)
+    }
+
+    mu.Lock()
+    got := capturedInitiators
+    mu.Unlock()
+
+    wants := []string{"user", "agent", "user"}
+    if len(got) != len(wants) {
+        t.Fatalf("expected %d upstream requests, got %d", len(wants), len(got))
+    }
+    for i, w := range wants {
+        if got[i] != w {
+            t.Errorf("request %d: X-Initiator = %q, want %q", i+1, got[i], w)
+        }
+    }
+
+    for i, res := range []*CopilotForwardResult{result1, result2, result3} {
+        if res != nil && res.Initiator != got[i] {
+            t.Errorf("result%d.Initiator = %q, want %q", i+1, res.Initiator, got[i])
+        }
+    }
+}
 ```
 
-期望：所有用例 PASS，包括 `TestCopilotSessionCache_AccountIsolation` 和 `TestCopilotInitiator_SessionCache_AccountIsolation`。
+- [ ] **Step 4.3：写 TestCopilotSessionCache_MessagesEndpoint（端到端，真实 ForwardMessages）**
 
-- [ ] **Step 4.3：确认测试通过**
-
-### Step 4.4：运行全量相关测试，确认无回归
+### Step 4.4：运行新增端到端测试，确认通过
 
 ```bash
 cd /Users/ziji/personal/github/sub2api/backend
-go test ./internal/service/ -run "TestXInitiatorHeader|TestCopilotInitiator" -tags unit -timeout 120s -count=1
+go test ./internal/service/ -run "TestCopilotSessionCache_(ChatCompletions|ResponsesEndpoint|MessagesEndpoint)" -tags unit -v -timeout 60s
+```
+
+期望：三个函数内的所有断言 PASS。
+
+- [ ] **Step 4.4：确认测试通过**
+
+### Step 4.5：运行全量 XInitiatorHeader 测试，确认无回归
+
+```bash
+cd /Users/ziji/personal/github/sub2api/backend
+go test ./internal/service/ -run "TestXInitiatorHeader|TestCopilotSessionCache|TestCopilotInitiator_SessionCache|TestExtractSessionKey" -tags unit -timeout 120s -count=1
 ```
 
 期望：无 FAIL。
 
-- [ ] **Step 4.4：确认无回归**
+- [ ] **Step 4.5：确认无回归**
 
-### Step 4.5：提交
+### Step 4.6：提交
 
 ```bash
 git add backend/internal/service/copilot_gateway_service_test.go \
@@ -901,7 +1100,7 @@ git add backend/internal/service/copilot_gateway_service_test.go \
 # 按仓库提交协议提交（类型: Feature，中文描述）
 ```
 
-- [ ] **Step 4.5：提交**
+- [ ] **Step 4.6：提交**
 
 ---
 
