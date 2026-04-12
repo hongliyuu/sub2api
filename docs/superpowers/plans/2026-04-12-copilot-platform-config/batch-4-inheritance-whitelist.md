@@ -573,64 +573,131 @@ copilotGatewayHandler.SetPlatformConfigService(copilotPlatformConfigService)
 
 （`copilotPlatformConfigService` 变量已在 Batch 3 的 wire_gen.go 步骤中添加。）
 
-- [ ] **Step 5: 写测试**
+- [ ] **Step 5: 定义窄接口 + 修改 struct 字段类型**
+
+由于 `CopilotPlatformConfigService.repo` 字段未导出，无法在 `handler` 包直接构造可控 stub。
+解决方案：在 handler 包内定义一个只含 `GetByPlanType` 的窄接口，struct 字段改为持有该接口。
+
+在 `copilot_gateway_handler.go` 中，**紧接在 `import` 块后**添加：
+
+```go
+// copilotPlatformConfigQuerier 是 handler 包内部使用的窄接口，
+// 只需 GetByPlanType 一个方法，便于在测试中 stub。
+type copilotPlatformConfigQuerier interface {
+	GetByPlanType(ctx context.Context, planType string) (*service.CopilotPlatformConfigEntry, error)
+}
+```
+
+将 `CopilotGatewayHandler` struct 中的字段类型由具体类型改为接口：
+
+```go
+// 旧
+platformConfigSvc *service.CopilotPlatformConfigService
+
+// 新
+platformConfigSvc copilotPlatformConfigQuerier
+```
+
+setter 方法签名同步更新（接受接口，`*service.CopilotPlatformConfigService` 天然实现该接口）：
+
+```go
+func (h *CopilotGatewayHandler) SetPlatformConfigService(svc copilotPlatformConfigQuerier) {
+	h.platformConfigSvc = svc
+}
+```
+
+wire_gen.go 中的调用 `copilotGatewayHandler.SetPlatformConfigService(copilotPlatformConfigService)` 无需改动，`*service.CopilotPlatformConfigService` 实现了 `GetByPlanType`。
+
+- [ ] **Step 6: 写测试**
 
 ```go
 // backend/internal/handler/copilot_body_size_test.go
 package handler
 
 import (
+	"context"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
-// TestPlatformBodyLimit_AccountLevelTakesPrecedence 验证账号级限制优先于平台配置。
-// （checkCopilotBodySize 优先使用 account.GetMaxBodyBytes()，此测试验证
-// 当账号有设置时 platformBodyLimit 不会被调用/影响结果。）
-func TestCopilotGatewayHandler_platformBodyLimit_ReturnsPlatformConfig(t *testing.T) {
+// stubPlatformConfigQuerier 实现 copilotPlatformConfigQuerier 接口，供测试使用。
+type stubPlatformConfigQuerier struct {
+	entry *service.CopilotPlatformConfigEntry
+	err   error
+}
+
+func (s *stubPlatformConfigQuerier) GetByPlanType(_ context.Context, _ string) (*service.CopilotPlatformConfigEntry, error) {
+	return s.entry, s.err
+}
+
+// TestPlatformBodyLimit_HitsPlatformConfig 验证平台配置命中时返回 max_body_kb * 1024。
+func TestCopilotGatewayHandler_platformBodyLimit_HitsPlatformConfig(t *testing.T) {
 	kb := 512
-	svc := &service.CopilotPlatformConfigService{}
-	_ = svc // stub — 实际测试通过编译验证接口存在
 	h := &CopilotGatewayHandler{
 		defaultMaxBodyBytes: 256 * 1024,
-		platformConfigSvc:   nil, // nil = fallback to system default
+		platformConfigSvc: &stubPlatformConfigQuerier{
+			entry: &service.CopilotPlatformConfigEntry{
+				PlanType:  "business",
+				MaxBodyKB: &kb,
+			},
+		},
 	}
 	account := &service.Account{
 		Platform:    service.PlatformCopilot,
 		Credentials: map[string]any{"plan_type": "business"},
 	}
-	// nil platformConfigSvc → 应回退到 h.defaultMaxBodyBytes
-	limit := h.platformBodyLimit(nil, account) //nolint:staticcheck
-	if limit != 256*1024 {
-		t.Errorf("expected system default 262144 bytes, got %d", limit)
+	limit := h.platformBodyLimit(context.Background(), account)
+	if limit != 512*1024 {
+		t.Errorf("expected platform config 524288 bytes, got %d", limit)
 	}
-	_ = kb
 }
 
 // TestCopilotGatewayHandler_platformBodyLimit_FallsBackToDefault 验证
-// 平台配置 nil 时使用系统默认。
-func TestCopilotGatewayHandler_platformBodyLimit_NoAccount(t *testing.T) {
+// platformConfigSvc 为 nil（或查不到）时使用系统默认。
+func TestCopilotGatewayHandler_platformBodyLimit_FallsBackToDefault(t *testing.T) {
 	h := &CopilotGatewayHandler{
 		defaultMaxBodyBytes: 128 * 1024,
 		platformConfigSvc:   nil,
 	}
-	limit := h.platformBodyLimit(nil, nil) //nolint:staticcheck
+	limit := h.platformBodyLimit(context.Background(), nil)
 	if limit != 128*1024 {
-		t.Errorf("expected 131072, got %d", limit)
+		t.Errorf("expected system default 131072, got %d", limit)
+	}
+}
+
+// TestCopilotGatewayHandler_platformBodyLimit_PlatformReturnsNilMaxBodyKB 验证
+// 平台配置存在但 MaxBodyKB 为 nil 时 fallback 系统默认。
+func TestCopilotGatewayHandler_platformBodyLimit_NilMaxBodyKB(t *testing.T) {
+	h := &CopilotGatewayHandler{
+		defaultMaxBodyBytes: 64 * 1024,
+		platformConfigSvc: &stubPlatformConfigQuerier{
+			entry: &service.CopilotPlatformConfigEntry{
+				PlanType:  "individual_free",
+				MaxBodyKB: nil, // 未配置
+			},
+		},
+	}
+	account := &service.Account{
+		Platform:    service.PlatformCopilot,
+		Credentials: map[string]any{"plan_type": "individual_free"},
+	}
+	limit := h.platformBodyLimit(context.Background(), account)
+	if limit != 64*1024 {
+		t.Errorf("expected system default 65536, got %d", limit)
 	}
 }
 ```
 
-- [ ] **Step 6: 运行测试**
+- [ ] **Step 7: 运行测试**
 
 ```bash
 cd backend && go test ./internal/handler/ -run TestCopilotGatewayHandler_platformBodyLimit -v
 ```
 
-Expected: 2 个测试 PASS。
+Expected: 3 个测试 PASS。
 
-- [ ] **Step 7: 全量编译检查**
+- [ ] **Step 8: 全量编译检查**
 
 ```bash
 cd backend && go build ./...
@@ -638,7 +705,7 @@ cd backend && go build ./...
 
 Expected: 无编译错误。
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add backend/internal/handler/copilot_gateway_handler.go \

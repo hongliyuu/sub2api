@@ -52,7 +52,6 @@ Batch 5 → 6（前端，依赖后端 API 但可并行开发）
 **前端新增：**
 - `frontend/src/api/admin/copilotPlatformConfig.ts`
 - `frontend/src/views/admin/copilot/CopilotPlatformConfigView.vue`
-- `frontend/src/views/admin/copilot/CopilotAccountListView.vue`
 
 **前端修改：**
 - `frontend/src/router/index.ts`（路由重组）

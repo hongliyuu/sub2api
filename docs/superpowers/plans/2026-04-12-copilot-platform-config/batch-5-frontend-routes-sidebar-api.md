@@ -223,9 +223,11 @@ git commit -m "Feature: 新增 CopilotPlatformConfig 前端 API 层"
 
 目标（spec Section 1）：
 - `/admin/copilot/platform` → `CopilotPlatformConfigView.vue`（新增）
-- `/admin/copilot/accounts` → `CopilotAccountListView.vue`（新增，Copilot 账户列表）
+- `/admin/copilot/accounts` → `AccountsView.vue`（直接复用，通过 `route.meta.defaultPlatform='copilot'` 预筛，**不创建 CopilotAccountListView.vue**）
 - `/admin/copilot/cost` → `CopilotAccountsView.vue`（原成本分析，路由名称变更）
 - `/admin/copilot/users` → 不变
+
+**说明：** `/admin/copilot/accounts` 直接挂载 `AccountsView`，通过 `route.meta.defaultPlatform` 传入预设筛选值。这样路由 path 保持不变，侧边栏 `isActive('/admin/copilot/accounts')` 高亮正确。`AccountsView` 在 Task 17（Batch 6）中修改以支持读取此 meta 值。
 
 - [ ] **Step 1: 修改路由定义**
 
@@ -252,10 +254,11 @@ git commit -m "Feature: 新增 CopilotPlatformConfig 前端 API 层"
 {
   path: '/admin/copilot/accounts',
   name: 'AdminCopilotAccountList',
-  component: () => import('@/views/admin/copilot/CopilotAccountListView.vue'),
+  component: () => import('@/views/admin/AccountsView.vue'),
   meta: {
     requiresAuth: true,
     requiresAdmin: true,
+    defaultPlatform: 'copilot',
     title: 'Copilot Account List',
     titleKey: 'admin.copilot.accountList.title',
     descriptionKey: 'admin.copilot.accountList.description'

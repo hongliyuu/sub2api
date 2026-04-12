@@ -6,7 +6,7 @@
 
 **Architecture:**
 - `CopilotPlatformConfigView.vue`：调用 `listCopilotPlatformConfigs` + `updateCopilotPlatformConfig`，每张卡片独立 loading/error 状态。
-- `CopilotAccountListView.vue`：路由跳板组件，`onMounted` 时用 `router.replace` 跳转到 `/admin/accounts?platform=copilot`。同时修改 `AccountsView.vue` 在 `initialParams` 中读取 `route.query.platform`，使跳转后能自动预筛 Copilot 账号。
+- Copilot 账户列表页：**不创建新文件**。路由 `/admin/copilot/accounts` 直接挂载 `AccountsView`，通过 `route.meta.defaultPlatform = 'copilot'` 预设筛选。Task 17 只修改 `AccountsView.vue` 读取该 meta 值，路由定义已在 Batch 5 Task 15 完成。
 - `EditAccountModal.vue`：在现有 Copilot mapping 区块之后新增白名单 section；读写 `credentials.model_whitelist`。
 
 **Tech Stack:** Vue 3 · TypeScript · vue-i18n
@@ -17,78 +17,84 @@
 
 ---
 
-### Task 17: CopilotAccountListView.vue（Copilot 账户列表页）
+### Task 17: CopilotAccountListView — 在路由层直接复用 AccountsView
 
 **Files:**
-- Modify: `frontend/src/views/admin/AccountsView.vue`（添加 route query 初始化）
-- Create: `frontend/src/views/admin/copilot/CopilotAccountListView.vue`
+- Modify: `frontend/src/views/admin/AccountsView.vue`
 
-**背景：** `AccountsView.vue` 的 `initialParams` 硬编码为 `{ platform: '' }`（第 641 行），
-不从 route query 读取，因此 `/admin/accounts?platform=copilot` 跳转后不会自动预筛。
-解决方案：先修 `AccountsView.vue` 让它在 `onMounted` 时读取 `route.query.platform`，
-再让 `CopilotAccountListView` 用 `router.replace` 导航到带 query 的账户列表页。
-这样 `CopilotAccountListView` 是路由层的"重定向跳板"，用户实际看到的是完整的
-`AccountsView`，带正确的 Copilot 预筛选。
+**设计决策：不创建 `CopilotAccountListView.vue`。**
 
-- [ ] **Step 1: 修改 AccountsView.vue 支持从 route query 初始化平台筛选**
+路由 `/admin/copilot/accounts` 在 Batch 5 Task 15 中已直接挂载 `AccountsView`，并设置
+`meta.defaultPlatform = 'copilot'`。需要处理两件事：
 
-找到 `AccountsView.vue` 约第 639-642 行：
+1. **初始化**：`AccountsView` 首次 `setup` 时读取 `route.meta.defaultPlatform` 作为 `params.platform` 初始值。
+2. **路由切换同步**：`<RouterView />` 无 `:key`，同组件在 `/admin/accounts` ↔ `/admin/copilot/accounts`
+   之间切换时，Vue **复用同一实例**，`setup` 不重跑。必须用 `watch` 监听 `route.meta.defaultPlatform`
+   变化，同步更新 `params.platform` 并重新加载，否则会出现"路由对、侧边栏对，但列表内容错"的隐蔽 bug。
+
+- [ ] **Step 1: 修改 AccountsView.vue**
+
+在 `<script setup>` 顶部 import 区域补充（若已有则跳过）：
 
 ```ts
-} = useTableLoader<Account, any>({
-  fetchFn: adminAPI.accounts.list,
-  initialParams: { platform: '', type: '', status: '', group: '', search: '' }
-})
+import { useRoute } from 'vue-router'
+import { watch } from 'vue'
 ```
 
-在 `useTableLoader` 调用之前，添加 route query 读取：
+找到 `useTableLoader` 调用块（约第 639 行），在其**之前**添加：
 
 ```ts
 const route = useRoute()
-const initialPlatform = typeof route.query.platform === 'string' ? route.query.platform : ''
+
+// 初始化：读取路由 meta 的预设平台（如 /admin/copilot/accounts 挂载时）
+const defaultPlatform = typeof (route.meta.defaultPlatform as string | undefined) === 'string'
+  ? (route.meta.defaultPlatform as string)
+  : ''
 ```
 
 将 `initialParams` 改为：
 
 ```ts
-initialParams: { platform: initialPlatform, type: '', status: '', group: '', search: '' }
+initialParams: { platform: defaultPlatform, type: '', status: '', group: '', search: '' }
 ```
 
-确认文件顶部已 import `useRoute`（搜索 `useRoute`）；若无，在 vue-router import 行中添加：
+在 `useTableLoader` 调用块**之后**（`params`、`baseReload` 等已声明），添加 watch：
 
 ```ts
-import { useRoute, useRouter } from 'vue-router'
+// 同组件路由切换同步：/admin/accounts ↔ /admin/copilot/accounts 复用同一实例时，
+// 监听 route.meta.defaultPlatform 变化，重置 platform 筛选并重新加载。
+watch(
+  () => route.meta.defaultPlatform as string | undefined,
+  (newDefault) => {
+    params.platform = typeof newDefault === 'string' ? newDefault : ''
+    baseReload()
+  }
+)
 ```
 
-- [ ] **Step 2: 创建 CopilotAccountListView.vue**
+- [ ] **Step 2: 确认侧边栏高亮正确**
 
-此组件唯一职责：在路由挂载时导航到带 `platform=copilot` query 的账户列表页。
-由于 `AccountsView` 已注册在 `/admin/accounts`，用 `router.replace` 实现无感跳转。
-
-```vue
-<!-- frontend/src/views/admin/copilot/CopilotAccountListView.vue -->
-<script setup lang="ts">
-import { onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-
-const router = useRouter()
-
-onMounted(() => {
-  router.replace({ path: '/admin/accounts', query: { platform: 'copilot' } })
-})
-</script>
-
-<template>
-  <!-- 跳转中，不渲染内容 -->
-</template>
+侧边栏 `isActive` 逻辑（`AppSidebar.vue:709`）：
+```ts
+return route.path === path || route.path.startsWith(path + '/')
 ```
 
-- [ ] **Step 3: Commit**
+路由 path 保持 `/admin/copilot/accounts`（无 replace 跳转），与菜单项精确匹配，高亮正确。
+
+- [ ] **Step 3: 手动验证切换场景**
+
+验证以下两个方向的路由切换均正确：
+
+1. 先进入 `/admin/accounts`（无过滤）→ 侧边栏点击"Copilot 账户列表"（`/admin/copilot/accounts`）
+   - 预期：列表自动切换为 `platform=copilot` 过滤，侧边栏高亮在 Copilot 分组
+2. 从 `/admin/copilot/accounts` 侧边栏点击通用"账号管理"（`/admin/accounts`）
+   - 预期：`platform` 筛选清空为空字符串，侧边栏高亮切回通用账号管理
+
+- [ ] **Step 4: Commit**
 
 ```bash
-git add frontend/src/views/admin/AccountsView.vue \
-        frontend/src/views/admin/copilot/CopilotAccountListView.vue
-git commit -m "Feature: CopilotAccountListView 跳转至带 copilot 筛选的账户列表页"
+git add frontend/src/views/admin/AccountsView.vue
+git commit -m "Feature: AccountsView 支持 route.meta.defaultPlatform 预设筛选，watch 同步路由切换"
 ```
 
 ---

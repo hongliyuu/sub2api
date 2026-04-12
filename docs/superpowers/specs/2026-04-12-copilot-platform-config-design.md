@@ -155,11 +155,11 @@ Copilot 账号选账号时：
 | 文件 | 说明 |
 |------|------|
 | `src/views/admin/copilot/CopilotPlatformConfigView.vue` | 平台配置页 |
-| `src/views/admin/copilot/CopilotAccountListView.vue` | 路由跳板：`onMounted` 时 `router.replace` 到 `/admin/accounts?platform=copilot` |
 | `src/api/admin/copilotPlatformConfig.ts` | 平台配置 API 调用层 |
 
-**修改文件**：  
-- `src/views/admin/AccountsView.vue`：`initialParams.platform` 从 `route.query.platform` 初始化，使 `?platform=copilot` 预筛有效
+**修改文件（Copilot 账户列表页）：**  
+- `/admin/copilot/accounts` 路由直接复用 `AccountsView`，通过 `route.meta.defaultPlatform = 'copilot'` 预设平台筛选，路由 path 保持不变，侧边栏高亮正确，无需新建页面组件
+- `src/views/admin/AccountsView.vue`：读取 `route.meta.defaultPlatform` 初始化 `params.platform`
 
 **路由变更文件**：`src/router/index.ts`  
 **侧边栏变更文件**：`src/components/layout/AppSidebar.vue`  
