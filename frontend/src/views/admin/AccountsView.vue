@@ -303,6 +303,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, toRaw, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { useIntervalFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
@@ -626,6 +627,13 @@ const toggleColumn = (key: string) => {
 
 const isColumnVisible = (key: string) => !hiddenColumns.has(key)
 
+const route = useRoute()
+
+// 初始化：读取路由 meta 的预设平台（如 /admin/copilot/accounts 挂载时）
+const defaultPlatform = typeof (route.meta.defaultPlatform as string | undefined) === 'string'
+  ? (route.meta.defaultPlatform as string)
+  : ''
+
 const {
   items: accounts,
   loading,
@@ -638,8 +646,18 @@ const {
   handlePageSizeChange: baseHandlePageSizeChange
 } = useTableLoader<Account, any>({
   fetchFn: adminAPI.accounts.list,
-  initialParams: { platform: '', type: '', status: '', group: '', search: '' }
+  initialParams: { platform: defaultPlatform, type: '', status: '', group: '', search: '' }
 })
+
+// 同组件路由切换同步：/admin/accounts ↔ /admin/copilot/accounts 复用同一实例时，
+// 监听 route.meta.defaultPlatform 变化，重置 platform 筛选并重新加载。
+watch(
+  () => route.meta.defaultPlatform as string | undefined,
+  (newDefault) => {
+    params.platform = typeof newDefault === 'string' ? newDefault : ''
+    baseReload()
+  }
+)
 
 const {
   selectedIds: selIds,
