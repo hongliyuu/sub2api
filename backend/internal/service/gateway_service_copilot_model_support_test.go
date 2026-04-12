@@ -89,3 +89,59 @@ func TestGatewayServiceIsModelSupportedByAccount_CopilotEmptyWhitelistAllowsAll(
 		}
 	}
 }
+
+// TestCopilotWhitelistContains_DashDotNormalization 验证 copilotWhitelistContains
+// 对 Claude 模型 dash/dot 两种 ID 格式做归一化后可以互认，避免因格式不一致导致误拦。
+func TestCopilotWhitelistContains_DashDotNormalization(t *testing.T) {
+	tests := []struct {
+		name      string
+		whitelist []string
+		model     string
+		want      bool
+	}{
+		{
+			name:      "whitelist存dot，请求用dash",
+			whitelist: []string{"claude-sonnet-4.6", "gpt-4o"},
+			model:     "claude-sonnet-4-6",
+			want:      true,
+		},
+		{
+			name:      "whitelist存dash，请求用dot",
+			whitelist: []string{"claude-sonnet-4-6", "gpt-4o"},
+			model:     "claude-sonnet-4.6",
+			want:      true,
+		},
+		{
+			name:      "opus dash/dot互认",
+			whitelist: []string{"claude-opus-4.6"},
+			model:     "claude-opus-4-6",
+			want:      true,
+		},
+		{
+			name:      "不在白名单中的模型被正确拦截",
+			whitelist: []string{"claude-sonnet-4.6", "gpt-4o"},
+			model:     "claude-opus-4-6",
+			want:      false,
+		},
+		{
+			name:      "非Claude模型精确匹配",
+			whitelist: []string{"gpt-4o", "gpt-4.1"},
+			model:     "gpt-4o",
+			want:      true,
+		},
+		{
+			name:      "非Claude模型不在白名单",
+			whitelist: []string{"gpt-4o"},
+			model:     "gpt-4.1",
+			want:      false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := copilotWhitelistContains(tt.whitelist, tt.model)
+			if got != tt.want {
+				t.Errorf("copilotWhitelistContains(%v, %q) = %v, want %v", tt.whitelist, tt.model, got, tt.want)
+			}
+		})
+	}
+}

@@ -272,6 +272,7 @@ const copilotModels: string[] = [
   'text-embedding-3-small',
   'text-embedding-3-small-inference',
   'text-embedding-ada-002',
+  'text-embedding-ada-002b',
   'accounts/msft/routers/mp3yn0h7',
   'accounts/msft/routers/yaqq2gxh',
   'accounts/msft/routers/f185i3v4',

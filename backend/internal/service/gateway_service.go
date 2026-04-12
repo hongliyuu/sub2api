@@ -22,6 +22,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/copilot"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
@@ -3535,6 +3536,10 @@ func (s *GatewayService) isSoraModelSupportedByAccount(account *Account, request
 
 // isCopilotModelInWhitelist 检查 requestedModel 是否在 Copilot 账号的白名单中。
 // 优先级：账号级 model_whitelist > 平台配置 model_whitelist > 允许所有（return true）。
+//
+// 比较时双方都先经过 copilot.NormalizeModelIDForCopilotUpstream 归一化到 dot 形式，
+// 避免 dash 形式（如 /models 返回的 claude-sonnet-4-6）与白名单中存的 dot 形式
+// （如 claude-sonnet-4.6）因格式差异导致误拦。
 func (s *GatewayService) isCopilotModelInWhitelist(account *Account, requestedModel string) bool {
 	if requestedModel == "" {
 		return true
@@ -3542,7 +3547,7 @@ func (s *GatewayService) isCopilotModelInWhitelist(account *Account, requestedMo
 	// 层 1：账号级 model_whitelist
 	accountWhitelist := account.GetCopilotModelWhitelist()
 	if len(accountWhitelist) > 0 {
-		return containsString(accountWhitelist, requestedModel)
+		return copilotWhitelistContains(accountWhitelist, requestedModel)
 	}
 	// 层 2：平台配置 model_whitelist（通过 plan_type 查询）
 	if s.copilotPlatformConfigSvc != nil {
@@ -3550,12 +3555,24 @@ func (s *GatewayService) isCopilotModelInWhitelist(account *Account, requestedMo
 		if planType != "" {
 			cfg, err := s.copilotPlatformConfigSvc.GetByPlanType(context.Background(), planType)
 			if err == nil && cfg != nil && len(cfg.ModelWhitelist) > 0 {
-				return containsString(cfg.ModelWhitelist, requestedModel)
+				return copilotWhitelistContains(cfg.ModelWhitelist, requestedModel)
 			}
 		}
 	}
 	// 层 3：无白名单，允许所有
 	return true
+}
+
+// copilotWhitelistContains 检查 model 是否在 whitelist 中，比较前双方均归一化为 dot 形式，
+// 以兼容 dash（/models 返回）与 dot（白名单存储）两种 Claude 模型 ID 格式。
+func copilotWhitelistContains(whitelist []string, model string) bool {
+	normalized := copilot.NormalizeModelIDForCopilotUpstream(model)
+	for _, entry := range whitelist {
+		if copilot.NormalizeModelIDForCopilotUpstream(entry) == normalized {
+			return true
+		}
+	}
+	return false
 }
 
 // containsString 检查 slice 中是否包含 s（精确匹配）。
