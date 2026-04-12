@@ -21,6 +21,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/copilotbudgetalert"
+	"github.com/Wei-Shaw/sub2api/ent/copilotplatformconfig"
 	"github.com/Wei-Shaw/sub2api/ent/copilotquotasnapshot"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
@@ -60,6 +61,8 @@ type Client struct {
 	AnnouncementRead *AnnouncementReadClient
 	// CopilotBudgetAlert is the client for interacting with the CopilotBudgetAlert builders.
 	CopilotBudgetAlert *CopilotBudgetAlertClient
+	// CopilotPlatformConfig is the client for interacting with the CopilotPlatformConfig builders.
+	CopilotPlatformConfig *CopilotPlatformConfigClient
 	// CopilotQuotaSnapshot is the client for interacting with the CopilotQuotaSnapshot builders.
 	CopilotQuotaSnapshot *CopilotQuotaSnapshotClient
 	// ErrorPassthroughRule is the client for interacting with the ErrorPassthroughRule builders.
@@ -113,6 +116,7 @@ func (c *Client) init() {
 	c.Announcement = NewAnnouncementClient(c.config)
 	c.AnnouncementRead = NewAnnouncementReadClient(c.config)
 	c.CopilotBudgetAlert = NewCopilotBudgetAlertClient(c.config)
+	c.CopilotPlatformConfig = NewCopilotPlatformConfigClient(c.config)
 	c.CopilotQuotaSnapshot = NewCopilotQuotaSnapshotClient(c.config)
 	c.ErrorPassthroughRule = NewErrorPassthroughRuleClient(c.config)
 	c.Group = NewGroupClient(c.config)
@@ -229,6 +233,7 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 		Announcement:            NewAnnouncementClient(cfg),
 		AnnouncementRead:        NewAnnouncementReadClient(cfg),
 		CopilotBudgetAlert:      NewCopilotBudgetAlertClient(cfg),
+		CopilotPlatformConfig:   NewCopilotPlatformConfigClient(cfg),
 		CopilotQuotaSnapshot:    NewCopilotQuotaSnapshotClient(cfg),
 		ErrorPassthroughRule:    NewErrorPassthroughRuleClient(cfg),
 		Group:                   NewGroupClient(cfg),
@@ -272,6 +277,7 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 		Announcement:            NewAnnouncementClient(cfg),
 		AnnouncementRead:        NewAnnouncementReadClient(cfg),
 		CopilotBudgetAlert:      NewCopilotBudgetAlertClient(cfg),
+		CopilotPlatformConfig:   NewCopilotPlatformConfigClient(cfg),
 		CopilotQuotaSnapshot:    NewCopilotQuotaSnapshotClient(cfg),
 		ErrorPassthroughRule:    NewErrorPassthroughRuleClient(cfg),
 		Group:                   NewGroupClient(cfg),
@@ -320,11 +326,11 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
-		c.CopilotBudgetAlert, c.CopilotQuotaSnapshot, c.ErrorPassthroughRule, c.Group,
-		c.IdempotencyRecord, c.ModelPricing, c.PromoCode, c.PromoCodeUsage, c.Proxy,
-		c.RedeemCode, c.SecuritySecret, c.Setting, c.UsageCleanupTask, c.UsageLog,
-		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserSubscription,
+		c.CopilotBudgetAlert, c.CopilotPlatformConfig, c.CopilotQuotaSnapshot,
+		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord, c.ModelPricing,
+		c.PromoCode, c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret,
+		c.Setting, c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
+		c.UserAttributeDefinition, c.UserAttributeValue, c.UserSubscription,
 	} {
 		n.Use(hooks...)
 	}
@@ -335,11 +341,11 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
-		c.CopilotBudgetAlert, c.CopilotQuotaSnapshot, c.ErrorPassthroughRule, c.Group,
-		c.IdempotencyRecord, c.ModelPricing, c.PromoCode, c.PromoCodeUsage, c.Proxy,
-		c.RedeemCode, c.SecuritySecret, c.Setting, c.UsageCleanupTask, c.UsageLog,
-		c.User, c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
-		c.UserSubscription,
+		c.CopilotBudgetAlert, c.CopilotPlatformConfig, c.CopilotQuotaSnapshot,
+		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord, c.ModelPricing,
+		c.PromoCode, c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret,
+		c.Setting, c.UsageCleanupTask, c.UsageLog, c.User, c.UserAllowedGroup,
+		c.UserAttributeDefinition, c.UserAttributeValue, c.UserSubscription,
 	} {
 		n.Intercept(interceptors...)
 	}
@@ -360,6 +366,8 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.AnnouncementRead.mutate(ctx, m)
 	case *CopilotBudgetAlertMutation:
 		return c.CopilotBudgetAlert.mutate(ctx, m)
+	case *CopilotPlatformConfigMutation:
+		return c.CopilotPlatformConfig.mutate(ctx, m)
 	case *CopilotQuotaSnapshotMutation:
 		return c.CopilotQuotaSnapshot.mutate(ctx, m)
 	case *ErrorPassthroughRuleMutation:
@@ -1343,6 +1351,139 @@ func (c *CopilotBudgetAlertClient) mutate(ctx context.Context, m *CopilotBudgetA
 		return (&CopilotBudgetAlertDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown CopilotBudgetAlert mutation op: %q", m.Op())
+	}
+}
+
+// CopilotPlatformConfigClient is a client for the CopilotPlatformConfig schema.
+type CopilotPlatformConfigClient struct {
+	config
+}
+
+// NewCopilotPlatformConfigClient returns a client for the CopilotPlatformConfig from the given config.
+func NewCopilotPlatformConfigClient(c config) *CopilotPlatformConfigClient {
+	return &CopilotPlatformConfigClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `copilotplatformconfig.Hooks(f(g(h())))`.
+func (c *CopilotPlatformConfigClient) Use(hooks ...Hook) {
+	c.hooks.CopilotPlatformConfig = append(c.hooks.CopilotPlatformConfig, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `copilotplatformconfig.Intercept(f(g(h())))`.
+func (c *CopilotPlatformConfigClient) Intercept(interceptors ...Interceptor) {
+	c.inters.CopilotPlatformConfig = append(c.inters.CopilotPlatformConfig, interceptors...)
+}
+
+// Create returns a builder for creating a CopilotPlatformConfig entity.
+func (c *CopilotPlatformConfigClient) Create() *CopilotPlatformConfigCreate {
+	mutation := newCopilotPlatformConfigMutation(c.config, OpCreate)
+	return &CopilotPlatformConfigCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of CopilotPlatformConfig entities.
+func (c *CopilotPlatformConfigClient) CreateBulk(builders ...*CopilotPlatformConfigCreate) *CopilotPlatformConfigCreateBulk {
+	return &CopilotPlatformConfigCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *CopilotPlatformConfigClient) MapCreateBulk(slice any, setFunc func(*CopilotPlatformConfigCreate, int)) *CopilotPlatformConfigCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &CopilotPlatformConfigCreateBulk{err: fmt.Errorf("calling to CopilotPlatformConfigClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*CopilotPlatformConfigCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &CopilotPlatformConfigCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for CopilotPlatformConfig.
+func (c *CopilotPlatformConfigClient) Update() *CopilotPlatformConfigUpdate {
+	mutation := newCopilotPlatformConfigMutation(c.config, OpUpdate)
+	return &CopilotPlatformConfigUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *CopilotPlatformConfigClient) UpdateOne(_m *CopilotPlatformConfig) *CopilotPlatformConfigUpdateOne {
+	mutation := newCopilotPlatformConfigMutation(c.config, OpUpdateOne, withCopilotPlatformConfig(_m))
+	return &CopilotPlatformConfigUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *CopilotPlatformConfigClient) UpdateOneID(id int64) *CopilotPlatformConfigUpdateOne {
+	mutation := newCopilotPlatformConfigMutation(c.config, OpUpdateOne, withCopilotPlatformConfigID(id))
+	return &CopilotPlatformConfigUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for CopilotPlatformConfig.
+func (c *CopilotPlatformConfigClient) Delete() *CopilotPlatformConfigDelete {
+	mutation := newCopilotPlatformConfigMutation(c.config, OpDelete)
+	return &CopilotPlatformConfigDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *CopilotPlatformConfigClient) DeleteOne(_m *CopilotPlatformConfig) *CopilotPlatformConfigDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *CopilotPlatformConfigClient) DeleteOneID(id int64) *CopilotPlatformConfigDeleteOne {
+	builder := c.Delete().Where(copilotplatformconfig.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &CopilotPlatformConfigDeleteOne{builder}
+}
+
+// Query returns a query builder for CopilotPlatformConfig.
+func (c *CopilotPlatformConfigClient) Query() *CopilotPlatformConfigQuery {
+	return &CopilotPlatformConfigQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeCopilotPlatformConfig},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a CopilotPlatformConfig entity by its id.
+func (c *CopilotPlatformConfigClient) Get(ctx context.Context, id int64) (*CopilotPlatformConfig, error) {
+	return c.Query().Where(copilotplatformconfig.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *CopilotPlatformConfigClient) GetX(ctx context.Context, id int64) *CopilotPlatformConfig {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *CopilotPlatformConfigClient) Hooks() []Hook {
+	return c.hooks.CopilotPlatformConfig
+}
+
+// Interceptors returns the client interceptors.
+func (c *CopilotPlatformConfigClient) Interceptors() []Interceptor {
+	return c.inters.CopilotPlatformConfig
+}
+
+func (c *CopilotPlatformConfigClient) mutate(ctx context.Context, m *CopilotPlatformConfigMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&CopilotPlatformConfigCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&CopilotPlatformConfigUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&CopilotPlatformConfigUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&CopilotPlatformConfigDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown CopilotPlatformConfig mutation op: %q", m.Op())
 	}
 }
 
@@ -4315,17 +4456,19 @@ func (c *UserSubscriptionClient) mutate(ctx context.Context, m *UserSubscription
 type (
 	hooks struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead,
-		CopilotBudgetAlert, CopilotQuotaSnapshot, ErrorPassthroughRule, Group,
-		IdempotencyRecord, ModelPricing, PromoCode, PromoCodeUsage, Proxy, RedeemCode,
-		SecuritySecret, Setting, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
-		UserAttributeDefinition, UserAttributeValue, UserSubscription []ent.Hook
+		CopilotBudgetAlert, CopilotPlatformConfig, CopilotQuotaSnapshot,
+		ErrorPassthroughRule, Group, IdempotencyRecord, ModelPricing, PromoCode,
+		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, UsageCleanupTask,
+		UsageLog, User, UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
+		UserSubscription []ent.Hook
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead,
-		CopilotBudgetAlert, CopilotQuotaSnapshot, ErrorPassthroughRule, Group,
-		IdempotencyRecord, ModelPricing, PromoCode, PromoCodeUsage, Proxy, RedeemCode,
-		SecuritySecret, Setting, UsageCleanupTask, UsageLog, User, UserAllowedGroup,
-		UserAttributeDefinition, UserAttributeValue, UserSubscription []ent.Interceptor
+		CopilotBudgetAlert, CopilotPlatformConfig, CopilotQuotaSnapshot,
+		ErrorPassthroughRule, Group, IdempotencyRecord, ModelPricing, PromoCode,
+		PromoCodeUsage, Proxy, RedeemCode, SecuritySecret, Setting, UsageCleanupTask,
+		UsageLog, User, UserAllowedGroup, UserAttributeDefinition, UserAttributeValue,
+		UserSubscription []ent.Interceptor
 	}
 )
 

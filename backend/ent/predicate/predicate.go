@@ -24,6 +24,9 @@ type AnnouncementRead func(*sql.Selector)
 // CopilotBudgetAlert is the predicate function for copilotbudgetalert builders.
 type CopilotBudgetAlert func(*sql.Selector)
 
+// CopilotPlatformConfig is the predicate function for copilotplatformconfig builders.
+type CopilotPlatformConfig func(*sql.Selector)
+
 // CopilotQuotaSnapshot is the predicate function for copilotquotasnapshot builders.
 type CopilotQuotaSnapshot func(*sql.Selector)
 

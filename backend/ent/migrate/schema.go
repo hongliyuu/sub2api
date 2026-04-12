@@ -367,6 +367,30 @@ var (
 			},
 		},
 	}
+	// CopilotPlatformConfigsColumns holds the columns for the "copilot_platform_configs" table.
+	CopilotPlatformConfigsColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "plan_type", Type: field.TypeString, Unique: true, Size: 32},
+		{Name: "max_output_tokens", Type: field.TypeInt64, Nullable: true},
+		{Name: "max_body_kb", Type: field.TypeInt, Nullable: true},
+		{Name: "model_mapping", Type: field.TypeJSON, Nullable: true},
+		{Name: "model_whitelist", Type: field.TypeJSON, Nullable: true},
+	}
+	// CopilotPlatformConfigsTable holds the schema information for the "copilot_platform_configs" table.
+	CopilotPlatformConfigsTable = &schema.Table{
+		Name:       "copilot_platform_configs",
+		Columns:    CopilotPlatformConfigsColumns,
+		PrimaryKey: []*schema.Column{CopilotPlatformConfigsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "copilotplatformconfig_plan_type",
+				Unique:  true,
+				Columns: []*schema.Column{CopilotPlatformConfigsColumns[3]},
+			},
+		},
+	}
 	// CopilotQuotaSnapshotsColumns holds the columns for the "copilot_quota_snapshots" table.
 	CopilotQuotaSnapshotsColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -1209,6 +1233,7 @@ var (
 		AnnouncementsTable,
 		AnnouncementReadsTable,
 		CopilotBudgetAlertsTable,
+		CopilotPlatformConfigsTable,
 		CopilotQuotaSnapshotsTable,
 		ErrorPassthroughRulesTable,
 		GroupsTable,
@@ -1255,6 +1280,9 @@ func init() {
 	}
 	CopilotBudgetAlertsTable.Annotation = &entsql.Annotation{
 		Table: "copilot_budget_alerts",
+	}
+	CopilotPlatformConfigsTable.Annotation = &entsql.Annotation{
+		Table: "copilot_platform_configs",
 	}
 	CopilotQuotaSnapshotsTable.Annotation = &entsql.Annotation{
 		Table: "copilot_quota_snapshots",

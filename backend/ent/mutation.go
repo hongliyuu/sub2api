@@ -18,6 +18,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/copilotbudgetalert"
+	"github.com/Wei-Shaw/sub2api/ent/copilotplatformconfig"
 	"github.com/Wei-Shaw/sub2api/ent/copilotquotasnapshot"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
@@ -55,6 +56,7 @@ const (
 	TypeAnnouncement            = "Announcement"
 	TypeAnnouncementRead        = "AnnouncementRead"
 	TypeCopilotBudgetAlert      = "CopilotBudgetAlert"
+	TypeCopilotPlatformConfig   = "CopilotPlatformConfig"
 	TypeCopilotQuotaSnapshot    = "CopilotQuotaSnapshot"
 	TypeErrorPassthroughRule    = "ErrorPassthroughRule"
 	TypeGroup                   = "Group"
@@ -7655,6 +7657,823 @@ func (m *CopilotBudgetAlertMutation) ClearEdge(name string) error {
 // It returns an error if the edge is not defined in the schema.
 func (m *CopilotBudgetAlertMutation) ResetEdge(name string) error {
 	return fmt.Errorf("unknown CopilotBudgetAlert edge %s", name)
+}
+
+// CopilotPlatformConfigMutation represents an operation that mutates the CopilotPlatformConfig nodes in the graph.
+type CopilotPlatformConfigMutation struct {
+	config
+	op                    Op
+	typ                   string
+	id                    *int64
+	created_at            *time.Time
+	updated_at            *time.Time
+	plan_type             *string
+	max_output_tokens     *int64
+	addmax_output_tokens  *int64
+	max_body_kb           *int
+	addmax_body_kb        *int
+	model_mapping         *map[string]string
+	model_whitelist       *[]string
+	appendmodel_whitelist []string
+	clearedFields         map[string]struct{}
+	done                  bool
+	oldValue              func(context.Context) (*CopilotPlatformConfig, error)
+	predicates            []predicate.CopilotPlatformConfig
+}
+
+var _ ent.Mutation = (*CopilotPlatformConfigMutation)(nil)
+
+// copilotplatformconfigOption allows management of the mutation configuration using functional options.
+type copilotplatformconfigOption func(*CopilotPlatformConfigMutation)
+
+// newCopilotPlatformConfigMutation creates new mutation for the CopilotPlatformConfig entity.
+func newCopilotPlatformConfigMutation(c config, op Op, opts ...copilotplatformconfigOption) *CopilotPlatformConfigMutation {
+	m := &CopilotPlatformConfigMutation{
+		config:        c,
+		op:            op,
+		typ:           TypeCopilotPlatformConfig,
+		clearedFields: make(map[string]struct{}),
+	}
+	for _, opt := range opts {
+		opt(m)
+	}
+	return m
+}
+
+// withCopilotPlatformConfigID sets the ID field of the mutation.
+func withCopilotPlatformConfigID(id int64) copilotplatformconfigOption {
+	return func(m *CopilotPlatformConfigMutation) {
+		var (
+			err   error
+			once  sync.Once
+			value *CopilotPlatformConfig
+		)
+		m.oldValue = func(ctx context.Context) (*CopilotPlatformConfig, error) {
+			once.Do(func() {
+				if m.done {
+					err = errors.New("querying old values post mutation is not allowed")
+				} else {
+					value, err = m.Client().CopilotPlatformConfig.Get(ctx, id)
+				}
+			})
+			return value, err
+		}
+		m.id = &id
+	}
+}
+
+// withCopilotPlatformConfig sets the old CopilotPlatformConfig of the mutation.
+func withCopilotPlatformConfig(node *CopilotPlatformConfig) copilotplatformconfigOption {
+	return func(m *CopilotPlatformConfigMutation) {
+		m.oldValue = func(context.Context) (*CopilotPlatformConfig, error) {
+			return node, nil
+		}
+		m.id = &node.ID
+	}
+}
+
+// Client returns a new `ent.Client` from the mutation. If the mutation was
+// executed in a transaction (ent.Tx), a transactional client is returned.
+func (m CopilotPlatformConfigMutation) Client() *Client {
+	client := &Client{config: m.config}
+	client.init()
+	return client
+}
+
+// Tx returns an `ent.Tx` for mutations that were executed in transactions;
+// it returns an error otherwise.
+func (m CopilotPlatformConfigMutation) Tx() (*Tx, error) {
+	if _, ok := m.driver.(*txDriver); !ok {
+		return nil, errors.New("ent: mutation is not running in a transaction")
+	}
+	tx := &Tx{config: m.config}
+	tx.init()
+	return tx, nil
+}
+
+// ID returns the ID value in the mutation. Note that the ID is only available
+// if it was provided to the builder or after it was returned from the database.
+func (m *CopilotPlatformConfigMutation) ID() (id int64, exists bool) {
+	if m.id == nil {
+		return
+	}
+	return *m.id, true
+}
+
+// IDs queries the database and returns the entity ids that match the mutation's predicate.
+// That means, if the mutation is applied within a transaction with an isolation level such
+// as sql.LevelSerializable, the returned ids match the ids of the rows that will be updated
+// or updated by the mutation.
+func (m *CopilotPlatformConfigMutation) IDs(ctx context.Context) ([]int64, error) {
+	switch {
+	case m.op.Is(OpUpdateOne | OpDeleteOne):
+		id, exists := m.ID()
+		if exists {
+			return []int64{id}, nil
+		}
+		fallthrough
+	case m.op.Is(OpUpdate | OpDelete):
+		return m.Client().CopilotPlatformConfig.Query().Where(m.predicates...).IDs(ctx)
+	default:
+		return nil, fmt.Errorf("IDs is not allowed on %s operations", m.op)
+	}
+}
+
+// SetCreatedAt sets the "created_at" field.
+func (m *CopilotPlatformConfigMutation) SetCreatedAt(t time.Time) {
+	m.created_at = &t
+}
+
+// CreatedAt returns the value of the "created_at" field in the mutation.
+func (m *CopilotPlatformConfigMutation) CreatedAt() (r time.Time, exists bool) {
+	v := m.created_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldCreatedAt returns the old "created_at" field's value of the CopilotPlatformConfig entity.
+// If the CopilotPlatformConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CopilotPlatformConfigMutation) OldCreatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldCreatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldCreatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldCreatedAt: %w", err)
+	}
+	return oldValue.CreatedAt, nil
+}
+
+// ResetCreatedAt resets all changes to the "created_at" field.
+func (m *CopilotPlatformConfigMutation) ResetCreatedAt() {
+	m.created_at = nil
+}
+
+// SetUpdatedAt sets the "updated_at" field.
+func (m *CopilotPlatformConfigMutation) SetUpdatedAt(t time.Time) {
+	m.updated_at = &t
+}
+
+// UpdatedAt returns the value of the "updated_at" field in the mutation.
+func (m *CopilotPlatformConfigMutation) UpdatedAt() (r time.Time, exists bool) {
+	v := m.updated_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldUpdatedAt returns the old "updated_at" field's value of the CopilotPlatformConfig entity.
+// If the CopilotPlatformConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CopilotPlatformConfigMutation) OldUpdatedAt(ctx context.Context) (v time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldUpdatedAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldUpdatedAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldUpdatedAt: %w", err)
+	}
+	return oldValue.UpdatedAt, nil
+}
+
+// ResetUpdatedAt resets all changes to the "updated_at" field.
+func (m *CopilotPlatformConfigMutation) ResetUpdatedAt() {
+	m.updated_at = nil
+}
+
+// SetPlanType sets the "plan_type" field.
+func (m *CopilotPlatformConfigMutation) SetPlanType(s string) {
+	m.plan_type = &s
+}
+
+// PlanType returns the value of the "plan_type" field in the mutation.
+func (m *CopilotPlatformConfigMutation) PlanType() (r string, exists bool) {
+	v := m.plan_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPlanType returns the old "plan_type" field's value of the CopilotPlatformConfig entity.
+// If the CopilotPlatformConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CopilotPlatformConfigMutation) OldPlanType(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPlanType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPlanType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPlanType: %w", err)
+	}
+	return oldValue.PlanType, nil
+}
+
+// ResetPlanType resets all changes to the "plan_type" field.
+func (m *CopilotPlatformConfigMutation) ResetPlanType() {
+	m.plan_type = nil
+}
+
+// SetMaxOutputTokens sets the "max_output_tokens" field.
+func (m *CopilotPlatformConfigMutation) SetMaxOutputTokens(i int64) {
+	m.max_output_tokens = &i
+	m.addmax_output_tokens = nil
+}
+
+// MaxOutputTokens returns the value of the "max_output_tokens" field in the mutation.
+func (m *CopilotPlatformConfigMutation) MaxOutputTokens() (r int64, exists bool) {
+	v := m.max_output_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMaxOutputTokens returns the old "max_output_tokens" field's value of the CopilotPlatformConfig entity.
+// If the CopilotPlatformConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CopilotPlatformConfigMutation) OldMaxOutputTokens(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMaxOutputTokens is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMaxOutputTokens requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMaxOutputTokens: %w", err)
+	}
+	return oldValue.MaxOutputTokens, nil
+}
+
+// AddMaxOutputTokens adds i to the "max_output_tokens" field.
+func (m *CopilotPlatformConfigMutation) AddMaxOutputTokens(i int64) {
+	if m.addmax_output_tokens != nil {
+		*m.addmax_output_tokens += i
+	} else {
+		m.addmax_output_tokens = &i
+	}
+}
+
+// AddedMaxOutputTokens returns the value that was added to the "max_output_tokens" field in this mutation.
+func (m *CopilotPlatformConfigMutation) AddedMaxOutputTokens() (r int64, exists bool) {
+	v := m.addmax_output_tokens
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearMaxOutputTokens clears the value of the "max_output_tokens" field.
+func (m *CopilotPlatformConfigMutation) ClearMaxOutputTokens() {
+	m.max_output_tokens = nil
+	m.addmax_output_tokens = nil
+	m.clearedFields[copilotplatformconfig.FieldMaxOutputTokens] = struct{}{}
+}
+
+// MaxOutputTokensCleared returns if the "max_output_tokens" field was cleared in this mutation.
+func (m *CopilotPlatformConfigMutation) MaxOutputTokensCleared() bool {
+	_, ok := m.clearedFields[copilotplatformconfig.FieldMaxOutputTokens]
+	return ok
+}
+
+// ResetMaxOutputTokens resets all changes to the "max_output_tokens" field.
+func (m *CopilotPlatformConfigMutation) ResetMaxOutputTokens() {
+	m.max_output_tokens = nil
+	m.addmax_output_tokens = nil
+	delete(m.clearedFields, copilotplatformconfig.FieldMaxOutputTokens)
+}
+
+// SetMaxBodyKB sets the "max_body_kb" field.
+func (m *CopilotPlatformConfigMutation) SetMaxBodyKB(i int) {
+	m.max_body_kb = &i
+	m.addmax_body_kb = nil
+}
+
+// MaxBodyKB returns the value of the "max_body_kb" field in the mutation.
+func (m *CopilotPlatformConfigMutation) MaxBodyKB() (r int, exists bool) {
+	v := m.max_body_kb
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldMaxBodyKB returns the old "max_body_kb" field's value of the CopilotPlatformConfig entity.
+// If the CopilotPlatformConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CopilotPlatformConfigMutation) OldMaxBodyKB(ctx context.Context) (v *int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldMaxBodyKB is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldMaxBodyKB requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldMaxBodyKB: %w", err)
+	}
+	return oldValue.MaxBodyKB, nil
+}
+
+// AddMaxBodyKB adds i to the "max_body_kb" field.
+func (m *CopilotPlatformConfigMutation) AddMaxBodyKB(i int) {
+	if m.addmax_body_kb != nil {
+		*m.addmax_body_kb += i
+	} else {
+		m.addmax_body_kb = &i
+	}
+}
+
+// AddedMaxBodyKB returns the value that was added to the "max_body_kb" field in this mutation.
+func (m *CopilotPlatformConfigMutation) AddedMaxBodyKB() (r int, exists bool) {
+	v := m.addmax_body_kb
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearMaxBodyKB clears the value of the "max_body_kb" field.
+func (m *CopilotPlatformConfigMutation) ClearMaxBodyKB() {
+	m.max_body_kb = nil
+	m.addmax_body_kb = nil
+	m.clearedFields[copilotplatformconfig.FieldMaxBodyKB] = struct{}{}
+}
+
+// MaxBodyKBCleared returns if the "max_body_kb" field was cleared in this mutation.
+func (m *CopilotPlatformConfigMutation) MaxBodyKBCleared() bool {
+	_, ok := m.clearedFields[copilotplatformconfig.FieldMaxBodyKB]
+	return ok
+}
+
+// ResetMaxBodyKB resets all changes to the "max_body_kb" field.
+func (m *CopilotPlatformConfigMutation) ResetMaxBodyKB() {
+	m.max_body_kb = nil
+	m.addmax_body_kb = nil
+	delete(m.clearedFields, copilotplatformconfig.FieldMaxBodyKB)
+}
+
+// SetModelMapping sets the "model_mapping" field.
+func (m *CopilotPlatformConfigMutation) SetModelMapping(value map[string]string) {
+	m.model_mapping = &value
+}
+
+// ModelMapping returns the value of the "model_mapping" field in the mutation.
+func (m *CopilotPlatformConfigMutation) ModelMapping() (r map[string]string, exists bool) {
+	v := m.model_mapping
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldModelMapping returns the old "model_mapping" field's value of the CopilotPlatformConfig entity.
+// If the CopilotPlatformConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CopilotPlatformConfigMutation) OldModelMapping(ctx context.Context) (v map[string]string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldModelMapping is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldModelMapping requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldModelMapping: %w", err)
+	}
+	return oldValue.ModelMapping, nil
+}
+
+// ClearModelMapping clears the value of the "model_mapping" field.
+func (m *CopilotPlatformConfigMutation) ClearModelMapping() {
+	m.model_mapping = nil
+	m.clearedFields[copilotplatformconfig.FieldModelMapping] = struct{}{}
+}
+
+// ModelMappingCleared returns if the "model_mapping" field was cleared in this mutation.
+func (m *CopilotPlatformConfigMutation) ModelMappingCleared() bool {
+	_, ok := m.clearedFields[copilotplatformconfig.FieldModelMapping]
+	return ok
+}
+
+// ResetModelMapping resets all changes to the "model_mapping" field.
+func (m *CopilotPlatformConfigMutation) ResetModelMapping() {
+	m.model_mapping = nil
+	delete(m.clearedFields, copilotplatformconfig.FieldModelMapping)
+}
+
+// SetModelWhitelist sets the "model_whitelist" field.
+func (m *CopilotPlatformConfigMutation) SetModelWhitelist(s []string) {
+	m.model_whitelist = &s
+	m.appendmodel_whitelist = nil
+}
+
+// ModelWhitelist returns the value of the "model_whitelist" field in the mutation.
+func (m *CopilotPlatformConfigMutation) ModelWhitelist() (r []string, exists bool) {
+	v := m.model_whitelist
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldModelWhitelist returns the old "model_whitelist" field's value of the CopilotPlatformConfig entity.
+// If the CopilotPlatformConfig object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *CopilotPlatformConfigMutation) OldModelWhitelist(ctx context.Context) (v []string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldModelWhitelist is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldModelWhitelist requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldModelWhitelist: %w", err)
+	}
+	return oldValue.ModelWhitelist, nil
+}
+
+// AppendModelWhitelist adds s to the "model_whitelist" field.
+func (m *CopilotPlatformConfigMutation) AppendModelWhitelist(s []string) {
+	m.appendmodel_whitelist = append(m.appendmodel_whitelist, s...)
+}
+
+// AppendedModelWhitelist returns the list of values that were appended to the "model_whitelist" field in this mutation.
+func (m *CopilotPlatformConfigMutation) AppendedModelWhitelist() ([]string, bool) {
+	if len(m.appendmodel_whitelist) == 0 {
+		return nil, false
+	}
+	return m.appendmodel_whitelist, true
+}
+
+// ClearModelWhitelist clears the value of the "model_whitelist" field.
+func (m *CopilotPlatformConfigMutation) ClearModelWhitelist() {
+	m.model_whitelist = nil
+	m.appendmodel_whitelist = nil
+	m.clearedFields[copilotplatformconfig.FieldModelWhitelist] = struct{}{}
+}
+
+// ModelWhitelistCleared returns if the "model_whitelist" field was cleared in this mutation.
+func (m *CopilotPlatformConfigMutation) ModelWhitelistCleared() bool {
+	_, ok := m.clearedFields[copilotplatformconfig.FieldModelWhitelist]
+	return ok
+}
+
+// ResetModelWhitelist resets all changes to the "model_whitelist" field.
+func (m *CopilotPlatformConfigMutation) ResetModelWhitelist() {
+	m.model_whitelist = nil
+	m.appendmodel_whitelist = nil
+	delete(m.clearedFields, copilotplatformconfig.FieldModelWhitelist)
+}
+
+// Where appends a list predicates to the CopilotPlatformConfigMutation builder.
+func (m *CopilotPlatformConfigMutation) Where(ps ...predicate.CopilotPlatformConfig) {
+	m.predicates = append(m.predicates, ps...)
+}
+
+// WhereP appends storage-level predicates to the CopilotPlatformConfigMutation builder. Using this method,
+// users can use type-assertion to append predicates that do not depend on any generated package.
+func (m *CopilotPlatformConfigMutation) WhereP(ps ...func(*sql.Selector)) {
+	p := make([]predicate.CopilotPlatformConfig, len(ps))
+	for i := range ps {
+		p[i] = ps[i]
+	}
+	m.Where(p...)
+}
+
+// Op returns the operation name.
+func (m *CopilotPlatformConfigMutation) Op() Op {
+	return m.op
+}
+
+// SetOp allows setting the mutation operation.
+func (m *CopilotPlatformConfigMutation) SetOp(op Op) {
+	m.op = op
+}
+
+// Type returns the node type of this mutation (CopilotPlatformConfig).
+func (m *CopilotPlatformConfigMutation) Type() string {
+	return m.typ
+}
+
+// Fields returns all fields that were changed during this mutation. Note that in
+// order to get all numeric fields that were incremented/decremented, call
+// AddedFields().
+func (m *CopilotPlatformConfigMutation) Fields() []string {
+	fields := make([]string, 0, 7)
+	if m.created_at != nil {
+		fields = append(fields, copilotplatformconfig.FieldCreatedAt)
+	}
+	if m.updated_at != nil {
+		fields = append(fields, copilotplatformconfig.FieldUpdatedAt)
+	}
+	if m.plan_type != nil {
+		fields = append(fields, copilotplatformconfig.FieldPlanType)
+	}
+	if m.max_output_tokens != nil {
+		fields = append(fields, copilotplatformconfig.FieldMaxOutputTokens)
+	}
+	if m.max_body_kb != nil {
+		fields = append(fields, copilotplatformconfig.FieldMaxBodyKB)
+	}
+	if m.model_mapping != nil {
+		fields = append(fields, copilotplatformconfig.FieldModelMapping)
+	}
+	if m.model_whitelist != nil {
+		fields = append(fields, copilotplatformconfig.FieldModelWhitelist)
+	}
+	return fields
+}
+
+// Field returns the value of a field with the given name. The second boolean
+// return value indicates that this field was not set, or was not defined in the
+// schema.
+func (m *CopilotPlatformConfigMutation) Field(name string) (ent.Value, bool) {
+	switch name {
+	case copilotplatformconfig.FieldCreatedAt:
+		return m.CreatedAt()
+	case copilotplatformconfig.FieldUpdatedAt:
+		return m.UpdatedAt()
+	case copilotplatformconfig.FieldPlanType:
+		return m.PlanType()
+	case copilotplatformconfig.FieldMaxOutputTokens:
+		return m.MaxOutputTokens()
+	case copilotplatformconfig.FieldMaxBodyKB:
+		return m.MaxBodyKB()
+	case copilotplatformconfig.FieldModelMapping:
+		return m.ModelMapping()
+	case copilotplatformconfig.FieldModelWhitelist:
+		return m.ModelWhitelist()
+	}
+	return nil, false
+}
+
+// OldField returns the old value of the field from the database. An error is
+// returned if the mutation operation is not UpdateOne, or the query to the
+// database failed.
+func (m *CopilotPlatformConfigMutation) OldField(ctx context.Context, name string) (ent.Value, error) {
+	switch name {
+	case copilotplatformconfig.FieldCreatedAt:
+		return m.OldCreatedAt(ctx)
+	case copilotplatformconfig.FieldUpdatedAt:
+		return m.OldUpdatedAt(ctx)
+	case copilotplatformconfig.FieldPlanType:
+		return m.OldPlanType(ctx)
+	case copilotplatformconfig.FieldMaxOutputTokens:
+		return m.OldMaxOutputTokens(ctx)
+	case copilotplatformconfig.FieldMaxBodyKB:
+		return m.OldMaxBodyKB(ctx)
+	case copilotplatformconfig.FieldModelMapping:
+		return m.OldModelMapping(ctx)
+	case copilotplatformconfig.FieldModelWhitelist:
+		return m.OldModelWhitelist(ctx)
+	}
+	return nil, fmt.Errorf("unknown CopilotPlatformConfig field %s", name)
+}
+
+// SetField sets the value of a field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CopilotPlatformConfigMutation) SetField(name string, value ent.Value) error {
+	switch name {
+	case copilotplatformconfig.FieldCreatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetCreatedAt(v)
+		return nil
+	case copilotplatformconfig.FieldUpdatedAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetUpdatedAt(v)
+		return nil
+	case copilotplatformconfig.FieldPlanType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPlanType(v)
+		return nil
+	case copilotplatformconfig.FieldMaxOutputTokens:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMaxOutputTokens(v)
+		return nil
+	case copilotplatformconfig.FieldMaxBodyKB:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetMaxBodyKB(v)
+		return nil
+	case copilotplatformconfig.FieldModelMapping:
+		v, ok := value.(map[string]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetModelMapping(v)
+		return nil
+	case copilotplatformconfig.FieldModelWhitelist:
+		v, ok := value.([]string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetModelWhitelist(v)
+		return nil
+	}
+	return fmt.Errorf("unknown CopilotPlatformConfig field %s", name)
+}
+
+// AddedFields returns all numeric fields that were incremented/decremented during
+// this mutation.
+func (m *CopilotPlatformConfigMutation) AddedFields() []string {
+	var fields []string
+	if m.addmax_output_tokens != nil {
+		fields = append(fields, copilotplatformconfig.FieldMaxOutputTokens)
+	}
+	if m.addmax_body_kb != nil {
+		fields = append(fields, copilotplatformconfig.FieldMaxBodyKB)
+	}
+	return fields
+}
+
+// AddedField returns the numeric value that was incremented/decremented on a field
+// with the given name. The second boolean return value indicates that this field
+// was not set, or was not defined in the schema.
+func (m *CopilotPlatformConfigMutation) AddedField(name string) (ent.Value, bool) {
+	switch name {
+	case copilotplatformconfig.FieldMaxOutputTokens:
+		return m.AddedMaxOutputTokens()
+	case copilotplatformconfig.FieldMaxBodyKB:
+		return m.AddedMaxBodyKB()
+	}
+	return nil, false
+}
+
+// AddField adds the value to the field with the given name. It returns an error if
+// the field is not defined in the schema, or if the type mismatched the field
+// type.
+func (m *CopilotPlatformConfigMutation) AddField(name string, value ent.Value) error {
+	switch name {
+	case copilotplatformconfig.FieldMaxOutputTokens:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddMaxOutputTokens(v)
+		return nil
+	case copilotplatformconfig.FieldMaxBodyKB:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddMaxBodyKB(v)
+		return nil
+	}
+	return fmt.Errorf("unknown CopilotPlatformConfig numeric field %s", name)
+}
+
+// ClearedFields returns all nullable fields that were cleared during this
+// mutation.
+func (m *CopilotPlatformConfigMutation) ClearedFields() []string {
+	var fields []string
+	if m.FieldCleared(copilotplatformconfig.FieldMaxOutputTokens) {
+		fields = append(fields, copilotplatformconfig.FieldMaxOutputTokens)
+	}
+	if m.FieldCleared(copilotplatformconfig.FieldMaxBodyKB) {
+		fields = append(fields, copilotplatformconfig.FieldMaxBodyKB)
+	}
+	if m.FieldCleared(copilotplatformconfig.FieldModelMapping) {
+		fields = append(fields, copilotplatformconfig.FieldModelMapping)
+	}
+	if m.FieldCleared(copilotplatformconfig.FieldModelWhitelist) {
+		fields = append(fields, copilotplatformconfig.FieldModelWhitelist)
+	}
+	return fields
+}
+
+// FieldCleared returns a boolean indicating if a field with the given name was
+// cleared in this mutation.
+func (m *CopilotPlatformConfigMutation) FieldCleared(name string) bool {
+	_, ok := m.clearedFields[name]
+	return ok
+}
+
+// ClearField clears the value of the field with the given name. It returns an
+// error if the field is not defined in the schema.
+func (m *CopilotPlatformConfigMutation) ClearField(name string) error {
+	switch name {
+	case copilotplatformconfig.FieldMaxOutputTokens:
+		m.ClearMaxOutputTokens()
+		return nil
+	case copilotplatformconfig.FieldMaxBodyKB:
+		m.ClearMaxBodyKB()
+		return nil
+	case copilotplatformconfig.FieldModelMapping:
+		m.ClearModelMapping()
+		return nil
+	case copilotplatformconfig.FieldModelWhitelist:
+		m.ClearModelWhitelist()
+		return nil
+	}
+	return fmt.Errorf("unknown CopilotPlatformConfig nullable field %s", name)
+}
+
+// ResetField resets all changes in the mutation for the field with the given name.
+// It returns an error if the field is not defined in the schema.
+func (m *CopilotPlatformConfigMutation) ResetField(name string) error {
+	switch name {
+	case copilotplatformconfig.FieldCreatedAt:
+		m.ResetCreatedAt()
+		return nil
+	case copilotplatformconfig.FieldUpdatedAt:
+		m.ResetUpdatedAt()
+		return nil
+	case copilotplatformconfig.FieldPlanType:
+		m.ResetPlanType()
+		return nil
+	case copilotplatformconfig.FieldMaxOutputTokens:
+		m.ResetMaxOutputTokens()
+		return nil
+	case copilotplatformconfig.FieldMaxBodyKB:
+		m.ResetMaxBodyKB()
+		return nil
+	case copilotplatformconfig.FieldModelMapping:
+		m.ResetModelMapping()
+		return nil
+	case copilotplatformconfig.FieldModelWhitelist:
+		m.ResetModelWhitelist()
+		return nil
+	}
+	return fmt.Errorf("unknown CopilotPlatformConfig field %s", name)
+}
+
+// AddedEdges returns all edge names that were set/added in this mutation.
+func (m *CopilotPlatformConfigMutation) AddedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// AddedIDs returns all IDs (to other nodes) that were added for the given edge
+// name in this mutation.
+func (m *CopilotPlatformConfigMutation) AddedIDs(name string) []ent.Value {
+	return nil
+}
+
+// RemovedEdges returns all edge names that were removed in this mutation.
+func (m *CopilotPlatformConfigMutation) RemovedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// RemovedIDs returns all IDs (to other nodes) that were removed for the edge with
+// the given name in this mutation.
+func (m *CopilotPlatformConfigMutation) RemovedIDs(name string) []ent.Value {
+	return nil
+}
+
+// ClearedEdges returns all edge names that were cleared in this mutation.
+func (m *CopilotPlatformConfigMutation) ClearedEdges() []string {
+	edges := make([]string, 0, 0)
+	return edges
+}
+
+// EdgeCleared returns a boolean which indicates if the edge with the given name
+// was cleared in this mutation.
+func (m *CopilotPlatformConfigMutation) EdgeCleared(name string) bool {
+	return false
+}
+
+// ClearEdge clears the value of the edge with the given name. It returns an error
+// if that edge is not defined in the schema.
+func (m *CopilotPlatformConfigMutation) ClearEdge(name string) error {
+	return fmt.Errorf("unknown CopilotPlatformConfig unique edge %s", name)
+}
+
+// ResetEdge resets all changes to the edge with the given name in this mutation.
+// It returns an error if the edge is not defined in the schema.
+func (m *CopilotPlatformConfigMutation) ResetEdge(name string) error {
+	return fmt.Errorf("unknown CopilotPlatformConfig edge %s", name)
 }
 
 // CopilotQuotaSnapshotMutation represents an operation that mutates the CopilotQuotaSnapshot nodes in the graph.

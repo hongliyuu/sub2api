@@ -11,6 +11,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/copilotbudgetalert"
+	"github.com/Wei-Shaw/sub2api/ent/copilotplatformconfig"
 	"github.com/Wei-Shaw/sub2api/ent/copilotquotasnapshot"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
@@ -333,6 +334,39 @@ func init() {
 	copilotbudgetalertDescEnabled := copilotbudgetalertFields[3].Descriptor()
 	// copilotbudgetalert.DefaultEnabled holds the default value on creation for the enabled field.
 	copilotbudgetalert.DefaultEnabled = copilotbudgetalertDescEnabled.Default.(bool)
+	copilotplatformconfigMixin := schema.CopilotPlatformConfig{}.Mixin()
+	copilotplatformconfigMixinFields0 := copilotplatformconfigMixin[0].Fields()
+	_ = copilotplatformconfigMixinFields0
+	copilotplatformconfigFields := schema.CopilotPlatformConfig{}.Fields()
+	_ = copilotplatformconfigFields
+	// copilotplatformconfigDescCreatedAt is the schema descriptor for created_at field.
+	copilotplatformconfigDescCreatedAt := copilotplatformconfigMixinFields0[0].Descriptor()
+	// copilotplatformconfig.DefaultCreatedAt holds the default value on creation for the created_at field.
+	copilotplatformconfig.DefaultCreatedAt = copilotplatformconfigDescCreatedAt.Default.(func() time.Time)
+	// copilotplatformconfigDescUpdatedAt is the schema descriptor for updated_at field.
+	copilotplatformconfigDescUpdatedAt := copilotplatformconfigMixinFields0[1].Descriptor()
+	// copilotplatformconfig.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	copilotplatformconfig.DefaultUpdatedAt = copilotplatformconfigDescUpdatedAt.Default.(func() time.Time)
+	// copilotplatformconfig.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	copilotplatformconfig.UpdateDefaultUpdatedAt = copilotplatformconfigDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// copilotplatformconfigDescPlanType is the schema descriptor for plan_type field.
+	copilotplatformconfigDescPlanType := copilotplatformconfigFields[0].Descriptor()
+	// copilotplatformconfig.PlanTypeValidator is a validator for the "plan_type" field. It is called by the builders before save.
+	copilotplatformconfig.PlanTypeValidator = func() func(string) error {
+		validators := copilotplatformconfigDescPlanType.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(plan_type string) error {
+			for _, fn := range fns {
+				if err := fn(plan_type); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
 	copilotquotasnapshotFields := schema.CopilotQuotaSnapshot{}.Fields()
 	_ = copilotquotasnapshotFields
 	// copilotquotasnapshotDescPlanType is the schema descriptor for plan_type field.

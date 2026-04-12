@@ -81,6 +81,18 @@ func (f CopilotBudgetAlertFunc) Mutate(ctx context.Context, m ent.Mutation) (ent
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CopilotBudgetAlertMutation", m)
 }
 
+// The CopilotPlatformConfigFunc type is an adapter to allow the use of ordinary
+// function as CopilotPlatformConfig mutator.
+type CopilotPlatformConfigFunc func(context.Context, *ent.CopilotPlatformConfigMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f CopilotPlatformConfigFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.CopilotPlatformConfigMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.CopilotPlatformConfigMutation", m)
+}
+
 // The CopilotQuotaSnapshotFunc type is an adapter to allow the use of ordinary
 // function as CopilotQuotaSnapshot mutator.
 type CopilotQuotaSnapshotFunc func(context.Context, *ent.CopilotQuotaSnapshotMutation) (ent.Value, error)
