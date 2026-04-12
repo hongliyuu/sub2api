@@ -260,11 +260,12 @@ async function saveEntry(entry: CopilotPlatformConfigEntry) {
   syncMapping(planType)
 
   // 注意：v-model.number 在输入框清空时会产生空字符串 ""（而非 null），
-  // 必须显式 normalize：非空正整数 → number，空值 → null。
+  // 必须显式 normalize：非负整数（含 0）→ number，空值 → null。
+  // 0 表示不限制输出 token，允许保存。
   function toNullableInt(v: unknown): number | null {
     if (v === '' || v === null || v === undefined) return null
     const n = Number(v)
-    return Number.isFinite(n) && n > 0 ? n : null
+    return Number.isFinite(n) && n >= 0 ? n : null
   }
 
   try {

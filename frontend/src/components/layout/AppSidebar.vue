@@ -55,6 +55,29 @@
           </router-link>
         </div>
 
+        <!-- Copilot Platform Section -->
+        <div class="sidebar-section">
+          <div v-if="!sidebarCollapsed" class="sidebar-section-title">
+            {{ t('nav.copilotGroup') }}
+          </div>
+          <div v-else class="mx-3 my-3 h-px bg-gray-200 dark:bg-dark-700"></div>
+          <router-link
+            v-for="item in copilotNavItems"
+            :key="item.path"
+            :to="item.path"
+            class="sidebar-link mb-1"
+            :class="{ 'sidebar-link-active': isActive(item.path) }"
+            :title="sidebarCollapsed ? item.label : undefined"
+            @click="handleMenuItemClick(item.path)"
+          >
+            <span v-if="item.iconSvg" class="h-5 w-5 flex-shrink-0 sidebar-svg-icon" v-html="sanitizeSvg(item.iconSvg)"></span>
+            <component v-else :is="item.icon" class="h-5 w-5 flex-shrink-0" />
+            <transition name="fade">
+              <span v-if="!sidebarCollapsed">{{ item.label }}</span>
+            </transition>
+          </router-link>
+        </div>
+
         <!-- Personal Section for Admin (hidden in simple mode) -->
         <div v-if="!authStore.isSimpleMode" class="sidebar-section">
           <div v-if="!sidebarCollapsed" class="sidebar-section-title">
@@ -627,7 +650,7 @@ const customMenuItemsForAdmin = computed(() => {
     .sort((a, b) => a.sort_order - b.sort_order)
 })
 
-// Admin navigation items
+// Admin navigation items (excludes Copilot items — shown separately in copilotNavItems)
 const adminNavItems = computed((): NavItem[] => {
   const baseItems: NavItem[] = [
     { path: '/admin/dashboard', label: t('nav.dashboard'), icon: DashboardIcon },
@@ -637,10 +660,6 @@ const adminNavItems = computed((): NavItem[] => {
           { path: '/admin/ops/request-inspect', label: t('nav.opsRequestInspect'), icon: InspectIcon }
         ]
       : []),
-    { path: '/admin/copilot/platform', label: t('nav.copilotPlatformConfig'), icon: CogIcon },
-    { path: '/admin/copilot/accounts', label: t('nav.copilotAccountList'), icon: GlobeIcon },
-    { path: '/admin/copilot/cost', label: t('nav.copilotAccounts'), icon: CreditCardIcon },
-    { path: '/admin/copilot/users', label: t('nav.copilotUsers'), icon: UsersIcon },
     { path: '/admin/users', label: t('nav.users'), icon: UsersIcon, hideInSimpleMode: true },
     { path: '/admin/user-view', label: t('nav.userView'), icon: UserViewIcon, hideInSimpleMode: true },
     { path: '/admin/groups', label: t('nav.groups'), icon: FolderIcon, hideInSimpleMode: true },
@@ -673,6 +692,14 @@ const adminNavItems = computed((): NavItem[] => {
   }
   return baseItems
 })
+
+// Copilot Platform navigation items (shown in a dedicated group)
+const copilotNavItems = computed((): NavItem[] => [
+  { path: '/admin/copilot/platform', label: t('nav.copilotPlatformConfig'), icon: CogIcon },
+  { path: '/admin/copilot/accounts', label: t('nav.copilotAccountList'), icon: GlobeIcon },
+  { path: '/admin/copilot/cost', label: t('nav.copilotAccounts'), icon: CreditCardIcon },
+  { path: '/admin/copilot/users', label: t('nav.copilotUsers'), icon: UsersIcon },
+])
 
 function toggleSidebar() {
   appStore.toggleSidebar()
