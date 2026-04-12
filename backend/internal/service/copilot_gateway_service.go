@@ -170,7 +170,7 @@ func (s *CopilotGatewayService) ForwardChatCompletions(
 		// back to the textified /chat/completions path instead.
 		hasCustomBaseURL := strings.TrimSpace(account.GetCredential("base_url")) != ""
 
-		modelProbeBody, _ := rewriteCopilotUpstreamModel(body, account)
+		modelProbeBody, _ := rewriteCopilotUpstreamModel(body, account, s.getCopilotPlatformModelMapping(ctx, account))
 		upstreamModelID := strings.TrimSpace(extractModelFromBody(modelProbeBody))
 		supportedEndpoints, epErr := s.getSupportedEndpointsForModel(ctx, account, upstreamModelID)
 		slog.Info("copilot chat: file routing decision",
@@ -220,10 +220,8 @@ func (s *CopilotGatewayService) forwardChatCompletionsDirect(
 	// (e.g. <available-deferred-tools> + actual message) that Copilot rejects.
 	body = mergeConsecutiveSameRoleMessagesInOpenAIBody(body)
 
-	body, logModel := rewriteCopilotUpstreamModel(body, account)
+	body, logModel := rewriteCopilotUpstreamModel(body, account, s.getCopilotPlatformModelMapping(ctx, account))
 	body = s.clampCopilotUpstreamMaxTokens(ctx, body, account)
-
-	// Remember whether the client originally requested usage in the stream,
 	// before ensureStreamIncludeUsage may add it.
 	clientWantsUsageChunk := gjson.GetBytes(body, "stream_options.include_usage").Bool()
 	// Inject stream_options.include_usage=true so Copilot appends a usage-summary
@@ -365,7 +363,7 @@ func (s *CopilotGatewayService) forwardChatCompletionsViaResponses(
 	translateStart := time.Now()
 
 	body = mergeConsecutiveSameRoleMessagesInOpenAIBody(body)
-	body, logModel := rewriteCopilotUpstreamModel(body, account)
+	body, logModel := rewriteCopilotUpstreamModel(body, account, s.getCopilotPlatformModelMapping(ctx, account))
 	body = s.clampCopilotUpstreamMaxTokens(ctx, body, account)
 
 	var chatReq apicompat.ChatCompletionsRequest
@@ -523,7 +521,7 @@ func (s *CopilotGatewayService) forwardChatCompletionsViaMessages(
 	translateStart := time.Now()
 
 	body = mergeConsecutiveSameRoleMessagesInOpenAIBody(body)
-	body, logModel := rewriteCopilotUpstreamModel(body, account)
+	body, logModel := rewriteCopilotUpstreamModel(body, account, s.getCopilotPlatformModelMapping(ctx, account))
 	body = s.clampCopilotUpstreamMaxTokens(ctx, body, account)
 
 	clientWantsStream := gjson.GetBytes(body, "stream").Bool()
@@ -1378,10 +1376,14 @@ func extractModelFromBody(body []byte) string {
 	return req.Model
 }
 
-// rewriteCopilotUpstreamModel applies account model_mapping then Copilot API id
-// normalization (Anthropic dated / dash ids → Copilot dot form). Returns the
-// possibly updated body and the original model string from the body for logging.
-func rewriteCopilotUpstreamModel(body []byte, account *Account) ([]byte, string) {
+// rewriteCopilotUpstreamModel applies account model_mapping (then optional platform
+// model_mapping as fallback) then Copilot API id normalization (Anthropic dated /
+// dash ids → Copilot dot form). Returns the possibly updated body and the original
+// model string from the body for logging.
+//
+// platformMapping may be nil; when provided it is checked only when the account-level
+// mapping does not match.
+func rewriteCopilotUpstreamModel(body []byte, account *Account, platformMapping map[string]string) ([]byte, string) {
 	if len(body) == 0 || account == nil {
 		return body, extractModelFromBody(body)
 	}
@@ -1389,7 +1391,13 @@ func rewriteCopilotUpstreamModel(body []byte, account *Account) ([]byte, string)
 	if original == "" {
 		return body, original
 	}
-	mapped := account.GetMappedModel(original)
+	mapped, accountMatched := account.ResolveMappedModel(original)
+	// Fall back to platform-level mapping when account mapping did not match.
+	if !accountMatched && len(platformMapping) > 0 {
+		if pm, ok := platformMapping[original]; ok && pm != "" {
+			mapped = pm
+		}
+	}
 	upstream := copilot.NormalizeModelIDForCopilotUpstream(mapped)
 	if upstream == original {
 		return body, original
@@ -1400,6 +1408,23 @@ func rewriteCopilotUpstreamModel(body []byte, account *Account) ([]byte, string)
 		return body, original
 	}
 	return newBody, original
+}
+
+// getCopilotPlatformModelMapping returns the platform-level model_mapping for the given
+// account (looked up by plan_type). Returns nil when not configured or on error.
+func (s *CopilotGatewayService) getCopilotPlatformModelMapping(ctx context.Context, account *Account) map[string]string {
+	if s.platformConfigSvc == nil || account == nil {
+		return nil
+	}
+	planType := account.GetCredential("plan_type")
+	if planType == "" {
+		return nil
+	}
+	cfg, err := s.platformConfigSvc.GetByPlanType(ctx, planType)
+	if err != nil || cfg == nil || len(cfg.ModelMapping) == 0 {
+		return nil
+	}
+	return cfg.ModelMapping
 }
 
 // detectStreamMode checks if the request body has "stream": true.
@@ -1799,7 +1824,7 @@ func (s *CopilotGatewayService) ForwardResponses(
 	// Uses the same gjson-based approach as extractOpenAIReasoningEffortFromBody.
 	reasoningEffort := extractCopilotReasoningEffort(body)
 
-	body, logModel := rewriteCopilotUpstreamModel(body, account)
+	body, logModel := rewriteCopilotUpstreamModel(body, account, s.getCopilotPlatformModelMapping(ctx, account))
 	upstreamSent := strings.TrimSpace(extractModelFromBody(body))
 	model := logModel
 	if model == "" {
@@ -1953,7 +1978,7 @@ func (s *CopilotGatewayService) ForwardMessages(
 	// Must be before the upstream request is built in forwardMessagesViaChatCompletions.
 	openAIBody = ensureStreamIncludeUsage(openAIBody)
 
-	openAIBody, _ = rewriteCopilotUpstreamModel(openAIBody, account)
+	openAIBody, _ = rewriteCopilotUpstreamModel(openAIBody, account, s.getCopilotPlatformModelMapping(ctx, account))
 
 	// Same normalization as ForwardChatCompletions: GitHub Copilot often returns 400 when
 	// the OpenAI-shaped body still has adjacent user/system messages. The Anthropic→OpenAI
