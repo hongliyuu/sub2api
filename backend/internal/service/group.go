@@ -59,6 +59,9 @@ type Group struct {
 	DefaultMappedModel          string
 	MessagesDispatchModelConfig OpenAIMessagesDispatchModelConfig
 
+	// Proxy bucket 调度配置（独立于 messages dispatch）
+	ProxyBucketLoadBalanceEnabled bool
+
 	CreatedAt time.Time
 	UpdatedAt time.Time
 

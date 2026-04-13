@@ -95,6 +95,9 @@ type Group struct {
 	// OpenAI Messages 调度开关（用户侧需要此字段判断是否展示 Claude Code 教程）
 	AllowMessagesDispatch bool `json:"allow_messages_dispatch"`
 
+	// Proxy bucket 调度配置（独立于 messages dispatch）
+	ProxyBucketLoadBalanceEnabled bool `json:"proxy_bucket_load_balance_enabled"`
+
 	// 账号过滤控制（仅 OpenAI/Antigravity 平台有效）
 	RequireOAuthOnly  bool `json:"require_oauth_only"`
 	RequirePrivacySet bool `json:"require_privacy_set"`
@@ -118,6 +121,9 @@ type AdminGroup struct {
 	// OpenAI Messages 调度配置（仅 openai 平台使用）
 	DefaultMappedModel          string                                   `json:"default_mapped_model"`
 	MessagesDispatchModelConfig domain.OpenAIMessagesDispatchModelConfig `json:"messages_dispatch_model_config"`
+
+	// Proxy bucket 调度配置（独立于 messages dispatch）
+	ProxyBucketLoadBalanceEnabled bool `json:"proxy_bucket_load_balance_enabled"`
 
 	// 支持的模型系列（仅 antigravity 平台使用）
 	SupportedModelScopes    []string       `json:"supported_model_scopes"`
