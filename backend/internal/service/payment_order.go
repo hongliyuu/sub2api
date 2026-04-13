@@ -53,7 +53,7 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 	feeRate := s.getFeeRate(req.PaymentType)
 	payAmountStr := payment.CalculatePayAmount(amount, feeRate)
 	payAmount, _ := strconv.ParseFloat(payAmountStr, 64)
-	selection, providerKey, err := s.selectProviderInstance(ctx, req, cfg, payAmount)
+	selection, err := s.selectProviderInstance(ctx, req, cfg, payAmount)
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +61,7 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 	if err != nil {
 		return nil, err
 	}
-	resp, err := s.invokeProvider(ctx, order, req, cfg, payAmountStr, payAmount, plan, providerKey, selection)
+	resp, err := s.invokeProvider(ctx, order, req, cfg, payAmountStr, payAmount, plan, selection)
 	if err != nil {
 		_, _ = s.entClient.PaymentOrder.UpdateOneID(order.ID).
 			SetStatus(OrderStatusFailed).
@@ -92,20 +92,16 @@ func (s *PaymentService) validateOrderInput(ctx context.Context, req CreateOrder
 	return nil, nil
 }
 
-func (s *PaymentService) selectProviderInstance(ctx context.Context, req CreateOrderRequest, cfg *PaymentConfig, payAmount float64) (*payment.InstanceSelection, string, error) {
+func (s *PaymentService) selectProviderInstance(ctx context.Context, req CreateOrderRequest, cfg *PaymentConfig, payAmount float64) (*payment.InstanceSelection, error) {
 	s.EnsureProviders(ctx)
-	providerKey := s.registry.GetProviderKey(req.PaymentType)
-	if providerKey == "" {
-		return nil, "", infraerrors.ServiceUnavailable("PAYMENT_GATEWAY_ERROR", fmt.Sprintf("payment method (%s) is not configured", req.PaymentType))
-	}
-	sel, err := s.loadBalancer.SelectInstance(ctx, providerKey, req.PaymentType, payment.Strategy(cfg.LoadBalanceStrategy), payAmount)
+	sel, err := s.loadBalancer.SelectInstance(ctx, "", req.PaymentType, payment.Strategy(cfg.LoadBalanceStrategy), payAmount)
 	if err != nil {
-		return nil, "", fmt.Errorf("select provider instance: %w", err)
+		return nil, infraerrors.ServiceUnavailable("PAYMENT_GATEWAY_ERROR", fmt.Sprintf("payment method (%s) is not configured", req.PaymentType))
 	}
 	if sel == nil {
-		return nil, "", infraerrors.TooManyRequests("NO_AVAILABLE_INSTANCE", "no available payment instance")
+		return nil, infraerrors.TooManyRequests("NO_AVAILABLE_INSTANCE", "no available payment instance")
 	}
-	return sel, providerKey, nil
+	return sel, nil
 }
 
 func (s *PaymentService) validateSubOrder(ctx context.Context, req CreateOrderRequest) (*dbent.SubscriptionPlan, error) {
@@ -307,8 +303,8 @@ func (s *PaymentService) checkDailyLimit(ctx context.Context, tx *dbent.Tx, user
 	return nil
 }
 
-func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.PaymentOrder, req CreateOrderRequest, cfg *PaymentConfig, payAmountStr string, payAmount float64, plan *dbent.SubscriptionPlan, providerKey string, sel *payment.InstanceSelection) (*CreateOrderResponse, error) {
-	prov, err := provider.CreateProvider(providerKey, sel.InstanceID, sel.Config)
+func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.PaymentOrder, req CreateOrderRequest, cfg *PaymentConfig, payAmountStr string, payAmount float64, plan *dbent.SubscriptionPlan, sel *payment.InstanceSelection) (*CreateOrderResponse, error) {
+	prov, err := provider.CreateProvider(sel.ProviderKey, sel.InstanceID, sel.Config)
 	if err != nil {
 		return nil, infraerrors.ServiceUnavailable("PAYMENT_GATEWAY_ERROR", "payment method is temporarily unavailable")
 	}
@@ -316,7 +312,7 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 	outTradeNo := order.OutTradeNo
 	pr, err := prov.CreatePayment(ctx, payment.CreatePaymentRequest{OrderID: outTradeNo, Amount: payAmountStr, PaymentType: req.PaymentType, Subject: subject, ClientIP: req.ClientIP, IsMobile: req.IsMobile, InstanceSubMethods: sel.SupportedTypes})
 	if err != nil {
-		slog.Error("[PaymentService] CreatePayment failed", "provider", providerKey, "instance", sel.InstanceID, "error", err)
+		slog.Error("[PaymentService] CreatePayment failed", "provider", sel.ProviderKey, "instance", sel.InstanceID, "error", err)
 		return nil, infraerrors.ServiceUnavailable("PAYMENT_GATEWAY_ERROR", fmt.Sprintf("payment gateway error: %s", err.Error()))
 	}
 	_, err = s.entClient.PaymentOrder.UpdateOneID(order.ID).SetNillablePaymentTradeNo(psNilIfEmpty(pr.TradeNo)).SetNillablePayURL(psNilIfEmpty(pr.PayURL)).SetNillableQrCode(psNilIfEmpty(pr.QRCode)).Save(ctx)
