@@ -969,10 +969,14 @@ const platformFilterOptions = computed(() => [
   { value: 'sora', label: 'Sora' }
 ])
 
-// Group options for assign (only subscription type groups)
+// Group options for assign: subscription-type groups, or exclusive standard groups (balance billing with time-limited access)
 const subscriptionGroupOptions = computed(() =>
   groups.value
-    .filter((g) => g.subscription_type === 'subscription' && g.status === 'active')
+    .filter(
+      (g) =>
+        g.status === 'active' &&
+        (g.subscription_type === 'subscription' || (g.is_exclusive && g.subscription_type === 'standard'))
+    )
     .map((g) => ({
       value: g.id,
       label: g.name,

@@ -78,6 +78,16 @@ func (g *Group) IsSubscriptionType() bool {
 	return g.SubscriptionType == SubscriptionTypeSubscription
 }
 
+// IsSubscriptionAssignable 判断分组是否可以被分配订阅。
+// 订阅模式分组（subscription）可以分配；
+// 专属余额模式分组（exclusive + standard）也可以分配，订阅在此仅作为访问有效期，实际按余额计费。
+func (g *Group) IsSubscriptionAssignable() bool {
+	if g.IsSubscriptionType() {
+		return true
+	}
+	return g.IsExclusive && g.SubscriptionType == SubscriptionTypeStandard
+}
+
 func (g *Group) IsFreeSubscription() bool {
 	return g.IsSubscriptionType() && g.RateMultiplier == 0
 }

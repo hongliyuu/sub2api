@@ -30,7 +30,7 @@ var (
 	ErrSubscriptionSuspended      = infraerrors.Forbidden("SUBSCRIPTION_SUSPENDED", "subscription is suspended")
 	ErrSubscriptionAlreadyExists  = infraerrors.Conflict("SUBSCRIPTION_ALREADY_EXISTS", "subscription already exists for this user and group")
 	ErrSubscriptionAssignConflict = infraerrors.Conflict("SUBSCRIPTION_ASSIGN_CONFLICT", "subscription exists but request conflicts with existing assignment semantics")
-	ErrGroupNotSubscriptionType   = infraerrors.BadRequest("GROUP_NOT_SUBSCRIPTION_TYPE", "group is not a subscription type")
+	ErrGroupNotSubscriptionType   = infraerrors.BadRequest("GROUP_NOT_SUBSCRIPTION_TYPE", "group does not support subscription assignment (must be subscription type or exclusive standard type)")
 	ErrInvalidInput               = infraerrors.BadRequest("INVALID_INPUT", "at least one of resetDaily, resetWeekly, or resetMonthly must be true")
 	ErrDailyLimitExceeded         = infraerrors.TooManyRequests("DAILY_LIMIT_EXCEEDED", "daily usage limit exceeded")
 	ErrWeeklyLimitExceeded        = infraerrors.TooManyRequests("WEEKLY_LIMIT_EXCEEDED", "weekly usage limit exceeded")
@@ -43,6 +43,7 @@ var (
 type SubscriptionService struct {
 	groupRepo           GroupRepository
 	userSubRepo         UserSubscriptionRepository
+	userRepo            UserRepository
 	billingCacheService *BillingCacheService
 	entClient           *dbent.Client
 
@@ -56,10 +57,11 @@ type SubscriptionService struct {
 }
 
 // NewSubscriptionService 创建订阅服务
-func NewSubscriptionService(groupRepo GroupRepository, userSubRepo UserSubscriptionRepository, billingCacheService *BillingCacheService, entClient *dbent.Client, cfg *config.Config) *SubscriptionService {
+func NewSubscriptionService(groupRepo GroupRepository, userSubRepo UserSubscriptionRepository, userRepo UserRepository, billingCacheService *BillingCacheService, entClient *dbent.Client, cfg *config.Config) *SubscriptionService {
 	svc := &SubscriptionService{
 		groupRepo:           groupRepo,
 		userSubRepo:         userSubRepo,
+		userRepo:            userRepo,
 		billingCacheService: billingCacheService,
 		entClient:           entClient,
 	}
@@ -172,7 +174,7 @@ func (s *SubscriptionService) AssignOrExtendSubscription(ctx context.Context, in
 	if err != nil {
 		return nil, false, fmt.Errorf("group not found: %w", err)
 	}
-	if !group.IsSubscriptionType() {
+	if !group.IsSubscriptionAssignable() {
 		return nil, false, ErrGroupNotSubscriptionType
 	}
 
@@ -386,7 +388,7 @@ func (s *SubscriptionService) assignSubscriptionWithReuse(ctx context.Context, i
 	if err != nil {
 		return nil, false, fmt.Errorf("group not found: %w", err)
 	}
-	if !group.IsSubscriptionType() {
+	if !group.IsSubscriptionAssignable() {
 		return nil, false, ErrGroupNotSubscriptionType
 	}
 
@@ -411,6 +413,13 @@ func (s *SubscriptionService) assignSubscriptionWithReuse(ctx context.Context, i
 	sub, err := s.createSubscription(ctx, input)
 	if err != nil {
 		return nil, false, err
+	}
+
+	// 专属余额模式分组：创建订阅时同步授权访问权限（幂等）
+	if group.IsExclusive && !group.IsSubscriptionType() && s.userRepo != nil {
+		if addErr := s.userRepo.AddGroupToAllowedGroups(ctx, input.UserID, input.GroupID); addErr != nil {
+			log.Printf("Warning: subscription created but failed to add group %d to user %d allowed_groups: %v", input.GroupID, input.UserID, addErr)
+		}
 	}
 
 	// 失效订阅缓存
@@ -472,6 +481,13 @@ func (s *SubscriptionService) RevokeSubscription(ctx context.Context, subscripti
 
 	if err := s.userSubRepo.Delete(ctx, subscriptionID); err != nil {
 		return err
+	}
+
+	// 专属余额模式分组：撤销订阅时同步移除访问权限
+	if sub.Group != nil && sub.Group.IsExclusive && !sub.Group.IsSubscriptionType() && s.userRepo != nil {
+		if removeErr := s.userRepo.RemoveGroupFromUserAllowedGroups(ctx, sub.UserID, sub.GroupID); removeErr != nil {
+			log.Printf("Warning: subscription revoked but failed to remove group %d from user %d allowed_groups: %v", sub.GroupID, sub.UserID, removeErr)
+		}
 	}
 
 	// 失效订阅缓存
