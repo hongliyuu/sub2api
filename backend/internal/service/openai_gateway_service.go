@@ -4799,6 +4799,9 @@ func applyOpenAICodexRateLimitFromExtra(account *Account, now time.Time) (*time.
 	if account == nil || !account.IsOpenAI() {
 		return nil, false
 	}
+	if account.IsPoolMode() {
+		return nil, false
+	}
 	resetAt := codexRateLimitResetAtFromExtra(account.Extra, now)
 	if resetAt == nil {
 		return nil, false
