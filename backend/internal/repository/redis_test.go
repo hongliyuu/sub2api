@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -117,12 +118,12 @@ func TestSnapshotDefaultRedisPoolStatsWithoutInit(t *testing.T) {
 }
 
 func TestProbeRedisNil(t *testing.T) {
-	require.ErrorIs(t, ProbeRedis(nil, nil), ErrRedisClientNotInitialized)
+	require.ErrorIs(t, ProbeRedis(context.TODO(), nil), ErrRedisClientNotInitialized)
 }
 
 func TestProbeDefaultRedisWithoutInit(t *testing.T) {
 	defaultRedisClient.Store(nil)
-	require.ErrorIs(t, ProbeDefaultRedis(nil), ErrRedisClientNotInitialized)
+	require.ErrorIs(t, ProbeDefaultRedis(context.TODO()), ErrRedisClientNotInitialized)
 }
 
 func float64PtrRedis(v float64) *float64 { return &v }

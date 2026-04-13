@@ -414,12 +414,12 @@ func TestOpsServiceGetDashboardOverview_ResourceBudgetNotices(t *testing.T) {
 	foundRedis := false
 	foundHTTP := false
 	for _, note := range out.Observability {
-		switch {
-		case note.Title == "Database pool sized aggressively":
+		switch note.Title {
+		case "Database pool sized aggressively":
 			foundDB = true
-		case note.Title == "Redis pool configured high":
+		case "Redis pool configured high":
 			foundRedis = true
-		case note.Title == "HTTP upstream pool configured aggressively":
+		case "HTTP upstream pool configured aggressively":
 			foundHTTP = true
 		}
 	}

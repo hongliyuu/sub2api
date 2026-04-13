@@ -432,20 +432,6 @@ func bundleFailureSplitSummary(bundle *service.OpsRealtimeSummaryBundle) *servic
 	return bundle.FailureSplitSummary
 }
 
-func buildFailureSplitSummaryPayload(summary *service.OpsFailureSplitSummary) gin.H {
-	payload := gin.H{
-		"protocol_or_request_shape": summary.ProtocolOrRequestShape,
-		"account_or_auth":           summary.AccountOrAuth,
-		"provider_or_upstream":      summary.ProviderOrUpstream,
-		"local_processing":          summary.LocalProcessing,
-	}
-	if summary.LikelyPrimary != "" {
-		payload["likely_primary"] = summary.LikelyPrimary
-		payload["suggestion"] = summary.Suggestion
-	}
-	return payload
-}
-
 func buildOperatorActionPlan(summary *service.OpsFailureSplitSummary, controlPlaneDrift any) *service.OpsOperatorActionPlan {
 	var plan service.OpsOperatorActionPlan
 	if summary != nil {

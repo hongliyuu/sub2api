@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
 	"strings"
 	"testing"
@@ -109,10 +110,10 @@ func TestDBPoolSnapshotFromStats(t *testing.T) {
 }
 
 func TestProbeDBNil(t *testing.T) {
-	require.ErrorIs(t, ProbeDB(nil, nil), ErrDBPoolNotInitialized)
+	require.ErrorIs(t, ProbeDB(context.TODO(), nil), ErrDBPoolNotInitialized)
 }
 
 func TestProbeDefaultDBWithoutInit(t *testing.T) {
 	defaultDBPool.Store(nil)
-	require.ErrorIs(t, ProbeDefaultDB(nil), ErrDBPoolNotInitialized)
+	require.ErrorIs(t, ProbeDefaultDB(context.TODO()), ErrDBPoolNotInitialized)
 }

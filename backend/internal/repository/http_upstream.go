@@ -738,18 +738,6 @@ func evaluateHTTPClientCacheWarnings(maxClients int) []string {
 	return warnings
 }
 
-func logHTTPClientCacheWarnings(warnings []string, maxClients int) {
-	if len(warnings) == 0 {
-		return
-	}
-	logger.WriteSinkEvent("warn", "repository.http_upstream", "http client cache guard", map[string]any{
-		"warnings": warnings,
-		"config": map[string]any{
-			"max_upstream_clients": maxClients,
-		},
-	})
-}
-
 // clientIdleTTL 获取客户端空闲回收阈值
 // 从配置中读取，无效值使用默认值
 func (s *httpUpstreamService) clientIdleTTL() time.Duration {

@@ -186,10 +186,6 @@ func shouldStopBillingLogScan(page *service.OpsSystemLogList, collected int, lim
 	return false
 }
 
-func matchesBillingCompensationFilters(log *service.OpsSystemLog, requestID string, apiKeyID, groupID *int64) bool {
-	return log != nil
-}
-
 func buildBillingCompensationLogEntry(log *service.OpsSystemLog) gin.H {
 	entry := describeLog(log)
 	if entry == nil {
@@ -238,21 +234,6 @@ func billingCompensationLogKind(log *service.OpsSystemLog) string {
 	return "candidate"
 }
 
-func resolveBillingCompensationRequestID(log *service.OpsSystemLog) string {
-	if log == nil {
-		return ""
-	}
-	if requestID := strings.TrimSpace(log.RequestID); requestID != "" {
-		return requestID
-	}
-	if value, ok := extractBillingCompensationField(log, "request_id"); ok {
-		if requestID := strings.TrimSpace(asString(value)); requestID != "" {
-			return requestID
-		}
-	}
-	return ""
-}
-
 func extractBillingCompensationField(log *service.OpsSystemLog, key string) (any, bool) {
 	if log == nil || key == "" || log.Extra == nil {
 		return nil, false
@@ -267,14 +248,6 @@ func extractBillingCompensationField(log *service.OpsSystemLog, key string) (any
 		}
 	}
 	return nil, false
-}
-
-func extractBillingCompensationInt64(log *service.OpsSystemLog, key string) (int64, bool) {
-	value, ok := extractBillingCompensationField(log, key)
-	if !ok {
-		return 0, false
-	}
-	return coerceInt64(value)
 }
 
 // GetBillingCompensationDetail returns persisted entries for the supplied request_id.
