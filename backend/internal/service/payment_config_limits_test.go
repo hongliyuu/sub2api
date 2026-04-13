@@ -255,6 +255,121 @@ func TestPcComputeGlobalRange(t *testing.T) {
 	})
 }
 
+func TestFilterMethodLimitsByEnabledTypes(t *testing.T) {
+	t.Parallel()
+
+	methods := map[string]MethodLimits{
+		payment.TypeAlipay: {PaymentType: payment.TypeAlipay},
+		payment.TypeWxpay:  {PaymentType: payment.TypeWxpay},
+		payment.TypeStripe: {PaymentType: payment.TypeStripe},
+	}
+
+	t.Run("empty allowlist keeps all methods", func(t *testing.T) {
+		t.Parallel()
+
+		filtered := filterMethodLimitsByEnabledTypes(methods, &PaymentConfig{})
+		if len(filtered) != 3 {
+			t.Fatalf("len(filtered) = %d, want 3", len(filtered))
+		}
+	})
+
+	t.Run("easypay allowlist keeps alipay and wxpay", func(t *testing.T) {
+		t.Parallel()
+
+		filtered := filterMethodLimitsByEnabledTypes(methods, &PaymentConfig{
+			EnabledTypes: []string{payment.TypeEasyPay},
+		})
+		if len(filtered) != 2 {
+			t.Fatalf("len(filtered) = %d, want 2", len(filtered))
+		}
+		if _, ok := filtered[payment.TypeAlipay]; !ok {
+			t.Fatal("expected alipay to be preserved")
+		}
+		if _, ok := filtered[payment.TypeWxpay]; !ok {
+			t.Fatal("expected wxpay to be preserved")
+		}
+		if _, ok := filtered[payment.TypeStripe]; ok {
+			t.Fatal("expected stripe to be filtered out")
+		}
+	})
+}
+
+func TestComputeMethodUsageSnapshot(t *testing.T) {
+	t.Parallel()
+
+	t.Run("unlimited instance reports available", func(t *testing.T) {
+		t.Parallel()
+
+		inst := makeInstance(1, payment.TypeEasyPay, payment.TypeAlipay, "")
+		snapshot := computeMethodUsageSnapshot(payment.TypeAlipay, []*dbent.PaymentProviderInstance{inst}, map[int64]float64{1: 999})
+		if !snapshot.available {
+			t.Fatal("expected unlimited instance to be available")
+		}
+		if snapshot.dailyUsed != 0 || snapshot.dailyRemaining != 0 {
+			t.Fatalf("unexpected unlimited snapshot values: %+v", snapshot)
+		}
+	})
+
+	t.Run("exhausted limited instance reports unavailable", func(t *testing.T) {
+		t.Parallel()
+
+		inst := makeInstance(1, payment.TypeEasyPay, payment.TypeAlipay,
+			`{"alipay":{"dailyLimit":100}}`)
+		snapshot := computeMethodUsageSnapshot(payment.TypeAlipay, []*dbent.PaymentProviderInstance{inst}, map[int64]float64{1: 100})
+		if snapshot.available {
+			t.Fatal("expected exhausted instance to be unavailable")
+		}
+		if snapshot.dailyRemaining != 0 {
+			t.Fatalf("dailyRemaining = %v, want 0", snapshot.dailyRemaining)
+		}
+	})
+
+	t.Run("selects instance with best remaining capacity", func(t *testing.T) {
+		t.Parallel()
+
+		inst1 := makeInstance(1, payment.TypeEasyPay, payment.TypeAlipay,
+			`{"alipay":{"dailyLimit":100}}`)
+		inst2 := makeInstance(2, payment.TypeEasyPay, payment.TypeAlipay,
+			`{"alipay":{"dailyLimit":120}}`)
+		snapshot := computeMethodUsageSnapshot(payment.TypeAlipay,
+			[]*dbent.PaymentProviderInstance{inst1, inst2},
+			map[int64]float64{1: 80, 2: 30},
+		)
+		if !snapshot.available {
+			t.Fatal("expected at least one instance to remain available")
+		}
+		if snapshot.dailyUsed != 30 {
+			t.Fatalf("dailyUsed = %v, want 30", snapshot.dailyUsed)
+		}
+		if snapshot.dailyRemaining != 90 {
+			t.Fatalf("dailyRemaining = %v, want 90", snapshot.dailyRemaining)
+		}
+	})
+}
+
+func TestSelectRequestedMethodLimits(t *testing.T) {
+	t.Parallel()
+
+	methods := map[string]MethodLimits{
+		payment.TypeAlipay: {PaymentType: payment.TypeAlipay, Available: true},
+		payment.TypeStripe: {PaymentType: payment.TypeStripe, Available: true},
+	}
+
+	got := selectRequestedMethodLimits(methods, []string{" alipay_direct ", "card", "wxpay"})
+	if len(got) != 3 {
+		t.Fatalf("len(got) = %d, want 3", len(got))
+	}
+	if got[0].PaymentType != payment.TypeAlipay {
+		t.Fatalf("got[0].PaymentType = %q, want %q", got[0].PaymentType, payment.TypeAlipay)
+	}
+	if got[1].PaymentType != payment.TypeStripe {
+		t.Fatalf("got[1].PaymentType = %q, want %q", got[1].PaymentType, payment.TypeStripe)
+	}
+	if got[2].PaymentType != payment.TypeWxpay {
+		t.Fatalf("got[2].PaymentType = %q, want %q", got[2].PaymentType, payment.TypeWxpay)
+	}
+}
+
 func TestPcInstanceTypeLimits(t *testing.T) {
 	t.Parallel()
 

@@ -85,7 +85,8 @@ func (s *PaymentService) getOrderByOutTradeNo(ctx context.Context, outTradeNo st
 			First(ctx)
 	}
 	if len(orders) > 1 {
-		slog.Warn("[PaymentService] duplicate out_trade_no detected; using newest order", "outTradeNo", outTradeNo, "orderID", orders[0].ID)
+		slog.Error("[PaymentService] duplicate out_trade_no detected; refusing ambiguous lookup", "outTradeNo", outTradeNo, "newestOrderID", orders[0].ID)
+		return nil, fmt.Errorf("duplicate out_trade_no detected: %s", outTradeNo)
 	}
 	return orders[0], nil
 }
@@ -115,6 +116,10 @@ type CreateOrderResponse struct {
 	StripePublishableKey string    `json:"stripe_publishable_key,omitempty"`
 	ExpiresAt            time.Time `json:"expires_at"`
 	PaymentMode          string    `json:"payment_mode,omitempty"`
+}
+
+type stripePublishableKeyProvider interface {
+	GetPublishableKey() string
 }
 
 type OrderListParams struct {
@@ -318,8 +323,12 @@ func (s *PaymentService) GetWebhookProvider(ctx context.Context, providerKey, ou
 }
 
 func (s *PaymentService) verifyWebhookForOrder(ctx context.Context, providerKey string, order *dbent.PaymentOrder, rawBody string, headers map[string]string) (*payment.PaymentNotification, error) {
-	if err := s.validateWebhookOrderBinding(order, providerKey, ""); err != nil {
-		return nil, err
+	if order == nil {
+		return nil, fmt.Errorf("nil order")
+	}
+	expectedProviderKey := s.expectedProviderKeyForOrder(order)
+	if expectedProviderKey != "" && expectedProviderKey != providerKey {
+		return nil, fmt.Errorf("provider key mismatch: got %s want %s", providerKey, expectedProviderKey)
 	}
 
 	candidate, err := s.webhookCandidateForOrder(ctx, order)
@@ -345,7 +354,7 @@ func (s *PaymentService) verifyWebhookForOrder(ctx context.Context, providerKey 
 
 func (s *PaymentService) webhookCandidateForOrder(ctx context.Context, order *dbent.PaymentOrder) (*webhookProviderCandidate, error) {
 	if order.ProviderInstanceID != nil && *order.ProviderInstanceID != "" {
-		provider, err := s.getOrderProvider(ctx, order)
+		provider, err := s.getOrderProviderFromInstance(ctx, order)
 		if err != nil {
 			return nil, err
 		}

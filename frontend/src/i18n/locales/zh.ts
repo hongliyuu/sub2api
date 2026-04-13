@@ -5385,6 +5385,7 @@ export default {
     errors: {
       tooManyPending: '待支付订单过多（最多 {max} 个），请先完成或取消现有订单',
       cancelRateLimited: '取消订单过于频繁，请稍后再试',
+      noAvailableInstance: '当前该支付方式没有可用的支付实例，请稍后重试或选择其他支付方式。',
       PENDING_ORDERS: '该服务商有未完成的订单，请等待订单完成后再操作',
     },
     stripePay: '立即支付',

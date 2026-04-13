@@ -212,7 +212,10 @@ func (e *EasyPay) VerifyNotification(_ context.Context, rawBody string, _ map[st
 func (e *EasyPay) Refund(ctx context.Context, req payment.RefundRequest) (*payment.RefundResponse, error) {
 	params := map[string]string{
 		"pid": e.config["pid"], "key": e.config["pkey"],
-		"trade_no": req.TradeNo, "out_trade_no": req.OrderID, "money": req.Amount,
+		"out_trade_no": req.OrderID, "money": req.Amount,
+	}
+	if strings.TrimSpace(req.TradeNo) != "" {
+		params["trade_no"] = req.TradeNo
 	}
 	body, err := e.post(ctx, e.config["apiBase"]+"/api.php?act=refund", params)
 	if err != nil {

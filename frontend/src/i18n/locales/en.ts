@@ -5197,6 +5197,7 @@ export default {
     errors: {
       tooManyPending: 'Too many pending orders (max {max}). Please complete or cancel existing orders first.',
       cancelRateLimited: 'Too many cancellations. Please try again later.',
+      noAvailableInstance: 'No payment instance is currently available for this method. Please try again shortly or choose another method.',
       PENDING_ORDERS: 'This provider has pending orders. Please wait for them to complete before making changes.',
     },
     stripePay: 'Pay Now',

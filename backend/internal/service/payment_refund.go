@@ -121,10 +121,9 @@ func (s *PaymentService) prepDeduct(ctx context.Context, o *dbent.PaymentOrder, 
 		return nil
 	}
 	p.DeductionType = payment.DeductionTypeBalance
-	if u.Balance+amountToleranceCNY < p.RefundAmount && !force {
-		return &RefundResult{Success: false, Warning: "user balance is lower than refund amount, use force to continue", RequireForce: true}
+	if u.Balance > 0 {
+		p.BalanceToDeduct = math.Min(p.RefundAmount, u.Balance)
 	}
-	p.BalanceToDeduct = math.Min(p.RefundAmount, u.Balance)
 	return nil
 }
 
@@ -152,9 +151,16 @@ func (s *PaymentService) ExecuteRefund(ctx context.Context, p *RefundPlan) (*Ref
 	if p.DeductionType == payment.DeductionTypeSubscription && p.SubDaysToDeduct > 0 && p.SubscriptionID > 0 {
 		if !s.hasAuditLog(ctx, p.OrderID, "REFUND_ROLLBACK_FAILED") {
 			if p.SubSnapshot == nil {
-				if sub, subErr := s.subscriptionSvc.GetByID(ctx, p.SubscriptionID); subErr == nil && sub != nil {
-					p.SubSnapshot = cloneUserSubscription(sub)
+				sub, subErr := s.subscriptionSvc.GetByID(ctx, p.SubscriptionID)
+				if subErr != nil {
+					s.restoreStatus(ctx, p)
+					return nil, fmt.Errorf("snapshot subscription before deduction: %w", subErr)
 				}
+				if sub == nil {
+					s.restoreStatus(ctx, p)
+					return nil, fmt.Errorf("snapshot subscription before deduction: subscription %d not found", p.SubscriptionID)
+				}
+				p.SubSnapshot = cloneUserSubscription(sub)
 			}
 			_, err := s.subscriptionSvc.ExtendSubscription(ctx, p.SubscriptionID, -p.SubDaysToDeduct)
 			if err != nil {
@@ -204,6 +210,12 @@ func (s *PaymentService) resolveRefundTradeNo(ctx context.Context, prov payment.
 	if order.PaymentTradeNo != "" {
 		return order.PaymentTradeNo, nil
 	}
+	switch prov.ProviderKey() {
+	case payment.TypeEasyPay, payment.TypeAlipay, payment.TypeWxpay:
+		return "", nil
+	case payment.TypeStripe:
+		return "", fmt.Errorf("missing stripe payment trade number for order %d", order.ID)
+	}
 	resp, err := prov.QueryOrder(ctx, order.OutTradeNo)
 	if err != nil {
 		return "", fmt.Errorf("query upstream trade number: %w", err)
@@ -211,6 +223,9 @@ func (s *PaymentService) resolveRefundTradeNo(ctx context.Context, prov payment.
 	tradeNo := strings.TrimSpace(resp.TradeNo)
 	if tradeNo == "" {
 		return "", fmt.Errorf("missing upstream trade number for order %d", order.ID)
+	}
+	if prov.ProviderKey() == payment.TypeEasyPay && tradeNo == order.OutTradeNo {
+		return "", nil
 	}
 	if _, saveErr := s.entClient.PaymentOrder.UpdateOneID(order.ID).SetPaymentTradeNo(tradeNo).Save(ctx); saveErr == nil {
 		order.PaymentTradeNo = tradeNo

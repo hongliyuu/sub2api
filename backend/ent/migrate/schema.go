@@ -564,7 +564,7 @@ var (
 		Indexes: []*schema.Index{
 			{
 				Name:    "paymentorder_out_trade_no",
-				Unique:  false,
+				Unique:  true,
 				Columns: []*schema.Column{PaymentOrdersColumns[8]},
 			},
 			{

@@ -69,6 +69,17 @@ var pendingOrderStatuses = []string{
 	payment.OrderStatusRecharging,
 }
 
+var providerHistoryLockStatuses = []string{
+	payment.OrderStatusPending,
+	payment.OrderStatusPaid,
+	payment.OrderStatusRecharging,
+	payment.OrderStatusCompleted,
+	payment.OrderStatusRefundRequested,
+	payment.OrderStatusRefunding,
+	payment.OrderStatusPartiallyRefunded,
+	payment.OrderStatusRefundFailed,
+}
+
 var sensitiveConfigPatterns = []string{"key", "pkey", "secret", "private", "password"}
 
 func isSensitiveConfigField(fieldName string) bool {
@@ -91,7 +102,10 @@ func (s *PaymentConfigService) countPendingOrders(ctx context.Context, providerI
 
 func (s *PaymentConfigService) countOrdersByInstance(ctx context.Context, providerInstanceID int64) (int, error) {
 	return s.entClient.PaymentOrder.Query().
-		Where(paymentorder.ProviderInstanceIDEQ(strconv.FormatInt(providerInstanceID, 10))).
+		Where(
+			paymentorder.ProviderInstanceIDEQ(strconv.FormatInt(providerInstanceID, 10)),
+			paymentorder.StatusIn(providerHistoryLockStatuses...),
+		).
 		Count(ctx)
 }
 
@@ -147,12 +161,12 @@ func (s *PaymentConfigService) UpdateProviderInstance(ctx context.Context, id in
 			}
 		}
 		if hasSensitive {
-			count, err := s.countPendingOrders(ctx, id)
+			count, err := s.countOrdersByInstance(ctx, id)
 			if err != nil {
-				return nil, fmt.Errorf("check pending orders: %w", err)
+				return nil, fmt.Errorf("check provider order history: %w", err)
 			}
 			if count > 0 {
-				return nil, infraerrors.Conflict("PENDING_ORDERS", "instance has pending orders").
+				return nil, infraerrors.Conflict("ORDER_HISTORY_EXISTS", "instance has settled or in-progress orders and cannot change sensitive merchant credentials").
 					WithMetadata(map[string]string{"count": strconv.Itoa(count)})
 			}
 		}

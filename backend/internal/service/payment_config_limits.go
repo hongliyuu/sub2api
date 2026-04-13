@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/ent/paymentproviderinstance"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 )
@@ -19,6 +22,10 @@ func (s *PaymentConfigService) GetAvailableMethodLimits(ctx context.Context) (*M
 	if err != nil {
 		return nil, fmt.Errorf("query provider instances: %w", err)
 	}
+	cfg, err := s.GetPaymentConfig(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get payment config: %w", err)
+	}
 	typeInstances := pcGroupByPaymentType(instances)
 	resp := &MethodLimitsResponse{
 		Methods: make(map[string]MethodLimits, len(typeInstances)),
@@ -27,28 +34,21 @@ func (s *PaymentConfigService) GetAvailableMethodLimits(ctx context.Context) (*M
 		ml := pcAggregateMethodLimits(pt, insts)
 		resp.Methods[ml.PaymentType] = ml
 	}
+	if usageMap, usageErr := s.loadMethodUsageMap(ctx, instances); usageErr == nil {
+		resp.Methods = applyMethodAvailability(resp.Methods, typeInstances, usageMap)
+	}
+	resp.Methods = filterMethodLimitsByEnabledTypes(resp.Methods, cfg)
 	resp.GlobalMin, resp.GlobalMax = pcComputeGlobalRange(resp.Methods)
 	return resp, nil
 }
 
 // GetMethodLimits returns per-payment-type limits from enabled provider instances.
 func (s *PaymentConfigService) GetMethodLimits(ctx context.Context, types []string) ([]MethodLimits, error) {
-	instances, err := s.entClient.PaymentProviderInstance.Query().
-		Where(paymentproviderinstance.EnabledEQ(true)).All(ctx)
+	resp, err := s.GetAvailableMethodLimits(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("query provider instances: %w", err)
+		return nil, err
 	}
-	result := make([]MethodLimits, 0, len(types))
-	for _, pt := range types {
-		var matching []*dbent.PaymentProviderInstance
-		for _, inst := range instances {
-			if payment.InstanceSupportsType(inst.SupportedTypes, pt) {
-				matching = append(matching, inst)
-			}
-		}
-		result = append(result, pcAggregateMethodLimits(pt, matching))
-	}
-	return result, nil
+	return selectRequestedMethodLimits(resp.Methods, types), nil
 }
 
 // pcGroupByPaymentType groups instances by user-facing payment type.
@@ -169,4 +169,119 @@ func pcComputeGlobalRange(methods map[string]MethodLimits) (globalMin, globalMax
 		globalMax = 0
 	}
 	return globalMin, globalMax
+}
+
+func filterMethodLimitsByEnabledTypes(methods map[string]MethodLimits, cfg *PaymentConfig) map[string]MethodLimits {
+	if len(methods) == 0 {
+		return methods
+	}
+	if cfg == nil || len(cfg.EnabledTypes) == 0 {
+		return methods
+	}
+	filtered := make(map[string]MethodLimits, len(methods))
+	for key, ml := range methods {
+		if isPaymentTypeEnabled(cfg, key) {
+			filtered[key] = ml
+		}
+	}
+	return filtered
+}
+
+func selectRequestedMethodLimits(methods map[string]MethodLimits, types []string) []MethodLimits {
+	result := make([]MethodLimits, 0, len(types))
+	for _, pt := range types {
+		key := payment.GetBasePaymentType(strings.ToLower(strings.TrimSpace(pt)))
+		if ml, ok := methods[key]; ok {
+			result = append(result, ml)
+			continue
+		}
+		result = append(result, MethodLimits{PaymentType: key})
+	}
+	return result
+}
+
+type methodUsageSnapshot struct {
+	dailyUsed      float64
+	dailyRemaining float64
+	available      bool
+}
+
+func (s *PaymentConfigService) loadMethodUsageMap(ctx context.Context, instances []*dbent.PaymentProviderInstance) (map[int64]float64, error) {
+	if len(instances) == 0 {
+		return map[int64]float64{}, nil
+	}
+	ids := make([]string, 0, len(instances))
+	for _, inst := range instances {
+		ids = append(ids, fmt.Sprintf("%d", inst.ID))
+	}
+	type row struct {
+		InstanceID string  `json:"provider_instance_id"`
+		Sum        float64 `json:"sum"`
+	}
+	var rows []row
+	err := s.entClient.PaymentOrder.Query().
+		Where(
+			paymentorder.ProviderInstanceIDIn(ids...),
+			paymentorder.StatusIn(
+				OrderStatusPending,
+				OrderStatusPaid,
+				OrderStatusCompleted,
+				OrderStatusRecharging,
+			),
+			paymentorder.CreatedAtGTE(startOfDay(time.Now())),
+		).
+		GroupBy(paymentorder.FieldProviderInstanceID).
+		Aggregate(dbent.Sum(paymentorder.FieldPayAmount)).
+		Scan(ctx, &rows)
+	if err != nil {
+		return nil, fmt.Errorf("query method usage: %w", err)
+	}
+	usageMap := make(map[int64]float64, len(rows))
+	for _, row := range rows {
+		var id int64
+		_, _ = fmt.Sscan(row.InstanceID, &id)
+		if id > 0 {
+			usageMap[id] = row.Sum
+		}
+	}
+	return usageMap, nil
+}
+
+func applyMethodAvailability(methods map[string]MethodLimits, grouped map[string][]*dbent.PaymentProviderInstance, usageMap map[int64]float64) map[string]MethodLimits {
+	for pt, ml := range methods {
+		snapshot := computeMethodUsageSnapshot(pt, grouped[pt], usageMap)
+		ml.DailyUsed = snapshot.dailyUsed
+		ml.DailyRemaining = snapshot.dailyRemaining
+		ml.Available = snapshot.available
+		methods[pt] = ml
+	}
+	return methods
+}
+
+func computeMethodUsageSnapshot(pt string, instances []*dbent.PaymentProviderInstance, usageMap map[int64]float64) methodUsageSnapshot {
+	if len(instances) == 0 {
+		return methodUsageSnapshot{}
+	}
+	bestRemaining := -1.0
+	bestUsed := 0.0
+	for _, inst := range instances {
+		cl, hasLimits := pcInstanceTypeLimits(inst, pt)
+		if !hasLimits || cl.DailyLimit <= 0 {
+			return methodUsageSnapshot{available: true}
+		}
+		used := usageMap[int64(inst.ID)]
+		remaining := cl.DailyLimit - used
+		if remaining > bestRemaining {
+			bestRemaining = remaining
+			bestUsed = used
+		}
+	}
+	if bestRemaining < 0 {
+		bestRemaining = 0
+	}
+	return methodUsageSnapshot{
+		dailyUsed:      bestUsed,
+		dailyRemaining: bestRemaining,
+		available:      bestRemaining > 0,
+	}
 }

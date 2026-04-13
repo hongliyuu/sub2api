@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 
+	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -278,7 +279,13 @@ func (h *PaymentHandler) GetOrder(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	response.Success(c, order)
+	response.Success(c, struct {
+		*dbent.PaymentOrder
+		StripePublishableKey string `json:"stripe_publishable_key,omitempty"`
+	}{
+		PaymentOrder:         order,
+		StripePublishableKey: h.paymentService.GetStripePublishableKeyForOrder(c.Request.Context(), order),
+	})
 }
 
 // CancelOrder cancels a pending order for the authenticated user.

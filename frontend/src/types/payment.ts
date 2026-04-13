@@ -89,6 +89,7 @@ export interface PaymentOrder {
   refund_requested_by?: number
   refund_request_reason?: string
   plan_id?: number
+  stripe_publishable_key?: string
 }
 
 // ==================== Plans & Channels ====================

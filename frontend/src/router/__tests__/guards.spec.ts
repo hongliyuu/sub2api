@@ -102,6 +102,9 @@ function simulateGuard(
       '/admin/orders',
       '/admin/subscriptions',
       '/orders',
+      '/payment/qrcode',
+      '/payment/stripe',
+      '/payment/stripe-popup',
       '/purchase',
       '/admin/redeem',
       '/subscriptions',
@@ -294,6 +297,28 @@ describe('路由守卫逻辑', () => {
         backendModeEnabled: false,
       }
       const redirect = simulateGuard('/orders', {}, authState)
+      expect(redirect).toBe('/dashboard')
+    })
+
+    it('普通用户简易模式访问 /payment/qrcode 重定向到 /dashboard', () => {
+      const authState: MockAuthState = {
+        isAuthenticated: true,
+        isAdmin: false,
+        isSimpleMode: true,
+        backendModeEnabled: false,
+      }
+      const redirect = simulateGuard('/payment/qrcode', {}, authState)
+      expect(redirect).toBe('/dashboard')
+    })
+
+    it('普通用户简易模式访问 /payment/stripe-popup 重定向到 /dashboard', () => {
+      const authState: MockAuthState = {
+        isAuthenticated: true,
+        isAdmin: false,
+        isSimpleMode: true,
+        backendModeEnabled: false,
+      }
+      const redirect = simulateGuard('/payment/stripe-popup', {}, authState)
       expect(redirect).toBe('/dashboard')
     })
 

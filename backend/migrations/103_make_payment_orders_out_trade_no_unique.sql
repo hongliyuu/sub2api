@@ -8,7 +8,7 @@
 -- Idempotent: safe to run multiple times.
 
 UPDATE payment_orders
-   SET out_trade_no = 'legacy_' || CAST(id AS TEXT)
+   SET out_trade_no = '__migration_103_legacy__' || CAST(id AS TEXT)
  WHERE out_trade_no = '';
 
 WITH ranked AS (
@@ -18,7 +18,7 @@ WITH ranked AS (
      WHERE out_trade_no <> ''
 )
 UPDATE payment_orders
-   SET out_trade_no = substr(out_trade_no, 1, 40) || '_dup_' || CAST(id AS TEXT)
+   SET out_trade_no = '__migration_103_dup__' || CAST(id AS TEXT)
  WHERE id IN (SELECT id FROM ranked WHERE rn > 1);
 
 DROP INDEX IF EXISTS paymentorder_out_trade_no;

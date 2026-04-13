@@ -139,21 +139,28 @@ func (s *PaymentService) checkPaid(ctx context.Context, o *dbent.PaymentOrder) s
 	if err != nil {
 		return ""
 	}
-	// Use OutTradeNo as fallback when PaymentTradeNo is empty
-	// (e.g. EasyPay popup mode where trade_no arrives only via notify callback)
-	tradeNo := o.PaymentTradeNo
-	if tradeNo == "" {
-		tradeNo = o.OutTradeNo
+	queryRef := o.PaymentTradeNo
+	if queryRef == "" && prov.ProviderKey() != payment.TypeStripe {
+		// Most providers support merchant order numbers for active verification.
+		// Stripe requires the PaymentIntent ID and cannot recover from out_trade_no.
+		queryRef = o.OutTradeNo
 	}
-	resp, err := prov.QueryOrder(ctx, tradeNo)
+	if queryRef == "" {
+		slog.Warn("skipping active payment verification because no query reference is available", "orderID", o.ID, "provider", prov.ProviderKey())
+		return ""
+	}
+	resp, err := prov.QueryOrder(ctx, queryRef)
 	if err != nil {
 		slog.Warn("query upstream failed", "orderID", o.ID, "error", err)
 		return ""
 	}
 	if resp.Status == payment.ProviderStatusPaid {
 		confirmedTradeNo := resp.TradeNo
-		if confirmedTradeNo == "" {
-			confirmedTradeNo = tradeNo
+		if confirmedTradeNo == "" || (prov.ProviderKey() == payment.TypeEasyPay && confirmedTradeNo == o.OutTradeNo) {
+			confirmedTradeNo = o.PaymentTradeNo
+		}
+		if confirmedTradeNo == "" && prov.ProviderKey() != payment.TypeEasyPay {
+			confirmedTradeNo = queryRef
 		}
 		if err := s.HandlePaymentNotification(ctx, &payment.PaymentNotification{TradeNo: confirmedTradeNo, OrderID: o.OutTradeNo, Amount: resp.Amount, Status: payment.ProviderStatusSuccess}, prov.ProviderKey()); err != nil {
 			slog.Error("fulfillment failed during checkPaid", "orderID", o.ID, "error", err)
@@ -162,7 +169,7 @@ func (s *PaymentService) checkPaid(ctx context.Context, o *dbent.PaymentOrder) s
 		return checkPaidResultAlreadyPaid
 	}
 	if cp, ok := prov.(payment.CancelableProvider); ok {
-		_ = cp.CancelPayment(ctx, tradeNo)
+		_ = cp.CancelPayment(ctx, queryRef)
 	}
 	return ""
 }
@@ -237,24 +244,52 @@ func (s *PaymentService) ExpireTimedOutOrders(ctx context.Context) (int, error) 
 // Falls back to registry lookup if instance ID is missing (legacy orders).
 func (s *PaymentService) getOrderProvider(ctx context.Context, o *dbent.PaymentOrder) (payment.Provider, error) {
 	if o.ProviderInstanceID != nil && *o.ProviderInstanceID != "" {
-		instID, err := strconv.ParseInt(*o.ProviderInstanceID, 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("parse provider instance id %q: %w", *o.ProviderInstanceID, err)
+		p, err := s.getOrderProviderFromInstance(ctx, o)
+		if err == nil {
+			return p, nil
 		}
-		cfg, err := s.loadBalancer.GetInstanceConfig(ctx, instID)
-		if err != nil {
-			return nil, fmt.Errorf("load provider instance %s config: %w", *o.ProviderInstanceID, err)
-		}
-		providerKey := s.registry.GetProviderKey(o.PaymentType)
-		if providerKey == "" {
-			providerKey = o.PaymentType
-		}
-		p, err := provider.CreateProvider(providerKey, *o.ProviderInstanceID, cfg)
-		if err != nil {
-			return nil, fmt.Errorf("create provider %s for instance %s: %w", providerKey, *o.ProviderInstanceID, err)
-		}
-		return p, nil
+		slog.Warn("order provider instance unavailable, falling back to registry provider", "orderID", o.ID, "instanceID", *o.ProviderInstanceID, "error", err)
+	}
+	return s.getFallbackOrderProvider(ctx, o)
+}
+
+func (s *PaymentService) getOrderProviderFromInstance(ctx context.Context, o *dbent.PaymentOrder) (payment.Provider, error) {
+	if o == nil {
+		return nil, fmt.Errorf("nil order")
+	}
+	if o.ProviderInstanceID == nil || *o.ProviderInstanceID == "" {
+		return nil, fmt.Errorf("order %d has no provider instance", o.ID)
+	}
+	instID, err := strconv.ParseInt(*o.ProviderInstanceID, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("parse provider instance id %q: %w", *o.ProviderInstanceID, err)
+	}
+	cfg, err := s.loadBalancer.GetInstanceConfig(ctx, instID)
+	if err != nil {
+		return nil, fmt.Errorf("load provider instance %s config: %w", *o.ProviderInstanceID, err)
+	}
+	providerKey := s.expectedProviderKeyForOrder(o)
+	if providerKey == "" {
+		providerKey = o.PaymentType
+	}
+	p, err := provider.CreateProvider(providerKey, *o.ProviderInstanceID, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("create provider %s for instance %s: %w", providerKey, *o.ProviderInstanceID, err)
+	}
+	return p, nil
+}
+
+func (s *PaymentService) getFallbackOrderProvider(ctx context.Context, o *dbent.PaymentOrder) (payment.Provider, error) {
+	if o == nil {
+		return nil, fmt.Errorf("nil order")
 	}
 	s.EnsureProviders(ctx)
-	return s.registry.GetProvider(o.PaymentType)
+	if p, err := s.registry.GetProvider(o.PaymentType); err == nil {
+		return p, nil
+	}
+	providerKey := s.expectedProviderKeyForOrder(o)
+	if providerKey == "" {
+		return nil, payment.ErrProviderNotFound
+	}
+	return s.registry.GetProviderByKey(providerKey)
 }

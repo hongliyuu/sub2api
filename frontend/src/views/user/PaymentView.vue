@@ -369,6 +369,16 @@ function amountFitsMethod(amt: number, methodType: string): boolean {
   if (!ml) return false
   if (ml.single_min > 0 && amt < ml.single_min) return false
   if (ml.single_max > 0 && amt > ml.single_max) return false
+  if (ml.daily_limit > 0 && amt > ml.daily_remaining) return false
+  return true
+}
+
+function amountInMethodRange(amt: number, methodType: string): boolean {
+  if (amt <= 0) return true
+  const ml = checkout.value.methods[methodType]
+  if (!ml) return false
+  if (ml.single_min > 0 && amt < ml.single_min) return false
+  if (ml.single_max > 0 && amt > ml.single_max) return false
   return true
 }
 
@@ -405,8 +415,11 @@ const totalAmount = computed(() =>
 const amountError = computed(() => {
   if (validAmount.value <= 0) return ''
   // No method can handle this amount
-  if (!enabledMethods.value.some((m) => amountFitsMethod(validAmount.value, m))) {
+  if (!enabledMethods.value.some((m) => amountInMethodRange(validAmount.value, m))) {
     return t('payment.amountNoMethod')
+  }
+  if (!methodOptions.value.some((m) => m.available)) {
+    return t('payment.errors.noAvailableInstance')
   }
   // Selected method can't handle this amount (but others can)
   const ml = selectedLimit.value
@@ -456,9 +469,11 @@ const canSubmitSubscription = computed(() =>
 
 // Auto-switch to first available method when current selection can't handle the amount
 watch(() => [validAmount.value, selectedMethod.value] as const, ([amt, method]) => {
-  if (amt <= 0 || amountFitsMethod(amt, method)) return
-  const available = enabledMethods.value.find((m) => amountFitsMethod(amt, m))
-  if (available) selectedMethod.value = available
+  const current = methodOptions.value.find((m) => m.type === method)
+  if (amt <= 0 && current?.available !== false) return
+  if (amt > 0 && current?.available !== false && amountFitsMethod(amt, method)) return
+  const available = methodOptions.value.find((m) => m.available && (amt <= 0 || amountFitsMethod(amt, m.type)))
+  if (available) selectedMethod.value = available.type
 })
 
 // Payment button class: follows selected payment method color
@@ -585,6 +600,8 @@ async function createOrder(orderAmount: number, orderType: string, planId?: numb
       errorMessage.value = t('payment.errors.tooManyPending', { max: metadata?.max || '' })
     } else if (apiErr.reason === 'CANCEL_RATE_LIMITED') {
       errorMessage.value = t('payment.errors.cancelRateLimited')
+    } else if (apiErr.reason === 'NO_AVAILABLE_INSTANCE') {
+      errorMessage.value = t('payment.errors.noAvailableInstance')
     } else {
       errorMessage.value = extractApiErrorMessage(err, t('payment.result.failed'))
     }
@@ -605,7 +622,7 @@ onMounted(async () => {
         const bi = order.indexOf(b)
         return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi)
       })
-      selectedMethod.value = sorted[0]
+      selectedMethod.value = sorted.find((type) => checkout.value.methods[type]?.available !== false) || sorted[0]
     }
     if (checkout.value.balance_disabled) {
       activeTab.value = 'subscription'

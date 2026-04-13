@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/payment"
@@ -281,20 +282,73 @@ func TestMergePaymentConfigPatchAllowsClearingEnabledTypes(t *testing.T) {
 func TestIsPaymentTypeEnabled(t *testing.T) {
 	t.Parallel()
 
-	cfg := &PaymentConfig{
-		EnabledTypes: []string{"alipay", "stripe"},
-	}
+	t.Run("normalized allowlist matches direct types", func(t *testing.T) {
+		t.Parallel()
 
-	if !isPaymentTypeEnabled(cfg, "alipay") {
-		t.Fatal("expected alipay to be enabled")
+		cfg := &PaymentConfig{
+			EnabledTypes: []string{"alipay", "stripe"},
+		}
+
+		if !isPaymentTypeEnabled(cfg, "alipay") {
+			t.Fatal("expected alipay to be enabled")
+		}
+		if !isPaymentTypeEnabled(cfg, " Stripe ") {
+			t.Fatal("expected stripe to be enabled with case/space normalization")
+		}
+		if isPaymentTypeEnabled(cfg, "wxpay") {
+			t.Fatal("expected wxpay to be disabled")
+		}
+		if isPaymentTypeEnabled(cfg, "") {
+			t.Fatal("expected empty payment type to be disabled")
+		}
+	})
+
+	t.Run("empty allowlist permits configured payment methods", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &PaymentConfig{}
+		if !isPaymentTypeEnabled(cfg, "alipay") {
+			t.Fatal("expected empty allowlist to permit alipay")
+		}
+		if !isPaymentTypeEnabled(cfg, "stripe") {
+			t.Fatal("expected empty allowlist to permit stripe")
+		}
+	})
+
+	t.Run("easypay allowlist enables alipay and wxpay subtypes", func(t *testing.T) {
+		t.Parallel()
+
+		cfg := &PaymentConfig{EnabledTypes: []string{" EasyPay "}}
+		if !isPaymentTypeEnabled(cfg, "alipay") {
+			t.Fatal("expected easypay to enable alipay")
+		}
+		if !isPaymentTypeEnabled(cfg, "wxpay_direct") {
+			t.Fatal("expected easypay to enable wxpay_direct")
+		}
+		if isPaymentTypeEnabled(cfg, "stripe") {
+			t.Fatal("expected stripe to remain disabled")
+		}
+	})
+}
+
+func TestBuildUpdateMapDoesNotMaterializeOmittedDefaults(t *testing.T) {
+	t.Parallel()
+
+	svc := &PaymentConfigService{}
+	minAmount := 25.0
+	updates, err := svc.BuildUpdateMap(context.Background(), UpdatePaymentConfigRequest{
+		MinAmount: &minAmount,
+	})
+	if err != nil {
+		t.Fatalf("BuildUpdateMap returned error: %v", err)
 	}
-	if !isPaymentTypeEnabled(cfg, " Stripe ") {
-		t.Fatal("expected stripe to be enabled with case/space normalization")
+	if got := updates[SettingMinRechargeAmount]; got != "25.00" {
+		t.Fatalf("min amount update = %q, want 25.00", got)
 	}
-	if isPaymentTypeEnabled(cfg, "wxpay") {
-		t.Fatal("expected wxpay to be disabled")
+	if _, ok := updates[SettingLoadBalanceStrategy]; ok {
+		t.Fatal("omitted load balance strategy should not be materialized")
 	}
-	if isPaymentTypeEnabled(cfg, "") {
-		t.Fatal("expected empty payment type to be disabled")
+	if _, ok := updates[SettingOrderTimeoutMinutes]; ok {
+		t.Fatal("omitted order timeout should not be materialized")
 	}
 }

@@ -1,6 +1,7 @@
 package admin
 
 import (
+	"context"
 	"strconv"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
@@ -245,7 +246,7 @@ func (h *PaymentHandler) CreateProvider(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	h.paymentService.RefreshProviders(c.Request.Context())
+	h.paymentService.RefreshProviders(context.Background())
 	response.Created(c, inst)
 }
 
@@ -266,7 +267,7 @@ func (h *PaymentHandler) UpdateProvider(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	h.paymentService.RefreshProviders(c.Request.Context())
+	h.paymentService.RefreshProviders(context.Background())
 	response.Success(c, inst)
 }
 
@@ -281,7 +282,7 @@ func (h *PaymentHandler) DeleteProvider(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	h.paymentService.RefreshProviders(c.Request.Context())
+	h.paymentService.RefreshProviders(context.Background())
 	response.Success(c, gin.H{"message": "deleted"})
 }
 
@@ -322,7 +323,7 @@ func (h *PaymentHandler) UpdateConfig(c *gin.Context) {
 		return
 	}
 	if h.paymentService != nil {
-		h.paymentService.RefreshProviders(c.Request.Context())
+		h.paymentService.RefreshProviders(context.Background())
 	}
 	if h.settingService != nil {
 		h.settingService.NotifySettingsUpdated()
