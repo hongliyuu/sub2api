@@ -199,3 +199,23 @@ func TestRateLimitService_HandleUpstreamError_OpenAITokenRevokedMarksPermanentAu
 	require.Equal(t, accountAuthClassPermanent, repo.lastExtraUpdates[0][accountAuthFailureClassKey])
 	require.Equal(t, accountAuthStateReauthorizeRequired, repo.lastExtraUpdates[0][accountAuthStateKey])
 }
+
+func TestRateLimitService_HandleUpstreamError_AnthropicCreditBalance400MarksBillingBlocked(t *testing.T) {
+	repo := &rateLimitAccountRepoStub{}
+	service := NewRateLimitService(repo, nil, &config.Config{}, nil, nil)
+	account := &Account{
+		ID:       105,
+		Platform: PlatformAnthropic,
+		Type:     AccountTypeAPIKey,
+	}
+
+	body := []byte(`{"error":{"message":"insufficient credit balance"}}`)
+	shouldDisable := service.HandleUpstreamError(context.Background(), account, 400, http.Header{}, body)
+
+	require.True(t, shouldDisable)
+	require.Equal(t, 1, repo.setErrorCalls)
+	require.Equal(t, 1, repo.updateExtraCalls)
+	require.Equal(t, "billing_required", repo.lastExtraUpdates[0][accountAuthFailureReasonKey])
+	require.Equal(t, accountAuthClassPermanent, repo.lastExtraUpdates[0][accountAuthFailureClassKey])
+	require.Equal(t, accountAuthStateWorkspaceBlocked, repo.lastExtraUpdates[0][accountAuthStateKey])
+}
