@@ -29,9 +29,9 @@ type OpsRequestDetailsIntegrationSuite struct {
 	logRepo *usageLogRepository
 
 	// Track entities created in each test for cleanup in TearDownTest.
-	createdUserIDs    []int
-	createdAPIKeyIDs  []int
-	createdAccountIDs []int
+	createdUserIDs    []int64
+	createdAPIKeyIDs  []int64
+	createdAccountIDs []int64
 }
 
 func (s *OpsRequestDetailsIntegrationSuite) SetupTest() {
