@@ -539,37 +539,37 @@ func (s *GatewayService) TempUnscheduleRetryableError(ctx context.Context, accou
 
 // GatewayService handles API gateway operations
 type GatewayService struct {
-	accountRepo           AccountRepository
-	groupRepo             GroupRepository
-	usageLogRepo          UsageLogRepository
-	usageBillingRepo      UsageBillingRepository
-	userRepo              UserRepository
-	userSubRepo           UserSubscriptionRepository
-	userGroupRateRepo     UserGroupRateRepository
-	cache                 GatewayCache
-	digestStore           *DigestSessionStore
-	cfg                   *config.Config
-	schedulerSnapshot     *SchedulerSnapshotService
-	billingService        *BillingService
-	rateLimitService      *RateLimitService
-	billingCacheService   *BillingCacheService
-	identityService       *IdentityService
-	httpUpstream          HTTPUpstream
-	deferredService       *DeferredService
-	concurrencyService    *ConcurrencyService
-	claudeTokenProvider   *ClaudeTokenProvider
-	sessionLimitCache          SessionLimitCache // 会话数量限制缓存（仅 Anthropic OAuth/SetupToken）
-	rpmCache                   RPMCache          // RPM 计数缓存（仅 Anthropic OAuth/SetupToken）
-	userGroupRateResolver      *userGroupRateResolver
-	userGroupRateCache         *gocache.Cache
-	userGroupRateSF            singleflight.Group
-	modelsListCache            *gocache.Cache
-	copilotPlatformConfigSvc   *CopilotPlatformConfigService
-	modelsListCacheTTL    time.Duration
-	settingService        *SettingService
-	responseHeaderFilter  *responseheaders.CompiledHeaderFilter
-	debugModelRouting     atomic.Bool
-	debugClaudeMimic      atomic.Bool
+	accountRepo              AccountRepository
+	groupRepo                GroupRepository
+	usageLogRepo             UsageLogRepository
+	usageBillingRepo         UsageBillingRepository
+	userRepo                 UserRepository
+	userSubRepo              UserSubscriptionRepository
+	userGroupRateRepo        UserGroupRateRepository
+	cache                    GatewayCache
+	digestStore              *DigestSessionStore
+	cfg                      *config.Config
+	schedulerSnapshot        *SchedulerSnapshotService
+	billingService           *BillingService
+	rateLimitService         *RateLimitService
+	billingCacheService      *BillingCacheService
+	identityService          *IdentityService
+	httpUpstream             HTTPUpstream
+	deferredService          *DeferredService
+	concurrencyService       *ConcurrencyService
+	claudeTokenProvider      *ClaudeTokenProvider
+	sessionLimitCache        SessionLimitCache // 会话数量限制缓存（仅 Anthropic OAuth/SetupToken）
+	rpmCache                 RPMCache          // RPM 计数缓存（仅 Anthropic OAuth/SetupToken）
+	userGroupRateResolver    *userGroupRateResolver
+	userGroupRateCache       *gocache.Cache
+	userGroupRateSF          singleflight.Group
+	modelsListCache          *gocache.Cache
+	copilotPlatformConfigSvc *CopilotPlatformConfigService
+	modelsListCacheTTL       time.Duration
+	settingService           *SettingService
+	responseHeaderFilter     *responseheaders.CompiledHeaderFilter
+	debugModelRouting        atomic.Bool
+	debugClaudeMimic         atomic.Bool
 }
 
 // NewGatewayService creates a new GatewayService
@@ -3569,16 +3569,6 @@ func copilotWhitelistContains(whitelist []string, model string) bool {
 	normalized := copilot.NormalizeModelIDForCopilotUpstream(model)
 	for _, entry := range whitelist {
 		if copilot.NormalizeModelIDForCopilotUpstream(entry) == normalized {
-			return true
-		}
-	}
-	return false
-}
-
-// containsString 检查 slice 中是否包含 s（精确匹配）。
-func containsString(slice []string, s string) bool {
-	for _, v := range slice {
-		if v == s {
 			return true
 		}
 	}

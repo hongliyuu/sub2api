@@ -65,13 +65,6 @@ func (c *copilotSessionCache) evictExpired() {
 	}
 }
 
-// size returns the number of live entries (for metrics/testing).
-func (c *copilotSessionCache) size() int {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return len(c.entries)
-}
-
 // --------------------------------------------------------------------------
 // Session key extraction helpers
 // --------------------------------------------------------------------------
