@@ -29,9 +29,11 @@ type OpsRequestDetailsIntegrationSuite struct {
 	logRepo *usageLogRepository
 
 	// Track entities created in each test for cleanup in TearDownTest.
-	createdUserIDs    []int64
-	createdAPIKeyIDs  []int64
-	createdAccountIDs []int64
+	createdUserIDs      []int64
+	createdAPIKeyIDs    []int64
+	createdAccountIDs   []int64
+	createdUsageLogReqs []string // request_ids of usage_logs to delete
+	createdErrorLogIDs  []int64  // ids of ops_error_logs to delete
 }
 
 func (s *OpsRequestDetailsIntegrationSuite) SetupTest() {
@@ -46,14 +48,24 @@ func (s *OpsRequestDetailsIntegrationSuite) SetupTest() {
 	s.createdUserIDs = nil
 	s.createdAPIKeyIDs = nil
 	s.createdAccountIDs = nil
+	s.createdUsageLogReqs = nil
+	s.createdErrorLogIDs = nil
 }
 
 // TearDownTest deletes all entities created during the test so that global
-// entity counts (users, api_keys, accounts) do not leak into other suites.
+// entity counts (users, api_keys, accounts, usage_logs, ops_error_logs) do not
+// leak into other suites.
 func (s *OpsRequestDetailsIntegrationSuite) TearDownTest() {
 	ctx := context.Background()
 	client := testEntClient(s.T())
 
+	// Delete log rows first to satisfy foreign-key constraints.
+	for _, reqID := range s.createdUsageLogReqs {
+		_, _ = integrationDB.ExecContext(ctx, "DELETE FROM usage_logs WHERE request_id = $1", reqID)
+	}
+	for _, id := range s.createdErrorLogIDs {
+		_, _ = integrationDB.ExecContext(ctx, "DELETE FROM ops_error_logs WHERE id = $1", id)
+	}
 	for _, id := range s.createdUserIDs {
 		_ = client.User.DeleteOneID(id).Exec(ctx)
 	}
@@ -108,7 +120,7 @@ func (s *OpsRequestDetailsIntegrationSuite) createTrackedAccount(a *service.Acco
 }
 
 // insertUsageLog inserts a single usage_log row directly through the
-// usageLogRepository and returns the created log (with ID and CreatedAt set).
+// usageLogRepository and registers it for cleanup in TearDownTest.
 func (s *OpsRequestDetailsIntegrationSuite) insertUsageLog(log *service.UsageLog) *service.UsageLog {
 	s.T().Helper()
 	if log.RequestID == "" {
@@ -119,15 +131,17 @@ func (s *OpsRequestDetailsIntegrationSuite) insertUsageLog(log *service.UsageLog
 	}
 	_, err := s.logRepo.Create(s.ctx, log)
 	require.NoError(s.T(), err, "insert usage_log")
+	s.createdUsageLogReqs = append(s.createdUsageLogReqs, log.RequestID)
 	return log
 }
 
-// insertErrorLog inserts a single ops_error_log row directly and returns the
-// assigned ID.
+// insertErrorLog inserts a single ops_error_log row directly and registers
+// the returned ID for cleanup in TearDownTest.
 func (s *OpsRequestDetailsIntegrationSuite) insertErrorLog(input *service.OpsInsertErrorLogInput) int64 {
 	s.T().Helper()
 	id, err := s.opsRepo.InsertErrorLog(s.ctx, input)
 	require.NoError(s.T(), err, "insert ops_error_log")
+	s.createdErrorLogIDs = append(s.createdErrorLogIDs, id)
 	return id
 }
 
