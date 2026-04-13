@@ -1090,7 +1090,7 @@ END`
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	out := make([]opsStorageGovernanceTableSnapshot, 0, 3)
 	for rows.Next() {
@@ -1138,7 +1138,7 @@ END, index_bytes DESC, si.indexrelname ASC`
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	out := make([]opsStorageGovernanceIndexStat, 0, 16)
 	for rows.Next() {
@@ -1694,7 +1694,7 @@ LIMIT 5`
 	if err != nil {
 		return opsRuntimeErrorFamilySummary{}, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	out := opsRuntimeErrorFamilySummary{
 		Kind:          "summary",

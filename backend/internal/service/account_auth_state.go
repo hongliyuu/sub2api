@@ -193,7 +193,6 @@ func accountAuthBackgroundRecoveryEligible(account *Account, state, class, recov
 }
 
 func accountAuthManualInterventionRequired(state, class, recovery string) bool {
-	state = strings.TrimSpace(state)
 	class = strings.TrimSpace(class)
 	recovery = strings.TrimSpace(recovery)
 	if class == accountAuthClassPermanent {

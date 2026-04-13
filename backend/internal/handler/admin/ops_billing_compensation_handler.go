@@ -187,10 +187,7 @@ func shouldStopBillingLogScan(page *service.OpsSystemLogList, collected int, lim
 }
 
 func matchesBillingCompensationFilters(log *service.OpsSystemLog, requestID string, apiKeyID, groupID *int64) bool {
-	if log == nil {
-		return false
-	}
-	return true
+	return log != nil
 }
 
 func buildBillingCompensationLogEntry(log *service.OpsSystemLog) gin.H {

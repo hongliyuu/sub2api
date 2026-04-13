@@ -338,7 +338,7 @@ func parseAdminUsageListRange(c *gin.Context, userTZ string) (*time.Time, *time.
 	if startDateStr != "" {
 		t, err := timezone.ParseInUserLocation("2006-01-02", startDateStr, userTZ)
 		if err != nil {
-			return nil, nil, fmt.Errorf("Invalid start_date format, use YYYY-MM-DD")
+			return nil, nil, fmt.Errorf("invalid start_date format, use YYYY-MM-DD")
 		}
 		startTime = &t
 	}
@@ -346,7 +346,7 @@ func parseAdminUsageListRange(c *gin.Context, userTZ string) (*time.Time, *time.
 	if endDateStr != "" {
 		t, err := timezone.ParseInUserLocation("2006-01-02", endDateStr, userTZ)
 		if err != nil {
-			return nil, nil, fmt.Errorf("Invalid end_date format, use YYYY-MM-DD")
+			return nil, nil, fmt.Errorf("invalid end_date format, use YYYY-MM-DD")
 		}
 		t = t.AddDate(0, 0, 1)
 		endTime = &t

@@ -15,7 +15,7 @@ func TestOpsCleanupRunCleanupOnceSnapshotsMaxRowsWithoutRetention(t *testing.T) 
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	mock.ExpectQuery("SELECT COALESCE\\(st.n_live_tup::bigint, c.reltuples::bigint, 0\\)").
 		WithArgs("ops_error_logs").
@@ -60,7 +60,7 @@ func TestOpsCleanupRunCleanupOnceResetsMaxRowsHitPerRun(t *testing.T) {
 
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	mock.ExpectQuery("SELECT COALESCE\\(st.n_live_tup::bigint, c.reltuples::bigint, 0\\)").
 		WithArgs("ops_error_logs").

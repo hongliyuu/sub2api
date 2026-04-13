@@ -395,10 +395,9 @@ func (r *opsRepository) listHourlyMetricsRows(ctx context.Context, filter *servi
 		groupID = filter.GroupID
 	}
 
-	filterClause, filterArgs, nextIdx := buildHourlyMetricsFilter(platform, groupID, idx)
+	filterClause, filterArgs, _ := buildHourlyMetricsFilter(platform, groupID, idx)
 	where += filterClause
 	args = append(args, filterArgs...)
-	idx = nextIdx
 
 	q := `
 SELECT
