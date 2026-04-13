@@ -3542,6 +3542,9 @@ async function saveSettings() {
     if (!isValidHttpUrl(form.frontend_url)) form.frontend_url = ''
     if (!isValidHttpUrl(form.doc_url)) form.doc_url = ''
 
+    const balanceLowNotifyRechargeUrl = form.balance_low_notify_recharge_url || currentOrigin
+    form.balance_low_notify_recharge_url = balanceLowNotifyRechargeUrl
+
     const payload: UpdateSettingsRequest = {
       registration_enabled: form.registration_enabled,
       email_verify_enabled: form.email_verify_enabled,
@@ -3642,7 +3645,7 @@ async function saveSettings() {
       // Balance & quota notification
       balance_low_notify_enabled: form.balance_low_notify_enabled,
       balance_low_notify_threshold: Number(form.balance_low_notify_threshold) || 0,
-      balance_low_notify_recharge_url: form.balance_low_notify_recharge_url || currentOrigin,
+      balance_low_notify_recharge_url: balanceLowNotifyRechargeUrl,
       account_quota_notify_enabled: form.account_quota_notify_enabled,
       account_quota_notify_emails: (form.account_quota_notify_emails || []).filter((e) => e.email.trim() !== ''),
     }
