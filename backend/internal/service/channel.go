@@ -212,7 +212,7 @@ func (c *Channel) Clone() *Channel {
 		}
 	}
 	if c.FeaturesConfig != nil {
-		cp.FeaturesConfig = cloneStringAnyMap(c.FeaturesConfig)
+		cp.FeaturesConfig = deepCopyFeaturesConfig(c.FeaturesConfig)
 	}
 	if c.AccountStatsPricingRules != nil {
 		cp.AccountStatsPricingRules = make([]AccountStatsPricingRule, len(c.AccountStatsPricingRules))
@@ -237,7 +237,8 @@ func (c *Channel) Clone() *Channel {
 	return &cp
 }
 
-func cloneStringAnyMap(src map[string]any) map[string]any {
+// deepCopyFeaturesConfig creates a deep copy of FeaturesConfig to prevent cache pollution.
+func deepCopyFeaturesConfig(src map[string]any) map[string]any {
 	if src == nil {
 		return nil
 	}
@@ -251,7 +252,7 @@ func cloneStringAnyMap(src map[string]any) map[string]any {
 func cloneAnyValue(v any) any {
 	switch vv := v.(type) {
 	case map[string]any:
-		return cloneStringAnyMap(vv)
+		return deepCopyFeaturesConfig(vv)
 	case []any:
 		out := make([]any, len(vv))
 		for i := range vv {
