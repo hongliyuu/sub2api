@@ -11,6 +11,7 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
+	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	"github.com/Wei-Shaw/sub2api/internal/payment/provider"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -50,7 +51,7 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 	feeRate := s.getFeeRate(req.PaymentType)
 	payAmountStr := payment.CalculatePayAmount(amount, feeRate)
 	payAmount, _ := strconv.ParseFloat(payAmountStr, 64)
-	order, err := s.createOrderInTx(ctx, req, user, plan, cfg, amount, feeRate, payAmount)
+	order, err := s.createOrderInTx(ctx, req, plan, cfg, amount, feeRate, payAmount)
 	if err != nil {
 		return nil, err
 	}
@@ -65,6 +66,10 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 }
 
 func (s *PaymentService) validateOrderInput(ctx context.Context, req CreateOrderRequest, cfg *PaymentConfig) (*dbent.SubscriptionPlan, error) {
+	if !isPaymentTypeEnabled(cfg, req.PaymentType) {
+		return nil, infraerrors.BadRequest("PAYMENT_TYPE_DISABLED", "payment method is not enabled").
+			WithMetadata(map[string]string{"payment_type": req.PaymentType})
+	}
 	if req.OrderType == payment.OrderTypeBalance && cfg.BalanceDisabled {
 		return nil, infraerrors.Forbidden("BALANCE_PAYMENT_DISABLED", "balance recharge has been disabled")
 	}
@@ -99,12 +104,24 @@ func (s *PaymentService) validateSubOrder(ctx context.Context, req CreateOrderRe
 	return plan, nil
 }
 
-func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderRequest, user *User, plan *dbent.SubscriptionPlan, cfg *PaymentConfig, amount, feeRate, payAmount float64) (*dbent.PaymentOrder, error) {
+func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderRequest, plan *dbent.SubscriptionPlan, cfg *PaymentConfig, amount, feeRate, payAmount float64) (*dbent.PaymentOrder, error) {
 	tx, err := s.entClient.Tx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	// Serialize order creation per user so pending-order and daily-limit checks
+	// see a stable view even when the same user submits multiple requests at once.
+	lockedUser, err := tx.User.Query().
+		Where(user.IDEQ(req.UserID)).
+		ForUpdate().
+		Only(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("lock user for order creation: %w", err)
+	}
+	if lockedUser.Status != payment.EntityStatusActive {
+		return nil, infraerrors.Forbidden("USER_INACTIVE", "user account is disabled")
+	}
 	if err := s.checkPendingLimit(ctx, tx, req.UserID, cfg.MaxPendingOrders); err != nil {
 		return nil, err
 	}
@@ -118,9 +135,9 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 	exp := time.Now().Add(time.Duration(tm) * time.Minute)
 	b := tx.PaymentOrder.Create().
 		SetUserID(req.UserID).
-		SetUserEmail(user.Email).
-		SetUserName(user.Username).
-		SetNillableUserNotes(psNilIfEmpty(user.Notes)).
+		SetUserEmail(lockedUser.Email).
+		SetUserName(lockedUser.Username).
+		SetNillableUserNotes(psNilIfEmpty(lockedUser.Notes)).
 		SetAmount(amount).
 		SetPayAmount(payAmount).
 		SetFeeRate(feeRate).
@@ -174,7 +191,21 @@ func (s *PaymentService) checkDailyLimit(ctx context.Context, tx *dbent.Tx, user
 		return nil
 	}
 	ts := psStartOfDayUTC(time.Now())
-	orders, err := tx.PaymentOrder.Query().Where(paymentorder.UserIDEQ(userID), paymentorder.StatusIn(OrderStatusPaid, OrderStatusRecharging, OrderStatusCompleted), paymentorder.PaidAtGTE(ts)).All(ctx)
+	orders, err := tx.PaymentOrder.Query().
+		Where(
+			paymentorder.UserIDEQ(userID),
+			paymentorder.Or(
+				paymentorder.And(
+					paymentorder.StatusEQ(OrderStatusPending),
+					paymentorder.CreatedAtGTE(ts),
+				),
+				paymentorder.And(
+					paymentorder.StatusIn(OrderStatusPaid, OrderStatusRecharging, OrderStatusCompleted),
+					paymentorder.PaidAtGTE(ts),
+				),
+			),
+		).
+		All(ctx)
 	if err != nil {
 		return fmt.Errorf("query daily usage: %w", err)
 	}
@@ -217,7 +248,23 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 		return nil, fmt.Errorf("update order with payment details: %w", err)
 	}
 	s.writeAuditLog(ctx, order.ID, "ORDER_CREATED", fmt.Sprintf("user:%d", req.UserID), map[string]any{"amount": req.Amount, "paymentType": req.PaymentType, "orderType": req.OrderType})
-	return &CreateOrderResponse{OrderID: order.ID, Amount: order.Amount, PayAmount: payAmount, FeeRate: order.FeeRate, Status: OrderStatusPending, PaymentType: req.PaymentType, PayURL: pr.PayURL, QRCode: pr.QRCode, ClientSecret: pr.ClientSecret, ExpiresAt: order.ExpiresAt, PaymentMode: sel.PaymentMode}, nil
+	resp := &CreateOrderResponse{
+		OrderID:      order.ID,
+		Amount:       order.Amount,
+		PayAmount:    payAmount,
+		FeeRate:      order.FeeRate,
+		Status:       OrderStatusPending,
+		PaymentType:  req.PaymentType,
+		PayURL:       pr.PayURL,
+		QRCode:       pr.QRCode,
+		ClientSecret: pr.ClientSecret,
+		ExpiresAt:    order.ExpiresAt,
+		PaymentMode:  sel.PaymentMode,
+	}
+	if providerKey == payment.TypeStripe {
+		resp.StripePublishableKey = sel.Config[payment.ConfigKeyPublishableKey]
+	}
+	return resp, nil
 }
 
 func (s *PaymentService) buildPaymentSubject(plan *dbent.SubscriptionPlan, payAmountStr string, cfg *PaymentConfig) string {
@@ -233,6 +280,22 @@ func (s *PaymentService) buildPaymentSubject(plan *dbent.SubscriptionPlan, payAm
 		return strings.TrimSpace(pf + " " + payAmountStr + " " + sf)
 	}
 	return "Sub2API " + payAmountStr + " CNY"
+}
+
+func isPaymentTypeEnabled(cfg *PaymentConfig, paymentType string) bool {
+	if cfg == nil {
+		return false
+	}
+	want := strings.ToLower(strings.TrimSpace(paymentType))
+	if want == "" {
+		return false
+	}
+	for _, enabled := range cfg.EnabledTypes {
+		if strings.EqualFold(strings.TrimSpace(enabled), want) {
+			return true
+		}
+	}
+	return false
 }
 
 // --- Order Queries ---

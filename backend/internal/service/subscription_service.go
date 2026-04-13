@@ -488,6 +488,36 @@ func (s *SubscriptionService) RevokeSubscription(ctx context.Context, subscripti
 	return nil
 }
 
+// RestoreSubscription recreates a previously revoked subscription from a
+// snapshot so gateway-refund rollback can restore access if the upstream refund
+// never completed.
+func (s *SubscriptionService) RestoreSubscription(ctx context.Context, snapshot *UserSubscription) (*UserSubscription, error) {
+	if snapshot == nil {
+		return nil, ErrSubscriptionNilInput
+	}
+
+	restored := *snapshot
+	restored.ID = 0
+	restored.CreatedAt = time.Time{}
+	restored.UpdatedAt = time.Time{}
+
+	if err := s.userSubRepo.Create(ctx, &restored); err != nil {
+		return nil, err
+	}
+
+	s.InvalidateSubCache(restored.UserID, restored.GroupID)
+	if s.billingCacheService != nil {
+		userID, groupID := restored.UserID, restored.GroupID
+		go func() {
+			cacheCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			_ = s.billingCacheService.InvalidateSubscription(cacheCtx, userID, groupID)
+		}()
+	}
+
+	return s.userSubRepo.GetByID(ctx, restored.ID)
+}
+
 // ExtendSubscription 调整订阅时长（正数延长，负数缩短）
 func (s *SubscriptionService) ExtendSubscription(ctx context.Context, subscriptionID int64, days int) (*UserSubscription, error) {
 	sub, err := s.userSubRepo.GetByID(ctx, subscriptionID)

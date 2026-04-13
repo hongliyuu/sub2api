@@ -89,6 +89,12 @@ func (s *PaymentConfigService) countPendingOrders(ctx context.Context, providerI
 		).Count(ctx)
 }
 
+func (s *PaymentConfigService) countOrdersByInstance(ctx context.Context, providerInstanceID int64) (int, error) {
+	return s.entClient.PaymentOrder.Query().
+		Where(paymentorder.ProviderInstanceIDEQ(strconv.FormatInt(providerInstanceID, 10))).
+		Count(ctx)
+}
+
 func (s *PaymentConfigService) countPendingOrdersByPlan(ctx context.Context, planID int64) (int, error) {
 	return s.entClient.PaymentOrder.Query().
 		Where(
@@ -269,6 +275,14 @@ func (s *PaymentConfigService) DeleteProviderInstance(ctx context.Context, id in
 	if count > 0 {
 		return infraerrors.Conflict("PENDING_ORDERS",
 			fmt.Sprintf("this instance has %d in-progress orders and cannot be deleted — wait for orders to complete or disable the instance first", count))
+	}
+	totalOrders, err := s.countOrdersByInstance(ctx, id)
+	if err != nil {
+		return fmt.Errorf("check historical orders: %w", err)
+	}
+	if totalOrders > 0 {
+		return infraerrors.Conflict("ORDER_HISTORY_EXISTS",
+			fmt.Sprintf("this instance has %d historical orders and cannot be deleted because refunds and reconciliation must keep the original merchant binding", totalOrders))
 	}
 	return s.entClient.PaymentProviderInstance.DeleteOneID(id).Exec(ctx)
 }

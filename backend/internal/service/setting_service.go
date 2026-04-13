@@ -448,6 +448,17 @@ func parseCustomMenuItemURLs(raw string) []string {
 
 // UpdateSettings 更新系统设置
 func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSettings) error {
+	return s.updateSettings(ctx, settings, nil)
+}
+
+// UpdateSettingsWithExtra merges additional raw setting writes into the same
+// SetMultiple call used for core settings, allowing callers to update related
+// setting groups atomically.
+func (s *SettingService) UpdateSettingsWithExtra(ctx context.Context, settings *SystemSettings, extra map[string]string) error {
+	return s.updateSettings(ctx, settings, extra)
+}
+
+func (s *SettingService) updateSettings(ctx context.Context, settings *SystemSettings, extra map[string]string) error {
 	if err := s.validateDefaultSubscriptionGroups(ctx, settings.DefaultSubscriptions); err != nil {
 		return err
 	}
@@ -595,6 +606,10 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	updates[SettingKeyEnableMetadataPassthrough] = strconv.FormatBool(settings.EnableMetadataPassthrough)
 	updates[SettingKeyEnableCCHSigning] = strconv.FormatBool(settings.EnableCCHSigning)
 
+	for key, value := range extra {
+		updates[key] = value
+	}
+
 	err = s.settingRepo.SetMultiple(ctx, updates)
 	if err == nil {
 		// 先使 inflight singleflight 失效，再刷新缓存，缩小旧值覆盖新值的竞态窗口
@@ -621,6 +636,17 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 		}
 	}
 	return err
+}
+
+// NotifySettingsUpdated invalidates any externally managed settings caches.
+// Use this when settings are changed outside SettingService.UpdateSettings.
+func (s *SettingService) NotifySettingsUpdated() {
+	if s == nil {
+		return
+	}
+	if s.onUpdate != nil {
+		s.onUpdate()
+	}
 }
 
 func (s *SettingService) validateDefaultSubscriptionGroups(ctx context.Context, items []DefaultSubscriptionSetting) error {

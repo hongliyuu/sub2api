@@ -64,6 +64,32 @@ func generateRandomString(n int) string {
 	return string(b)
 }
 
+func (s *PaymentService) getOrderByOutTradeNo(ctx context.Context, outTradeNo string) (*dbent.PaymentOrder, error) {
+	if outTradeNo == "" {
+		return s.entClient.PaymentOrder.Query().
+			Where(paymentorder.IDEQ(-1)).
+			First(ctx)
+	}
+
+	orders, err := s.entClient.PaymentOrder.Query().
+		Where(paymentorder.OutTradeNoEQ(outTradeNo)).
+		Order(dbent.Desc(paymentorder.FieldCreatedAt), dbent.Desc(paymentorder.FieldID)).
+		Limit(2).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(orders) == 0 {
+		return s.entClient.PaymentOrder.Query().
+			Where(paymentorder.IDEQ(-1)).
+			First(ctx)
+	}
+	if len(orders) > 1 {
+		slog.Warn("[PaymentService] duplicate out_trade_no detected; using newest order", "outTradeNo", outTradeNo, "orderID", orders[0].ID)
+	}
+	return orders[0], nil
+}
+
 type CreateOrderRequest struct {
 	UserID      int64
 	Amount      float64
@@ -77,17 +103,18 @@ type CreateOrderRequest struct {
 }
 
 type CreateOrderResponse struct {
-	OrderID      int64     `json:"order_id"`
-	Amount       float64   `json:"amount"`
-	PayAmount    float64   `json:"pay_amount"`
-	FeeRate      float64   `json:"fee_rate"`
-	Status       string    `json:"status"`
-	PaymentType  string    `json:"payment_type"`
-	PayURL       string    `json:"pay_url,omitempty"`
-	QRCode       string    `json:"qr_code,omitempty"`
-	ClientSecret string    `json:"client_secret,omitempty"`
-	ExpiresAt    time.Time `json:"expires_at"`
-	PaymentMode  string    `json:"payment_mode,omitempty"`
+	OrderID              int64     `json:"order_id"`
+	Amount               float64   `json:"amount"`
+	PayAmount            float64   `json:"pay_amount"`
+	FeeRate              float64   `json:"fee_rate"`
+	Status               string    `json:"status"`
+	PaymentType          string    `json:"payment_type"`
+	PayURL               string    `json:"pay_url,omitempty"`
+	QRCode               string    `json:"qr_code,omitempty"`
+	ClientSecret         string    `json:"client_secret,omitempty"`
+	StripePublishableKey string    `json:"stripe_publishable_key,omitempty"`
+	ExpiresAt            time.Time `json:"expires_at"`
+	PaymentMode          string    `json:"payment_mode,omitempty"`
 }
 
 type OrderListParams struct {
@@ -111,6 +138,8 @@ type RefundPlan struct {
 	BalanceToDeduct float64
 	SubDaysToDeduct int
 	SubscriptionID  int64
+	SubSnapshot     *UserSubscription
+	SubRevoked      bool
 }
 
 type RefundResult struct {
@@ -167,6 +196,11 @@ type PaymentService struct {
 	groupRepo       GroupRepository
 }
 
+type webhookProviderCandidate struct {
+	instanceID string
+	provider   payment.Provider
+}
+
 func NewPaymentService(entClient *dbent.Client, registry *payment.Registry, loadBalancer payment.LoadBalancer, redeemService *RedeemService, subscriptionSvc *SubscriptionService, configService *PaymentConfigService, userRepo UserRepository, groupRepo GroupRepository) *PaymentService {
 	return &PaymentService{entClient: entClient, registry: registry, loadBalancer: loadBalancer, redeemService: redeemService, subscriptionSvc: subscriptionSvc, configService: configService, userRepo: userRepo, groupRepo: groupRepo}
 }
@@ -219,13 +253,58 @@ func (s *PaymentService) loadProviders(ctx context.Context) {
 	}
 }
 
+// VerifyWebhookNotification verifies a provider webhook against the correct
+// provider instance and ensures the verified callback belongs to the order that
+// originally created the payment.
+func (s *PaymentService) VerifyWebhookNotification(ctx context.Context, providerKey, hintedOutTradeNo, rawBody string, headers map[string]string) (*payment.PaymentNotification, error) {
+	if hintedOutTradeNo != "" {
+		order, err := s.getOrderByOutTradeNo(ctx, hintedOutTradeNo)
+		if err == nil {
+			return s.verifyWebhookForOrder(ctx, providerKey, order, rawBody, headers)
+		}
+	}
+
+	candidates, err := s.listWebhookProviderCandidates(ctx, providerKey)
+	if err != nil {
+		return nil, err
+	}
+
+	var firstErr error
+	for _, candidate := range candidates {
+		notification, verifyErr := candidate.provider.VerifyNotification(ctx, rawBody, headers)
+		if verifyErr != nil {
+			if firstErr == nil {
+				firstErr = verifyErr
+			}
+			continue
+		}
+		if notification == nil {
+			return nil, nil
+		}
+
+		order, orderErr := s.getOrderByOutTradeNo(ctx, notification.OrderID)
+		if orderErr != nil {
+			return nil, fmt.Errorf("order not found for verified notification: %w", orderErr)
+		}
+		if err := s.validateWebhookOrderBinding(order, providerKey, candidate.instanceID); err != nil {
+			return nil, err
+		}
+		return notification, nil
+	}
+
+	if firstErr != nil {
+		return nil, firstErr
+	}
+	return nil, payment.ErrProviderNotFound
+}
+
 // GetWebhookProvider returns the provider instance that should verify a webhook.
 // It extracts out_trade_no from the raw body, looks up the order to find the
 // original provider instance, and creates a provider with that instance's credentials.
 // Falls back to the registry provider when the order cannot be found.
 func (s *PaymentService) GetWebhookProvider(ctx context.Context, providerKey, outTradeNo string) (payment.Provider, error) {
 	if outTradeNo != "" {
-		order, err := s.entClient.PaymentOrder.Query().Where(paymentorder.OutTradeNo(outTradeNo)).Only(ctx)
+		order, err := s.getOrderByOutTradeNo(ctx, outTradeNo)
 		if err == nil {
 			p, pErr := s.getOrderProvider(ctx, order)
 			if pErr == nil {
@@ -236,6 +315,124 @@ func (s *PaymentService) GetWebhookProvider(ctx context.Context, providerKey, ou
 	}
 	s.EnsureProviders(ctx)
 	return s.registry.GetProviderByKey(providerKey)
+}
+
+func (s *PaymentService) verifyWebhookForOrder(ctx context.Context, providerKey string, order *dbent.PaymentOrder, rawBody string, headers map[string]string) (*payment.PaymentNotification, error) {
+	if err := s.validateWebhookOrderBinding(order, providerKey, ""); err != nil {
+		return nil, err
+	}
+
+	candidate, err := s.webhookCandidateForOrder(ctx, order)
+	if err != nil {
+		return nil, err
+	}
+
+	notification, err := candidate.provider.VerifyNotification(ctx, rawBody, headers)
+	if err != nil {
+		return nil, err
+	}
+	if notification == nil {
+		return nil, nil
+	}
+	if notification.OrderID != "" && notification.OrderID != order.OutTradeNo {
+		return nil, fmt.Errorf("verified webhook order mismatch: got %s want %s", notification.OrderID, order.OutTradeNo)
+	}
+	if err := s.validateWebhookOrderBinding(order, providerKey, candidate.instanceID); err != nil {
+		return nil, err
+	}
+	return notification, nil
+}
+
+func (s *PaymentService) webhookCandidateForOrder(ctx context.Context, order *dbent.PaymentOrder) (*webhookProviderCandidate, error) {
+	if order.ProviderInstanceID != nil && *order.ProviderInstanceID != "" {
+		provider, err := s.getOrderProvider(ctx, order)
+		if err != nil {
+			return nil, err
+		}
+		return &webhookProviderCandidate{
+			instanceID: *order.ProviderInstanceID,
+			provider:   provider,
+		}, nil
+	}
+
+	provider, err := s.getOrderProvider(ctx, order)
+	if err != nil {
+		return nil, err
+	}
+	return &webhookProviderCandidate{provider: provider}, nil
+}
+
+func (s *PaymentService) listWebhookProviderCandidates(ctx context.Context, providerKey string) ([]webhookProviderCandidate, error) {
+	instances, err := s.entClient.PaymentProviderInstance.Query().
+		Where(
+			paymentproviderinstance.EnabledEQ(true),
+			paymentproviderinstance.ProviderKeyEQ(providerKey),
+		).
+		All(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("query provider instances: %w", err)
+	}
+
+	candidates := make([]webhookProviderCandidate, 0, len(instances))
+	for _, inst := range instances {
+		cfg, cfgErr := s.loadBalancer.GetInstanceConfig(ctx, int64(inst.ID))
+		if cfgErr != nil {
+			slog.Warn("[Webhook] failed to load provider config", "instanceID", inst.ID, "error", cfgErr)
+			continue
+		}
+		if inst.PaymentMode != "" {
+			cfg["paymentMode"] = inst.PaymentMode
+		}
+		instanceID := fmt.Sprintf("%d", inst.ID)
+		provider, providerErr := provider.CreateProvider(providerKey, instanceID, cfg)
+		if providerErr != nil {
+			slog.Warn("[Webhook] failed to create provider", "instanceID", inst.ID, "provider", providerKey, "error", providerErr)
+			continue
+		}
+		candidates = append(candidates, webhookProviderCandidate{
+			instanceID: instanceID,
+			provider:   provider,
+		})
+	}
+	if len(candidates) > 0 {
+		return candidates, nil
+	}
+
+	s.EnsureProviders(ctx)
+	provider, err := s.registry.GetProviderByKey(providerKey)
+	if err != nil {
+		return nil, err
+	}
+	return []webhookProviderCandidate{{provider: provider}}, nil
+}
+
+func (s *PaymentService) validateWebhookOrderBinding(order *dbent.PaymentOrder, providerKey, instanceID string) error {
+	if order == nil {
+		return fmt.Errorf("nil order")
+	}
+	expectedProviderKey := s.expectedProviderKeyForOrder(order)
+	if expectedProviderKey != "" && expectedProviderKey != providerKey {
+		return fmt.Errorf("provider key mismatch: got %s want %s", providerKey, expectedProviderKey)
+	}
+	if order.ProviderInstanceID != nil && *order.ProviderInstanceID != "" {
+		if instanceID == "" {
+			return fmt.Errorf("missing provider instance for order %d", order.ID)
+		}
+		if *order.ProviderInstanceID != instanceID {
+			return fmt.Errorf("provider instance mismatch: got %s want %s", instanceID, *order.ProviderInstanceID)
+		}
+	}
+	return nil
+}
+
+func (s *PaymentService) expectedProviderKeyForOrder(order *dbent.PaymentOrder) string {
+	if order == nil {
+		return ""
+	}
+	if key := s.registry.GetProviderKey(order.PaymentType); key != "" {
+		return key
+	}
+	return payment.GetBasePaymentType(order.PaymentType)
 }
 
 // --- Helpers ---

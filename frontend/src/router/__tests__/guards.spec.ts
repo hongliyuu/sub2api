@@ -99,7 +99,10 @@ function simulateGuard(
   if (authState.isSimpleMode) {
     const restrictedPaths = [
       '/admin/groups',
+      '/admin/orders',
       '/admin/subscriptions',
+      '/orders',
+      '/purchase',
       '/admin/redeem',
       '/subscriptions',
       '/redeem',
@@ -269,6 +272,39 @@ describe('路由守卫逻辑', () => {
         { requiresAdmin: true },
         authState
       )
+      expect(redirect).toBe('/admin/dashboard')
+    })
+
+    it('普通用户简易模式访问 /purchase 重定向到 /dashboard', () => {
+      const authState: MockAuthState = {
+        isAuthenticated: true,
+        isAdmin: false,
+        isSimpleMode: true,
+        backendModeEnabled: false,
+      }
+      const redirect = simulateGuard('/purchase', {}, authState)
+      expect(redirect).toBe('/dashboard')
+    })
+
+    it('普通用户简易模式访问 /orders 重定向到 /dashboard', () => {
+      const authState: MockAuthState = {
+        isAuthenticated: true,
+        isAdmin: false,
+        isSimpleMode: true,
+        backendModeEnabled: false,
+      }
+      const redirect = simulateGuard('/orders', {}, authState)
+      expect(redirect).toBe('/dashboard')
+    })
+
+    it('管理员简易模式访问 /admin/orders 重定向到 /admin/dashboard', () => {
+      const authState: MockAuthState = {
+        isAuthenticated: true,
+        isAdmin: true,
+        isSimpleMode: true,
+        backendModeEnabled: false,
+      }
+      const redirect = simulateGuard('/admin/orders', { requiresAdmin: true }, authState)
       expect(redirect).toBe('/admin/dashboard')
     })
 

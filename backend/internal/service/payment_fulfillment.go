@@ -23,7 +23,7 @@ func (s *PaymentService) HandlePaymentNotification(ctx context.Context, n *payme
 		return nil
 	}
 	// Look up order by out_trade_no (the external order ID we sent to the provider)
-	order, err := s.entClient.PaymentOrder.Query().Where(paymentorder.OutTradeNo(n.OrderID)).Only(ctx)
+	order, err := s.getOrderByOutTradeNo(ctx, n.OrderID)
 	if err != nil {
 		// Fallback: try legacy format (sub2_N where N is DB ID)
 		trimmed := strings.TrimPrefix(n.OrderID, orderIDPrefix)

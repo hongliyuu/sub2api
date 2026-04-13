@@ -167,6 +167,17 @@ func NewPaymentConfigService(entClient *dbent.Client, settingRepo SettingReposit
 	return &PaymentConfigService{entClient: entClient, settingRepo: settingRepo, encryptionKey: encryptionKey}
 }
 
+// BuildUpdateMap merges a patch-style payment config request with the current
+// persisted config and returns the exact settings map that should be written.
+func (s *PaymentConfigService) BuildUpdateMap(ctx context.Context, req UpdatePaymentConfigRequest) (map[string]string, error) {
+	current, err := s.GetPaymentConfig(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("get current payment config: %w", err)
+	}
+	merged := mergePaymentConfigPatch(current, req)
+	return serializePaymentConfig(merged), nil
+}
+
 // IsPaymentEnabled returns whether the payment system is enabled.
 func (s *PaymentConfigService) IsPaymentEnabled(ctx context.Context) bool {
 	val, err := s.settingRepo.GetValue(ctx, SettingPaymentEnabled)
@@ -254,31 +265,102 @@ func (s *PaymentConfigService) getStripePublishableKey(ctx context.Context) stri
 // nil-check before serialisation — this is inherent to patch-style update patterns
 // and cannot be meaningfully decomposed without introducing unnecessary abstraction.
 func (s *PaymentConfigService) UpdatePaymentConfig(ctx context.Context, req UpdatePaymentConfigRequest) error {
-	m := map[string]string{
-		SettingPaymentEnabled:      formatBoolOrEmpty(req.Enabled),
-		SettingMinRechargeAmount:   formatPositiveFloat(req.MinAmount),
-		SettingMaxRechargeAmount:   formatPositiveFloat(req.MaxAmount),
-		SettingDailyRechargeLimit:  formatPositiveFloat(req.DailyLimit),
-		SettingOrderTimeoutMinutes: formatPositiveInt(req.OrderTimeoutMin),
-		SettingMaxPendingOrders:    formatPositiveInt(req.MaxPendingOrders),
-		SettingBalancePayDisabled:  formatBoolOrEmpty(req.BalanceDisabled),
-		SettingLoadBalanceStrategy: derefStr(req.LoadBalanceStrategy),
-		SettingProductNamePrefix:   derefStr(req.ProductNamePrefix),
-		SettingProductNameSuffix:   derefStr(req.ProductNameSuffix),
-		SettingHelpImageURL:        derefStr(req.HelpImageURL),
-		SettingHelpText:            derefStr(req.HelpText),
-		SettingCancelRateLimitOn:   formatBoolOrEmpty(req.CancelRateLimitEnabled),
-		SettingCancelRateLimitMax:  formatPositiveInt(req.CancelRateLimitMax),
-		SettingCancelWindowSize:    formatPositiveInt(req.CancelRateLimitWindow),
-		SettingCancelWindowUnit:    derefStr(req.CancelRateLimitUnit),
-		SettingCancelWindowMode:    derefStr(req.CancelRateLimitMode),
-	}
-	if req.EnabledTypes != nil {
-		m[SettingEnabledPaymentTypes] = strings.Join(req.EnabledTypes, ",")
-	} else {
-		m[SettingEnabledPaymentTypes] = ""
+	m, err := s.BuildUpdateMap(ctx, req)
+	if err != nil {
+		return err
 	}
 	return s.settingRepo.SetMultiple(ctx, m)
+}
+
+func mergePaymentConfigPatch(current *PaymentConfig, req UpdatePaymentConfigRequest) *PaymentConfig {
+	if current == nil {
+		current = (&PaymentConfigService{}).parsePaymentConfig(map[string]string{})
+	}
+	merged := *current
+
+	if req.Enabled != nil {
+		merged.Enabled = *req.Enabled
+	}
+	if req.MinAmount != nil {
+		merged.MinAmount = *req.MinAmount
+	}
+	if req.MaxAmount != nil {
+		merged.MaxAmount = *req.MaxAmount
+	}
+	if req.DailyLimit != nil {
+		merged.DailyLimit = *req.DailyLimit
+	}
+	if req.OrderTimeoutMin != nil {
+		merged.OrderTimeoutMin = *req.OrderTimeoutMin
+	}
+	if req.MaxPendingOrders != nil {
+		merged.MaxPendingOrders = *req.MaxPendingOrders
+	}
+	if req.EnabledTypes != nil {
+		merged.EnabledTypes = append([]string(nil), req.EnabledTypes...)
+	}
+	if req.BalanceDisabled != nil {
+		merged.BalanceDisabled = *req.BalanceDisabled
+	}
+	if req.LoadBalanceStrategy != nil {
+		merged.LoadBalanceStrategy = *req.LoadBalanceStrategy
+	}
+	if req.ProductNamePrefix != nil {
+		merged.ProductNamePrefix = *req.ProductNamePrefix
+	}
+	if req.ProductNameSuffix != nil {
+		merged.ProductNameSuffix = *req.ProductNameSuffix
+	}
+	if req.HelpImageURL != nil {
+		merged.HelpImageURL = *req.HelpImageURL
+	}
+	if req.HelpText != nil {
+		merged.HelpText = *req.HelpText
+	}
+	if req.CancelRateLimitEnabled != nil {
+		merged.CancelRateLimitEnabled = *req.CancelRateLimitEnabled
+	}
+	if req.CancelRateLimitMax != nil {
+		merged.CancelRateLimitMax = *req.CancelRateLimitMax
+	}
+	if req.CancelRateLimitWindow != nil {
+		merged.CancelRateLimitWindow = *req.CancelRateLimitWindow
+	}
+	if req.CancelRateLimitUnit != nil {
+		merged.CancelRateLimitUnit = *req.CancelRateLimitUnit
+	}
+	if req.CancelRateLimitMode != nil {
+		merged.CancelRateLimitMode = *req.CancelRateLimitMode
+	}
+
+	return &merged
+}
+
+func serializePaymentConfig(cfg *PaymentConfig) map[string]string {
+	if cfg == nil {
+		cfg = (&PaymentConfigService{}).parsePaymentConfig(map[string]string{})
+	}
+	enabledTypes := append([]string(nil), cfg.EnabledTypes...)
+	return map[string]string{
+		SettingPaymentEnabled:      strconv.FormatBool(cfg.Enabled),
+		SettingMinRechargeAmount:   formatOptionalPositiveFloat(cfg.MinAmount),
+		SettingMaxRechargeAmount:   formatOptionalPositiveFloat(cfg.MaxAmount),
+		SettingDailyRechargeLimit:  formatOptionalPositiveFloat(cfg.DailyLimit),
+		SettingOrderTimeoutMinutes: formatOptionalPositiveInt(cfg.OrderTimeoutMin),
+		SettingMaxPendingOrders:    formatOptionalPositiveInt(cfg.MaxPendingOrders),
+		SettingEnabledPaymentTypes: joinTypes(enabledTypes),
+		SettingBalancePayDisabled:  strconv.FormatBool(cfg.BalanceDisabled),
+		SettingLoadBalanceStrategy: nonEmptyOrDefault(cfg.LoadBalanceStrategy, payment.DefaultLoadBalanceStrategy),
+		SettingProductNamePrefix:   cfg.ProductNamePrefix,
+		SettingProductNameSuffix:   cfg.ProductNameSuffix,
+		SettingHelpImageURL:        cfg.HelpImageURL,
+		SettingHelpText:            cfg.HelpText,
+		SettingCancelRateLimitOn:   strconv.FormatBool(cfg.CancelRateLimitEnabled),
+		SettingCancelRateLimitMax:  formatOptionalPositiveInt(cfg.CancelRateLimitMax),
+		SettingCancelWindowSize:    formatOptionalPositiveInt(cfg.CancelRateLimitWindow),
+		SettingCancelWindowUnit:    cfg.CancelRateLimitUnit,
+		SettingCancelWindowMode:    cfg.CancelRateLimitMode,
+	}
 }
 
 func formatBoolOrEmpty(v *bool) string {
@@ -288,11 +370,25 @@ func formatBoolOrEmpty(v *bool) string {
 	return strconv.FormatBool(*v)
 }
 
+func formatOptionalPositiveFloat(v float64) string {
+	if v <= 0 {
+		return ""
+	}
+	return strconv.FormatFloat(v, 'f', 2, 64)
+}
+
 func formatPositiveFloat(v *float64) string {
 	if v == nil || *v <= 0 {
 		return "" // empty → parsePaymentConfig uses default
 	}
 	return strconv.FormatFloat(*v, 'f', 2, 64)
+}
+
+func formatOptionalPositiveInt(v int) string {
+	if v <= 0 {
+		return ""
+	}
+	return strconv.Itoa(v)
 }
 
 func formatPositiveInt(v *int) string {
@@ -307,6 +403,13 @@ func derefStr(v *string) string {
 		return ""
 	}
 	return *v
+}
+
+func nonEmptyOrDefault(v, fallback string) string {
+	if strings.TrimSpace(v) == "" {
+		return fallback
+	}
+	return v
 }
 
 func splitTypes(s string) []string {

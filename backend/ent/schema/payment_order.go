@@ -178,7 +178,7 @@ func (PaymentOrder) Edges() []ent.Edge {
 
 func (PaymentOrder) Indexes() []ent.Index {
 	return []ent.Index{
-		index.Fields("out_trade_no"),
+		index.Fields("out_trade_no").Unique(),
 		index.Fields("user_id"),
 		index.Fields("status"),
 		index.Fields("expires_at"),

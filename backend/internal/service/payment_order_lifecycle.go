@@ -151,7 +151,11 @@ func (s *PaymentService) checkPaid(ctx context.Context, o *dbent.PaymentOrder) s
 		return ""
 	}
 	if resp.Status == payment.ProviderStatusPaid {
-		if err := s.HandlePaymentNotification(ctx, &payment.PaymentNotification{TradeNo: o.PaymentTradeNo, OrderID: o.OutTradeNo, Amount: resp.Amount, Status: payment.ProviderStatusSuccess}, prov.ProviderKey()); err != nil {
+		confirmedTradeNo := resp.TradeNo
+		if confirmedTradeNo == "" {
+			confirmedTradeNo = tradeNo
+		}
+		if err := s.HandlePaymentNotification(ctx, &payment.PaymentNotification{TradeNo: confirmedTradeNo, OrderID: o.OutTradeNo, Amount: resp.Amount, Status: payment.ProviderStatusSuccess}, prov.ProviderKey()); err != nil {
 			slog.Error("fulfillment failed during checkPaid", "orderID", o.ID, "error", err)
 			// Still return already_paid — order was paid, fulfillment can be retried
 		}
@@ -167,9 +171,7 @@ func (s *PaymentService) checkPaid(ctx context.Context, o *dbent.PaymentOrder) s
 // if a payment was made, and processes it if so. This handles the case where
 // the provider's notify callback was missed (e.g. EasyPay popup mode).
 func (s *PaymentService) VerifyOrderByOutTradeNo(ctx context.Context, outTradeNo string, userID int64) (*dbent.PaymentOrder, error) {
-	o, err := s.entClient.PaymentOrder.Query().
-		Where(paymentorder.OutTradeNo(outTradeNo)).
-		Only(ctx)
+	o, err := s.getOrderByOutTradeNo(ctx, outTradeNo)
 	if err != nil {
 		return nil, infraerrors.NotFound("NOT_FOUND", "order not found")
 	}
@@ -193,9 +195,7 @@ func (s *PaymentService) VerifyOrderByOutTradeNo(ctx context.Context, outTradeNo
 // VerifyOrderPublic verifies payment status without user authentication.
 // Used by the payment result page when the user's session has expired.
 func (s *PaymentService) VerifyOrderPublic(ctx context.Context, outTradeNo string) (*dbent.PaymentOrder, error) {
-	o, err := s.entClient.PaymentOrder.Query().
-		Where(paymentorder.OutTradeNo(outTradeNo)).
-		Only(ctx)
+	o, err := s.getOrderByOutTradeNo(ctx, outTradeNo)
 	if err != nil {
 		return nil, infraerrors.NotFound("NOT_FOUND", "order not found")
 	}
@@ -238,19 +238,22 @@ func (s *PaymentService) ExpireTimedOutOrders(ctx context.Context) (int, error) 
 func (s *PaymentService) getOrderProvider(ctx context.Context, o *dbent.PaymentOrder) (payment.Provider, error) {
 	if o.ProviderInstanceID != nil && *o.ProviderInstanceID != "" {
 		instID, err := strconv.ParseInt(*o.ProviderInstanceID, 10, 64)
-		if err == nil {
-			cfg, err := s.loadBalancer.GetInstanceConfig(ctx, instID)
-			if err == nil {
-				providerKey := s.registry.GetProviderKey(o.PaymentType)
-				if providerKey == "" {
-					providerKey = o.PaymentType
-				}
-				p, err := provider.CreateProvider(providerKey, *o.ProviderInstanceID, cfg)
-				if err == nil {
-					return p, nil
-				}
-			}
+		if err != nil {
+			return nil, fmt.Errorf("parse provider instance id %q: %w", *o.ProviderInstanceID, err)
 		}
+		cfg, err := s.loadBalancer.GetInstanceConfig(ctx, instID)
+		if err != nil {
+			return nil, fmt.Errorf("load provider instance %s config: %w", *o.ProviderInstanceID, err)
+		}
+		providerKey := s.registry.GetProviderKey(o.PaymentType)
+		if providerKey == "" {
+			providerKey = o.PaymentType
+		}
+		p, err := provider.CreateProvider(providerKey, *o.ProviderInstanceID, cfg)
+		if err != nil {
+			return nil, fmt.Errorf("create provider %s for instance %s: %w", providerKey, *o.ProviderInstanceID, err)
+		}
+		return p, nil
 	}
 	s.EnsureProviders(ctx)
 	return s.registry.GetProvider(o.PaymentType)

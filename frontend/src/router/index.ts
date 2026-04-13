@@ -613,7 +613,10 @@ router.beforeEach((to, _from, next) => {
   if (authStore.isSimpleMode) {
     const restrictedPaths = [
       '/admin/groups',
+      '/admin/orders',
       '/admin/subscriptions',
+      '/orders',
+      '/purchase',
       '/admin/redeem',
       '/subscriptions',
       '/redeem'

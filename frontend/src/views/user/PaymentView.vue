@@ -29,7 +29,7 @@
           <StripePaymentInline
             :order-id="paymentState.orderId"
             :client-secret="paymentState.clientSecret"
-            :publishable-key="checkout.stripe_publishable_key"
+            :publishable-key="paymentState.publishableKey || checkout.stripe_publishable_key"
             :pay-amount="paymentState.payAmount"
             @success="onPaymentSuccess"
             @done="onStripeDone"
@@ -302,11 +302,11 @@ const previewImage = ref('')
 
 // Payment phase: 'select' → 'paying' (QR/redirect) or 'stripe' (inline Stripe)
 const paymentPhase = ref<'select' | 'paying' | 'stripe'>('select')
-const paymentState = ref({ orderId: 0, qrCode: '', expiresAt: '', paymentType: '', payUrl: '', clientSecret: '', payAmount: 0, orderType: '' })
+const paymentState = ref({ orderId: 0, qrCode: '', expiresAt: '', paymentType: '', payUrl: '', clientSecret: '', publishableKey: '', payAmount: 0, orderType: '' })
 
 function resetPayment() {
   paymentPhase.value = 'select'
-  paymentState.value = { orderId: 0, qrCode: '', expiresAt: '', paymentType: '', payUrl: '', clientSecret: '', payAmount: 0, orderType: '' }
+  paymentState.value = { orderId: 0, qrCode: '', expiresAt: '', paymentType: '', payUrl: '', clientSecret: '', publishableKey: '', payAmount: 0, orderType: '' }
 }
 
 function onPaymentDone() {
@@ -539,7 +539,8 @@ async function createOrder(orderAmount: number, orderType: string, planId?: numb
       paymentState.value = {
         orderId: result.order_id, qrCode: '', expiresAt: result.expires_at || '',
         paymentType: selectedMethod.value, payUrl: '',
-        clientSecret: result.client_secret, payAmount: result.pay_amount,
+        clientSecret: result.client_secret, publishableKey: result.stripe_publishable_key || '',
+        payAmount: result.pay_amount,
         orderType,
       }
       paymentPhase.value = 'stripe'
@@ -548,7 +549,7 @@ async function createOrder(orderAmount: number, orderType: string, planId?: numb
       paymentState.value = {
         orderId: result.order_id, qrCode: '', expiresAt: result.expires_at || '',
         paymentType: selectedMethod.value, payUrl: result.pay_url,
-        clientSecret: '', payAmount: 0,
+        clientSecret: '', publishableKey: '', payAmount: 0,
         orderType,
       }
       paymentPhase.value = 'paying'
@@ -559,7 +560,7 @@ async function createOrder(orderAmount: number, orderType: string, planId?: numb
       paymentState.value = {
         orderId: result.order_id, qrCode: result.qr_code,
         expiresAt: result.expires_at || '', paymentType: selectedMethod.value, payUrl: '',
-        clientSecret: '', payAmount: 0,
+        clientSecret: '', publishableKey: '', payAmount: 0,
         orderType,
       }
       paymentPhase.value = 'paying'
@@ -569,7 +570,7 @@ async function createOrder(orderAmount: number, orderType: string, planId?: numb
       paymentState.value = {
         orderId: result.order_id, qrCode: '', expiresAt: result.expires_at || '',
         paymentType: selectedMethod.value, payUrl: result.pay_url,
-        clientSecret: '', payAmount: 0,
+        clientSecret: '', publishableKey: '', payAmount: 0,
         orderType,
       }
       paymentPhase.value = 'paying'

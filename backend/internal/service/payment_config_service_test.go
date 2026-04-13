@@ -204,3 +204,97 @@ func TestGetBasePaymentType(t *testing.T) {
 		})
 	}
 }
+
+func TestMergePaymentConfigPatchPreservesOmittedFields(t *testing.T) {
+	t.Parallel()
+
+	current := &PaymentConfig{
+		Enabled:                true,
+		MinAmount:              10,
+		MaxAmount:              200,
+		DailyLimit:             500,
+		OrderTimeoutMin:        15,
+		MaxPendingOrders:       4,
+		EnabledTypes:           []string{"alipay", "wxpay"},
+		BalanceDisabled:        true,
+		LoadBalanceStrategy:    string(payment.StrategyLeastAmount),
+		ProductNamePrefix:      "PRE",
+		ProductNameSuffix:      "SUF",
+		HelpImageURL:           "https://example.com/help.png",
+		HelpText:               "help",
+		CancelRateLimitEnabled: true,
+		CancelRateLimitMax:     5,
+		CancelRateLimitWindow:  60,
+		CancelRateLimitUnit:    "minute",
+		CancelRateLimitMode:    "rolling",
+	}
+
+	newMin := 25.0
+	req := UpdatePaymentConfigRequest{
+		MinAmount: &newMin,
+	}
+
+	merged := mergePaymentConfigPatch(current, req)
+
+	if merged.MinAmount != 25 {
+		t.Fatalf("MinAmount = %v, want 25", merged.MinAmount)
+	}
+	if merged.MaxAmount != current.MaxAmount {
+		t.Fatalf("MaxAmount = %v, want %v", merged.MaxAmount, current.MaxAmount)
+	}
+	if len(merged.EnabledTypes) != 2 || merged.EnabledTypes[0] != "alipay" || merged.EnabledTypes[1] != "wxpay" {
+		t.Fatalf("EnabledTypes = %v, want [alipay wxpay]", merged.EnabledTypes)
+	}
+	if !merged.BalanceDisabled {
+		t.Fatal("expected BalanceDisabled to be preserved")
+	}
+	if merged.HelpText != current.HelpText {
+		t.Fatalf("HelpText = %q, want %q", merged.HelpText, current.HelpText)
+	}
+	if !merged.CancelRateLimitEnabled || merged.CancelRateLimitMax != 5 || merged.CancelRateLimitWindow != 60 {
+		t.Fatalf("cancel rate limit settings were not preserved: %+v", merged)
+	}
+}
+
+func TestMergePaymentConfigPatchAllowsClearingEnabledTypes(t *testing.T) {
+	t.Parallel()
+
+	current := &PaymentConfig{
+		Enabled:      true,
+		EnabledTypes: []string{"alipay", "wxpay"},
+	}
+	req := UpdatePaymentConfigRequest{
+		EnabledTypes: []string{},
+	}
+
+	merged := mergePaymentConfigPatch(current, req)
+	if len(merged.EnabledTypes) != 0 {
+		t.Fatalf("EnabledTypes = %v, want empty slice", merged.EnabledTypes)
+	}
+
+	serialized := serializePaymentConfig(merged)
+	if got := serialized[SettingEnabledPaymentTypes]; got != "" {
+		t.Fatalf("serialized enabled types = %q, want empty string", got)
+	}
+}
+
+func TestIsPaymentTypeEnabled(t *testing.T) {
+	t.Parallel()
+
+	cfg := &PaymentConfig{
+		EnabledTypes: []string{"alipay", "stripe"},
+	}
+
+	if !isPaymentTypeEnabled(cfg, "alipay") {
+		t.Fatal("expected alipay to be enabled")
+	}
+	if !isPaymentTypeEnabled(cfg, " Stripe ") {
+		t.Fatal("expected stripe to be enabled with case/space normalization")
+	}
+	if isPaymentTypeEnabled(cfg, "wxpay") {
+		t.Fatal("expected wxpay to be disabled")
+	}
+	if isPaymentTypeEnabled(cfg, "") {
+		t.Fatal("expected empty payment type to be disabled")
+	}
+}

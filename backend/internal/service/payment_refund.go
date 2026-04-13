@@ -121,6 +121,9 @@ func (s *PaymentService) prepDeduct(ctx context.Context, o *dbent.PaymentOrder, 
 		return nil
 	}
 	p.DeductionType = payment.DeductionTypeBalance
+	if u.Balance+amountToleranceCNY < p.RefundAmount && !force {
+		return &RefundResult{Success: false, Warning: "user balance is lower than refund amount, use force to continue", RequireForce: true}
+	}
 	p.BalanceToDeduct = math.Min(p.RefundAmount, u.Balance)
 	return nil
 }
@@ -148,6 +151,11 @@ func (s *PaymentService) ExecuteRefund(ctx context.Context, p *RefundPlan) (*Ref
 	}
 	if p.DeductionType == payment.DeductionTypeSubscription && p.SubDaysToDeduct > 0 && p.SubscriptionID > 0 {
 		if !s.hasAuditLog(ctx, p.OrderID, "REFUND_ROLLBACK_FAILED") {
+			if p.SubSnapshot == nil {
+				if sub, subErr := s.subscriptionSvc.GetByID(ctx, p.SubscriptionID); subErr == nil && sub != nil {
+					p.SubSnapshot = cloneUserSubscription(sub)
+				}
+			}
 			_, err := s.subscriptionSvc.ExtendSubscription(ctx, p.SubscriptionID, -p.SubDaysToDeduct)
 			if err != nil {
 				// If deducting would expire the subscription, revoke it entirely
@@ -156,6 +164,7 @@ func (s *PaymentService) ExecuteRefund(ctx context.Context, p *RefundPlan) (*Ref
 					s.restoreStatus(ctx, p)
 					return nil, fmt.Errorf("revoke subscription: %w", revokeErr)
 				}
+				p.SubRevoked = true
 			}
 		} else {
 			slog.Warn("skipping subscription deduction on retry (previous rollback failed)", "orderID", p.OrderID)
@@ -169,24 +178,44 @@ func (s *PaymentService) ExecuteRefund(ctx context.Context, p *RefundPlan) (*Ref
 }
 
 func (s *PaymentService) gwRefund(ctx context.Context, p *RefundPlan) error {
-	if p.Order.PaymentTradeNo == "" {
-		s.writeAuditLog(ctx, p.Order.ID, "REFUND_NO_TRADE_NO", "admin", map[string]any{"detail": "skipped"})
-		return nil
-	}
-
 	// Use the exact provider instance that created this order, not a random one
 	// from the registry. Each instance has its own merchant credentials.
 	prov, err := s.getRefundProvider(ctx, p.Order)
 	if err != nil {
 		return fmt.Errorf("get refund provider: %w", err)
 	}
+	tradeNo, err := s.resolveRefundTradeNo(ctx, prov, p.Order)
+	if err != nil {
+		return err
+	}
 	_, err = prov.Refund(ctx, payment.RefundRequest{
-		TradeNo: p.Order.PaymentTradeNo,
+		TradeNo: tradeNo,
 		OrderID: p.Order.OutTradeNo,
 		Amount:  strconv.FormatFloat(p.GatewayAmount, 'f', 2, 64),
 		Reason:  p.Reason,
 	})
 	return err
+}
+
+func (s *PaymentService) resolveRefundTradeNo(ctx context.Context, prov payment.Provider, order *dbent.PaymentOrder) (string, error) {
+	if order == nil {
+		return "", fmt.Errorf("nil order")
+	}
+	if order.PaymentTradeNo != "" {
+		return order.PaymentTradeNo, nil
+	}
+	resp, err := prov.QueryOrder(ctx, order.OutTradeNo)
+	if err != nil {
+		return "", fmt.Errorf("query upstream trade number: %w", err)
+	}
+	tradeNo := strings.TrimSpace(resp.TradeNo)
+	if tradeNo == "" {
+		return "", fmt.Errorf("missing upstream trade number for order %d", order.ID)
+	}
+	if _, saveErr := s.entClient.PaymentOrder.UpdateOneID(order.ID).SetPaymentTradeNo(tradeNo).Save(ctx); saveErr == nil {
+		order.PaymentTradeNo = tradeNo
+	}
+	return tradeNo, nil
 }
 
 // getRefundProvider creates a provider using the order's original instance config.
@@ -230,13 +259,35 @@ func (s *PaymentService) RollbackRefund(ctx context.Context, p *RefundPlan, gErr
 		}
 	}
 	if p.DeductionType == payment.DeductionTypeSubscription && p.SubDaysToDeduct > 0 && p.SubscriptionID > 0 {
-		if _, err := s.subscriptionSvc.ExtendSubscription(ctx, p.SubscriptionID, p.SubDaysToDeduct); err != nil {
-			slog.Error("[CRITICAL] subscription rollback failed", "orderID", p.OrderID, "subID", p.SubscriptionID, "days", p.SubDaysToDeduct, "error", err)
-			s.writeAuditLog(ctx, p.OrderID, "REFUND_ROLLBACK_FAILED", "admin", map[string]any{"gatewayError": psErrMsg(gErr), "rollbackError": psErrMsg(err), "subDaysDeducted": p.SubDaysToDeduct})
-			return false
+		if p.SubRevoked {
+			if p.SubSnapshot == nil {
+				err := fmt.Errorf("missing revoked subscription snapshot")
+				slog.Error("[CRITICAL] subscription rollback failed", "orderID", p.OrderID, "subID", p.SubscriptionID, "error", err)
+				s.writeAuditLog(ctx, p.OrderID, "REFUND_ROLLBACK_FAILED", "admin", map[string]any{"gatewayError": psErrMsg(gErr), "rollbackError": psErrMsg(err), "subDaysDeducted": p.SubDaysToDeduct})
+				return false
+			}
+			if _, err := s.subscriptionSvc.RestoreSubscription(ctx, p.SubSnapshot); err != nil {
+				slog.Error("[CRITICAL] subscription rollback failed", "orderID", p.OrderID, "subID", p.SubscriptionID, "days", p.SubDaysToDeduct, "error", err)
+				s.writeAuditLog(ctx, p.OrderID, "REFUND_ROLLBACK_FAILED", "admin", map[string]any{"gatewayError": psErrMsg(gErr), "rollbackError": psErrMsg(err), "subDaysDeducted": p.SubDaysToDeduct})
+				return false
+			}
+		} else {
+			if _, err := s.subscriptionSvc.ExtendSubscription(ctx, p.SubscriptionID, p.SubDaysToDeduct); err != nil {
+				slog.Error("[CRITICAL] subscription rollback failed", "orderID", p.OrderID, "subID", p.SubscriptionID, "days", p.SubDaysToDeduct, "error", err)
+				s.writeAuditLog(ctx, p.OrderID, "REFUND_ROLLBACK_FAILED", "admin", map[string]any{"gatewayError": psErrMsg(gErr), "rollbackError": psErrMsg(err), "subDaysDeducted": p.SubDaysToDeduct})
+				return false
+			}
 		}
 	}
 	return true
+}
+
+func cloneUserSubscription(sub *UserSubscription) *UserSubscription {
+	if sub == nil {
+		return nil
+	}
+	copy := *sub
+	return &copy
 }
 
 func (s *PaymentService) restoreStatus(ctx context.Context, p *RefundPlan) {

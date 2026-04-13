@@ -883,13 +883,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		}(),
 	}
 
-	if err := h.settingService.UpdateSettings(c.Request.Context(), settings); err != nil {
-		response.ErrorFrom(c, err)
-		return
-	}
-
-	// Update payment configuration (integrated into system settings).
-	// Skip if no payment fields were provided (prevents accidental wipe).
+	var paymentUpdates map[string]string
 	if h.paymentConfigService != nil && hasPaymentFields(req) {
 		paymentReq := service.UpdatePaymentConfigRequest{
 			Enabled:                req.PaymentEnabled,
@@ -911,10 +905,19 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			CancelRateLimitUnit:    req.PaymentCancelRateLimitUnit,
 			CancelRateLimitMode:    req.PaymentCancelRateLimitMode,
 		}
-		if err := h.paymentConfigService.UpdatePaymentConfig(c.Request.Context(), paymentReq); err != nil {
+		paymentUpdates, err = h.paymentConfigService.BuildUpdateMap(c.Request.Context(), paymentReq)
+		if err != nil {
 			response.ErrorFrom(c, err)
 			return
 		}
+	}
+
+	if err := h.settingService.UpdateSettingsWithExtra(c.Request.Context(), settings, paymentUpdates); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	if len(paymentUpdates) > 0 {
 		// Refresh in-memory provider registry so config changes take effect immediately
 		if h.paymentService != nil {
 			h.paymentService.RefreshProviders(c.Request.Context())

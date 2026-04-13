@@ -145,7 +145,7 @@ onMounted(async () => {
     order.value = res.data
 
     await paymentStore.fetchConfig()
-    const publishableKey = paymentStore.config?.stripe_publishable_key
+    const publishableKey = String(route.query.publishable_key || paymentStore.config?.stripe_publishable_key || '')
     if (!publishableKey) { initError.value = t('payment.stripeNotConfigured'); return }
 
     const { loadStripe } = await import('@stripe/stripe-js')

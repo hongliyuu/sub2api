@@ -13,13 +13,15 @@ import (
 type PaymentHandler struct {
 	paymentService *service.PaymentService
 	configService  *service.PaymentConfigService
+	settingService *service.SettingService
 }
 
 // NewPaymentHandler creates a new admin PaymentHandler.
-func NewPaymentHandler(paymentService *service.PaymentService, configService *service.PaymentConfigService) *PaymentHandler {
+func NewPaymentHandler(paymentService *service.PaymentService, configService *service.PaymentConfigService, settingService *service.SettingService) *PaymentHandler {
 	return &PaymentHandler{
 		paymentService: paymentService,
 		configService:  configService,
+		settingService: settingService,
 	}
 }
 
@@ -318,6 +320,12 @@ func (h *PaymentHandler) UpdateConfig(c *gin.Context) {
 	if err := h.configService.UpdatePaymentConfig(c.Request.Context(), req); err != nil {
 		response.ErrorFrom(c, err)
 		return
+	}
+	if h.paymentService != nil {
+		h.paymentService.RefreshProviders(c.Request.Context())
+	}
+	if h.settingService != nil {
+		h.settingService.NotifySettingsUpdated()
 	}
 	response.Success(c, gin.H{"message": "updated"})
 }

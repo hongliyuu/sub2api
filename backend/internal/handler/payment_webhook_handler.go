@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"io"
 	"log/slog"
 	"net/http"
@@ -77,19 +78,12 @@ func (h *PaymentWebhookHandler) handleNotify(c *gin.Context, providerKey string)
 	// This is needed when multiple instances of the same provider exist (e.g. multiple EasyPay accounts).
 	outTradeNo := extractOutTradeNo(rawBody, providerKey)
 
-	provider, err := h.paymentService.GetWebhookProvider(c.Request.Context(), providerKey, outTradeNo)
-	if err != nil {
-		slog.Warn("[Payment Webhook] provider not found", "provider", providerKey, "outTradeNo", outTradeNo, "error", err)
-		writeSuccessResponse(c, providerKey)
-		return
-	}
-
 	headers := make(map[string]string)
 	for k := range c.Request.Header {
 		headers[strings.ToLower(k)] = c.GetHeader(k)
 	}
 
-	notification, err := provider.VerifyNotification(c.Request.Context(), rawBody, headers)
+	notification, err := h.paymentService.VerifyWebhookNotification(c.Request.Context(), providerKey, outTradeNo, rawBody, headers)
 	if err != nil {
 		truncatedBody := rawBody
 		if len(truncatedBody) > webhookLogTruncateLen {
@@ -120,14 +114,23 @@ func (h *PaymentWebhookHandler) handleNotify(c *gin.Context, providerKey string)
 // This allows looking up the correct provider instance before verification.
 func extractOutTradeNo(rawBody, providerKey string) string {
 	switch providerKey {
-	case payment.TypeEasyPay:
+	case payment.TypeEasyPay, payment.TypeAlipay:
 		values, err := url.ParseQuery(rawBody)
 		if err == nil {
 			return values.Get("out_trade_no")
 		}
+	case payment.TypeStripe:
+		var payload struct {
+			Data struct {
+				Object struct {
+					Metadata map[string]string `json:"metadata"`
+				} `json:"object"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal([]byte(rawBody), &payload); err == nil {
+			return strings.TrimSpace(payload.Data.Object.Metadata["orderId"])
+		}
 	}
-	// For other providers (Stripe, Alipay direct, WxPay direct), the registry
-	// typically has only one instance, so no instance lookup is needed.
 	return ""
 }
 
