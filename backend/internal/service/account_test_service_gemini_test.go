@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/geminicli"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
@@ -84,4 +85,26 @@ func TestBuildGeminiVertexRequest(t *testing.T) {
 	require.Equal(t, "Bearer vertex-access-token", req.Header.Get("Authorization"))
 	require.Equal(t, "application/json", req.Header.Get("Content-Type"))
 	require.Contains(t, req.URL.String(), "/v1beta1/projects/demo-project/locations/us-central1/publishers/google/models/gemini-2.5-flash:streamGenerateContent?alt=sse")
+}
+
+func TestResolveGeminiTestModel_UsesVertexDefaultForVertexAccounts(t *testing.T) {
+	t.Parallel()
+
+	model := resolveGeminiTestModel(&Account{
+		Platform: PlatformGemini,
+		Type:     AccountTypeVertex,
+	}, "")
+	require.Equal(t, geminicli.VertexDefaultTestModel, model)
+
+	model = resolveGeminiTestModel(&Account{
+		Platform: PlatformGemini,
+		Type:     AccountTypeAPIKey,
+	}, "")
+	require.Equal(t, geminicli.DefaultTestModel, model)
+
+	model = resolveGeminiTestModel(&Account{
+		Platform: PlatformGemini,
+		Type:     AccountTypeVertex,
+	}, "gemini-3-flash")
+	require.Equal(t, "gemini-3-flash", model)
 }

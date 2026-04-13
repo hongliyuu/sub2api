@@ -723,7 +723,27 @@ func (s *AccountUsageService) getGeminiUsage(ctx context.Context, account *Accou
 		UpdatedAt: &now,
 	}
 
-	if s.geminiQuotaService == nil || s.usageLogRepo == nil {
+	if s.usageLogRepo == nil {
+		return usage, nil
+	}
+
+	// Vertex 按实际计费，不应套用 Gemini 模拟配额窗口。
+	// 这里直接展示本地“今日”聚合，确保账号列表窗口与详情统计口径一致。
+	if account != nil && account.IsGeminiVertex() {
+		todayStart := timezone.Today()
+		stats, err := s.usageLogRepo.GetAccountWindowStats(ctx, account.ID, todayStart)
+		if err != nil {
+			return nil, fmt.Errorf("get vertex daily usage stats failed: %w", err)
+		}
+		usage.GeminiSharedDaily = buildGeminiWindowOnlyProgress(
+			windowStatsFromAccountStats(stats),
+			todayStart.Add(24*time.Hour),
+			now,
+		)
+		return usage, nil
+	}
+
+	if s.geminiQuotaService == nil {
 		return usage, nil
 	}
 
@@ -1347,6 +1367,20 @@ func buildGeminiUsageProgress(used, limit int64, resetAt time.Time, tokens int64
 			Tokens:   tokens,
 			Cost:     cost,
 		},
+	}
+}
+
+func buildGeminiWindowOnlyProgress(stats *WindowStats, resetAt time.Time, now time.Time) *UsageProgress {
+	remainingSeconds := int(resetAt.Sub(now).Seconds())
+	if remainingSeconds < 0 {
+		remainingSeconds = 0
+	}
+	resetCopy := resetAt
+	return &UsageProgress{
+		Utilization:      0,
+		ResetsAt:         &resetCopy,
+		RemainingSeconds: remainingSeconds,
+		WindowStats:      stats,
 	}
 }
 

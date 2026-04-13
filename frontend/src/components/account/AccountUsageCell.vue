@@ -513,7 +513,7 @@ const shouldFetchUsage = computed(() => {
     return props.account.type === 'oauth' || props.account.type === 'setup-token'
   }
   if (props.account.platform === 'gemini') {
-    return true
+    return props.account.type !== 'vertex'
   }
   if (props.account.platform === 'antigravity') {
     return props.account.type === 'oauth'
@@ -525,6 +525,7 @@ const shouldFetchUsage = computed(() => {
 })
 
 const geminiUsageAvailable = computed(() => {
+  if (props.account.type === 'vertex') return false
   return (
     !!usageInfo.value?.gemini_shared_daily ||
     !!usageInfo.value?.gemini_pro_daily ||

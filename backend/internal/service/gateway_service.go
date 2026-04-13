@@ -8676,8 +8676,9 @@ func (s *GatewayService) validateUpstreamBaseURL(raw string) (string, error) {
 	return normalized, nil
 }
 
-// GetAvailableModels returns the list of models available for a group
-// It aggregates model_mapping keys from all schedulable accounts in the group
+// GetAvailableModels returns the list of models available for a group.
+// Vertex accounts prefer explicit model_whitelist entries; other accounts still
+// aggregate model_mapping keys as before.
 func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64, platform string) []string {
 	cacheKey := modelsListCacheKey(groupID, platform)
 	if s.modelsListCache != nil {
@@ -8716,20 +8717,39 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 
 	// Collect unique models from all accounts
 	modelSet := make(map[string]struct{})
-	hasAnyMapping := false
+	hasAnyRestriction := false
 
 	for _, acc := range accounts {
+		if acc.Type == AccountTypeVertex {
+			if whitelist, explicit := acc.resolveConfiguredModelWhitelist(); explicit {
+				if len(whitelist) > 0 {
+					hasAnyRestriction = true
+					for _, model := range whitelist {
+						modelSet[model] = struct{}{}
+					}
+				}
+				continue
+			}
+			if whitelist := acc.GetModelWhitelist(); len(whitelist) > 0 {
+				hasAnyRestriction = true
+				for _, model := range whitelist {
+					modelSet[model] = struct{}{}
+				}
+				continue
+			}
+		}
+
 		mapping := acc.GetModelMapping()
 		if len(mapping) > 0 {
-			hasAnyMapping = true
+			hasAnyRestriction = true
 			for model := range mapping {
 				modelSet[model] = struct{}{}
 			}
 		}
 	}
 
-	// If no account has model_mapping, return nil (use default)
-	if !hasAnyMapping {
+	// If no account has explicit model restrictions, return nil (use default)
+	if !hasAnyRestriction {
 		if s.modelsListCache != nil {
 			s.modelsListCache.Set(cacheKey, []string(nil), s.modelsListCacheTTL)
 			modelsListCacheStoreTotal.Add(1)

@@ -134,6 +134,7 @@ func TestAccountIsModelSupported(t *testing.T) {
 	tests := []struct {
 		name           string
 		platform       string
+		typeName       string
 		credentials    map[string]any
 		requestedModel string
 		expected       bool
@@ -206,12 +207,81 @@ func TestAccountIsModelSupported(t *testing.T) {
 			requestedModel: "gemini-3-flash",
 			expected:       false,
 		},
+		{
+			name:     "vertex whitelist exact match supported",
+			platform: PlatformGemini,
+			typeName: AccountTypeVertex,
+			credentials: map[string]any{
+				"model_whitelist": []any{
+					"gemini-2.5-flash",
+				},
+				"model_mapping": map[string]any{
+					"gemini-2.5-flash": "gemini-2.5-pro",
+				},
+			},
+			requestedModel: "gemini-2.5-flash",
+			expected:       true,
+		},
+		{
+			name:     "vertex whitelist blocks unmapped model even when mapping exists",
+			platform: PlatformGemini,
+			typeName: AccountTypeVertex,
+			credentials: map[string]any{
+				"model_whitelist": []any{
+					"gemini-2.5-flash",
+				},
+				"model_mapping": map[string]any{
+					"gemini-2.5-pro": "gemini-2.5-pro",
+				},
+			},
+			requestedModel: "gemini-2.5-pro",
+			expected:       false,
+		},
+		{
+			name:     "vertex legacy passthrough mapping remains supported",
+			platform: PlatformGemini,
+			typeName: AccountTypeVertex,
+			credentials: map[string]any{
+				"model_mapping": map[string]any{
+					"gemini-2.5-flash": "gemini-2.5-flash",
+					"gemini-2.5-pro":   "gemini-3-pro-preview",
+				},
+			},
+			requestedModel: "gemini-2.5-flash",
+			expected:       true,
+		},
+		{
+			name:     "vertex whitelist supports wildcard patterns",
+			platform: PlatformGemini,
+			typeName: AccountTypeVertex,
+			credentials: map[string]any{
+				"model_whitelist": []any{
+					"gemini-3*",
+				},
+			},
+			requestedModel: "gemini-3-flash",
+			expected:       true,
+		},
+		{
+			name:     "vertex explicit empty whitelist allows all even with mapping",
+			platform: PlatformGemini,
+			typeName: AccountTypeVertex,
+			credentials: map[string]any{
+				"model_whitelist": []any{},
+				"model_mapping": map[string]any{
+					"gemini-2.5-flash": "gemini-2.5-pro",
+				},
+			},
+			requestedModel: "gemini-9-future",
+			expected:       true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			account := &Account{
 				Platform:    tt.platform,
+				Type:        tt.typeName,
 				Credentials: tt.credentials,
 			}
 			result := account.IsModelSupported(tt.requestedModel)

@@ -548,10 +548,7 @@ func (s *AccountTestService) testGeminiAccountConnection(c *gin.Context, account
 	ctx := c.Request.Context()
 
 	// Determine the model to use
-	testModelID := modelID
-	if testModelID == "" {
-		testModelID = geminicli.DefaultTestModel
-	}
+	testModelID := resolveGeminiTestModel(account, modelID)
 
 	// For direct Gemini accounts with model mapping, map the model
 	if account.Type == AccountTypeAPIKey || account.Type == AccountTypeVertex {
@@ -609,6 +606,17 @@ func (s *AccountTestService) testGeminiAccountConnection(c *gin.Context, account
 
 	// Process SSE stream
 	return s.processGeminiStream(c, resp.Body)
+}
+
+func resolveGeminiTestModel(account *Account, modelID string) string {
+	testModelID := strings.TrimSpace(modelID)
+	if testModelID != "" {
+		return testModelID
+	}
+	if account != nil && account.Type == AccountTypeVertex {
+		return geminicli.VertexDefaultTestModel
+	}
+	return geminicli.DefaultTestModel
 }
 
 // routeAntigravityTest 路由 Antigravity 账号的测试请求。

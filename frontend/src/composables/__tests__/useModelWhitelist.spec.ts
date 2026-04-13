@@ -4,7 +4,7 @@ vi.mock('@/api/admin/accounts', () => ({
   getAntigravityDefaultModelMapping: vi.fn()
 }))
 
-import { buildModelMappingObject, getModelsByPlatform } from '../useModelWhitelist'
+import { buildModelMappingObject, buildModelWhitelistArray, getModelsByPlatform } from '../useModelWhitelist'
 
 describe('useModelWhitelist', () => {
   it('openai 模型列表包含 GPT-5.4 官方快照', () => {
@@ -40,11 +40,16 @@ describe('useModelWhitelist', () => {
   it('Vertex 模型列表包含图片模型兼容项', () => {
     const models = getModelsByPlatform('vertex')
 
-    expect(models).toContain('gemini-3-flash')
-    expect(models).toContain('gemini-2.5-flash-image')
+    expect(models).toEqual([
+      'gemini-3-flash-preview',
+      'gemini-3-pro-preview',
+      'gemini-3.1-pro-preview',
+      'gemini-3.1-flash-image-preview',
+      'gemini-3.1-pro-image-preview',
+      'gemini-3.1-flash-lite-preview'
+    ])
     expect(models).toContain('gemini-3.1-flash-image-preview')
-    expect(models).toContain('gemini-3.1-flash-image')
-    expect(models).toContain('gemini-3-pro-image')
+    expect(models.indexOf('gemini-3-flash-preview')).toBeLessThan(models.indexOf('gemini-3.1-flash-image-preview'))
   })
 
   it('antigravity 模型列表会把新的 Gemini 图片模型排在前面', () => {
@@ -76,5 +81,17 @@ describe('useModelWhitelist', () => {
       'gpt-5.4-mini': 'gpt-5.4-mini',
       'gpt-5.4-nano': 'gpt-5.4-nano'
     })
+  })
+
+  it('buildModelWhitelistArray keeps wildcard entries for standalone whitelists', () => {
+    const whitelist = buildModelWhitelistArray(['gemini-3*', 'gemini-2.5-flash'])
+
+    expect(whitelist).toEqual(['gemini-3*', 'gemini-2.5-flash'])
+  })
+
+  it('buildModelWhitelistArray drops invalid wildcard formats and deduplicates', () => {
+    const whitelist = buildModelWhitelistArray(['gemini-*', 'gemini-*', 'gemini-*preview'])
+
+    expect(whitelist).toEqual(['gemini-*'])
   })
 })

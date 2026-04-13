@@ -144,4 +144,42 @@ describe('AccountTestModal', () => {
     expect(preview.exists()).toBe(true)
     expect(preview.attributes('src')).toBe('data:image/png;base64,QUJD')
   })
+
+  it('vertex 账号会优先选择文本测试模型', async () => {
+    const wrapper = mount(AccountTestModal, {
+      props: {
+        show: false,
+        account: {
+          id: 43,
+          name: 'Vertex Test',
+          platform: 'gemini',
+          type: 'vertex',
+          status: 'active'
+        }
+      } as any,
+      global: {
+        stubs: {
+          BaseDialog: { template: '<div><slot /><slot name="footer" /></div>' },
+          Select: { template: '<div class="select-stub"></div>' },
+          TextArea: {
+            props: ['modelValue'],
+            emits: ['update:modelValue'],
+            template: '<textarea class="textarea-stub" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />'
+          },
+          Icon: true
+        }
+      }
+    })
+
+    getAvailableModels.mockResolvedValueOnce([
+      { id: 'gemini-3.1-flash-image-preview', display_name: 'Gemini 3.1 Flash Image Preview' },
+      { id: 'gemini-3-flash-preview', display_name: 'Gemini 3 Flash Preview' },
+      { id: 'gemini-3-pro-preview', display_name: 'Gemini 3 Pro Preview' }
+    ])
+
+    await wrapper.setProps({ show: true })
+    await flushPromises()
+
+    expect((wrapper.vm as any).selectedModelId).toBe('gemini-3-flash-preview')
+  })
 })

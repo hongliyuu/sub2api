@@ -11,6 +11,7 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1832,25 +1833,11 @@ func (h *AccountHandler) GetAvailableModels(c *gin.Context) {
 		return
 	}
 
-	// Handle Gemini accounts
-	if account.IsGemini() {
-		// For OAuth accounts: return default Gemini models
-		if account.IsOAuth() {
-			response.Success(c, geminicli.DefaultModels)
-			return
-		}
-
-		// For API Key accounts: return models based on model_mapping
-		mapping := account.GetModelMapping()
-		if len(mapping) == 0 {
-			response.Success(c, geminicli.DefaultModels)
-			return
-		}
-
-		var models []geminicli.Model
-		for requestedModel := range mapping {
+	buildGeminiModelsFromIDs := func(defaultModels []geminicli.Model, ids []string) []geminicli.Model {
+		models := make([]geminicli.Model, 0, len(ids))
+		for _, requestedModel := range ids {
 			var found bool
-			for _, dm := range geminicli.DefaultModels {
+			for _, dm := range defaultModels {
 				if dm.ID == requestedModel {
 					models = append(models, dm)
 					found = true
@@ -1866,7 +1853,50 @@ func (h *AccountHandler) GetAvailableModels(c *gin.Context) {
 				})
 			}
 		}
-		response.Success(c, models)
+		return models
+	}
+
+	// Handle Gemini accounts
+	if account.IsGemini() {
+		defaultGeminiModels := geminicli.DefaultModels
+		if account.Type == service.AccountTypeVertex {
+			defaultGeminiModels = geminicli.VertexDefaultModels
+		}
+
+		// For OAuth accounts: return default Gemini models
+		if account.IsOAuth() {
+			response.Success(c, defaultGeminiModels)
+			return
+		}
+
+		if account.Type == service.AccountTypeVertex {
+			if whitelist, explicit := account.GetConfiguredModelWhitelist(); explicit {
+				if len(whitelist) > 0 {
+					response.Success(c, buildGeminiModelsFromIDs(defaultGeminiModels, whitelist))
+					return
+				}
+				response.Success(c, defaultGeminiModels)
+				return
+			}
+			if whitelist := account.GetModelWhitelist(); len(whitelist) > 0 {
+				response.Success(c, buildGeminiModelsFromIDs(defaultGeminiModels, whitelist))
+				return
+			}
+		}
+
+		// For API Key accounts: return models based on model_mapping
+		mapping := account.GetModelMapping()
+		if len(mapping) == 0 {
+			response.Success(c, defaultGeminiModels)
+			return
+		}
+
+		modelIDs := make([]string, 0, len(mapping))
+		for requestedModel := range mapping {
+			modelIDs = append(modelIDs, requestedModel)
+		}
+		sort.Strings(modelIDs)
+		response.Success(c, buildGeminiModelsFromIDs(defaultGeminiModels, modelIDs))
 		return
 	}
 

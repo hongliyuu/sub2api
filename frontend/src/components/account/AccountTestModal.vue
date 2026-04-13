@@ -217,6 +217,7 @@ import { Icon } from '@/components/icons'
 import { useClipboard } from '@/composables/useClipboard'
 import { adminAPI } from '@/api/admin'
 import type { Account, ClaudeModel } from '@/types'
+import { defaultAccountTestModelId, sortAccountTestModels } from '@/utils/accountTestModels'
 
 const { t } = useI18n()
 const { copyToClipboard } = useClipboard()
@@ -251,24 +252,12 @@ const testPrompt = ref('')
 const loadingModels = ref(false)
 let eventSource: EventSource | null = null
 const generatedImages = ref<PreviewImage[]>([])
-const prioritizedGeminiModels = ['gemini-3.1-flash-image-preview', 'gemini-3.1-pro-preview', 'gemini-3-flash', 'gemini-3-pro', 'gemini-3.1-flash-preview']
 const supportsGeminiImageTest = computed(() => {
   const modelID = selectedModelId.value.toLowerCase()
   if (!modelID.startsWith('gemini-') || !modelID.includes('-image')) return false
 
   return props.account?.platform === 'gemini' || (props.account?.platform === 'antigravity' && props.account?.type === 'apikey')
 })
-
-const sortTestModels = (models: ClaudeModel[]) => {
-  const priorityMap = new Map(prioritizedGeminiModels.map((id, index) => [id, index]))
-
-  return [...models].sort((a, b) => {
-    const aPriority = priorityMap.get(a.id) ?? Number.MAX_SAFE_INTEGER
-    const bPriority = priorityMap.get(b.id) ?? Number.MAX_SAFE_INTEGER
-    if (aPriority !== bPriority) return aPriority - bPriority
-    return 0
-  })
-}
 
 // Load available models when modal opens
 watch(
@@ -298,18 +287,9 @@ const loadAvailableModels = async () => {
   try {
     const models = await adminAPI.accounts.getAvailableModels(props.account.id)
     availableModels.value = props.account.platform === 'gemini' || props.account.platform === 'antigravity'
-      ? sortTestModels(models)
+      ? sortAccountTestModels(models, props.account)
       : models
-    // Default selection by platform
-    if (availableModels.value.length > 0) {
-      if (props.account.platform === 'gemini') {
-        selectedModelId.value = availableModels.value[0].id
-      } else {
-        // Try to select Sonnet as default, otherwise use first model
-        const sonnetModel = availableModels.value.find((m) => m.id.includes('sonnet'))
-        selectedModelId.value = sonnetModel?.id || availableModels.value[0].id
-      }
-    }
+    selectedModelId.value = defaultAccountTestModelId(availableModels.value, props.account)
   } catch (error) {
     console.error('Failed to load available models:', error)
     // Fallback to empty list

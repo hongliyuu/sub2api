@@ -50,7 +50,7 @@ export const claudeModels = [
 // Google Gemini
 const geminiModels = [
   // Keep in sync with backend curated Gemini lists.
-  // This list is intentionally conservative (models commonly available across Gemini/Vertex flows).
+  // This list is intentionally conservative for Gemini API / AI Studio style accounts.
   'gemini-3.1-flash-image-preview',
   'gemini-3.1-flash-image',
   'gemini-2.5-flash-image',
@@ -60,6 +60,16 @@ const geminiModels = [
   'gemini-2.5-pro',
   'gemini-3-flash',
   'gemini-3-pro-preview'
+]
+
+const vertexModels = [
+  // Vertex 单独维护测试/白名单顺序，优先放更稳妥的文本模型，图片模型保留在后面。
+  'gemini-3-flash-preview',
+  'gemini-3-pro-preview',
+  'gemini-3.1-pro-preview',
+  'gemini-3.1-flash-image-preview',
+  'gemini-3.1-pro-image-preview',
+  'gemini-3.1-flash-lite-preview'
 ]
 
 // Antigravity 官方支持的模型（精确匹配）
@@ -367,7 +377,7 @@ export function getModelsByPlatform(platform: string): string[] {
     case 'openai': return openaiModels
     case 'anthropic':
     case 'claude': return claudeModels
-    case 'vertex':
+    case 'vertex': return vertexModels
     case 'gemini': return geminiModels
     case 'antigravity': return antigravityModels
     case 'zhipu': return zhipuModels
@@ -447,4 +457,23 @@ export function buildModelMappingObject(
   }
 
   return Object.keys(mapping).length > 0 ? mapping : null
+}
+
+export function buildModelWhitelistArray(allowedModels: string[]): string[] | null {
+  const whitelist: string[] = []
+  const seen = new Set<string>()
+
+  for (const rawModel of allowedModels) {
+    const model = rawModel.trim()
+    if (!model) continue
+    if (!isValidWildcardPattern(model)) {
+      console.warn(`[buildModelWhitelistArray] 无效的通配符格式，跳过: ${model}`)
+      continue
+    }
+    if (seen.has(model)) continue
+    seen.add(model)
+    whitelist.push(model)
+  }
+
+  return whitelist.length > 0 ? whitelist : null
 }

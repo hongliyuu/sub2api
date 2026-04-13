@@ -5,12 +5,35 @@ import (
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 )
 
 type accountUsageCodexProbeRepo struct {
 	stubOpenAIAccountRepo
 	updateExtraCh chan map[string]any
 	rateLimitCh   chan time.Time
+}
+
+type accountUsageGeminiUsageRepoStub struct {
+	UsageLogRepository
+
+	accountStats *usagestats.AccountStats
+	accountErr   error
+	lastAccount  int64
+	lastStart    time.Time
+}
+
+func (r *accountUsageGeminiUsageRepoStub) GetAccountWindowStats(ctx context.Context, accountID int64, startTime time.Time) (*usagestats.AccountStats, error) {
+	r.lastAccount = accountID
+	r.lastStart = startTime
+	if r.accountErr != nil {
+		return nil, r.accountErr
+	}
+	if r.accountStats != nil {
+		return r.accountStats, nil
+	}
+	return &usagestats.AccountStats{}, nil
 }
 
 func (r *accountUsageCodexProbeRepo) UpdateExtra(_ context.Context, _ int64, updates map[string]any) error {
@@ -198,4 +221,54 @@ func TestBuildCodexUsageProgressFromExtra_ZerosExpiredWindow(t *testing.T) {
 			t.Fatalf("expected Utilization=0 for expired 7d window, got %v", progress.Utilization)
 		}
 	})
+}
+
+func TestAccountUsageService_GetGeminiUsage_VertexUsesTodayWindowStats(t *testing.T) {
+	t.Parallel()
+
+	repo := &accountUsageGeminiUsageRepoStub{
+		accountStats: &usagestats.AccountStats{
+			Requests:     3,
+			Tokens:       1200,
+			Cost:         1.25,
+			StandardCost: 1.25,
+			UserCost:     1.25,
+		},
+	}
+	svc := &AccountUsageService{
+		usageLogRepo: repo,
+	}
+
+	usage, err := svc.getGeminiUsage(context.Background(), &Account{
+		ID:       42,
+		Platform: PlatformGemini,
+		Type:     AccountTypeVertex,
+	})
+	if err != nil {
+		t.Fatalf("getGeminiUsage() error = %v", err)
+	}
+	if usage == nil || usage.GeminiSharedDaily == nil {
+		t.Fatal("expected vertex account to expose daily usage window")
+	}
+	if repo.lastAccount != 42 {
+		t.Fatalf("GetAccountWindowStats accountID = %d, want 42", repo.lastAccount)
+	}
+	if usage.GeminiSharedDaily.WindowStats == nil {
+		t.Fatal("expected vertex usage window stats to be populated")
+	}
+	if got := usage.GeminiSharedDaily.WindowStats.Requests; got != 3 {
+		t.Fatalf("window stats requests = %d, want 3", got)
+	}
+	if got := usage.GeminiSharedDaily.WindowStats.Tokens; got != 1200 {
+		t.Fatalf("window stats tokens = %d, want 1200", got)
+	}
+	if got := usage.GeminiSharedDaily.WindowStats.Cost; got != 1.25 {
+		t.Fatalf("window stats cost = %v, want 1.25", got)
+	}
+	if got := usage.GeminiSharedDaily.Utilization; got != 0 {
+		t.Fatalf("vertex daily utilization = %v, want 0", got)
+	}
+	if usage.GeminiSharedDaily.ResetsAt == nil {
+		t.Fatal("expected vertex daily reset time")
+	}
 }

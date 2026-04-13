@@ -426,6 +426,78 @@ func (a *Account) GetModelMapping() map[string]string {
 	return mapping
 }
 
+func parseModelWhitelist(raw any) ([]string, bool) {
+	switch v := raw.(type) {
+	case []string:
+		result := make([]string, 0, len(v))
+		for _, item := range v {
+			trimmed := strings.TrimSpace(item)
+			if trimmed != "" {
+				result = append(result, trimmed)
+			}
+		}
+		return result, true
+	case []any:
+		result := make([]string, 0, len(v))
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				trimmed := strings.TrimSpace(s)
+				if trimmed != "" {
+					result = append(result, trimmed)
+				}
+			}
+		}
+		return result, true
+	default:
+		return nil, false
+	}
+}
+
+func (a *Account) deriveVertexLegacyWhitelist() []string {
+	if a == nil {
+		return nil
+	}
+	mapping := a.GetModelMapping()
+	if len(mapping) == 0 {
+		return nil
+	}
+	whitelist := make([]string, 0, len(mapping))
+	for from, to := range mapping {
+		if from == to {
+			whitelist = append(whitelist, from)
+		}
+	}
+	if len(whitelist) == 0 {
+		return nil
+	}
+	sort.Strings(whitelist)
+	return whitelist
+}
+
+func (a *Account) resolveConfiguredModelWhitelist() ([]string, bool) {
+	if a == nil || a.Credentials == nil {
+		return nil, false
+	}
+	return parseModelWhitelist(a.Credentials["model_whitelist"])
+}
+
+func (a *Account) GetConfiguredModelWhitelist() ([]string, bool) {
+	return a.resolveConfiguredModelWhitelist()
+}
+
+// GetModelWhitelist returns the explicit allowlist for this account.
+// Vertex accounts also support a legacy compatibility mode where exact passthrough
+// entries in model_mapping are treated as a whitelist when model_whitelist is absent.
+func (a *Account) GetModelWhitelist() []string {
+	if whitelist, ok := a.resolveConfiguredModelWhitelist(); ok {
+		return whitelist
+	}
+	if a.Type == AccountTypeVertex {
+		return a.deriveVertexLegacyWhitelist()
+	}
+	return nil
+}
+
 func (a *Account) resolveModelMapping(rawMapping map[string]any) map[string]string {
 	if a.Credentials == nil {
 		// Antigravity 平台使用默认映射
@@ -558,9 +630,50 @@ func resolveRequestedModelInMapping(mapping map[string]string, requestedModel st
 	return matchWildcardMappingResult(mapping, requestedModel)
 }
 
+func whitelistSupportsRequestedModel(whitelist []string, requestedModel string) bool {
+	if requestedModel == "" {
+		return false
+	}
+	for _, pattern := range whitelist {
+		if matchWildcard(pattern, requestedModel) {
+			return true
+		}
+	}
+	return false
+}
+
+// IsModelWhitelisted checks whether the requested model matches the explicit whitelist.
+// An empty whitelist means "allow all".
+func (a *Account) IsModelWhitelisted(requestedModel string) bool {
+	whitelist, explicit := a.resolveConfiguredModelWhitelist()
+	if !explicit {
+		whitelist = a.GetModelWhitelist()
+	}
+	if len(whitelist) == 0 {
+		return true
+	}
+	if whitelistSupportsRequestedModel(whitelist, requestedModel) {
+		return true
+	}
+	normalized := normalizeRequestedModelForLookup(a.Platform, requestedModel)
+	return normalized != requestedModel && whitelistSupportsRequestedModel(whitelist, normalized)
+}
+
 // IsModelSupported 检查模型是否在 model_mapping 中（支持通配符）
 // 如果未配置 mapping，返回 true（允许所有模型）
 func (a *Account) IsModelSupported(requestedModel string) bool {
+	if a.Type == AccountTypeVertex {
+		if whitelist, explicit := a.resolveConfiguredModelWhitelist(); explicit {
+			if len(whitelist) == 0 {
+				return true
+			}
+			if whitelistSupportsRequestedModel(whitelist, requestedModel) {
+				return true
+			}
+			normalized := normalizeRequestedModelForLookup(a.Platform, requestedModel)
+			return normalized != requestedModel && whitelistSupportsRequestedModel(whitelist, normalized)
+		}
+	}
 	mapping := a.GetModelMapping()
 	if len(mapping) == 0 {
 		return true // 无映射 = 允许所有
