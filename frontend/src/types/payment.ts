@@ -90,6 +90,7 @@ export interface PaymentOrder {
   refund_request_reason?: string
   plan_id?: number
   stripe_publishable_key?: string
+  provider_instance_id?: string
 }
 
 // ==================== Plans & Channels ====================
@@ -139,6 +140,7 @@ export interface ProviderInstance {
   enabled: boolean
   payment_mode: string
   refund_enabled: boolean
+  allow_user_refund: boolean
   limits: string
   sort_order: number
 }

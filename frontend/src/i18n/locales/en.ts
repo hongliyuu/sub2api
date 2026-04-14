@@ -4544,6 +4544,7 @@ export default {
         supportedTypes: 'Supported Payment Types',
         supportedTypesHint: 'Comma-separated, e.g. alipay,wxpay',
         refundEnabled: 'Allow Refund',
+        allowUserRefund: 'Allow User Refund',
       },
       smtp: {
         title: 'SMTP Settings',
