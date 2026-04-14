@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -437,52 +436,27 @@ func summarizeOpenAIWSPayloadKeySizes(payload map[string]any, topN int) string {
 		Key  string
 		Size int
 	}
-	if topN <= 0 || topN > len(payload) {
-		topN = len(payload)
-	}
-	sizes := make([]keySize, 0, topN)
-	compare := func(left keySize, right keySize) bool {
-		if left.Size == right.Size {
-			return left.Key < right.Key
-		}
-		return left.Size > right.Size
-	}
+	sizes := make([]keySize, 0, len(payload))
 	for key, value := range payload {
 		size := estimateOpenAIWSPayloadValueSize(value, openAIWSPayloadSizeEstimateDepth)
-		candidate := keySize{Key: key, Size: size}
-		inserted := false
-		for idx := range sizes {
-			if compare(candidate, sizes[idx]) {
-				sizes = append(sizes, keySize{})
-				copy(sizes[idx+1:], sizes[idx:])
-				sizes[idx] = candidate
-				inserted = true
-				break
-			}
-		}
-		if inserted {
-			if len(sizes) > topN {
-				sizes = sizes[:topN]
-			}
-			continue
-		}
-		if len(sizes) < topN {
-			sizes = append(sizes, candidate)
-		}
+		sizes = append(sizes, keySize{Key: key, Size: size})
 	}
-	if len(sizes) == 0 {
-		return "-"
-	}
-	var b strings.Builder
-	for idx, item := range sizes {
-		if idx > 0 {
-			b.WriteByte(',')
+	sort.Slice(sizes, func(i, j int) bool {
+		if sizes[i].Size == sizes[j].Size {
+			return sizes[i].Key < sizes[j].Key
 		}
-		b.WriteString(item.Key)
-		b.WriteByte(':')
-		b.WriteString(strconv.Itoa(item.Size))
+		return sizes[i].Size > sizes[j].Size
+	})
+
+	if topN <= 0 || topN > len(sizes) {
+		topN = len(sizes)
 	}
-	return b.String()
+	parts := make([]string, 0, topN)
+	for idx := 0; idx < topN; idx++ {
+		item := sizes[idx]
+		parts = append(parts, fmt.Sprintf("%s:%d", item.Key, item.Size))
+	}
+	return strings.Join(parts, ",")
 }
 
 func estimateOpenAIWSPayloadValueSize(value any, depth int) int {
@@ -513,7 +487,7 @@ func estimateOpenAIWSPayloadValueSize(value any, depth int) int {
 			if count > openAIWSPayloadSizeEstimateMaxItems {
 				return -1
 			}
-			itemSize := estimateOpenAIWSPayloadValueSizeShallow(item)
+			itemSize := estimateOpenAIWSPayloadValueSize(item, depth-1)
 			if itemSize < 0 {
 				return -1
 			}
@@ -533,7 +507,7 @@ func estimateOpenAIWSPayloadValueSize(value any, depth int) int {
 			return -1
 		}
 		for i := 0; i < limit; i++ {
-			itemSize := estimateOpenAIWSPayloadValueSizeShallow(v[i])
+			itemSize := estimateOpenAIWSPayloadValueSize(v[i], depth-1)
 			if itemSize < 0 {
 				return -1
 			}
@@ -544,36 +518,14 @@ func estimateOpenAIWSPayloadValueSize(value any, depth int) int {
 		}
 		return total
 	default:
-		return estimateOpenAIWSPayloadValueSizeShallow(v)
-	}
-}
-
-func estimateOpenAIWSPayloadValueSizeShallow(value any) int {
-	switch v := value.(type) {
-	case nil:
-		return 0
-	case string:
-		return len(v)
-	case []byte:
-		return len(v)
-	case bool:
-		return 1
-	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-		return 8
-	case float32, float64:
-		return 8
-	case map[string]any:
-		return 2 + len(v)*16
-	case []any:
-		return 2 + len(v)*8
-	case []string:
-		total := 2
-		for _, item := range v {
-			total += len(item) + 1
+		raw, err := json.Marshal(v)
+		if err != nil {
+			return -1
 		}
-		return total
-	default:
-		return 16
+		if len(raw) > openAIWSPayloadSizeEstimateMaxBytes {
+			return -1
+		}
+		return len(raw)
 	}
 }
 
@@ -707,19 +659,14 @@ func summarizeOpenAIWSInput(input any) string {
 		handleInputItem(inputItem)
 	}
 
-	var b strings.Builder
-	b.Grow(96)
-	b.WriteString("items=")
-	b.WriteString(strconv.Itoa(itemCount))
-	b.WriteString(",text_chars=")
-	b.WriteString(strconv.Itoa(textChars))
-	b.WriteString(",image_data_urls=")
-	b.WriteString(strconv.Itoa(imageDataURLs))
-	b.WriteString(",image_data_url_chars=")
-	b.WriteString(strconv.Itoa(imageDataURLChars))
-	b.WriteString(",image_remote_urls=")
-	b.WriteString(strconv.Itoa(imageRemoteURLs))
-	return b.String()
+	return fmt.Sprintf(
+		"items=%d,text_chars=%d,image_data_urls=%d,image_data_url_chars=%d,image_remote_urls=%d",
+		itemCount,
+		textChars,
+		imageDataURLs,
+		imageDataURLChars,
+		imageRemoteURLs,
+	)
 }
 
 func dropOpenAIWSPayloadKey(payload map[string]any, key string, removed *[]string) {
@@ -1769,16 +1716,9 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 	)
 
 	payload := s.buildOpenAIWSCreatePayload(reqBody, account)
-	payloadStrategy := "full"
-	var removedKeys []string
-	if attempt > 1 {
-		payloadStrategy, removedKeys = applyOpenAIWSRetryPayloadStrategy(payload, attempt)
-	}
+	payloadStrategy, removedKeys := applyOpenAIWSRetryPayloadStrategy(payload, attempt)
 	previousResponseID := openAIWSPayloadString(payload, "previous_response_id")
-	previousResponseIDKind := "-"
-	if previousResponseID != "" {
-		previousResponseIDKind = ClassifyOpenAIPreviousResponseIDKind(previousResponseID)
-	}
+	previousResponseIDKind := ClassifyOpenAIPreviousResponseIDKind(previousResponseID)
 	promptCacheKey := openAIWSPayloadString(payload, "prompt_cache_key")
 	_, hasTools := payload["tools"]
 	debugEnabled := isOpenAIWSModeDebugEnabled()

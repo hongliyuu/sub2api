@@ -1,7 +1,6 @@
 package service
 
 import (
-	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -124,56 +123,5 @@ func BenchmarkReplaceOpenAIWSMessageModel_DualReplace(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		benchmarkOpenAIWSBytesSink = replaceOpenAIWSMessageModel(event, "gpt-5.1", "custom-model")
-	}
-}
-
-func BenchmarkOpenAIWSWritePayloadAfterSchemaLog_LegacyRemarshal(b *testing.B) {
-	cfg := &config.Config{}
-	svc := &OpenAIGatewayService{cfg: cfg}
-	account := &Account{ID: 1, Platform: PlatformOpenAI, Type: AccountTypeOAuth}
-	reqBody := benchmarkOpenAIWSHotPathRequest()
-
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		payload := svc.buildOpenAIWSCreatePayload(reqBody, account)
-		_, _ = applyOpenAIWSRetryPayloadStrategy(payload, 2)
-		setOpenAIWSTurnMetadata(payload, `{"trace":"bench","turn":"1"}`)
-
-		payloadJSON := payloadAsJSONBytes(payload)
-		benchmarkOpenAIWSBytesSink = payloadJSON
-		encoded, err := json.Marshal(payload)
-		if err != nil {
-			b.Fatal(err)
-		}
-		benchmarkOpenAIWSBytesSink = encoded
-	}
-}
-
-func BenchmarkOpenAIWSWritePayloadAfterSchemaLog_ReuseJSON(b *testing.B) {
-	cfg := &config.Config{}
-	svc := &OpenAIGatewayService{cfg: cfg}
-	account := &Account{ID: 1, Platform: PlatformOpenAI, Type: AccountTypeOAuth}
-	reqBody := benchmarkOpenAIWSHotPathRequest()
-
-	b.ReportAllocs()
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		payload := svc.buildOpenAIWSCreatePayload(reqBody, account)
-		_, _ = applyOpenAIWSRetryPayloadStrategy(payload, 2)
-		setOpenAIWSTurnMetadata(payload, `{"trace":"bench","turn":"1"}`)
-
-		payloadJSON, err := json.Marshal(payload)
-		if err != nil {
-			b.Fatal(err)
-		}
-		benchmarkOpenAIWSBytesSink = payloadJSON
-		encoded, err := json.Marshal(json.RawMessage(payloadJSON))
-		if err != nil {
-			b.Fatal(err)
-		}
-		benchmarkOpenAIWSBytesSink = encoded
 	}
 }
