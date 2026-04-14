@@ -64,6 +64,7 @@ export interface CheckoutInfoResponse {
   plans: SubscriptionPlan[]
   balance_disabled: boolean
   balance_recharge_multiplier: number
+  recharge_fee_rate: number
   help_text: string
   help_image_url: string
   stripe_publishable_key: string
@@ -164,6 +165,7 @@ export interface CreateOrderResult {
   client_secret?: string
   stripe_publishable_key?: string
   pay_amount: number
+  fee_rate: number
   expires_at: string
   payment_mode?: string
 }
