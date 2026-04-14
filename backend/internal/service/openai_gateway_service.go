@@ -4938,6 +4938,7 @@ func normalizeOpenAIPassthroughOAuthBody(body []byte, compact bool) ([]byte, boo
 
 	normalized := body
 	changed := false
+	unsupportedFields := []string{"prompt_cache_retention", "safety_identifier"}
 
 	if compact {
 		if store := gjson.GetBytes(normalized, "store"); store.Exists() {
@@ -4969,6 +4970,17 @@ func normalizeOpenAIPassthroughOAuthBody(body []byte, compact bool) ([]byte, boo
 			next, err := sjson.SetBytes(normalized, "stream", true)
 			if err != nil {
 				return body, false, fmt.Errorf("normalize passthrough body stream=true: %w", err)
+			}
+			normalized = next
+			changed = true
+		}
+	}
+
+	for _, field := range unsupportedFields {
+		if value := gjson.GetBytes(normalized, field); value.Exists() {
+			next, err := sjson.DeleteBytes(normalized, field)
+			if err != nil {
+				return body, false, fmt.Errorf("normalize passthrough body delete %s: %w", field, err)
 			}
 			normalized = next
 			changed = true
