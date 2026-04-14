@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 	"sync"
@@ -12,6 +13,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/paymentproviderinstance"
 	"github.com/Wei-Shaw/sub2api/ent/setting"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 )
 
 const (
@@ -24,6 +26,7 @@ const (
 	SettingEnabledPaymentTypes = "ENABLED_PAYMENT_TYPES"
 	SettingLoadBalanceStrategy = "LOAD_BALANCE_STRATEGY"
 	SettingBalancePayDisabled  = "BALANCE_PAYMENT_DISABLED"
+	SettingBalanceRechargeMult = "BALANCE_RECHARGE_MULTIPLIER"
 	SettingProductNamePrefix   = "PRODUCT_NAME_PREFIX"
 	SettingProductNameSuffix   = "PRODUCT_NAME_SUFFIX"
 	SettingHelpImageURL        = "PAYMENT_HELP_IMAGE_URL"
@@ -49,9 +52,10 @@ type PaymentConfig struct {
 	DailyLimit           float64  `json:"daily_limit"`
 	OrderTimeoutMin      int      `json:"order_timeout_minutes"`
 	MaxPendingOrders     int      `json:"max_pending_orders"`
-	EnabledTypes         []string `json:"enabled_payment_types"`
-	BalanceDisabled      bool     `json:"balance_disabled"`
-	LoadBalanceStrategy  string   `json:"load_balance_strategy"`
+	EnabledTypes              []string `json:"enabled_payment_types"`
+	BalanceDisabled           bool     `json:"balance_disabled"`
+	BalanceRechargeMultiplier float64  `json:"balance_recharge_multiplier"`
+	LoadBalanceStrategy       string   `json:"load_balance_strategy"`
 	ProductNamePrefix    string   `json:"product_name_prefix"`
 	ProductNameSuffix    string   `json:"product_name_suffix"`
 	HelpImageURL         string   `json:"help_image_url"`
@@ -74,9 +78,10 @@ type UpdatePaymentConfigRequest struct {
 	DailyLimit          *float64 `json:"daily_limit"`
 	OrderTimeoutMin     *int     `json:"order_timeout_minutes"`
 	MaxPendingOrders    *int     `json:"max_pending_orders"`
-	EnabledTypes        []string `json:"enabled_payment_types"`
-	BalanceDisabled     *bool    `json:"balance_disabled"`
-	LoadBalanceStrategy *string  `json:"load_balance_strategy"`
+	EnabledTypes              []string `json:"enabled_payment_types"`
+	BalanceDisabled           *bool    `json:"balance_disabled"`
+	BalanceRechargeMultiplier *float64 `json:"balance_recharge_multiplier"`
+	LoadBalanceStrategy       *string  `json:"load_balance_strategy"`
 	ProductNamePrefix   *string  `json:"product_name_prefix"`
 	ProductNameSuffix   *string  `json:"product_name_suffix"`
 	HelpImageURL        *string  `json:"help_image_url"`
@@ -213,8 +218,9 @@ func (s *PaymentConfigService) parsePaymentConfig(vals map[string]string) *Payme
 		DailyLimit:          pcParseFloat(vals[SettingDailyRechargeLimit], 0),
 		OrderTimeoutMin:     pcParseInt(vals[SettingOrderTimeoutMinutes], defaultOrderTimeoutMin),
 		MaxPendingOrders:    pcParseInt(vals[SettingMaxPendingOrders], defaultMaxPendingOrders),
-		BalanceDisabled:     vals[SettingBalancePayDisabled] == "true",
-		LoadBalanceStrategy: vals[SettingLoadBalanceStrategy],
+		BalanceDisabled:           vals[SettingBalancePayDisabled] == "true",
+		BalanceRechargeMultiplier: normalizeBalanceRechargeMultiplier(pcParseFloat(vals[SettingBalanceRechargeMult], defaultBalanceRechargeMultiplier)),
+		LoadBalanceStrategy:       vals[SettingLoadBalanceStrategy],
 		ProductNamePrefix:   vals[SettingProductNamePrefix],
 		ProductNameSuffix:   vals[SettingProductNameSuffix],
 		HelpImageURL:        vals[SettingHelpImageURL],
@@ -266,6 +272,11 @@ func (s *PaymentConfigService) UpdatePaymentConfig(ctx context.Context, req Upda
 	s.updateMu.Lock()
 	defer s.updateMu.Unlock()
 
+	if req.BalanceRechargeMultiplier != nil {
+		if math.IsNaN(*req.BalanceRechargeMultiplier) || math.IsInf(*req.BalanceRechargeMultiplier, 0) || *req.BalanceRechargeMultiplier <= 0 {
+			return infraerrors.BadRequest("INVALID_BALANCE_RECHARGE_MULTIPLIER", "balance recharge multiplier must be greater than 0")
+		}
+	}
 	if s.entClient != nil {
 		return s.updatePaymentConfigTx(ctx, req)
 	}
@@ -342,6 +353,9 @@ func mergePaymentConfigPatch(current *PaymentConfig, req UpdatePaymentConfigRequ
 	if req.BalanceDisabled != nil {
 		merged.BalanceDisabled = *req.BalanceDisabled
 	}
+	if req.BalanceRechargeMultiplier != nil {
+		merged.BalanceRechargeMultiplier = normalizeBalanceRechargeMultiplier(*req.BalanceRechargeMultiplier)
+	}
 	if req.LoadBalanceStrategy != nil {
 		merged.LoadBalanceStrategy = *req.LoadBalanceStrategy
 	}
@@ -390,6 +404,7 @@ func serializePaymentConfig(cfg *PaymentConfig) map[string]string {
 		SettingMaxPendingOrders:    formatOptionalPositiveInt(cfg.MaxPendingOrders),
 		SettingEnabledPaymentTypes: joinTypes(enabledTypes),
 		SettingBalancePayDisabled:  strconv.FormatBool(cfg.BalanceDisabled),
+		SettingBalanceRechargeMult: formatOptionalPositiveFloat(normalizeBalanceRechargeMultiplier(cfg.BalanceRechargeMultiplier)),
 		SettingLoadBalanceStrategy: nonEmptyOrDefault(cfg.LoadBalanceStrategy, payment.DefaultLoadBalanceStrategy),
 		SettingProductNamePrefix:   cfg.ProductNamePrefix,
 		SettingProductNameSuffix:   cfg.ProductNameSuffix,
@@ -428,6 +443,9 @@ func buildPaymentUpdateMap(req UpdatePaymentConfigRequest) map[string]string {
 	}
 	if req.BalanceDisabled != nil {
 		updates[SettingBalancePayDisabled] = strconv.FormatBool(*req.BalanceDisabled)
+	}
+	if req.BalanceRechargeMultiplier != nil {
+		updates[SettingBalanceRechargeMult] = formatPositiveFloat(req.BalanceRechargeMultiplier)
 	}
 	if req.LoadBalanceStrategy != nil {
 		updates[SettingLoadBalanceStrategy] = nonEmptyOrDefault(*req.LoadBalanceStrategy, payment.DefaultLoadBalanceStrategy)
@@ -562,7 +580,7 @@ func paymentConfigSettingKeys() []string {
 	return []string{
 		SettingPaymentEnabled, SettingMinRechargeAmount, SettingMaxRechargeAmount,
 		SettingDailyRechargeLimit, SettingOrderTimeoutMinutes, SettingMaxPendingOrders,
-		SettingEnabledPaymentTypes, SettingBalancePayDisabled, SettingLoadBalanceStrategy,
+		SettingEnabledPaymentTypes, SettingBalancePayDisabled, SettingBalanceRechargeMult, SettingLoadBalanceStrategy,
 		SettingProductNamePrefix, SettingProductNameSuffix,
 		SettingHelpImageURL, SettingHelpText,
 		SettingCancelRateLimitOn, SettingCancelRateLimitMax,

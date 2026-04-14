@@ -46,18 +46,22 @@ func (s *PaymentService) CreateOrder(ctx context.Context, req CreateOrderRequest
 	if user.Status != payment.EntityStatusActive {
 		return nil, infraerrors.Forbidden("USER_INACTIVE", "user account is disabled")
 	}
-	amount := req.Amount
+	orderAmount := req.Amount
+	limitAmount := req.Amount
 	if plan != nil {
-		amount = plan.Price
+		orderAmount = plan.Price
+		limitAmount = plan.Price
+	} else if req.OrderType == payment.OrderTypeBalance {
+		orderAmount = calculateCreditedBalance(req.Amount, cfg.BalanceRechargeMultiplier)
 	}
 	feeRate := s.getFeeRate(req.PaymentType)
-	payAmountStr := payment.CalculatePayAmount(amount, feeRate)
+	payAmountStr := payment.CalculatePayAmount(limitAmount, feeRate)
 	payAmount, _ := strconv.ParseFloat(payAmountStr, 64)
 	selection, err := s.selectProviderInstance(ctx, req, cfg, payAmount)
 	if err != nil {
 		return nil, err
 	}
-	order, err := s.createOrderInTx(ctx, req, plan, cfg, amount, feeRate, payAmount, selection)
+	order, err := s.createOrderInTx(ctx, req, plan, cfg, orderAmount, limitAmount, feeRate, payAmount, selection)
 	if err != nil {
 		return nil, err
 	}
@@ -119,7 +123,7 @@ func (s *PaymentService) validateSubOrder(ctx context.Context, req CreateOrderRe
 	return plan, nil
 }
 
-func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderRequest, plan *dbent.SubscriptionPlan, cfg *PaymentConfig, amount, feeRate, payAmount float64, sel *payment.InstanceSelection) (*dbent.PaymentOrder, error) {
+func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderRequest, plan *dbent.SubscriptionPlan, cfg *PaymentConfig, orderAmount, limitAmount, feeRate, payAmount float64, sel *payment.InstanceSelection) (*dbent.PaymentOrder, error) {
 	tx, err := s.entClient.Tx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("begin transaction: %w", err)
@@ -140,7 +144,7 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 	if err := s.checkPendingLimit(ctx, tx, req.UserID, cfg.MaxPendingOrders); err != nil {
 		return nil, err
 	}
-	if err := s.checkDailyLimit(ctx, tx, req.UserID, amount, cfg.DailyLimit); err != nil {
+	if err := s.checkDailyLimit(ctx, tx, req.UserID, limitAmount, cfg.DailyLimit); err != nil {
 		return nil, err
 	}
 	if err := s.revalidateSelectedInstance(ctx, tx, req.PaymentType, payAmount, sel); err != nil {
@@ -156,7 +160,7 @@ func (s *PaymentService) createOrderInTx(ctx context.Context, req CreateOrderReq
 		SetUserEmail(lockedUser.Email).
 		SetUserName(lockedUser.Username).
 		SetNillableUserNotes(psNilIfEmpty(lockedUser.Notes)).
-		SetAmount(amount).
+		SetAmount(orderAmount).
 		SetPayAmount(payAmount).
 		SetFeeRate(feeRate).
 		SetRechargeCode("").
@@ -292,6 +296,10 @@ func (s *PaymentService) checkDailyLimit(ctx context.Context, tx *dbent.Tx, user
 	}
 	var used float64
 	for _, o := range orders {
+		if o.OrderType == payment.OrderTypeBalance {
+			used += o.PayAmount
+			continue
+		}
 		used += o.Amount
 	}
 	if used+amount > limit {
@@ -317,7 +325,13 @@ func (s *PaymentService) invokeProvider(ctx context.Context, order *dbent.Paymen
 	if err != nil {
 		return nil, fmt.Errorf("update order with payment details: %w", err)
 	}
-	s.writeAuditLog(ctx, order.ID, "ORDER_CREATED", fmt.Sprintf("user:%d", req.UserID), map[string]any{"amount": req.Amount, "paymentType": req.PaymentType, "orderType": req.OrderType})
+	s.writeAuditLog(ctx, order.ID, "ORDER_CREATED", fmt.Sprintf("user:%d", req.UserID), map[string]any{
+		"paymentAmount":  req.Amount,
+		"creditedAmount": order.Amount,
+		"payAmount":      order.PayAmount,
+		"paymentType":    req.PaymentType,
+		"orderType":      req.OrderType,
+	})
 	resp := &CreateOrderResponse{
 		OrderID:      order.ID,
 		Amount:       order.Amount,
