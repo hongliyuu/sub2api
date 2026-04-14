@@ -1,7 +1,9 @@
 package service
 
 import (
+	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -70,4 +72,137 @@ func TestReplaceOpenAIWSMessageModel_OptimizedStillCorrect(t *testing.T) {
 
 	both := []byte(`{"model":"gpt-5.1","response":{"model":"gpt-5.1"}}`)
 	require.Equal(t, `{"model":"custom-model","response":{"model":"custom-model"}}`, string(replaceOpenAIWSMessageModel(both, "gpt-5.1", "custom-model")))
+}
+
+func TestSummarizeOpenAIWSPayloadKeySizes_OptimizedStableAndBounded(t *testing.T) {
+	payload := map[string]any{
+		"type":                 "response.create",
+		"model":                "gpt-5.1",
+		"previous_response_id": "resp_test_1",
+		"input": []any{
+			map[string]any{"type": "input_text", "text": "hello"},
+			map[string]any{"type": "input_text", "text": "world"},
+		},
+		"tools": []any{
+			map[string]any{
+				"type": "function",
+				"name": "search",
+				"parameters": map[string]any{
+					"type":       "object",
+					"properties": map[string]any{"query": map[string]any{"type": "string"}},
+				},
+			},
+		},
+		"metadata": map[string]any{
+			"trace_id": "trace-1",
+			"nested":   map[string]any{"ignored": []any{"a", "b", "c"}},
+		},
+	}
+
+	got := summarizeOpenAIWSPayloadKeySizes(payload, 3)
+	parts := strings.Split(got, ",")
+	require.Len(t, parts, 3)
+	require.NotContains(t, got, "-1", "优化后的浅层估算不应再把嵌套字段整体降级为 -1")
+	require.Equal(t, got, summarizeOpenAIWSPayloadKeySizes(payload, 3), "同一 payload 多次摘要应稳定一致")
+}
+
+func TestSummarizeOpenAIWSInput_OptimizedMatchesLegacy(t *testing.T) {
+	input := []any{
+		map[string]any{
+			"type": "message",
+			"content": []any{
+				map[string]any{"type": "input_text", "text": "hello"},
+				map[string]any{"type": "input_image", "image_url": "https://example.com/image.png"},
+			},
+		},
+		map[string]any{
+			"type":      "input_image",
+			"image_url": "data:image/png;base64,abc123",
+		},
+	}
+
+	require.Equal(t, legacySummarizeOpenAIWSInput(input), summarizeOpenAIWSInput(input))
+}
+
+func legacySummarizeOpenAIWSInput(input any) string {
+	items, ok := input.([]any)
+	if !ok || len(items) == 0 {
+		return "-"
+	}
+
+	itemCount := len(items)
+	textChars := 0
+	imageDataURLs := 0
+	imageDataURLChars := 0
+	imageRemoteURLs := 0
+
+	handleContentItem := func(contentItem map[string]any) {
+		contentType, _ := contentItem["type"].(string)
+		switch strings.TrimSpace(contentType) {
+		case "input_text", "output_text", "text":
+			if text, ok := contentItem["text"].(string); ok {
+				textChars += len(text)
+			}
+		case "input_image":
+			imageURL := extractOpenAIWSImageURL(contentItem["image_url"])
+			if imageURL == "" {
+				return
+			}
+			if strings.HasPrefix(strings.ToLower(imageURL), "data:image/") {
+				imageDataURLs++
+				imageDataURLChars += len(imageURL)
+				return
+			}
+			imageRemoteURLs++
+		}
+	}
+
+	handleInputItem := func(inputItem map[string]any) {
+		if content, ok := inputItem["content"].([]any); ok {
+			for _, rawContent := range content {
+				contentItem, ok := rawContent.(map[string]any)
+				if !ok {
+					continue
+				}
+				handleContentItem(contentItem)
+			}
+			return
+		}
+
+		itemType, _ := inputItem["type"].(string)
+		switch strings.TrimSpace(itemType) {
+		case "input_text", "output_text", "text":
+			if text, ok := inputItem["text"].(string); ok {
+				textChars += len(text)
+			}
+		case "input_image":
+			imageURL := extractOpenAIWSImageURL(inputItem["image_url"])
+			if imageURL == "" {
+				return
+			}
+			if strings.HasPrefix(strings.ToLower(imageURL), "data:image/") {
+				imageDataURLs++
+				imageDataURLChars += len(imageURL)
+				return
+			}
+			imageRemoteURLs++
+		}
+	}
+
+	for _, rawItem := range items {
+		inputItem, ok := rawItem.(map[string]any)
+		if !ok {
+			continue
+		}
+		handleInputItem(inputItem)
+	}
+
+	return fmt.Sprintf(
+		"items=%d,text_chars=%d,image_data_urls=%d,image_data_url_chars=%d,image_remote_urls=%d",
+		itemCount,
+		textChars,
+		imageDataURLs,
+		imageDataURLChars,
+		imageRemoteURLs,
+	)
 }
