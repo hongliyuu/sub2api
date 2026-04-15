@@ -72,7 +72,7 @@ func (s *cleanupRepoStub) GetTaskStatus(ctx context.Context, taskID int64) (stri
 	return status, nil
 }
 
-func (s *cleanupRepoStub) UpdateTaskProgress(ctx context.Context, taskID int64, deletedRows int64) error {
+func (s *cleanupRepoStub) UpdateTaskProgress(ctx context.Context, taskID int64, startedAt time.Time, deletedRows int64) error {
 	return nil
 }
 
@@ -90,11 +90,11 @@ func (s *cleanupRepoStub) CancelTask(ctx context.Context, taskID int64, canceled
 	return true, nil
 }
 
-func (s *cleanupRepoStub) MarkTaskSucceeded(ctx context.Context, taskID int64, deletedRows int64) error {
+func (s *cleanupRepoStub) MarkTaskSucceeded(ctx context.Context, taskID int64, startedAt time.Time, deletedRows int64) error {
 	return nil
 }
 
-func (s *cleanupRepoStub) MarkTaskFailed(ctx context.Context, taskID int64, deletedRows int64, errorMsg string) error {
+func (s *cleanupRepoStub) MarkTaskFailed(ctx context.Context, taskID int64, startedAt time.Time, deletedRows int64, errorMsg string) error {
 	return nil
 }
 

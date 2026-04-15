@@ -25,7 +25,7 @@ func (userStoreUnavailableRepoStub) CreateProcessing(context.Context, *service.I
 func (userStoreUnavailableRepoStub) GetByScopeAndKeyHash(context.Context, string, string) (*service.IdempotencyRecord, error) {
 	return nil, errors.New("store unavailable")
 }
-func (userStoreUnavailableRepoStub) TryReclaim(context.Context, int64, string, time.Time, time.Time, time.Time) (bool, error) {
+func (userStoreUnavailableRepoStub) TryReclaim(context.Context, int64, string, string, time.Time, time.Time, time.Time) (bool, error) {
 	return false, errors.New("store unavailable")
 }
 func (userStoreUnavailableRepoStub) ExtendProcessingLock(context.Context, int64, string, time.Time, time.Time, time.Time) (bool, error) {
@@ -103,14 +103,14 @@ func (r *userMemoryIdempotencyRepoStub) GetByScopeAndKeyHash(_ context.Context, 
 	return r.clone(r.data[r.key(scope, keyHash)]), nil
 }
 
-func (r *userMemoryIdempotencyRepoStub) TryReclaim(_ context.Context, id int64, fromStatus string, now, newLockedUntil, newExpiresAt time.Time) (bool, error) {
+func (r *userMemoryIdempotencyRepoStub) TryReclaim(_ context.Context, id int64, fromStatus, requestFingerprint string, now, newLockedUntil, newExpiresAt time.Time) (bool, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, rec := range r.data {
 		if rec.ID != id {
 			continue
 		}
-		if rec.Status != fromStatus {
+		if rec.Status != fromStatus || rec.RequestFingerprint != requestFingerprint {
 			return false, nil
 		}
 		if rec.LockedUntil != nil && rec.LockedUntil.After(now) {

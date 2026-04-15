@@ -658,6 +658,10 @@ func (s *RateLimitService) handleAuthErrorWithMetadata(ctx context.Context, acco
 	slog.Warn("account_disabled_auth_error", "account_id", account.ID, "error", errorMsg)
 }
 
+func (s *RateLimitService) handleAuthError(ctx context.Context, account *Account, errorMsg string) {
+	s.handleAuthErrorWithMetadata(ctx, account, errorMsg, "", "", "")
+}
+
 // handle403 处理 403 Forbidden 错误
 // Antigravity 平台区分 validation/violation/generic 三种类型，均 SetError 永久禁用；
 // 其他平台保持原有 SetError 行为。

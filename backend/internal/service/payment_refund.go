@@ -10,6 +10,7 @@ import (
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/ent/paymentauditlog"
 	"github.com/Wei-Shaw/sub2api/ent/paymentorder"
 	"github.com/Wei-Shaw/sub2api/internal/payment"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -212,6 +213,11 @@ func (s *PaymentService) gwRefund(ctx context.Context, p *RefundPlan) (*payment.
 	return resp, nil
 }
 
+// getRefundProvider uses the order-bound provider instance when preparing refunds.
+func (s *PaymentService) getRefundProvider(ctx context.Context, o *dbent.PaymentOrder) (payment.Provider, error) {
+	return s.getOrderProvider(ctx, o)
+}
+
 func (s *PaymentService) resolveRefundTradeNo(ctx context.Context, prov payment.Provider, order *dbent.PaymentOrder) (string, error) {
 	if order == nil {
 		return "", fmt.Errorf("nil order")
@@ -324,6 +330,19 @@ func (s *PaymentService) deductBalanceForRefund(ctx context.Context, p *RefundPl
 		return fmt.Errorf("deduct refund balance: %w", err)
 	}
 	return nil
+}
+
+func (s *PaymentService) hasAuditLog(ctx context.Context, oid int64, action string) bool {
+	count, err := s.entClient.PaymentAuditLog.Query().
+		Where(
+			paymentauditlog.OrderIDEQ(strconv.FormatInt(oid, 10)),
+			paymentauditlog.ActionEQ(strings.TrimSpace(action)),
+		).
+		Count(ctx)
+	if err != nil {
+		return false
+	}
+	return count > 0
 }
 
 func (s *PaymentService) deductSubscriptionForRefund(ctx context.Context, p *RefundPlan) error {
