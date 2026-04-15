@@ -8,7 +8,6 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -971,21 +970,9 @@ func LoadForBootstrap() (*Config, error) {
 	return load(true)
 }
 
-func resolveExecutableDir() string {
-	exePath, err := os.Executable()
-	if err != nil {
-		return ""
-	}
-	if resolved, resolveErr := filepath.EvalSymlinks(exePath); resolveErr == nil {
-		exePath = resolved
-	}
-	return strings.TrimSpace(filepath.Dir(exePath))
-}
-
-func buildConfigSearchPaths(dataDir string, preferContainerDataDir bool, execDir string) []string {
-	paths := make([]string, 0, 7)
+func buildConfigSearchPaths(dataDir string, preferContainerDataDir bool) []string {
+	paths := make([]string, 0, 5)
 	dataDir = strings.TrimSpace(dataDir)
-	execDir = strings.TrimSpace(execDir)
 	if dataDir != "" {
 		paths = append(paths, dataDir)
 	}
@@ -993,17 +980,7 @@ func buildConfigSearchPaths(dataDir string, preferContainerDataDir bool, execDir
 		paths = append(paths, dockerDataDir)
 	}
 
-	if execDir != "" {
-		paths = append(paths, execDir)
-	}
-
-	paths = append(paths, ".", "./config")
-
-	if execDir != "" {
-		paths = append(paths, filepath.Join(execDir, "config"))
-	}
-
-	paths = append(paths, systemConfigDir)
+	paths = append(paths, ".", "./config", systemConfigDir)
 
 	// Outside Docker, keep /app/data as a last-resort compatibility fallback
 	// so old manual deployments can still be discovered without overriding
@@ -1029,7 +1006,7 @@ func buildConfigSearchPaths(dataDir string, preferContainerDataDir bool, execDir
 }
 
 func addConfigSearchPaths(v *viper.Viper) {
-	for _, path := range buildConfigSearchPaths(os.Getenv("DATA_DIR"), shouldPreferContainerDataDir(), resolveExecutableDir()) {
+	for _, path := range buildConfigSearchPaths(os.Getenv("DATA_DIR"), shouldPreferContainerDataDir()) {
 		v.AddConfigPath(path)
 	}
 }
@@ -1069,26 +1046,21 @@ func isWritableDir(dir string) bool {
 	return true
 }
 
-func resolveWritableDataDir(dataDir string, preferContainerDataDir bool, execDir string) string {
+func resolveWritableDataDir(dataDir string, preferContainerDataDir bool) string {
 	dataDir = strings.TrimSpace(dataDir)
-	execDir = strings.TrimSpace(execDir)
 	if dataDir != "" {
 		return dataDir
 	}
 	if preferContainerDataDir && isWritableDir(dockerDataDir) {
 		return dockerDataDir
 	}
-	if execDir != "" && isWritableDir(execDir) {
-		return execDir
-	}
 	return "."
 }
 
 // ResolveDataDir returns the primary writable data directory used by setup.
-// Priority: DATA_DIR environment variable > /app/data in container deployments >
-// executable directory > current directory.
+// Priority: DATA_DIR environment variable > /app/data in container deployments > current directory.
 func ResolveDataDir() string {
-	return resolveWritableDataDir(os.Getenv("DATA_DIR"), shouldPreferContainerDataDir(), resolveExecutableDir())
+	return resolveWritableDataDir(os.Getenv("DATA_DIR"), shouldPreferContainerDataDir())
 }
 
 // FindConfigFile returns the first discovered config file according to the

@@ -694,27 +694,19 @@ func TestGetServerAddressFromEnv(t *testing.T) {
 }
 
 func TestBuildConfigSearchPathsOutsideContainerKeepsAppDataAsFallback(t *testing.T) {
-	execDir := "/opt/sub2api/backend"
-	paths := buildConfigSearchPaths("", false, execDir)
-	expected := []string{execDir, ".", "./config", filepath.Join(execDir, "config"), systemConfigDir, dockerDataDir}
+	paths := buildConfigSearchPaths("", false)
+	expected := []string{".", "./config", systemConfigDir, dockerDataDir}
 	require.Equal(t, expected, paths)
 }
 
 func TestBuildConfigSearchPathsInContainerPrefersAppData(t *testing.T) {
-	execDir := "/opt/sub2api/backend"
-	paths := buildConfigSearchPaths("", true, execDir)
-	expected := []string{dockerDataDir, execDir, ".", "./config", filepath.Join(execDir, "config"), systemConfigDir}
+	paths := buildConfigSearchPaths("", true)
+	expected := []string{dockerDataDir, ".", "./config", systemConfigDir}
 	require.Equal(t, expected, paths)
 }
 
-func TestResolveWritableDataDirOutsideContainerPrefersExecutableDirectory(t *testing.T) {
-	execDir := t.TempDir()
-	dir := resolveWritableDataDir("", false, execDir)
-	require.Equal(t, execDir, dir)
-}
-
-func TestResolveWritableDataDirOutsideContainerFallsBackToCurrentDirectory(t *testing.T) {
-	dir := resolveWritableDataDir("", false, "")
+func TestResolveWritableDataDirOutsideContainerDefaultsToCurrentDirectory(t *testing.T) {
+	dir := resolveWritableDataDir("", false)
 	require.Equal(t, ".", dir)
 }
 
