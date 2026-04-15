@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -23,6 +24,7 @@ var (
 type SystemOperationLock struct {
 	recordID    int64
 	operationID string
+	lockedUntil atomic.Int64
 
 	stopOnce sync.Once
 	stopCh   chan struct{}
@@ -33,6 +35,20 @@ func (l *SystemOperationLock) OperationID() string {
 		return ""
 	}
 	return l.operationID
+}
+
+func (l *SystemOperationLock) currentLockedUntil() time.Time {
+	if l == nil {
+		return time.Time{}
+	}
+	return time.Unix(0, l.lockedUntil.Load()).UTC()
+}
+
+func (l *SystemOperationLock) setLockedUntil(value time.Time) {
+	if l == nil {
+		return
+	}
+	l.lockedUntil.Store(value.UTC().UnixNano())
 }
 
 type SystemOperationLockService struct {
@@ -106,6 +122,7 @@ func (s *SystemOperationLockService) Acquire(ctx context.Context, operationID st
 			ctx,
 			existing.ID,
 			existing.Status,
+			operationID,
 			now,
 			lockedUntil,
 			expiresAt,
@@ -132,6 +149,7 @@ func (s *SystemOperationLockService) Acquire(ctx context.Context, operationID st
 		operationID: operationID,
 		stopCh:      make(chan struct{}),
 	}
+	lock.setLockedUntil(lockedUntil)
 	go s.renewLoop(lock)
 
 	return lock, nil
@@ -151,16 +169,25 @@ func (s *SystemOperationLockService) Release(ctx context.Context, lock *SystemOp
 	}
 
 	expiresAt := time.Now().Add(s.ttl)
+	expectedLockedUntil := lock.currentLockedUntil()
 	if succeeded {
 		responseBody := fmt.Sprintf(`{"operation_id":"%s","released":true}`, lock.operationID)
-		return s.repo.MarkSucceeded(ctx, lock.recordID, 200, responseBody, expiresAt)
+		err := s.repo.MarkSucceeded(ctx, lock.recordID, lock.operationID, expectedLockedUntil, 200, responseBody, expiresAt)
+		if IsIdempotencyOwnershipLost(err) {
+			return nil
+		}
+		return err
 	}
 
 	reason := failureReason
 	if reason == "" {
 		reason = "SYSTEM_OPERATION_FAILED"
 	}
-	return s.repo.MarkFailedRetryable(ctx, lock.recordID, reason, time.Now(), expiresAt)
+	err := s.repo.MarkFailedRetryable(ctx, lock.recordID, lock.operationID, expectedLockedUntil, reason, time.Now(), expiresAt)
+	if IsIdempotencyOwnershipLost(err) {
+		return nil
+	}
+	return err
 }
 
 func (s *SystemOperationLockService) renewLoop(lock *SystemOperationLock) {
@@ -171,12 +198,15 @@ func (s *SystemOperationLockService) renewLoop(lock *SystemOperationLock) {
 		select {
 		case <-ticker.C:
 			now := time.Now()
+			expectedLockedUntil := lock.currentLockedUntil()
+			newLockedUntil := now.Add(s.lease)
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			ok, err := s.repo.ExtendProcessingLock(
 				ctx,
 				lock.recordID,
 				lock.operationID,
-				now.Add(s.lease),
+				expectedLockedUntil,
+				newLockedUntil,
 				now.Add(s.ttl),
 			)
 			cancel()
@@ -189,6 +219,7 @@ func (s *SystemOperationLockService) renewLoop(lock *SystemOperationLock) {
 				logger.LegacyPrintf("service.system_operation_lock", "[SystemOperationLock] renew stopped operation_id=%s reason=ownership_lost", lock.operationID)
 				return
 			}
+			lock.setLockedUntil(newLockedUntil)
 		case <-lock.stopCh:
 			return
 		}

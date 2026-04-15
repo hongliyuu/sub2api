@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -22,6 +23,8 @@ func metricsHandler() gin.HandlerFunc {
 func renderRuntimeMetrics() string {
 	db := repository.SnapshotDefaultDBPoolStats()
 	redis := repository.SnapshotDefaultRedisPoolStats()
+	opsErrorLogQueueLength := handler.OpsErrorLogQueueLength()
+	opsErrorLogQueueCapacity := handler.OpsErrorLogQueueCapacity()
 	scheduler := service.SnapshotSchedulerOutboxRuntimeMetrics()
 	usageNotPersisted := service.SnapshotUsageLogNotPersistedMetrics()
 	cleanup := service.SnapshotCleanupStats()
@@ -51,6 +54,15 @@ func renderRuntimeMetrics() string {
 	writePromGaugePtr(&b, "sub2api_redis_pool_hit_rate_percent", redis.HitRatePercent, "Redis pool hit rate percentage.")
 	writePromGaugePtr(&b, "sub2api_redis_pool_connection_pressure_percent", redis.ConnectionPressurePercent, "Redis pool connection pressure percentage.")
 	writePromGaugePtr(&b, "sub2api_redis_pool_headroom_percent", redis.PoolHeadroomPercent, "Redis pool headroom percentage.")
+
+	writePromGauge(&b, "sub2api_ops_error_log_queue_length", float64(opsErrorLogQueueLength), "Current ops error log queue length.")
+	writePromGauge(&b, "sub2api_ops_error_log_queue_capacity", float64(opsErrorLogQueueCapacity), "Configured ops error log queue capacity.")
+	writePromCounter(&b, "sub2api_ops_error_log_enqueued_total", float64(handler.OpsErrorLogEnqueuedTotal()), "Cumulative ops error log entries enqueued.")
+	writePromCounter(&b, "sub2api_ops_error_log_processed_total", float64(handler.OpsErrorLogProcessedTotal()), "Cumulative ops error log entries processed by workers.")
+	writePromCounter(&b, "sub2api_ops_error_log_sanitized_total", float64(handler.OpsErrorLogSanitizedTotal()), "Cumulative ops error log request bodies sanitized before enqueue.")
+	writePromCounter(&b, "sub2api_ops_error_log_dropped_total", float64(handler.OpsErrorLogDroppedTotal()), "Cumulative ops error log entries dropped because the queue was full.")
+	writePromCounter(&b, "sub2api_ops_error_log_persisted_success_total", float64(handler.OpsErrorLogPersistedSuccessTotal()), "Cumulative ops error log entries persisted successfully.")
+	writePromCounter(&b, "sub2api_ops_error_log_persisted_failure_total", float64(handler.OpsErrorLogPersistedFailureTotal()), "Cumulative ops error log entries that failed to persist.")
 
 	writePromCounter(&b, "sub2api_scheduler_outbox_poison_total", float64(scheduler.PoisonTotal), "Cumulative scheduler outbox poison events.")
 	writePromCounter(&b, "sub2api_scheduler_outbox_transient_total", float64(scheduler.TransientTotal), "Cumulative scheduler outbox transient events.")

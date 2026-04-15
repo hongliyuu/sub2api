@@ -8,6 +8,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
+	iputil "github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/server/routes"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -101,7 +102,12 @@ func registerRoutes(
 	redisClient *redis.Client,
 ) {
 	// 通用路由（健康检查、状态等）
-	routes.RegisterCommonRoutes(r)
+	routes.RegisterCommonRoutes(r, routes.CommonRouteOptions{
+		PublicHealth:  cfg.Server.Observability.PublicHealth,
+		PublicMetrics: cfg.Server.Observability.PublicMetrics,
+		AllowCIDRs:    cfg.Server.Observability.AllowCIDRs,
+		ClientIP:      iputil.GetTrustedClientIP,
+	})
 
 	// API v1
 	v1 := r.Group("/api/v1")

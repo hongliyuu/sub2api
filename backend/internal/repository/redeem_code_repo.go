@@ -293,6 +293,67 @@ func (r *redeemCodeRepository) SumPositiveBalanceByUser(ctx context.Context, use
 	return result[0].Sum, nil
 }
 
+func (r *redeemCodeRepository) GetStats(ctx context.Context) (*service.RedeemCodeStats, error) {
+	stats := &service.RedeemCodeStats{
+		TypeCounts: make(map[string]int64),
+	}
+
+	totalCodes, err := r.client.RedeemCode.Query().Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+	stats.TotalCodes = int64(totalCodes)
+
+	unusedCodes, err := r.client.RedeemCode.Query().Where(redeemcode.StatusEQ(service.StatusUnused)).Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+	stats.UnusedCodes = int64(unusedCodes)
+
+	usedCodes, err := r.client.RedeemCode.Query().Where(redeemcode.StatusEQ(service.StatusUsed)).Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+	stats.UsedCodes = int64(usedCodes)
+
+	expiredCodes, err := r.client.RedeemCode.Query().Where(redeemcode.StatusEQ(service.StatusExpired)).Count(ctx)
+	if err != nil {
+		return nil, err
+	}
+	stats.ExpiredCodes = int64(expiredCodes)
+
+	var valueResult []struct {
+		Sum float64 `json:"sum"`
+	}
+	err = r.client.RedeemCode.Query().
+		Where(redeemcode.StatusEQ(service.StatusUsed)).
+		Aggregate(dbent.As(dbent.Sum(redeemcode.FieldValue), "sum")).
+		Scan(ctx, &valueResult)
+	if err != nil {
+		return nil, err
+	}
+	if len(valueResult) > 0 {
+		stats.TotalValueDistributed = valueResult[0].Sum
+	}
+
+	var typeRows []struct {
+		Type  string `json:"type"`
+		Count int64  `json:"count"`
+	}
+	err = r.client.RedeemCode.Query().
+		GroupBy(redeemcode.FieldType).
+		Aggregate(dbent.As(dbent.Count(), "count")).
+		Scan(ctx, &typeRows)
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range typeRows {
+		stats.TypeCounts[row.Type] = row.Count
+	}
+
+	return stats, nil
+}
+
 func redeemCodeEntityToService(m *dbent.RedeemCode) *service.RedeemCode {
 	if m == nil {
 		return nil

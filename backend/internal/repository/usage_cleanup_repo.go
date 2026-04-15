@@ -202,18 +202,30 @@ func (r *usageCleanupRepository) GetTaskStatus(ctx context.Context, taskID int64
 	return status, nil
 }
 
-func (r *usageCleanupRepository) UpdateTaskProgress(ctx context.Context, taskID int64, deletedRows int64) error {
+func (r *usageCleanupRepository) UpdateTaskProgress(ctx context.Context, taskID int64, startedAt time.Time, deletedRows int64) error {
 	if r.client != nil {
-		return r.updateTaskProgressWithEnt(ctx, taskID, deletedRows)
+		return r.updateTaskProgressWithEnt(ctx, taskID, startedAt, deletedRows)
 	}
 	query := `
 		UPDATE usage_cleanup_tasks
 		SET deleted_rows = $1,
 			updated_at = NOW()
 		WHERE id = $2
+			AND status = $3
+			AND started_at = $4
 	`
-	_, err := r.sql.ExecContext(ctx, query, deletedRows, taskID)
-	return err
+	res, err := r.sql.ExecContext(ctx, query, deletedRows, taskID, service.UsageCleanupStatusRunning, startedAt.UTC())
+	if err != nil {
+		return err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return service.ErrUsageCleanupTaskOwnershipLost
+	}
+	return nil
 }
 
 func (r *usageCleanupRepository) CancelTask(ctx context.Context, taskID int64, canceledBy int64) (bool, error) {
@@ -249,9 +261,9 @@ func (r *usageCleanupRepository) CancelTask(ctx context.Context, taskID int64, c
 	return true, nil
 }
 
-func (r *usageCleanupRepository) MarkTaskSucceeded(ctx context.Context, taskID int64, deletedRows int64) error {
+func (r *usageCleanupRepository) MarkTaskSucceeded(ctx context.Context, taskID int64, startedAt time.Time, deletedRows int64) error {
 	if r.client != nil {
-		return r.markTaskSucceededWithEnt(ctx, taskID, deletedRows)
+		return r.markTaskSucceededWithEnt(ctx, taskID, startedAt, deletedRows)
 	}
 	query := `
 		UPDATE usage_cleanup_tasks
@@ -260,14 +272,26 @@ func (r *usageCleanupRepository) MarkTaskSucceeded(ctx context.Context, taskID i
 			finished_at = NOW(),
 			updated_at = NOW()
 		WHERE id = $3
+			AND status = $4
+			AND started_at = $5
 	`
-	_, err := r.sql.ExecContext(ctx, query, service.UsageCleanupStatusSucceeded, deletedRows, taskID)
-	return err
+	res, err := r.sql.ExecContext(ctx, query, service.UsageCleanupStatusSucceeded, deletedRows, taskID, service.UsageCleanupStatusRunning, startedAt.UTC())
+	if err != nil {
+		return err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return service.ErrUsageCleanupTaskOwnershipLost
+	}
+	return nil
 }
 
-func (r *usageCleanupRepository) MarkTaskFailed(ctx context.Context, taskID int64, deletedRows int64, errorMsg string) error {
+func (r *usageCleanupRepository) MarkTaskFailed(ctx context.Context, taskID int64, startedAt time.Time, deletedRows int64, errorMsg string) error {
 	if r.client != nil {
-		return r.markTaskFailedWithEnt(ctx, taskID, deletedRows, errorMsg)
+		return r.markTaskFailedWithEnt(ctx, taskID, startedAt, deletedRows, errorMsg)
 	}
 	query := `
 		UPDATE usage_cleanup_tasks
@@ -277,9 +301,21 @@ func (r *usageCleanupRepository) MarkTaskFailed(ctx context.Context, taskID int6
 			finished_at = NOW(),
 			updated_at = NOW()
 		WHERE id = $4
+			AND status = $5
+			AND started_at = $6
 	`
-	_, err := r.sql.ExecContext(ctx, query, service.UsageCleanupStatusFailed, deletedRows, errorMsg, taskID)
-	return err
+	res, err := r.sql.ExecContext(ctx, query, service.UsageCleanupStatusFailed, deletedRows, errorMsg, taskID, service.UsageCleanupStatusRunning, startedAt.UTC())
+	if err != nil {
+		return err
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return service.ErrUsageCleanupTaskOwnershipLost
+	}
+	return nil
 }
 
 func (r *usageCleanupRepository) DeleteUsageLogsBatch(ctx context.Context, filters service.UsageCleanupFilters, limit int) (int64, error) {
@@ -464,15 +500,25 @@ func (r *usageCleanupRepository) getTaskStatusWithEnt(ctx context.Context, taskI
 	return task.Status, nil
 }
 
-func (r *usageCleanupRepository) updateTaskProgressWithEnt(ctx context.Context, taskID int64, deletedRows int64) error {
+func (r *usageCleanupRepository) updateTaskProgressWithEnt(ctx context.Context, taskID int64, startedAt time.Time, deletedRows int64) error {
 	client := clientFromContext(ctx, r.client)
 	now := time.Now()
-	_, err := client.UsageCleanupTask.Update().
-		Where(dbusagecleanuptask.IDEQ(taskID)).
+	affected, err := client.UsageCleanupTask.Update().
+		Where(
+			dbusagecleanuptask.IDEQ(taskID),
+			dbusagecleanuptask.StatusEQ(service.UsageCleanupStatusRunning),
+			dbusagecleanuptask.StartedAtEQ(startedAt),
+		).
 		SetDeletedRows(deletedRows).
 		SetUpdatedAt(now).
 		Save(ctx)
-	return err
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return service.ErrUsageCleanupTaskOwnershipLost
+	}
+	return nil
 }
 
 func (r *usageCleanupRepository) cancelTaskWithEnt(ctx context.Context, taskID int64, canceledBy int64) (bool, error) {
@@ -496,31 +542,51 @@ func (r *usageCleanupRepository) cancelTaskWithEnt(ctx context.Context, taskID i
 	return affected > 0, nil
 }
 
-func (r *usageCleanupRepository) markTaskSucceededWithEnt(ctx context.Context, taskID int64, deletedRows int64) error {
+func (r *usageCleanupRepository) markTaskSucceededWithEnt(ctx context.Context, taskID int64, startedAt time.Time, deletedRows int64) error {
 	client := clientFromContext(ctx, r.client)
 	now := time.Now()
-	_, err := client.UsageCleanupTask.Update().
-		Where(dbusagecleanuptask.IDEQ(taskID)).
+	affected, err := client.UsageCleanupTask.Update().
+		Where(
+			dbusagecleanuptask.IDEQ(taskID),
+			dbusagecleanuptask.StatusEQ(service.UsageCleanupStatusRunning),
+			dbusagecleanuptask.StartedAtEQ(startedAt),
+		).
 		SetStatus(service.UsageCleanupStatusSucceeded).
 		SetDeletedRows(deletedRows).
 		SetFinishedAt(now).
 		SetUpdatedAt(now).
 		Save(ctx)
-	return err
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return service.ErrUsageCleanupTaskOwnershipLost
+	}
+	return nil
 }
 
-func (r *usageCleanupRepository) markTaskFailedWithEnt(ctx context.Context, taskID int64, deletedRows int64, errorMsg string) error {
+func (r *usageCleanupRepository) markTaskFailedWithEnt(ctx context.Context, taskID int64, startedAt time.Time, deletedRows int64, errorMsg string) error {
 	client := clientFromContext(ctx, r.client)
 	now := time.Now()
-	_, err := client.UsageCleanupTask.Update().
-		Where(dbusagecleanuptask.IDEQ(taskID)).
+	affected, err := client.UsageCleanupTask.Update().
+		Where(
+			dbusagecleanuptask.IDEQ(taskID),
+			dbusagecleanuptask.StatusEQ(service.UsageCleanupStatusRunning),
+			dbusagecleanuptask.StartedAtEQ(startedAt),
+		).
 		SetStatus(service.UsageCleanupStatusFailed).
 		SetDeletedRows(deletedRows).
 		SetErrorMessage(errorMsg).
 		SetFinishedAt(now).
 		SetUpdatedAt(now).
 		Save(ctx)
-	return err
+	if err != nil {
+		return err
+	}
+	if affected == 0 {
+		return service.ErrUsageCleanupTaskOwnershipLost
+	}
+	return nil
 }
 
 func usageCleanupTaskFromEnt(row *dbent.UsageCleanupTask) (service.UsageCleanupTask, error) {

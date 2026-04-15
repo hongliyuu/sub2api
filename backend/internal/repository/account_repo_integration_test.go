@@ -4,10 +4,14 @@ package repository
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/ent/account"
 	"github.com/Wei-Shaw/sub2api/ent/accountgroup"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -17,6 +21,7 @@ import (
 type AccountRepoSuite struct {
 	suite.Suite
 	ctx    context.Context
+	tx     *dbent.Tx
 	client *dbent.Client
 	repo   *accountRepository
 }
@@ -24,6 +29,21 @@ type AccountRepoSuite struct {
 type schedulerCacheRecorder struct {
 	setAccounts []*service.Account
 	accounts    map[int64]*service.Account
+}
+
+type failSchedulerOutboxExec struct {
+	delegate sqlExecutor
+}
+
+func (f *failSchedulerOutboxExec) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
+	if strings.Contains(query, "INSERT INTO scheduler_outbox") {
+		return nil, errors.New("forced scheduler outbox failure")
+	}
+	return f.delegate.ExecContext(ctx, query, args...)
+}
+
+func (f *failSchedulerOutboxExec) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	return f.delegate.QueryContext(ctx, query, args...)
 }
 
 func (s *schedulerCacheRecorder) GetSnapshot(ctx context.Context, bucket service.SchedulerBucket) ([]*service.Account, bool, error) {
@@ -79,6 +99,7 @@ func (s *schedulerCacheRecorder) SetOutboxWatermark(ctx context.Context, id int6
 func (s *AccountRepoSuite) SetupTest() {
 	s.ctx = context.Background()
 	tx := testEntTx(s.T())
+	s.tx = tx
 	s.client = tx.Client()
 	s.repo = newAccountRepositoryWithSQL(s.client, tx, nil)
 }
@@ -179,6 +200,16 @@ func (s *AccountRepoSuite) TestDelete() {
 
 	_, err = s.repo.GetByID(s.ctx, account.ID)
 	s.Require().Error(err, "expected error after delete")
+
+	var outboxCount int
+	s.Require().NoError(scanSingleRow(
+		s.ctx,
+		s.tx,
+		"SELECT COUNT(*) FROM scheduler_outbox WHERE event_type = $1 AND account_id = $2",
+		[]any{service.SchedulerOutboxEventAccountChanged, account.ID},
+		&outboxCount,
+	))
+	s.Require().Equal(1, outboxCount, "expected delete invalidation outbox event")
 }
 
 func (s *AccountRepoSuite) TestDelete_WithGroupBindings() {
@@ -192,6 +223,25 @@ func (s *AccountRepoSuite) TestDelete_WithGroupBindings() {
 	count, err := s.client.AccountGroup.Query().Where(accountgroup.AccountIDEQ(account.ID)).Count(s.ctx)
 	s.Require().NoError(err)
 	s.Require().Zero(count, "expected bindings to be removed")
+}
+
+func (s *AccountRepoSuite) TestDelete_RollsBackWhenOutboxEnqueueFails() {
+	ctx := context.Background()
+	committedAccount := mustCreateAccount(s.T(), testEntClient(), &service.Account{Name: "rollback-account"})
+
+	tx := testEntTx(s.T())
+	repo := newAccountRepositoryWithSQL(tx.Client(), &failSchedulerOutboxExec{delegate: tx}, nil)
+
+	err := repo.Delete(ctx, committedAccount.ID)
+	s.Require().Error(err)
+	s.Require().Contains(err.Error(), "forced scheduler outbox failure")
+
+	s.Require().NoError(tx.Rollback())
+	tx = nil
+
+	restored, err := integrationEntClient.Account.Query().Where(account.IDEQ(committedAccount.ID)).Only(ctx)
+	s.Require().NoError(err, "account delete should roll back when outbox enqueue fails")
+	s.Require().Nil(restored.DeletedAt, "account should remain undeleted after rollback")
 }
 
 // --- List / ListWithFilters ---

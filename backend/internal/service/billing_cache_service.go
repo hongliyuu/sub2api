@@ -177,35 +177,48 @@ func (s *BillingCacheService) enqueueCacheWrite(task cacheWriteTask) (enqueued b
 	}
 }
 
+func (s *BillingCacheService) enqueueCacheWriteWithFallback(task cacheWriteTask) {
+	if s.enqueueCacheWrite(task) {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), cacheWriteTimeout)
+	defer cancel()
+	s.executeCacheWriteTask(ctx, task)
+}
+
 func (s *BillingCacheService) cacheWriteWorker(ch <-chan cacheWriteTask) {
 	defer s.cacheWriteWg.Done()
 	for task := range ch {
 		ctx, cancel := context.WithTimeout(context.Background(), cacheWriteTimeout)
-		switch task.kind {
-		case cacheWriteSetBalance:
-			s.setBalanceCache(ctx, task.userID, task.balance)
-		case cacheWriteSetSubscription:
-			s.setSubscriptionCache(ctx, task.userID, task.groupID, task.subscriptionData)
-		case cacheWriteUpdateSubscriptionUsage:
-			if s.cache != nil {
-				if err := s.cache.UpdateSubscriptionUsage(ctx, task.userID, task.groupID, task.amount); err != nil {
-					logger.LegacyPrintf("service.billing_cache", "Warning: update subscription cache failed for user %d group %d: %v", task.userID, task.groupID, err)
-				}
-			}
-		case cacheWriteDeductBalance:
-			if s.cache != nil {
-				if err := s.cache.DeductUserBalance(ctx, task.userID, task.amount); err != nil {
-					logger.LegacyPrintf("service.billing_cache", "Warning: deduct balance cache failed for user %d: %v", task.userID, err)
-				}
-			}
-		case cacheWriteUpdateRateLimitUsage:
-			if s.cache != nil {
-				if err := s.cache.UpdateAPIKeyRateLimitUsage(ctx, task.apiKeyID, task.amount); err != nil {
-					logger.LegacyPrintf("service.billing_cache", "Warning: update rate limit usage cache failed for api key %d: %v", task.apiKeyID, err)
-				}
+		s.executeCacheWriteTask(ctx, task)
+		cancel()
+	}
+}
+
+func (s *BillingCacheService) executeCacheWriteTask(ctx context.Context, task cacheWriteTask) {
+	switch task.kind {
+	case cacheWriteSetBalance:
+		s.setBalanceCache(ctx, task.userID, task.balance)
+	case cacheWriteSetSubscription:
+		s.setSubscriptionCache(ctx, task.userID, task.groupID, task.subscriptionData)
+	case cacheWriteUpdateSubscriptionUsage:
+		if s.cache != nil {
+			if err := s.cache.UpdateSubscriptionUsage(ctx, task.userID, task.groupID, task.amount); err != nil {
+				logger.LegacyPrintf("service.billing_cache", "Warning: update subscription cache failed for user %d group %d: %v", task.userID, task.groupID, err)
 			}
 		}
-		cancel()
+	case cacheWriteDeductBalance:
+		if s.cache != nil {
+			if err := s.cache.DeductUserBalance(ctx, task.userID, task.amount); err != nil {
+				logger.LegacyPrintf("service.billing_cache", "Warning: deduct balance cache failed for user %d: %v", task.userID, err)
+			}
+		}
+	case cacheWriteUpdateRateLimitUsage:
+		if s.cache != nil {
+			if err := s.cache.UpdateAPIKeyRateLimitUsage(ctx, task.apiKeyID, task.amount); err != nil {
+				logger.LegacyPrintf("service.billing_cache", "Warning: update rate limit usage cache failed for api key %d: %v", task.apiKeyID, err)
+			}
+		}
 	}
 }
 
@@ -295,7 +308,7 @@ func (s *BillingCacheService) GetUserBalance(ctx context.Context, userID int64) 
 		}
 
 		// 异步建立缓存
-		_ = s.enqueueCacheWrite(cacheWriteTask{
+		s.enqueueCacheWriteWithFallback(cacheWriteTask{
 			kind:    cacheWriteSetBalance,
 			userID:  userID,
 			balance: balance,
@@ -393,7 +406,7 @@ func (s *BillingCacheService) GetSubscriptionStatus(ctx context.Context, userID,
 		if innerErr != nil {
 			return nil, innerErr
 		}
-		_ = s.enqueueCacheWrite(cacheWriteTask{
+		s.enqueueCacheWriteWithFallback(cacheWriteTask{
 			kind:             cacheWriteSetSubscription,
 			userID:           userID,
 			groupID:          groupID,
@@ -637,7 +650,7 @@ func (s *BillingCacheService) QueueUpdateAPIKeyRateLimitUsage(apiKeyID int64, co
 	if s.cache == nil {
 		return
 	}
-	s.enqueueCacheWrite(cacheWriteTask{
+	s.enqueueCacheWriteWithFallback(cacheWriteTask{
 		kind:     cacheWriteUpdateRateLimitUsage,
 		apiKeyID: apiKeyID,
 		amount:   cost,

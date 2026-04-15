@@ -251,7 +251,14 @@ type ServerConfig struct {
 	IdleTimeout        int       `mapstructure:"idle_timeout"`          // 空闲连接超时（秒）
 	TrustedProxies     []string  `mapstructure:"trusted_proxies"`       // 可信代理列表（CIDR/IP）
 	MaxRequestBodySize int64     `mapstructure:"max_request_body_size"` // 全局最大请求体限制
+	Observability      ServerObservabilityConfig `mapstructure:"observability"`
 	H2C                H2CConfig `mapstructure:"h2c"`                   // HTTP/2 Cleartext 配置
+}
+
+type ServerObservabilityConfig struct {
+	PublicHealth bool     `mapstructure:"public_health"`
+	PublicMetrics bool    `mapstructure:"public_metrics"`
+	AllowCIDRs   []string `mapstructure:"allow_cidrs"`
 }
 
 // H2CConfig HTTP/2 Cleartext 配置
@@ -1161,6 +1168,9 @@ func setDefaults() {
 	viper.SetDefault("server.idle_timeout", 120)       // 120秒空闲超时
 	viper.SetDefault("server.trusted_proxies", []string{})
 	viper.SetDefault("server.max_request_body_size", int64(256*1024*1024))
+	viper.SetDefault("server.observability.public_health", false)
+	viper.SetDefault("server.observability.public_metrics", false)
+	viper.SetDefault("server.observability.allow_cidrs", []string{"127.0.0.1/32", "::1/128"})
 	// H2C 默认配置
 	viper.SetDefault("server.h2c.enabled", false)
 	viper.SetDefault("server.h2c.max_concurrent_streams", uint32(50))      // 50 个并发流
@@ -1303,10 +1313,12 @@ func setDefaults() {
 	viper.SetDefault("ops.use_preaggregated_tables", true)
 	viper.SetDefault("ops.cleanup.enabled", true)
 	viper.SetDefault("ops.cleanup.schedule", "0 2 * * *")
-	// Retention days: vNext defaults to 30 days across ops datasets.
-	viper.SetDefault("ops.cleanup.error_log_retention_days", 30)
+	// Retention days: keep noisy ops logs tighter by default to control storage growth.
+	viper.SetDefault("ops.cleanup.error_log_retention_days", 14)
 	viper.SetDefault("ops.cleanup.minute_metrics_retention_days", 30)
 	viper.SetDefault("ops.cleanup.hourly_metrics_retention_days", 30)
+	viper.SetDefault("ops.cleanup.system_log_max_rows", int64(500000))
+	viper.SetDefault("ops.cleanup.error_log_max_rows", int64(200000))
 	viper.SetDefault("ops.aggregation.enabled", true)
 	viper.SetDefault("ops.metrics_collector_cache.enabled", true)
 	// TTL should be slightly larger than collection interval (1m) to maximize cross-replica cache hits.
@@ -1373,7 +1385,8 @@ func setDefaults() {
 	viper.SetDefault("dashboard_aggregation.lookback_seconds", 120)
 	viper.SetDefault("dashboard_aggregation.backfill_enabled", false)
 	viper.SetDefault("dashboard_aggregation.backfill_max_days", 31)
-	viper.SetDefault("dashboard_aggregation.retention.usage_logs_days", 90)
+	viper.SetDefault("dashboard_aggregation.retention.usage_logs_days", 30)
+	viper.SetDefault("dashboard_aggregation.retention.usage_logs_max_rows", int64(300000))
 	viper.SetDefault("dashboard_aggregation.retention.usage_billing_dedup_days", 365)
 	viper.SetDefault("dashboard_aggregation.retention.hourly_days", 180)
 	viper.SetDefault("dashboard_aggregation.retention.daily_days", 730)

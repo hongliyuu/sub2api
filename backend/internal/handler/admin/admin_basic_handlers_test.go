@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
@@ -15,11 +16,21 @@ func setupAdminRouter() (*gin.Engine, *stubAdminService) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	adminSvc := newStubAdminService()
+	redeemSvc := service.NewRedeemService(&redeemStatsRepoStub{
+		stats: &service.RedeemCodeStats{
+			TypeCounts: map[string]int64{
+				service.RedeemTypeBalance:      1,
+				service.RedeemTypeConcurrency:  0,
+				service.RedeemTypeSubscription: 0,
+				service.RedeemTypeInvitation:   0,
+			},
+		},
+	}, nil, nil, nil, nil, nil, nil)
 
 	userHandler := NewUserHandler(adminSvc, nil)
 	groupHandler := NewGroupHandler(adminSvc, nil, nil)
 	proxyHandler := NewProxyHandler(adminSvc)
-	redeemHandler := NewRedeemHandler(adminSvc, nil)
+	redeemHandler := NewRedeemHandler(adminSvc, redeemSvc)
 
 	router.GET("/api/v1/admin/users", userHandler.List)
 	router.GET("/api/v1/admin/users/:id", userHandler.GetByID)

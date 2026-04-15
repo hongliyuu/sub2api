@@ -23,6 +23,7 @@ var (
 	ErrTotpTooManyAttempts = infraerrors.TooManyRequests("TOTP_TOO_MANY_ATTEMPTS", "too many verification attempts, please try again later")
 	ErrVerifyCodeRequired  = infraerrors.BadRequest("VERIFY_CODE_REQUIRED", "email verification code is required")
 	ErrPasswordRequired    = infraerrors.BadRequest("PASSWORD_REQUIRED", "password is required")
+	ErrTotpUnavailable     = infraerrors.ServiceUnavailable("TOTP_UNAVAILABLE", "totp service is unavailable")
 )
 
 // TotpCache defines cache operations for TOTP service
@@ -117,7 +118,10 @@ func NewTotpService(
 
 // GetStatus returns the TOTP status for a user
 func (s *TotpService) GetStatus(ctx context.Context, userID int64) (*TotpStatus, error) {
-	featureEnabled := s.settingService.IsTotpEnabled(ctx)
+	if s == nil || s.userRepo == nil {
+		return nil, ErrTotpUnavailable
+	}
+	featureEnabled := s.settingService != nil && s.settingService.IsTotpEnabled(ctx)
 
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
@@ -134,6 +138,9 @@ func (s *TotpService) GetStatus(ctx context.Context, userID int64) (*TotpStatus,
 // InitiateSetup starts the TOTP setup process
 // If email verification is enabled, emailCode is required; otherwise password is required
 func (s *TotpService) InitiateSetup(ctx context.Context, userID int64, emailCode, password string) (*TotpSetupResponse, error) {
+	if s == nil || s.userRepo == nil || s.cache == nil || s.encryptor == nil || s.settingService == nil {
+		return nil, ErrTotpUnavailable
+	}
 	// Check if TOTP feature is enabled globally
 	if !s.settingService.IsTotpEnabled(ctx) {
 		return nil, ErrTotpNotEnabled
@@ -154,6 +161,9 @@ func (s *TotpService) InitiateSetup(ctx context.Context, userID int64, emailCode
 		// Email verification enabled - verify email code
 		if emailCode == "" {
 			return nil, ErrVerifyCodeRequired
+		}
+		if s.emailService == nil {
+			return nil, ErrTotpUnavailable
 		}
 		if err := s.emailService.VerifyCode(ctx, user.Email, emailCode); err != nil {
 			return nil, err
@@ -204,6 +214,9 @@ func (s *TotpService) InitiateSetup(ctx context.Context, userID int64, emailCode
 
 // CompleteSetup completes the TOTP setup by verifying the code
 func (s *TotpService) CompleteSetup(ctx context.Context, userID int64, totpCode, setupToken string) error {
+	if s == nil || s.userRepo == nil || s.cache == nil || s.encryptor == nil || s.settingService == nil {
+		return ErrTotpUnavailable
+	}
 	// Check if TOTP feature is enabled globally
 	if !s.settingService.IsTotpEnabled(ctx) {
 		return ErrTotpNotEnabled
@@ -229,14 +242,9 @@ func (s *TotpService) CompleteSetup(ctx context.Context, userID int64, totpCode,
 		return ErrTotpInvalidCode
 	}
 
-	setupSecretPrefix := "N/A"
-	if len(session.Secret) >= 4 {
-		setupSecretPrefix = session.Secret[:4]
-	}
 	slog.Debug("totp_complete_setup_before_encrypt",
 		"user_id", userID,
-		"secret_len", len(session.Secret),
-		"secret_prefix", setupSecretPrefix)
+		"secret_len", len(session.Secret))
 
 	// Encrypt the secret
 	encryptedSecret, err := s.encryptor.Encrypt(session.Secret)
@@ -255,16 +263,11 @@ func (s *TotpService) CompleteSetup(ctx context.Context, userID int64, totpCode,
 			"user_id", userID,
 			"error", decErr)
 	} else {
-		decryptedPrefix := "N/A"
-		if len(decrypted) >= 4 {
-			decryptedPrefix = decrypted[:4]
-		}
 		slog.Debug("totp_complete_setup_verified",
 			"user_id", userID,
 			"original_len", len(session.Secret),
 			"decrypted_len", len(decrypted),
-			"match", session.Secret == decrypted,
-			"decrypted_prefix", decryptedPrefix)
+			"match", session.Secret == decrypted)
 	}
 
 	// Update user with encrypted TOTP secret
@@ -286,6 +289,9 @@ func (s *TotpService) CompleteSetup(ctx context.Context, userID int64, totpCode,
 // Disable disables TOTP for a user
 // If email verification is enabled, emailCode is required; otherwise password is required
 func (s *TotpService) Disable(ctx context.Context, userID int64, emailCode, password string) error {
+	if s == nil || s.userRepo == nil || s.settingService == nil {
+		return ErrTotpUnavailable
+	}
 	// Get user
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
@@ -301,6 +307,9 @@ func (s *TotpService) Disable(ctx context.Context, userID int64, emailCode, pass
 		// Email verification enabled - verify email code
 		if emailCode == "" {
 			return ErrVerifyCodeRequired
+		}
+		if s.emailService == nil {
+			return ErrTotpUnavailable
 		}
 		if err := s.emailService.VerifyCode(ctx, user.Email, emailCode); err != nil {
 			return err
@@ -325,6 +334,9 @@ func (s *TotpService) Disable(ctx context.Context, userID int64, emailCode, pass
 
 // VerifyCode verifies a TOTP code for a user
 func (s *TotpService) VerifyCode(ctx context.Context, userID int64, code string) error {
+	if s == nil || s.userRepo == nil || s.cache == nil || s.encryptor == nil {
+		return ErrTotpUnavailable
+	}
 	slog.Debug("totp_verify_code_called",
 		"user_id", userID,
 		"code_len", len(code))
@@ -365,14 +377,9 @@ func (s *TotpService) VerifyCode(ctx context.Context, userID int64, code string)
 		return infraerrors.InternalServer("TOTP_VERIFY_ERROR", "failed to verify totp code")
 	}
 
-	secretPrefix := "N/A"
-	if len(secret) >= 4 {
-		secretPrefix = secret[:4]
-	}
 	slog.Debug("totp_verify_decrypted",
 		"user_id", userID,
-		"secret_len", len(secret),
-		"secret_prefix", secretPrefix)
+		"secret_len", len(secret))
 
 	// Verify the code
 	valid := totp.Validate(code, secret)
@@ -380,7 +387,6 @@ func (s *TotpService) VerifyCode(ctx context.Context, userID int64, code string)
 		"user_id", userID,
 		"valid", valid,
 		"secret_len", len(secret),
-		"secret_prefix", secretPrefix,
 		"server_time", time.Now().UTC().Format(time.RFC3339))
 
 	if !valid {
@@ -397,6 +403,9 @@ func (s *TotpService) VerifyCode(ctx context.Context, userID int64, code string)
 
 // CreateLoginSession creates a temporary login session for 2FA
 func (s *TotpService) CreateLoginSession(ctx context.Context, userID int64, email string) (string, error) {
+	if s == nil || s.cache == nil {
+		return "", ErrTotpUnavailable
+	}
 	// Generate a random temp token
 	tempToken, err := generateRandomToken(32)
 	if err != nil {
@@ -418,16 +427,25 @@ func (s *TotpService) CreateLoginSession(ctx context.Context, userID int64, emai
 
 // GetLoginSession retrieves a login session
 func (s *TotpService) GetLoginSession(ctx context.Context, tempToken string) (*TotpLoginSession, error) {
+	if s == nil || s.cache == nil {
+		return nil, ErrTotpUnavailable
+	}
 	return s.cache.GetLoginSession(ctx, tempToken)
 }
 
 // DeleteLoginSession deletes a login session
 func (s *TotpService) DeleteLoginSession(ctx context.Context, tempToken string) error {
+	if s == nil || s.cache == nil {
+		return ErrTotpUnavailable
+	}
 	return s.cache.DeleteLoginSession(ctx, tempToken)
 }
 
 // IsTotpEnabledForUser checks if TOTP is enabled for a specific user
 func (s *TotpService) IsTotpEnabledForUser(ctx context.Context, userID int64) (bool, error) {
+	if s == nil || s.userRepo == nil {
+		return false, ErrTotpUnavailable
+	}
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		return false, fmt.Errorf("get user: %w", err)
@@ -479,6 +497,9 @@ type VerificationMethod struct {
 
 // GetVerificationMethod returns the verification method for TOTP operations
 func (s *TotpService) GetVerificationMethod(ctx context.Context) *VerificationMethod {
+	if s == nil || s.settingService == nil {
+		return &VerificationMethod{Method: "email"}
+	}
 	if s.settingService.IsEmailVerifyEnabled(ctx) {
 		return &VerificationMethod{Method: "email"}
 	}
@@ -487,6 +508,9 @@ func (s *TotpService) GetVerificationMethod(ctx context.Context) *VerificationMe
 
 // SendVerifyCode sends an email verification code for TOTP operations
 func (s *TotpService) SendVerifyCode(ctx context.Context, userID int64) error {
+	if s == nil || s.settingService == nil || s.userRepo == nil || s.emailQueueService == nil {
+		return ErrTotpUnavailable
+	}
 	// Check if email verification is enabled
 	if !s.settingService.IsEmailVerifyEnabled(ctx) {
 		return infraerrors.BadRequest("EMAIL_VERIFY_NOT_ENABLED", "email verification is not enabled")

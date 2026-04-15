@@ -342,6 +342,30 @@ func (s *RedeemCodeRepoSuite) TestListByUser_DefaultLimit() {
 	s.Require().Len(codes, 1)
 }
 
+func (s *RedeemCodeRepoSuite) TestGetStats() {
+	codes := []service.RedeemCode{
+		{Code: "STAT-BALANCE-UNUSED", Type: service.RedeemTypeBalance, Status: service.StatusUnused},
+		{Code: "STAT-INVITE-UNUSED", Type: service.RedeemTypeInvitation, Status: service.StatusUnused},
+		{Code: "STAT-CONC-USED", Type: service.RedeemTypeConcurrency, Status: service.StatusUsed, Value: 15},
+		{Code: "STAT-SUB-EXPIRED", Type: service.RedeemTypeSubscription, Status: service.StatusExpired},
+	}
+	for i := range codes {
+		s.Require().NoError(s.repo.Create(s.ctx, &codes[i]))
+	}
+
+	stats, err := s.repo.GetStats(s.ctx)
+	s.Require().NoError(err)
+	s.Require().Equal(int64(4), stats.TotalCodes)
+	s.Require().Equal(int64(2), stats.UnusedCodes)
+	s.Require().Equal(int64(1), stats.UsedCodes)
+	s.Require().Equal(int64(1), stats.ExpiredCodes)
+	s.Require().InDelta(15, stats.TotalValueDistributed, 1e-9)
+	s.Require().Equal(int64(1), stats.TypeCounts[service.RedeemTypeBalance])
+	s.Require().Equal(int64(1), stats.TypeCounts[service.RedeemTypeInvitation])
+	s.Require().Equal(int64(1), stats.TypeCounts[service.RedeemTypeConcurrency])
+	s.Require().Equal(int64(1), stats.TypeCounts[service.RedeemTypeSubscription])
+}
+
 // --- Combined original test ---
 
 func (s *RedeemCodeRepoSuite) TestCreateBatch_Filters_Use_Idempotency_ListByUser() {

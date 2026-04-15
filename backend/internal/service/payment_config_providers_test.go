@@ -3,6 +3,7 @@
 package service
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -101,7 +102,7 @@ func TestIsSensitiveConfigField(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		field    string
+		field   string
 		wantSen bool
 	}{
 		// Sensitive fields (contain key/secret/private/password/pkey patterns)
@@ -134,6 +135,51 @@ func TestIsSensitiveConfigField(t *testing.T) {
 			assert.Equal(t, tc.wantSen, got, "isSensitiveConfigField(%q)", tc.field)
 		})
 	}
+}
+
+func TestDecryptAndMaskConfig(t *testing.T) {
+	t.Parallel()
+
+	svc := &PaymentConfigService{
+		encryptionKey: []byte(strings.Repeat("k", 32)),
+	}
+	encrypted, err := svc.encryptConfig(map[string]string{
+		"appId":      "2021001234567890",
+		"privateKey": "merchant-private-key",
+		"publicKey":  "merchant-public-key",
+		"notifyUrl":  "https://crs.qazwc.com/api/v1/pay/notify/alipay",
+		"password":   "",
+	})
+	require.NoError(t, err)
+
+	masked, err := svc.decryptAndMaskConfig(encrypted)
+	require.NoError(t, err)
+	require.NotNil(t, masked)
+	assert.Equal(t, "2021001234567890", masked["appId"])
+	assert.Equal(t, maskedSensitiveConfigValue, masked["privateKey"])
+	assert.Equal(t, maskedSensitiveConfigValue, masked["publicKey"])
+	assert.Equal(t, "https://crs.qazwc.com/api/v1/pay/notify/alipay", masked["notifyUrl"])
+	assert.Equal(t, "", masked["password"])
+}
+
+func TestMergeProviderConfigKeepsExistingSensitiveValueWhenClientEchoesMask(t *testing.T) {
+	t.Parallel()
+
+	merged := mergeProviderConfig(
+		map[string]string{
+			"appId":      "2021001234567890",
+			"privateKey": "original-private-key",
+			"notifyUrl":  "https://old.example.com/notify",
+		},
+		map[string]string{
+			"privateKey": maskedSensitiveConfigValue,
+			"notifyUrl":  "https://new.example.com/notify",
+		},
+	)
+
+	assert.Equal(t, "2021001234567890", merged["appId"])
+	assert.Equal(t, "original-private-key", merged["privateKey"])
+	assert.Equal(t, "https://new.example.com/notify", merged["notifyUrl"])
 }
 
 func TestJoinTypes(t *testing.T) {

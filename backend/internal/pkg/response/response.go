@@ -2,13 +2,16 @@
 package response
 
 import (
-	"log"
 	"math"
 	"net/http"
+	"strings"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/util/logredact"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 // Response 标准API响应格式
@@ -86,9 +89,40 @@ func ErrorFrom(c *gin.Context, err error) bool {
 
 	statusCode, status := infraerrors.ToHTTP(err)
 
-	// Log internal errors with full details for debugging
 	if statusCode >= 500 && c.Request != nil {
-		log.Printf("[ERROR] %s %s\n  Error: %s", c.Request.Method, c.Request.URL.Path, logredact.RedactText(err.Error()))
+		fields := []zap.Field{
+			zap.String("component", "http.response_error"),
+			zap.Int("status_code", statusCode),
+			zap.String("reason", status.Reason),
+			zap.String("message", status.Message),
+			zap.String("error", logredact.RedactText(err.Error())),
+			zap.String("method", c.Request.Method),
+			zap.String("path", c.Request.URL.Path),
+		}
+		if requestID, _ := c.Request.Context().Value(ctxkey.RequestID).(string); strings.TrimSpace(requestID) != "" {
+			fields = append(fields, zap.String("request_id", requestID))
+		}
+		if clientRequestID, _ := c.Request.Context().Value(ctxkey.ClientRequestID).(string); strings.TrimSpace(clientRequestID) != "" {
+			fields = append(fields, zap.String("client_request_id", clientRequestID))
+		}
+		logger.FromContext(c.Request.Context()).With(fields...).Error("http.error_from")
+	} else if c.Request != nil {
+		fields := []zap.Field{
+			zap.String("component", "http.response_error"),
+			zap.Int("status_code", statusCode),
+			zap.String("reason", status.Reason),
+			zap.String("message", status.Message),
+			zap.String("error", logredact.RedactText(err.Error())),
+			zap.String("method", c.Request.Method),
+			zap.String("path", c.Request.URL.Path),
+		}
+		if requestID, _ := c.Request.Context().Value(ctxkey.RequestID).(string); strings.TrimSpace(requestID) != "" {
+			fields = append(fields, zap.String("request_id", requestID))
+		}
+		if clientRequestID, _ := c.Request.Context().Value(ctxkey.ClientRequestID).(string); strings.TrimSpace(clientRequestID) != "" {
+			fields = append(fields, zap.String("client_request_id", clientRequestID))
+		}
+		logger.FromContext(c.Request.Context()).With(fields...).Warn("http.error_from")
 	}
 
 	ErrorWithDetails(c, statusCode, status.Message, status.Reason, status.Metadata)

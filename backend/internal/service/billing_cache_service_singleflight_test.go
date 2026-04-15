@@ -18,6 +18,7 @@ import (
 type billingCacheMissStub struct {
 	setBalanceCalls      atomic.Int64
 	setSubscriptionCalls atomic.Int64
+	rateLimitUpdateCalls atomic.Int64
 }
 
 func (s *billingCacheMissStub) GetUserBalance(ctx context.Context, userID int64) (float64, error) {
@@ -63,6 +64,7 @@ func (s *billingCacheMissStub) SetAPIKeyRateLimit(ctx context.Context, keyID int
 }
 
 func (s *billingCacheMissStub) UpdateAPIKeyRateLimitUsage(ctx context.Context, keyID int64, cost float64) error {
+	s.rateLimitUpdateCalls.Add(1)
 	return nil
 }
 
@@ -281,4 +283,50 @@ func TestBillingCacheServiceGetSubscriptionStatus_Singleflight(t *testing.T) {
 
 	require.Equal(t, int64(1), repo.calls.Load(), "singleflight 应该合并并发订阅请求")
 	require.Equal(t, int64(1), cache.setSubscriptionCalls.Load(), "缓存写入只需一次")
+}
+
+func TestBillingCacheServiceGetUserBalance_FallsBackToSyncWriteWhenQueueStopped(t *testing.T) {
+	cache := &billingCacheMissStub{}
+	userRepo := &balanceLoadUserRepoStub{balance: 23.45}
+	svc := NewBillingCacheService(cache, userRepo, nil, nil, &config.Config{})
+	svc.Stop()
+
+	balance, err := svc.GetUserBalance(context.Background(), 99)
+	require.NoError(t, err)
+	require.Equal(t, 23.45, balance)
+	require.Equal(t, int64(1), cache.setBalanceCalls.Load(), "queue closed should fall back to sync balance cache write")
+}
+
+func TestBillingCacheServiceGetSubscriptionStatus_FallsBackToSyncWriteWhenQueueStopped(t *testing.T) {
+	cache := &billingCacheMissStub{}
+	repo := &subscriptionLoadUserSubRepoStub{
+		subscription: &UserSubscription{
+			ID:              101,
+			UserID:          99,
+			GroupID:         12,
+			Status:          SubscriptionStatusActive,
+			ExpiresAt:       time.Now().Add(time.Hour),
+			DailyUsageUSD:   1.1,
+			WeeklyUsageUSD:  2.2,
+			MonthlyUsageUSD: 3.3,
+		},
+	}
+	svc := NewBillingCacheService(cache, nil, repo, nil, &config.Config{})
+	svc.Stop()
+
+	data, err := svc.GetSubscriptionStatus(context.Background(), 99, 12)
+	require.NoError(t, err)
+	require.NotNil(t, data)
+	require.Equal(t, SubscriptionStatusActive, data.Status)
+	require.Equal(t, int64(1), cache.setSubscriptionCalls.Load(), "queue closed should fall back to sync subscription cache write")
+}
+
+func TestBillingCacheServiceQueueUpdateAPIKeyRateLimitUsage_FallsBackWhenQueueStopped(t *testing.T) {
+	cache := &billingCacheMissStub{}
+	svc := NewBillingCacheService(cache, nil, nil, nil, &config.Config{})
+	svc.Stop()
+
+	svc.QueueUpdateAPIKeyRateLimitUsage(7, 1.25)
+
+	require.Equal(t, int64(1), cache.rateLimitUpdateCalls.Load(), "queue closed should fall back to sync rate limit cache write")
 }

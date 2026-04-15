@@ -215,14 +215,16 @@ func (s *PaymentService) revalidateSelectedInstance(ctx context.Context, tx *dbe
 	if !inst.Enabled || (!payment.InstanceSupportsType(inst.SupportedTypes, paymentType) && inst.ProviderKey != payment.GetBasePaymentType(paymentType)) {
 		return infraerrors.TooManyRequests("NO_AVAILABLE_INSTANCE", "selected payment instance is no longer available")
 	}
-	usage, err := tx.PaymentOrder.Query().
-		Where(
-			paymentorder.ProviderInstanceIDEQ(sel.InstanceID),
-			paymentorder.StatusIn(OrderStatusPending, OrderStatusPaid, OrderStatusCompleted, OrderStatusRecharging),
-			paymentorder.CreatedAtGTE(startOfDay(time.Now())),
-		).
-		Aggregate(dbent.Sum(paymentorder.FieldPayAmount)).
-		Float64(ctx)
+	usage, err := payment.ScanNullableSum(func(dest any) error {
+		return tx.PaymentOrder.Query().
+			Where(
+				paymentorder.ProviderInstanceIDEQ(sel.InstanceID),
+				paymentorder.StatusIn(OrderStatusPending, OrderStatusPaid, OrderStatusCompleted, OrderStatusRecharging),
+				paymentorder.CreatedAtGTE(startOfDay(time.Now())),
+			).
+			Aggregate(dbent.Sum(paymentorder.FieldPayAmount)).
+			Scan(ctx, dest)
+	})
 	if err != nil {
 		return fmt.Errorf("query selected instance usage: %w", err)
 	}

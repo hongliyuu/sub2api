@@ -71,6 +71,17 @@ func TestLatestMigrationBaseline(t *testing.T) {
 func TestIsMigrationChecksumCompatible_AdditionalCases(t *testing.T) {
 	require.False(t, isMigrationChecksumCompatible("unknown.sql", "db", "file"))
 
+	require.True(t, isMigrationChecksumCompatible(
+		"098_migrate_purchase_subscription_to_custom_menu.sql",
+		"da103effd6affebe41a27af457983eadf0e610d73294984e223dbba68ffdbd04",
+		"6ecb2ad0acf89baff3123cb44bd0670437a973ed64122f5bf4ba33b83bded33c",
+	))
+	require.False(t, isMigrationChecksumCompatible(
+		"098_migrate_purchase_subscription_to_custom_menu.sql",
+		"da103effd6affebe41a27af457983eadf0e610d73294984e223dbba68ffdbd04",
+		"some-other-file-checksum",
+	))
+
 	var (
 		name string
 		rule migrationChecksumCompatibilityRule

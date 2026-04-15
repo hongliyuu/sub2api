@@ -1056,6 +1056,89 @@ func (s *UsageLogRepoSuite) TestDashboardAggregationConsistency() {
 	s.Require().Equal(int64(2), daily.activeUsers)
 }
 
+func (s *UsageLogRepoSuite) TestGetAllGroupUsageSummary_UsesGroupDailyAggregatesAndRawTail() {
+	now := time.Now().UTC().Truncate(time.Second)
+	historicalDay := truncateToDayUTC(now.AddDate(0, 0, -2))
+	todayStart := truncateToDayUTC(now)
+
+	group1 := mustCreateGroup(s.T(), s.client, &service.Group{Name: "g-summary-1"})
+	group2 := mustCreateGroup(s.T(), s.client, &service.Group{Name: "g-summary-2"})
+	user1 := mustCreateUser(s.T(), s.client, &service.User{Email: "summary-u1@test.com"})
+	user2 := mustCreateUser(s.T(), s.client, &service.User{Email: "summary-u2@test.com"})
+	apiKey1 := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user1.ID, Key: "sk-summary-1", Name: "k1"})
+	apiKey2 := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user2.ID, Key: "sk-summary-2", Name: "k2"})
+	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-summary"})
+
+	oldLog1 := &service.UsageLog{
+		UserID:     user1.ID,
+		APIKeyID:   apiKey1.ID,
+		AccountID:  account.ID,
+		GroupID:    &group1.ID,
+		Model:      "claude-3",
+		TotalCost:  1.2,
+		ActualCost: 1.2,
+		CreatedAt:  historicalDay.Add(2 * time.Hour),
+	}
+	_, err := s.repo.Create(s.ctx, oldLog1)
+	s.Require().NoError(err)
+
+	oldLog2 := &service.UsageLog{
+		UserID:     user2.ID,
+		APIKeyID:   apiKey2.ID,
+		AccountID:  account.ID,
+		GroupID:    &group2.ID,
+		Model:      "claude-3",
+		TotalCost:  2.3,
+		ActualCost: 2.3,
+		CreatedAt:  historicalDay.Add(5 * time.Hour),
+	}
+	_, err = s.repo.Create(s.ctx, oldLog2)
+	s.Require().NoError(err)
+
+	aggRepo := newDashboardAggregationRepositoryWithSQL(s.tx)
+	s.Require().NoError(aggRepo.AggregateRange(s.ctx, historicalDay, todayStart))
+	s.Require().NoError(aggRepo.UpdateAggregationWatermark(s.ctx, todayStart))
+
+	tailLog1 := &service.UsageLog{
+		UserID:     user1.ID,
+		APIKeyID:   apiKey1.ID,
+		AccountID:  account.ID,
+		GroupID:    &group1.ID,
+		Model:      "claude-3",
+		TotalCost:  0.4,
+		ActualCost: 0.4,
+		CreatedAt:  todayStart.Add(1 * time.Hour),
+	}
+	_, err = s.repo.Create(s.ctx, tailLog1)
+	s.Require().NoError(err)
+
+	tailLog2 := &service.UsageLog{
+		UserID:     user2.ID,
+		APIKeyID:   apiKey2.ID,
+		AccountID:  account.ID,
+		GroupID:    &group2.ID,
+		Model:      "claude-3",
+		TotalCost:  0.6,
+		ActualCost: 0.6,
+		CreatedAt:  todayStart.Add(2 * time.Hour),
+	}
+	_, err = s.repo.Create(s.ctx, tailLog2)
+	s.Require().NoError(err)
+
+	results, err := s.repo.GetAllGroupUsageSummary(s.ctx, todayStart)
+	s.Require().NoError(err)
+
+	summaryByGroup := make(map[int64]usagestats.GroupUsageSummary, len(results))
+	for _, item := range results {
+		summaryByGroup[item.GroupID] = item
+	}
+
+	s.Require().InEpsilon(1.6, summaryByGroup[group1.ID].TotalCost, 0.0001)
+	s.Require().InEpsilon(0.4, summaryByGroup[group1.ID].TodayCost, 0.0001)
+	s.Require().InEpsilon(2.9, summaryByGroup[group2.ID].TotalCost, 0.0001)
+	s.Require().InEpsilon(0.6, summaryByGroup[group2.ID].TodayCost, 0.0001)
+}
+
 // --- GetBatchUserUsageStats ---
 
 func (s *UsageLogRepoSuite) TestGetBatchUserUsageStats() {

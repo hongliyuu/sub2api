@@ -15,6 +15,9 @@ services:
     image: sub2api:latest
     container_name: sub2api
     restart: unless-stopped
+    mem_limit: ${SUB2API_MEM_LIMIT:-2g}
+    cpus: ${SUB2API_CPUS:-2.0}
+    pids_limit: ${SUB2API_PIDS_LIMIT:-512}
     ulimits:
       nofile:
         soft: 100000
@@ -37,7 +40,13 @@ services:
       - SERVER_HOST=0.0.0.0
       - SERVER_PORT=8080
       - SERVER_MODE=${SERVER_MODE:-release}
+      - SERVER_FRONTEND_URL=${SERVER_FRONTEND_URL:-}
+      - SERVER_TRUSTED_PROXIES=${SERVER_TRUSTED_PROXIES:-}
+      - SERVER_OBSERVABILITY_PUBLIC_HEALTH=${SERVER_OBSERVABILITY_PUBLIC_HEALTH:-false}
+      - SERVER_OBSERVABILITY_PUBLIC_METRICS=${SERVER_OBSERVABILITY_PUBLIC_METRICS:-false}
+      - SERVER_OBSERVABILITY_ALLOW_CIDRS=${SERVER_OBSERVABILITY_ALLOW_CIDRS:-127.0.0.1/32,::1/128}
       - RUN_MODE=${RUN_MODE:-standard}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-}
 
       # =======================================================================
       # Database Configuration (PostgreSQL) - Required
@@ -52,6 +61,11 @@ services:
       - DATABASE_MAX_IDLE_CONNS=${DATABASE_MAX_IDLE_CONNS:-10}
       - DATABASE_CONN_MAX_LIFETIME_MINUTES=${DATABASE_CONN_MAX_LIFETIME_MINUTES:-30}
       - DATABASE_CONN_MAX_IDLE_TIME_MINUTES=${DATABASE_CONN_MAX_IDLE_TIME_MINUTES:-5}
+      - DATABASE_CONNECT_TIMEOUT_SECONDS=${DATABASE_CONNECT_TIMEOUT_SECONDS:-5}
+      - DATABASE_STATEMENT_TIMEOUT_MS=${DATABASE_STATEMENT_TIMEOUT_MS:-0}
+      - DATABASE_LOCK_TIMEOUT_MS=${DATABASE_LOCK_TIMEOUT_MS:-0}
+      - DATABASE_IDLE_IN_TRANSACTION_SESSION_TIMEOUT_MS=${DATABASE_IDLE_IN_TRANSACTION_SESSION_TIMEOUT_MS:-0}
+      - DATABASE_APPLICATION_NAME=${DATABASE_APPLICATION_NAME:-sub2api}
 
       # =======================================================================
       # Redis Configuration - Required
@@ -75,6 +89,7 @@ services:
       # =======================================================================
       - JWT_SECRET=${JWT_SECRET:-}
       - JWT_EXPIRE_HOUR=${JWT_EXPIRE_HOUR:-24}
+      - TOTP_ENCRYPTION_KEY=${TOTP_ENCRYPTION_KEY:-}
 
       # =======================================================================
       # Timezone Configuration
@@ -93,12 +108,43 @@ services:
       # SECURITY: This repo does not embed third-party client_secret.
       - GEMINI_CLI_OAUTH_CLIENT_SECRET=${GEMINI_CLI_OAUTH_CLIENT_SECRET:-}
       - ANTIGRAVITY_OAUTH_CLIENT_SECRET=${ANTIGRAVITY_OAUTH_CLIENT_SECRET:-}
+
+      # =======================================================================
+      # Security Configuration (URL Allowlist)
+      # =======================================================================
+      # Enable URL allowlist validation (false to skip allowlist checks)
+      - SECURITY_URL_ALLOWLIST_ENABLED=${SECURITY_URL_ALLOWLIST_ENABLED:-false}
+      # Allow insecure HTTP URLs when allowlist is disabled (default: false, requires https)
+      - SECURITY_URL_ALLOWLIST_ALLOW_INSECURE_HTTP=${SECURITY_URL_ALLOWLIST_ALLOW_INSECURE_HTTP:-false}
+      # Allow private IP addresses for upstream/pricing/CRS (for internal deployments)
+      - SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS=${SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS:-false}
+      # Upstream hosts whitelist (comma-separated, only used when enabled=true)
+      - SECURITY_URL_ALLOWLIST_UPSTREAM_HOSTS=${SECURITY_URL_ALLOWLIST_UPSTREAM_HOSTS:-}
+      # CRS hosts whitelist (comma-separated, only used when enabled=true)
+      - SECURITY_URL_ALLOWLIST_CRS_HOSTS=${SECURITY_URL_ALLOWLIST_CRS_HOSTS:-}
+
+      # =======================================================================
+      # Update Configuration (在线更新配置)
+      # =======================================================================
+      # Proxy for accessing GitHub (online updates + pricing data)
+      # Examples: http://host:port, socks5://host:port
+      - UPDATE_PROXY_URL=${UPDATE_PROXY_URL:-}
+      - OPS_CLEANUP_ERROR_LOG_RETENTION_DAYS=${OPS_CLEANUP_ERROR_LOG_RETENTION_DAYS:-14}
+      - OPS_CLEANUP_SYSTEM_LOG_MAX_ROWS=${OPS_CLEANUP_SYSTEM_LOG_MAX_ROWS:-500000}
+      - OPS_CLEANUP_ERROR_LOG_MAX_ROWS=${OPS_CLEANUP_ERROR_LOG_MAX_ROWS:-200000}
+      - DASHBOARD_AGGREGATION_RETENTION_USAGE_LOGS_DAYS=${DASHBOARD_AGGREGATION_RETENTION_USAGE_LOGS_DAYS:-30}
+      - DASHBOARD_AGGREGATION_RETENTION_USAGE_LOGS_MAX_ROWS=${DASHBOARD_AGGREGATION_RETENTION_USAGE_LOGS_MAX_ROWS:-300000}
     healthcheck:
-      test: ["CMD", "wget", "-q", "-T", "5", "-O", "/dev/null", "http://localhost:8080/health"]
+      test: ["CMD", "wget", "-q", "-T", "5", "-O", "/dev/null", "http://localhost:8080/readyz"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
 
 volumes:
   sub2api_data:

@@ -26,6 +26,7 @@ type sqlExecutor interface {
 
 type groupRepository struct {
 	client *dbent.Client
+	db     *sql.DB
 	sql    sqlExecutor
 }
 
@@ -34,7 +35,11 @@ func NewGroupRepository(client *dbent.Client, sqlDB *sql.DB) service.GroupReposi
 }
 
 func newGroupRepositoryWithSQL(client *dbent.Client, sqlq sqlExecutor) *groupRepository {
-	return &groupRepository{client: client, sql: sqlq}
+	repo := &groupRepository{client: client, sql: sqlq}
+	if db, ok := sqlq.(*sql.DB); ok {
+		repo.db = db
+	}
+	return repo
 }
 
 func (r *groupRepository) Create(ctx context.Context, groupIn *service.Group) error {
@@ -199,12 +204,29 @@ func (r *groupRepository) Update(ctx context.Context, groupIn *service.Group) er
 }
 
 func (r *groupRepository) Delete(ctx context.Context, id int64) error {
-	_, err := r.client.Group.Delete().Where(group.IDEQ(id)).Exec(ctx)
-	if err != nil {
+	tx, err := r.client.Tx(ctx)
+	if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
+		return err
+	}
+
+	outboxExec := r.sql
+	txClient := r.client
+	if err == nil {
+		defer func() { _ = tx.Rollback() }()
+		txClient = tx.Client()
+		outboxExec = tx
+	}
+
+	if _, err := txClient.Group.Delete().Where(group.IDEQ(id)).Exec(ctx); err != nil {
 		return translatePersistenceError(err, service.ErrGroupNotFound, nil)
 	}
-	if err := enqueueSchedulerOutbox(ctx, r.sql, service.SchedulerOutboxEventGroupChanged, nil, &id, nil); err != nil {
-		logger.LegacyPrintf("repository.group", "[SchedulerOutbox] enqueue group delete failed: group=%d err=%v", id, err)
+	if err := enqueueSchedulerOutbox(ctx, outboxExec, service.SchedulerOutboxEventGroupChanged, nil, &id, nil); err != nil {
+		return err
+	}
+	if tx != nil {
+		if err := tx.Commit(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -501,13 +523,20 @@ func (r *groupRepository) GetAccountCount(ctx context.Context, groupID int64) (t
 }
 
 func (r *groupRepository) DeleteAccountGroupsByGroupID(ctx context.Context, groupID int64) (int64, error) {
-	res, err := r.sql.ExecContext(ctx, "DELETE FROM account_groups WHERE group_id = $1", groupID)
+	var affected int64
+	err := withSQLTransactionIfAvailable(ctx, r.db, r.sql, func(exec sqlExecutor) error {
+		res, err := exec.ExecContext(ctx, "DELETE FROM account_groups WHERE group_id = $1", groupID)
+		if err != nil {
+			return err
+		}
+		affected, _ = res.RowsAffected()
+		if err := enqueueSchedulerOutbox(ctx, exec, service.SchedulerOutboxEventGroupChanged, nil, &groupID, nil); err != nil {
+			return err
+		}
+		return nil
+	})
 	if err != nil {
 		return 0, err
-	}
-	affected, _ := res.RowsAffected()
-	if err := enqueueSchedulerOutbox(ctx, r.sql, service.SchedulerOutboxEventGroupChanged, nil, &groupID, nil); err != nil {
-		logger.LegacyPrintf("repository.group", "[SchedulerOutbox] enqueue group account clear failed: group=%d err=%v", groupID, err)
 	}
 	return affected, nil
 }
@@ -610,14 +639,18 @@ func (r *groupRepository) DeleteCascade(ctx context.Context, id int64) ([]int64,
 	if _, err := txClient.Group.Delete().Where(group.IDEQ(id)).Exec(ctx); err != nil {
 		return nil, err
 	}
+	outboxExec := r.sql
+	if tx != nil {
+		outboxExec = tx
+	}
+	if err := enqueueSchedulerOutbox(ctx, outboxExec, service.SchedulerOutboxEventGroupChanged, nil, &id, nil); err != nil {
+		return nil, err
+	}
 
 	if tx != nil {
 		if err := tx.Commit(); err != nil {
 			return nil, err
 		}
-	}
-	if err := enqueueSchedulerOutbox(ctx, r.sql, service.SchedulerOutboxEventGroupChanged, nil, &id, nil); err != nil {
-		logger.LegacyPrintf("repository.group", "[SchedulerOutbox] enqueue group cascade delete failed: group=%d err=%v", id, err)
 	}
 
 	return affectedUserIDs, nil

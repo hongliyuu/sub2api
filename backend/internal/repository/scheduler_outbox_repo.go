@@ -81,6 +81,23 @@ func (r *schedulerOutboxRepository) MaxID(ctx context.Context) (int64, error) {
 	return maxID, nil
 }
 
+func withSQLTransactionIfAvailable(ctx context.Context, db *sql.DB, fallback sqlExecutor, fn func(exec sqlExecutor) error) error {
+	if db == nil {
+		return fn(fallback)
+	}
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if err := fn(tx); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func enqueueSchedulerOutbox(ctx context.Context, exec sqlExecutor, eventType string, accountID *int64, groupID *int64, payload any) error {
 	if exec == nil {
 		return nil

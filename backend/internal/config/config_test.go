@@ -194,6 +194,16 @@ func TestLoadDefaultIdempotencyConfig(t *testing.T) {
 	}
 }
 
+func TestLoadDefaultServerObservabilityConfig(t *testing.T) {
+	resetViperWithJWTSecret(t)
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.False(t, cfg.Server.Observability.PublicHealth)
+	require.False(t, cfg.Server.Observability.PublicMetrics)
+	require.Equal(t, []string{"127.0.0.1/32", "::1/128"}, cfg.Server.Observability.AllowCIDRs)
+}
+
 func TestLoadIdempotencyConfigFromEnv(t *testing.T) {
 	resetViperWithJWTSecret(t)
 	t.Setenv("IDEMPOTENCY_OBSERVE_ONLY", "false")
@@ -511,8 +521,11 @@ func TestLoadDefaultDashboardAggregationConfig(t *testing.T) {
 	if cfg.DashboardAgg.BackfillMaxDays != 31 {
 		t.Fatalf("DashboardAgg.BackfillMaxDays = %d, want 31", cfg.DashboardAgg.BackfillMaxDays)
 	}
-	if cfg.DashboardAgg.Retention.UsageLogsDays != 90 {
-		t.Fatalf("DashboardAgg.Retention.UsageLogsDays = %d, want 90", cfg.DashboardAgg.Retention.UsageLogsDays)
+	if cfg.DashboardAgg.Retention.UsageLogsDays != 30 {
+		t.Fatalf("DashboardAgg.Retention.UsageLogsDays = %d, want 30", cfg.DashboardAgg.Retention.UsageLogsDays)
+	}
+	if cfg.DashboardAgg.Retention.UsageLogsMaxRows != 300000 {
+		t.Fatalf("DashboardAgg.Retention.UsageLogsMaxRows = %d, want 300000", cfg.DashboardAgg.Retention.UsageLogsMaxRows)
 	}
 	if cfg.DashboardAgg.Retention.UsageBillingDedupDays != 365 {
 		t.Fatalf("DashboardAgg.Retention.UsageBillingDedupDays = %d, want 365", cfg.DashboardAgg.Retention.UsageBillingDedupDays)
@@ -588,6 +601,15 @@ func TestLoadDefaultUsageCleanupConfig(t *testing.T) {
 	}
 	if cfg.UsageCleanup.TaskTimeoutSeconds != 1800 {
 		t.Fatalf("UsageCleanup.TaskTimeoutSeconds = %d, want 1800", cfg.UsageCleanup.TaskTimeoutSeconds)
+	}
+	if cfg.Ops.Cleanup.ErrorLogRetentionDays != 14 {
+		t.Fatalf("Ops.Cleanup.ErrorLogRetentionDays = %d, want 14", cfg.Ops.Cleanup.ErrorLogRetentionDays)
+	}
+	if cfg.Ops.Cleanup.SystemLogMaxRows != 500000 {
+		t.Fatalf("Ops.Cleanup.SystemLogMaxRows = %d, want 500000", cfg.Ops.Cleanup.SystemLogMaxRows)
+	}
+	if cfg.Ops.Cleanup.ErrorLogMaxRows != 200000 {
+		t.Fatalf("Ops.Cleanup.ErrorLogMaxRows = %d, want 200000", cfg.Ops.Cleanup.ErrorLogMaxRows)
 	}
 }
 

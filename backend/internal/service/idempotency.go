@@ -28,6 +28,7 @@ var (
 	ErrIdempotencyKeyConflict    = infraerrors.Conflict("IDEMPOTENCY_KEY_CONFLICT", "idempotency key reused with different payload")
 	ErrIdempotencyInProgress     = infraerrors.Conflict("IDEMPOTENCY_IN_PROGRESS", "idempotent request is still processing")
 	ErrIdempotencyRetryBackoff   = infraerrors.Conflict("IDEMPOTENCY_RETRY_BACKOFF", "idempotent request is in retry backoff window")
+	ErrIdempotencyOwnershipLost  = infraerrors.Conflict("IDEMPOTENCY_OWNERSHIP_LOST", "idempotency request ownership lost")
 	ErrIdempotencyStoreUnavail   = infraerrors.ServiceUnavailable("IDEMPOTENCY_STORE_UNAVAILABLE", "idempotency store unavailable")
 	ErrIdempotencyInvalidPayload = infraerrors.BadRequest("IDEMPOTENCY_PAYLOAD_INVALID", "failed to normalize request payload")
 )
@@ -50,10 +51,10 @@ type IdempotencyRecord struct {
 type IdempotencyRepository interface {
 	CreateProcessing(ctx context.Context, record *IdempotencyRecord) (bool, error)
 	GetByScopeAndKeyHash(ctx context.Context, scope, keyHash string) (*IdempotencyRecord, error)
-	TryReclaim(ctx context.Context, id int64, fromStatus string, now, newLockedUntil, newExpiresAt time.Time) (bool, error)
-	ExtendProcessingLock(ctx context.Context, id int64, requestFingerprint string, newLockedUntil, newExpiresAt time.Time) (bool, error)
-	MarkSucceeded(ctx context.Context, id int64, responseStatus int, responseBody string, expiresAt time.Time) error
-	MarkFailedRetryable(ctx context.Context, id int64, errorReason string, lockedUntil, expiresAt time.Time) error
+	TryReclaim(ctx context.Context, id int64, fromStatus, requestFingerprint string, now, newLockedUntil, newExpiresAt time.Time) (bool, error)
+	ExtendProcessingLock(ctx context.Context, id int64, requestFingerprint string, expectedLockedUntil, newLockedUntil, newExpiresAt time.Time) (bool, error)
+	MarkSucceeded(ctx context.Context, id int64, requestFingerprint string, expectedLockedUntil time.Time, responseStatus int, responseBody string, expiresAt time.Time) error
+	MarkFailedRetryable(ctx context.Context, id int64, requestFingerprint string, expectedLockedUntil time.Time, errorReason string, lockedUntil, expiresAt time.Time) error
 	DeleteExpired(ctx context.Context, now time.Time, limit int) (int64, error)
 }
 
@@ -196,6 +197,10 @@ func RetryAfterSecondsFromError(err error) int {
 	return seconds
 }
 
+func IsIdempotencyOwnershipLost(err error) bool {
+	return errors.Is(err, ErrIdempotencyOwnershipLost)
+}
+
 func (c *IdempotencyCoordinator) Execute(
 	ctx context.Context,
 	opts IdempotencyExecuteOptions,
@@ -288,7 +293,7 @@ func (c *IdempotencyCoordinator) Execute(
 		}
 		reclaimedByExpired := false
 		if !existing.ExpiresAt.After(now) {
-			taken, reclaimErr := c.repo.TryReclaim(ctx, existing.ID, existing.Status, now, lockedUntil, expiresAt)
+			taken, reclaimErr := c.repo.TryReclaim(ctx, existing.ID, existing.Status, fingerprint, now, lockedUntil, expiresAt)
 			if reclaimErr != nil {
 				RecordIdempotencyStoreUnavailable(opts.Route, opts.Scope, "try_reclaim_expired_error")
 				logIdempotencyAudit(opts.Route, opts.Scope, keyHash, existing.Status+"->store_unavailable", false, map[string]string{
@@ -353,7 +358,7 @@ func (c *IdempotencyCoordinator) Execute(
 					logIdempotencyAudit(opts.Route, opts.Scope, keyHash, "failed_retryable->retry_backoff_conflict", false, nil)
 					return nil, c.conflictWithRetryAfter(ErrIdempotencyRetryBackoff, existing.LockedUntil, now)
 				}
-				taken, reclaimErr := c.repo.TryReclaim(ctx, existing.ID, IdempotencyStatusFailedRetryable, now, lockedUntil, expiresAt)
+				taken, reclaimErr := c.repo.TryReclaim(ctx, existing.ID, IdempotencyStatusFailedRetryable, fingerprint, now, lockedUntil, expiresAt)
 				if reclaimErr != nil {
 					RecordIdempotencyStoreUnavailable(opts.Route, opts.Scope, "try_reclaim_error")
 					logIdempotencyAudit(opts.Route, opts.Scope, keyHash, "failed_retryable->store_unavailable", false, map[string]string{
@@ -407,7 +412,13 @@ func (c *IdempotencyCoordinator) Execute(
 		logIdempotencyAudit(opts.Route, opts.Scope, keyHash, "processing->failed_retryable", false, map[string]string{
 			"reason": reason,
 		})
-		if markErr := c.repo.MarkFailedRetryable(ctx, record.ID, reason, backoffUntil, expiresAt); markErr != nil {
+		if markErr := c.repo.MarkFailedRetryable(ctx, record.ID, fingerprint, lockedUntil, reason, backoffUntil, expiresAt); markErr != nil {
+			if IsIdempotencyOwnershipLost(markErr) {
+				logIdempotencyAudit(opts.Route, opts.Scope, keyHash, "processing->ownership_lost", false, map[string]string{
+					"operation": "mark_failed_retryable",
+				})
+				return nil, execErr
+			}
 			RecordIdempotencyStoreUnavailable(opts.Route, opts.Scope, "mark_failed_retryable_error")
 			logIdempotencyAudit(opts.Route, opts.Scope, keyHash, "processing->store_unavailable", false, map[string]string{
 				"operation": "mark_failed_retryable",
@@ -424,7 +435,13 @@ func (c *IdempotencyCoordinator) Execute(
 		})
 		return nil, ErrIdempotencyStoreUnavail.WithCause(marshalErr)
 	}
-	if markErr := c.repo.MarkSucceeded(ctx, record.ID, 200, storedBody, expiresAt); markErr != nil {
+	if markErr := c.repo.MarkSucceeded(ctx, record.ID, fingerprint, lockedUntil, 200, storedBody, expiresAt); markErr != nil {
+		if IsIdempotencyOwnershipLost(markErr) {
+			logIdempotencyAudit(opts.Route, opts.Scope, keyHash, "processing->ownership_lost", false, map[string]string{
+				"operation": "mark_succeeded",
+			})
+			return c.resolveAfterOwnershipLost(ctx, opts.Scope, keyHash, fingerprint, now)
+		}
 		RecordIdempotencyStoreUnavailable(opts.Route, opts.Scope, "mark_succeeded_error")
 		logIdempotencyAudit(opts.Route, opts.Scope, keyHash, "processing->store_unavailable", false, map[string]string{
 			"operation": "mark_succeeded",
@@ -434,6 +451,40 @@ func (c *IdempotencyCoordinator) Execute(
 	logIdempotencyAudit(opts.Route, opts.Scope, keyHash, "processing->succeeded", false, nil)
 
 	return &IdempotencyExecuteResult{Data: data}, nil
+}
+
+func (c *IdempotencyCoordinator) resolveAfterOwnershipLost(
+	ctx context.Context,
+	scope, keyHash, fingerprint string,
+	now time.Time,
+) (*IdempotencyExecuteResult, error) {
+	latest, err := c.repo.GetByScopeAndKeyHash(ctx, scope, keyHash)
+	if err != nil {
+		return nil, ErrIdempotencyStoreUnavail.WithCause(err)
+	}
+	if latest == nil {
+		return nil, ErrIdempotencyInProgress
+	}
+	if latest.RequestFingerprint != fingerprint {
+		return nil, ErrIdempotencyKeyConflict
+	}
+	switch latest.Status {
+	case IdempotencyStatusSucceeded:
+		data, parseErr := c.decodeStoredResponse(latest.ResponseBody)
+		if parseErr != nil {
+			return nil, ErrIdempotencyStoreUnavail.WithCause(parseErr)
+		}
+		return &IdempotencyExecuteResult{Data: data, Replayed: true}, nil
+	case IdempotencyStatusProcessing:
+		return nil, c.conflictWithRetryAfter(ErrIdempotencyInProgress, latest.LockedUntil, now)
+	case IdempotencyStatusFailedRetryable:
+		if latest.LockedUntil != nil && latest.LockedUntil.After(now) {
+			return nil, c.conflictWithRetryAfter(ErrIdempotencyRetryBackoff, latest.LockedUntil, now)
+		}
+		return nil, ErrIdempotencyRetryBackoff
+	default:
+		return nil, ErrIdempotencyOwnershipLost
+	}
 }
 
 func (c *IdempotencyCoordinator) conflictWithRetryAfter(base *infraerrors.ApplicationError, lockedUntil *time.Time, now time.Time) error {

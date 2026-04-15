@@ -3249,26 +3249,112 @@ func (r *usageLogRepository) GetUserBreakdownStats(ctx context.Context, startTim
 
 // GetAllGroupUsageSummary returns today's and cumulative actual_cost for every group.
 // todayStart is the start-of-day in the caller's timezone (UTC-based).
-// TODO(perf): This query scans ALL usage_logs rows for total_cost aggregation.
-// When usage_logs exceeds ~1M rows, consider adding a short-lived cache (30s)
-// or a materialized view / pre-aggregation table for cumulative costs.
+//
+// Performance notes:
+// - total_cost is served from group/day pre-aggregation plus a raw tail after the latest watermark
+// - today_cost remains a bounded raw query so arbitrary caller timezones stay accurate
 func (r *usageLogRepository) GetAllGroupUsageSummary(ctx context.Context, todayStart time.Time) ([]usagestats.GroupUsageSummary, error) {
+	todayStartUTC := todayStart.UTC()
+	watermark, err := r.getDashboardAggregationWatermark(ctx)
+	if err == nil && watermark.After(time.Unix(0, 0).UTC()) {
+		results, aggErr := r.getAllGroupUsageSummaryFromAggregates(ctx, todayStartUTC, watermark.UTC())
+		if aggErr == nil {
+			return results, nil
+		}
+		if !isUndefinedTableError(aggErr) {
+			logger.LegacyPrintf("repository.usage_log", "group usage summary aggregate query failed, falling back to raw logs: %v", aggErr)
+		}
+	} else if err != nil && !isUndefinedTableError(err) {
+		logger.LegacyPrintf("repository.usage_log", "group usage summary watermark query failed, falling back to raw logs: %v", err)
+	}
+
+	return r.getAllGroupUsageSummaryFromUsageLogs(ctx, todayStartUTC)
+}
+
+func (r *usageLogRepository) getDashboardAggregationWatermark(ctx context.Context) (time.Time, error) {
+	var ts time.Time
+	err := scanSingleRow(ctx, r.sql, "SELECT last_aggregated_at FROM usage_dashboard_aggregation_watermark WHERE id = 1", nil, &ts)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return time.Unix(0, 0).UTC(), nil
+		}
+		return time.Time{}, err
+	}
+	return ts.UTC(), nil
+}
+
+func (r *usageLogRepository) getAllGroupUsageSummaryFromAggregates(ctx context.Context, todayStartUTC, watermark time.Time) ([]usagestats.GroupUsageSummary, error) {
 	query := `
+		WITH agg_totals AS (
+			SELECT
+				group_id,
+				COALESCE(SUM(actual_cost), 0) AS total_cost
+			FROM usage_group_daily_costs
+			GROUP BY group_id
+		),
+		tail_totals AS (
+			SELECT
+				group_id,
+				COALESCE(SUM(actual_cost), 0) AS total_cost
+			FROM usage_logs
+			WHERE created_at >= $1
+				AND group_id IS NOT NULL
+			GROUP BY group_id
+		),
+		today_totals AS (
+			SELECT
+				group_id,
+				COALESCE(SUM(actual_cost), 0) AS today_cost
+			FROM usage_logs
+			WHERE created_at >= $2
+				AND group_id IS NOT NULL
+			GROUP BY group_id
+		)
 		SELECT
 			g.id AS group_id,
-			COALESCE(SUM(ul.actual_cost), 0) AS total_cost,
-			COALESCE(SUM(CASE WHEN ul.created_at >= $1 THEN ul.actual_cost ELSE 0 END), 0) AS today_cost
+			COALESCE(a.total_cost, 0) + COALESCE(t.total_cost, 0) AS total_cost,
+			COALESCE(td.today_cost, 0) AS today_cost
 		FROM groups g
-		LEFT JOIN usage_logs ul ON ul.group_id = g.id
-		GROUP BY g.id
+		LEFT JOIN agg_totals a ON a.group_id = g.id
+		LEFT JOIN tail_totals t ON t.group_id = g.id
+		LEFT JOIN today_totals td ON td.group_id = g.id
+		ORDER BY g.id
 	`
 
-	rows, err := r.sql.QueryContext(ctx, query, todayStart)
+	return r.scanGroupUsageSummaryRows(ctx, query, watermark, todayStartUTC)
+}
+
+func (r *usageLogRepository) getAllGroupUsageSummaryFromUsageLogs(ctx context.Context, todayStartUTC time.Time) ([]usagestats.GroupUsageSummary, error) {
+	query := `
+		WITH usage AS (
+			SELECT
+				group_id,
+				COALESCE(SUM(actual_cost), 0) AS total_cost,
+				COALESCE(SUM(actual_cost) FILTER (WHERE created_at >= $1), 0) AS today_cost
+			FROM usage_logs
+			WHERE group_id IS NOT NULL
+			GROUP BY group_id
+		)
+		SELECT
+			g.id AS group_id,
+			COALESCE(u.total_cost, 0) AS total_cost,
+			COALESCE(u.today_cost, 0) AS today_cost
+		FROM groups g
+		LEFT JOIN usage u ON u.group_id = g.id
+		ORDER BY g.id
+	`
+
+	return r.scanGroupUsageSummaryRows(ctx, query, todayStartUTC)
+}
+
+func (r *usageLogRepository) scanGroupUsageSummaryRows(ctx context.Context, query string, args ...any) ([]usagestats.GroupUsageSummary, error) {
+	rows, err := r.sql.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
-	var results []usagestats.GroupUsageSummary
+
+	results := make([]usagestats.GroupUsageSummary, 0)
 	for rows.Next() {
 		var row usagestats.GroupUsageSummary
 		if err := rows.Scan(&row.GroupID, &row.TotalCost, &row.TodayCost); err != nil {
@@ -3280,6 +3366,14 @@ func (r *usageLogRepository) GetAllGroupUsageSummary(ctx context.Context, todayS
 		return nil, err
 	}
 	return results, nil
+}
+
+func isUndefinedTableError(err error) bool {
+	var pqErr *pq.Error
+	if !errors.As(err, &pqErr) || pqErr == nil {
+		return false
+	}
+	return pqErr.Code == "42P01"
 }
 
 // resolveModelDimensionExpression maps model source type to a safe SQL expression.

@@ -73,6 +73,12 @@ var migrationChecksumCompatibilityRules = map[string]migrationChecksumCompatibil
 			"222b4a09c797c22e5922b6b172327c824f5463aaa8760e4f621bc5c22e2be0f3": {},
 		},
 	},
+	"098_migrate_purchase_subscription_to_custom_menu.sql": {
+		fileChecksum: "6ecb2ad0acf89baff3123cb44bd0670437a973ed64122f5bf4ba33b83bded33c",
+		acceptedDBChecksum: map[string]struct{}{
+			"da103effd6affebe41a27af457983eadf0e610d73294984e223dbba68ffdbd04": {},
+		},
+	},
 }
 
 // ApplyMigrations 将嵌入的 SQL 迁移文件应用到指定的数据库。
@@ -358,8 +364,7 @@ func validateMigrationExecutionMode(name, content string) (bool, error) {
 		}
 
 		if strings.Contains(normalizedStmt, "CONCURRENTLY") {
-			isCreateIndex := strings.Contains(normalizedStmt, "CREATE") && strings.Contains(normalizedStmt, "INDEX")
-			isDropIndex := strings.Contains(normalizedStmt, "DROP") && strings.Contains(normalizedStmt, "INDEX")
+			isCreateIndex, isDropIndex := classifyConcurrentIndexStatement(normalizedStmt)
 			if !isCreateIndex && !isDropIndex {
 				return false, errors.New("*_notx.sql currently only supports CREATE/DROP INDEX CONCURRENTLY statements")
 			}
@@ -376,6 +381,26 @@ func validateMigrationExecutionMode(name, content string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+func classifyConcurrentIndexStatement(stmt string) (isCreateIndex bool, isDropIndex bool) {
+	fields := strings.Fields(strings.TrimSpace(stmt))
+	if len(fields) < 2 {
+		return false, false
+	}
+
+	switch fields[0] {
+	case "CREATE":
+		idx := 1
+		if idx < len(fields) && fields[idx] == "UNIQUE" {
+			idx++
+		}
+		return idx < len(fields) && fields[idx] == "INDEX", false
+	case "DROP":
+		return false, fields[1] == "INDEX"
+	default:
+		return false, false
+	}
 }
 
 func splitSQLStatements(content string) []string {

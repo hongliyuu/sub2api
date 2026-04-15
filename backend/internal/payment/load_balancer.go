@@ -279,25 +279,20 @@ func (lb *DefaultLoadBalancer) decryptConfig(encrypted string) (map[string]strin
 // GetInstanceDailyAmount returns the total completed order amount for an instance today.
 func (lb *DefaultLoadBalancer) GetInstanceDailyAmount(ctx context.Context, instanceID string) (float64, error) {
 	todayStart := startOfDay(time.Now())
-
-	var result []struct {
-		Sum float64 `json:"sum"`
-	}
-	err := lb.db.PaymentOrder.Query().
-		Where(
-			paymentorder.ProviderInstanceID(instanceID),
-			paymentorder.StatusIn(OrderStatusCompleted, OrderStatusPaid, OrderStatusRecharging),
-			paymentorder.PaidAtGTE(todayStart),
-		).
-		Aggregate(dbent.Sum(paymentorder.FieldPayAmount)).
-		Scan(ctx, &result)
+	sum, err := ScanNullableSum(func(dest any) error {
+		return lb.db.PaymentOrder.Query().
+			Where(
+				paymentorder.ProviderInstanceID(instanceID),
+				paymentorder.StatusIn(OrderStatusCompleted, OrderStatusPaid, OrderStatusRecharging),
+				paymentorder.PaidAtGTE(todayStart),
+			).
+			Aggregate(dbent.Sum(paymentorder.FieldPayAmount)).
+			Scan(ctx, dest)
+	})
 	if err != nil {
 		return 0, fmt.Errorf("query daily amount: %w", err)
 	}
-	if len(result) > 0 {
-		return result[0].Sum, nil
-	}
-	return 0, nil
+	return sum, nil
 }
 
 func startOfDay(t time.Time) time.Time {

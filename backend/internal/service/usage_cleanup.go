@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
@@ -14,6 +15,8 @@ const (
 	UsageCleanupStatusFailed    = "failed"
 	UsageCleanupStatusCanceled  = "canceled"
 )
+
+var ErrUsageCleanupTaskOwnershipLost = errors.New("usage cleanup task ownership lost")
 
 // UsageCleanupFilters 定义清理任务过滤条件
 // 时间范围为必填，其他字段可选
@@ -66,10 +69,10 @@ type UsageCleanupRepository interface {
 	// GetTaskStatus 查询任务状态；若不存在返回 sql.ErrNoRows
 	GetTaskStatus(ctx context.Context, taskID int64) (string, error)
 	// UpdateTaskProgress 更新任务进度（deleted_rows）用于断点续跑/展示
-	UpdateTaskProgress(ctx context.Context, taskID int64, deletedRows int64) error
+	UpdateTaskProgress(ctx context.Context, taskID int64, startedAt time.Time, deletedRows int64) error
 	// CancelTask 将任务标记为 canceled（仅允许 pending/running）
 	CancelTask(ctx context.Context, taskID int64, canceledBy int64) (bool, error)
-	MarkTaskSucceeded(ctx context.Context, taskID int64, deletedRows int64) error
-	MarkTaskFailed(ctx context.Context, taskID int64, deletedRows int64, errorMsg string) error
+	MarkTaskSucceeded(ctx context.Context, taskID int64, startedAt time.Time, deletedRows int64) error
+	MarkTaskFailed(ctx context.Context, taskID int64, startedAt time.Time, deletedRows int64, errorMsg string) error
 	DeleteUsageLogsBatch(ctx context.Context, filters UsageCleanupFilters, limit int) (int64, error)
 }

@@ -70,12 +70,12 @@ type flakySystemLockRenewRepo struct {
 	extendCalls int32
 }
 
-func (r *flakySystemLockRenewRepo) ExtendProcessingLock(ctx context.Context, id int64, requestFingerprint string, newLockedUntil, newExpiresAt time.Time) (bool, error) {
+func (r *flakySystemLockRenewRepo) ExtendProcessingLock(ctx context.Context, id int64, requestFingerprint string, expectedLockedUntil, newLockedUntil, newExpiresAt time.Time) (bool, error) {
 	call := atomic.AddInt32(&r.extendCalls, 1)
 	if call == 1 {
 		return false, errors.New("transient extend failure")
 	}
-	return r.inMemoryIdempotencyRepo.ExtendProcessingLock(ctx, id, requestFingerprint, newLockedUntil, newExpiresAt)
+	return r.inMemoryIdempotencyRepo.ExtendProcessingLock(ctx, id, requestFingerprint, expectedLockedUntil, newLockedUntil, newExpiresAt)
 }
 
 func TestSystemOperationLockService_RenewLeaseContinuesAfterTransientFailure(t *testing.T) {
@@ -157,6 +157,72 @@ func TestSystemOperationLockService_RecoverAfterLeaseExpired(t *testing.T) {
 	require.NoError(t, svc.Release(context.Background(), lock2, true, ""))
 }
 
+func TestSystemOperationLockService_StaleReleaseDoesNotOverrideReclaimedOwner(t *testing.T) {
+	repo := newInMemoryIdempotencyRepo()
+	svc := NewSystemOperationLockService(repo, IdempotencyConfig{
+		SystemOperationTTL: 5 * time.Second,
+		ProcessingTimeout:  300 * time.Millisecond,
+	})
+
+	lock1, err := svc.Acquire(context.Background(), "op-stale")
+	require.NoError(t, err)
+	require.NotNil(t, lock1)
+
+	lock1.stopOnce.Do(func() {
+		close(lock1.stopCh)
+	})
+
+	time.Sleep(450 * time.Millisecond)
+
+	lock2, err := svc.Acquire(context.Background(), "op-new")
+	require.NoError(t, err)
+	require.NotNil(t, lock2)
+
+	require.NoError(t, svc.Release(context.Background(), lock1, true, ""))
+
+	keyHash := HashIdempotencyKey(systemOperationLockKey)
+	record, err := repo.GetByScopeAndKeyHash(context.Background(), systemOperationLockScope, keyHash)
+	require.NoError(t, err)
+	require.NotNil(t, record)
+	require.Equal(t, IdempotencyStatusProcessing, record.Status)
+	require.Equal(t, "op-new", record.RequestFingerprint)
+
+	require.NoError(t, svc.Release(context.Background(), lock2, true, ""))
+}
+
+func TestSystemOperationLockService_StaleReleaseDoesNotOverrideReclaimedSameOperationID(t *testing.T) {
+	repo := newInMemoryIdempotencyRepo()
+	svc := NewSystemOperationLockService(repo, IdempotencyConfig{
+		SystemOperationTTL: 5 * time.Second,
+		ProcessingTimeout:  300 * time.Millisecond,
+	})
+
+	lock1, err := svc.Acquire(context.Background(), "op-same-reclaim")
+	require.NoError(t, err)
+	require.NotNil(t, lock1)
+
+	lock1.stopOnce.Do(func() {
+		close(lock1.stopCh)
+	})
+
+	time.Sleep(450 * time.Millisecond)
+
+	lock2, err := svc.Acquire(context.Background(), "op-same-reclaim")
+	require.NoError(t, err)
+	require.NotNil(t, lock2)
+
+	require.NoError(t, svc.Release(context.Background(), lock1, true, ""))
+
+	keyHash := HashIdempotencyKey(systemOperationLockKey)
+	record, err := repo.GetByScopeAndKeyHash(context.Background(), systemOperationLockScope, keyHash)
+	require.NoError(t, err)
+	require.NotNil(t, record)
+	require.Equal(t, IdempotencyStatusProcessing, record.Status)
+	require.Equal(t, "op-same-reclaim", record.RequestFingerprint)
+
+	require.NoError(t, svc.Release(context.Background(), lock2, true, ""))
+}
+
 type systemLockRepoStub struct {
 	createOwner bool
 	createErr   error
@@ -182,22 +248,22 @@ func (s *systemLockRepoStub) GetByScopeAndKeyHash(context.Context, string, strin
 	return cloneRecord(s.existing), nil
 }
 
-func (s *systemLockRepoStub) TryReclaim(context.Context, int64, string, time.Time, time.Time, time.Time) (bool, error) {
+func (s *systemLockRepoStub) TryReclaim(context.Context, int64, string, string, time.Time, time.Time, time.Time) (bool, error) {
 	if s.reclaimErr != nil {
 		return false, s.reclaimErr
 	}
 	return s.reclaimOK, nil
 }
 
-func (s *systemLockRepoStub) ExtendProcessingLock(context.Context, int64, string, time.Time, time.Time) (bool, error) {
+func (s *systemLockRepoStub) ExtendProcessingLock(context.Context, int64, string, time.Time, time.Time, time.Time) (bool, error) {
 	return true, nil
 }
 
-func (s *systemLockRepoStub) MarkSucceeded(context.Context, int64, int, string, time.Time) error {
+func (s *systemLockRepoStub) MarkSucceeded(context.Context, int64, string, time.Time, int, string, time.Time) error {
 	return s.markSuccErr
 }
 
-func (s *systemLockRepoStub) MarkFailedRetryable(context.Context, int64, string, time.Time, time.Time) error {
+func (s *systemLockRepoStub) MarkFailedRetryable(context.Context, int64, string, time.Time, string, time.Time, time.Time) error {
 	return s.markFailErr
 }
 

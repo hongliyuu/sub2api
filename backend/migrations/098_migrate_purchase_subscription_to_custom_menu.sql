@@ -60,11 +60,11 @@ BEGIN
     -- Upsert custom_menu_items
     INSERT INTO settings (key, value)
     VALUES ('custom_menu_items', v_items::text)
-    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value;
+    ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW();
 
     -- Clear legacy settings
-    UPDATE settings SET value = 'false' WHERE key = 'purchase_subscription_enabled';
-    UPDATE settings SET value = ''      WHERE key = 'purchase_subscription_url';
+    UPDATE settings SET value = 'false', updated_at = NOW() WHERE key = 'purchase_subscription_enabled';
+    UPDATE settings SET value = '', updated_at = NOW() WHERE key = 'purchase_subscription_url';
 
     RAISE NOTICE '[migration-096] Migrated purchase_subscription_url (%) to custom_menu_items', v_url;
 END $$;

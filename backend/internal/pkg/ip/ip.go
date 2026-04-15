@@ -8,40 +8,10 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// GetClientIP 从 Gin Context 中提取客户端真实 IP 地址。
-// 按以下优先级检查 Header：
-// 1. CF-Connecting-IP (Cloudflare)
-// 2. X-Real-IP (Nginx)
-// 3. X-Forwarded-For (取第一个非私有 IP)
-// 4. c.ClientIP() (Gin 内置方法)
+// GetClientIP 从 Gin 的可信代理链中提取客户端真实 IP 地址。
+// 统一复用 gin.Engine.SetTrustedProxies 的解析结果，避免在未受信任链路上直接采信原始转发头。
 func GetClientIP(c *gin.Context) string {
-	// 1. Cloudflare
-	if ip := c.GetHeader("CF-Connecting-IP"); ip != "" {
-		return normalizeIP(ip)
-	}
-
-	// 2. Nginx X-Real-IP
-	if ip := c.GetHeader("X-Real-IP"); ip != "" {
-		return normalizeIP(ip)
-	}
-
-	// 3. X-Forwarded-For (多个 IP 时取第一个公网 IP)
-	if xff := c.GetHeader("X-Forwarded-For"); xff != "" {
-		ips := strings.Split(xff, ",")
-		for _, ip := range ips {
-			ip = strings.TrimSpace(ip)
-			if ip != "" && !isPrivateIP(ip) {
-				return normalizeIP(ip)
-			}
-		}
-		// 如果都是私有 IP，返回第一个
-		if len(ips) > 0 {
-			return normalizeIP(strings.TrimSpace(ips[0]))
-		}
-	}
-
-	// 4. Gin 内置方法
-	return normalizeIP(c.ClientIP())
+	return GetTrustedClientIP(c)
 }
 
 // GetTrustedClientIP 从 Gin 的可信代理解析链提取客户端 IP。

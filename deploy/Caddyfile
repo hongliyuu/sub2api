@@ -32,7 +32,7 @@ api.sub2api.com {
 	# =========================================================================
 	reverse_proxy localhost:8080 {
 		# 健康检查
-		health_uri /health
+		health_uri /readyz
 		health_interval 30s
 		health_timeout 10s
 		health_status 200
@@ -43,7 +43,7 @@ api.sub2api.com {
 		lb_try_interval 250ms
 		
 		# 传递真实客户端信息
-		# 兼容 Cloudflare 和直连：后端应优先读取 CF-Connecting-IP，其次 X-Real-IP
+		# 后端会按 trusted proxies 链路解析这些头，而不是直接信任原始转发头
 		header_up X-Real-IP {remote_host}
 		header_up X-Forwarded-For {remote_host}
 		header_up X-Forwarded-Proto {scheme}

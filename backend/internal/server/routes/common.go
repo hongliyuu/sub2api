@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/handler"
+	iputil "github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	"github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
@@ -20,21 +22,47 @@ type CommonRouteOptions struct {
 	RedisProbe        func(context.Context) error
 	DBSnapshot        func() repository.DBPoolSnapshot
 	RedisSnapshot     func() repository.RedisPoolSnapshot
+	OpsErrorLog       func() OpsErrorLogSnapshot
 	SchedulerSnapshot func() service.SchedulerOutboxRuntimeMetrics
 	Now               func() time.Time
+	PublicHealth      bool
+	PublicMetrics     bool
+	AllowCIDRs        []string
+	ClientIP          func(*gin.Context) string
+}
+
+type OpsErrorLogSnapshot struct {
+	QueueLength           int64
+	QueueCapacity         int
+	DroppedTotal          int64
+	EnqueuedTotal         int64
+	ProcessedTotal        int64
+	PersistedSuccessTotal int64
+	PersistedFailureTotal int64
 }
 
 // RegisterCommonRoutes 注册通用路由（健康检查、状态等）
 func RegisterCommonRoutes(r *gin.Engine, provided ...CommonRouteOptions) {
 	opts := resolveCommonRouteOptions(provided...)
+	healthGuard := observabilityGuard(opts.PublicHealth, opts.AllowCIDRs, opts.ClientIP)
+	metricsGuard := observabilityGuard(opts.PublicMetrics, opts.AllowCIDRs, opts.ClientIP)
+
 	readinessHandler := func(c *gin.Context) {
+		payload, ready := buildReadinessPayload(c.Request.Context(), opts)
+		statusCode := http.StatusOK
+		if !ready {
+			statusCode = http.StatusServiceUnavailable
+		}
+		c.JSON(statusCode, payload)
+	}
+	healthHandler := func(c *gin.Context) {
 		c.JSON(http.StatusOK, buildHealthPayload(c.Request.Context(), opts))
 	}
 
 	// 健康检查
-	r.GET("/health", readinessHandler)
+	r.GET("/health", healthGuard(healthHandler))
 	r.GET("/readyz", readinessHandler)
-	r.GET("/api/health", readinessHandler)
+	r.GET("/api/health", healthGuard(healthHandler))
 	r.GET("/api/readyz", readinessHandler)
 
 	r.GET("/livez", func(c *gin.Context) {
@@ -46,7 +74,7 @@ func RegisterCommonRoutes(r *gin.Engine, provided ...CommonRouteOptions) {
 	})
 
 	// Runtime metrics in Prometheus exposition format.
-	r.GET("/metrics", metricsHandler())
+	r.GET("/metrics", metricsGuard(metricsHandler()))
 
 	// Claude Code 遥测日志（忽略，直接返回200）
 	r.POST("/api/event_logging/batch", func(c *gin.Context) {
@@ -83,29 +111,93 @@ func resolveCommonRouteOptions(provided ...CommonRouteOptions) CommonRouteOption
 	if opts.RedisSnapshot == nil {
 		opts.RedisSnapshot = repository.SnapshotDefaultRedisPoolStats
 	}
+	if opts.OpsErrorLog == nil {
+		opts.OpsErrorLog = func() OpsErrorLogSnapshot {
+			return OpsErrorLogSnapshot{
+				QueueLength:           handler.OpsErrorLogQueueLength(),
+				QueueCapacity:         handler.OpsErrorLogQueueCapacity(),
+				DroppedTotal:          handler.OpsErrorLogDroppedTotal(),
+				EnqueuedTotal:         handler.OpsErrorLogEnqueuedTotal(),
+				ProcessedTotal:        handler.OpsErrorLogProcessedTotal(),
+				PersistedSuccessTotal: handler.OpsErrorLogPersistedSuccessTotal(),
+				PersistedFailureTotal: handler.OpsErrorLogPersistedFailureTotal(),
+			}
+		}
+	}
 	if opts.SchedulerSnapshot == nil {
 		opts.SchedulerSnapshot = service.SnapshotSchedulerOutboxRuntimeMetrics
 	}
 	if opts.Now == nil {
 		opts.Now = time.Now
 	}
+	if opts.ClientIP == nil {
+		opts.ClientIP = iputil.GetTrustedClientIP
+	}
 	return opts
+}
+
+func observabilityGuard(public bool, allowCIDRs []string, clientIP func(*gin.Context) string) func(gin.HandlerFunc) gin.HandlerFunc {
+	compiledAllow := iputil.CompileIPRules(allowCIDRs)
+	return func(next gin.HandlerFunc) gin.HandlerFunc {
+		if public {
+			return next
+		}
+		return func(c *gin.Context) {
+			if compiledAllow == nil || compiledAllow.PatternCount == 0 {
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+					"error":   "forbidden",
+					"message": "observability endpoint is not exposed",
+				})
+				return
+			}
+			requestIP := ""
+			if clientIP != nil {
+				requestIP = strings.TrimSpace(clientIP(c))
+			}
+			allowed, _ := iputil.CheckIPRestrictionWithCompiledRules(requestIP, compiledAllow, nil)
+			if !allowed {
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+					"error":   "forbidden",
+					"message": "observability endpoint is not exposed",
+				})
+				return
+			}
+			next(c)
+		}
+	}
+}
+
+func buildReadinessPayload(baseCtx context.Context, opts CommonRouteOptions) (gin.H, bool) {
+	payload := buildHealthPayload(baseCtx, opts)
+	ready, _ := payload["ready"].(bool)
+	checkedAt, _ := payload["checked_at"].(string)
+	status := "ok"
+	if !ready {
+		status = "not_ready"
+	}
+	return gin.H{
+		"status":     status,
+		"ready":      ready,
+		"checked_at": checkedAt,
+	}, ready
 }
 
 func buildHealthPayload(baseCtx context.Context, opts CommonRouteOptions) gin.H {
 	dbSnapshot := opts.DBSnapshot()
 	redisSnapshot := opts.RedisSnapshot()
+	opsErrorLogSnapshot := opts.OpsErrorLog()
 	schedulerSnapshot := opts.SchedulerSnapshot()
 	dbErr := probeHealthComponent(baseCtx, opts.DBProbe)
 	redisErr := probeHealthComponent(baseCtx, opts.RedisProbe)
 
 	dbReady, dbStatus, dbNote := summarizeDBHealth(dbSnapshot, dbErr)
 	redisReady, redisStatus, redisNote := summarizeRedisHealth(redisSnapshot, redisErr)
+	opsErrorLogStatus, opsErrorLogNote, opsErrorLogUsagePercent := summarizeOpsErrorLogHealth(opsErrorLogSnapshot)
 	schedulerStatus, schedulerNote := summarizeSchedulerHealth(schedulerSnapshot)
 
 	ready := dbReady && redisReady
 	status := "ok"
-	if !ready || schedulerStatus != "ok" {
+	if !ready || schedulerStatus != "ok" || opsErrorLogStatus != "ok" {
 		status = "degraded"
 	}
 
@@ -137,6 +229,18 @@ func buildHealthPayload(baseCtx context.Context, opts CommonRouteOptions) gin.H 
 				"stalls":           redisSnapshot.Stalls,
 				"usage_percent":    redisSnapshot.UsagePercent,
 				"hit_rate_percent": redisSnapshot.HitRatePercent,
+			},
+			"ops_error_logger": gin.H{
+				"status":                  opsErrorLogStatus,
+				"note":                    opsErrorLogNote,
+				"queue_length":            opsErrorLogSnapshot.QueueLength,
+				"queue_capacity":          opsErrorLogSnapshot.QueueCapacity,
+				"queue_usage_percent":     opsErrorLogUsagePercent,
+				"enqueued_total":          opsErrorLogSnapshot.EnqueuedTotal,
+				"processed_total":         opsErrorLogSnapshot.ProcessedTotal,
+				"dropped_total":           opsErrorLogSnapshot.DroppedTotal,
+				"persisted_success_total": opsErrorLogSnapshot.PersistedSuccessTotal,
+				"persisted_failure_total": opsErrorLogSnapshot.PersistedFailureTotal,
 			},
 			"scheduler_outbox": gin.H{
 				"status":                     schedulerStatus,
@@ -190,6 +294,32 @@ func summarizeRedisHealth(snapshot repository.RedisPoolSnapshot, err error) (boo
 		return true, "warning", "redis connections near pool limit"
 	}
 	return true, "ok", "redis probe healthy"
+}
+
+func summarizeOpsErrorLogHealth(snapshot OpsErrorLogSnapshot) (string, string, *float64) {
+	var usagePercent *float64
+	if snapshot.QueueCapacity > 0 {
+		usage := float64(snapshot.QueueLength) / float64(snapshot.QueueCapacity) * 100
+		usagePercent = &usage
+		if usage >= 95 {
+			return "critical", "ops error log queue nearly full", usagePercent
+		}
+		if usage >= 80 {
+			return "warning", "ops error log queue under pressure", usagePercent
+		}
+	}
+
+	notes := make([]string, 0, 2)
+	if snapshot.DroppedTotal > 0 {
+		notes = append(notes, "historical_dropped_total="+formatHealthInt(snapshot.DroppedTotal))
+	}
+	if snapshot.PersistedFailureTotal > 0 {
+		notes = append(notes, "historical_persist_fail_total="+formatHealthInt(snapshot.PersistedFailureTotal))
+	}
+	if len(notes) > 0 {
+		return "ok", strings.Join(notes, ", "), usagePercent
+	}
+	return "ok", "ops error logger healthy", usagePercent
 }
 
 func summarizeSchedulerHealth(snapshot service.SchedulerOutboxRuntimeMetrics) (string, string) {

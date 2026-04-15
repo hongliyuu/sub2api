@@ -49,6 +49,15 @@ DROP INDEX CONCURRENTLY IF EXISTS idx_b;
 		require.True(t, nonTx)
 		require.NoError(t, err)
 	})
+
+	t.Run("drop index with created_at name should not be misclassified as create", func(t *testing.T) {
+		nonTx, err := validateMigrationExecutionMode("104_add_retention_cleanup_indexes_notx.sql", `
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ops_error_logs_created_at_id ON ops_error_logs(created_at, id);
+DROP INDEX CONCURRENTLY IF EXISTS idx_ops_error_logs_created_at;
+`)
+		require.True(t, nonTx)
+		require.NoError(t, err)
+	})
 }
 
 func TestApplyMigrationsFS_NonTransactionalMigration(t *testing.T) {

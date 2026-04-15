@@ -156,7 +156,7 @@ func (s *cleanupRepoStub) GetTaskStatus(ctx context.Context, taskID int64) (stri
 	return status, nil
 }
 
-func (s *cleanupRepoStub) UpdateTaskProgress(ctx context.Context, taskID int64, deletedRows int64) error {
+func (s *cleanupRepoStub) UpdateTaskProgress(ctx context.Context, taskID int64, startedAt time.Time, deletedRows int64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.progressCalls = append(s.progressCalls, cleanupMarkCall{taskID: taskID, deletedRows: deletedRows})
@@ -194,7 +194,7 @@ func (s *cleanupRepoStub) CancelTask(ctx context.Context, taskID int64, canceled
 	return true, nil
 }
 
-func (s *cleanupRepoStub) MarkTaskSucceeded(ctx context.Context, taskID int64, deletedRows int64) error {
+func (s *cleanupRepoStub) MarkTaskSucceeded(ctx context.Context, taskID int64, startedAt time.Time, deletedRows int64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.markSucceeded = append(s.markSucceeded, cleanupMarkCall{taskID: taskID, deletedRows: deletedRows})
@@ -205,7 +205,7 @@ func (s *cleanupRepoStub) MarkTaskSucceeded(ctx context.Context, taskID int64, d
 	return nil
 }
 
-func (s *cleanupRepoStub) MarkTaskFailed(ctx context.Context, taskID int64, deletedRows int64, errorMsg string) error {
+func (s *cleanupRepoStub) MarkTaskFailed(ctx context.Context, taskID int64, startedAt time.Time, deletedRows int64, errorMsg string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.markFailed = append(s.markFailed, cleanupMarkCall{taskID: taskID, deletedRows: deletedRows, errMsg: errorMsg})

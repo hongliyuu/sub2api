@@ -23,6 +23,7 @@ This directory contains files for deploying Sub2API on Linux servers.
 | `sub2api.service` | Systemd service unit file |
 | `sub2api-datamanagementd.service` | datamanagementd systemd service unit file |
 | `DATAMANAGEMENTD_CN.md` | datamanagementd 部署与联动说明（中文） |
+| `HOST_DATABASE_AND_REDIS_HARDENING.md` | 宿主 PostgreSQL / Redis 观测与收口配置示例 |
 | `config.example.yaml` | Example configuration file |
 
 ---
@@ -106,6 +107,8 @@ docker compose -f docker-compose.local.yml logs -f sub2api
 
 **Recommendation:** Use `docker-compose.local.yml` (deployed by `docker-deploy.sh`) for easier data management and migration.
 
+By default, the compose-based PostgreSQL and Redis services stay on the internal Docker network only. If you need host access for debugging, add an explicit loopback-only `ports:` mapping temporarily.
+
 ### How Auto-Setup Works
 
 When using Docker Compose with `AUTO_SETUP=true`:
@@ -123,6 +126,12 @@ When using Docker Compose with `AUTO_SETUP=true`:
    ```bash
    docker compose logs sub2api | grep "admin password"
    ```
+
+### Health Endpoints
+
+- `GET /readyz` is the container readiness probe and now returns non-200 when dependencies are not ready.
+- `GET /health` stays detailed for operators, but should usually remain restricted via `SERVER_OBSERVABILITY_*`.
+- `GET /metrics` should likewise stay restricted unless you intentionally expose it behind trusted network controls.
 
 ### Database Migration Notes (PostgreSQL)
 

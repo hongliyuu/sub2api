@@ -59,7 +59,11 @@ func (s *PaymentConfigService) ListProviderInstancesWithConfig(ctx context.Conte
 }
 
 func (s *PaymentConfigService) decryptAndMaskConfig(encrypted string) (map[string]string, error) {
-	return s.decryptConfig(encrypted)
+	cfg, err := s.decryptConfig(encrypted)
+	if err != nil {
+		return nil, err
+	}
+	return maskSensitiveConfig(cfg), nil
 }
 
 // pendingOrderStatuses are order statuses considered "in progress".
@@ -82,6 +86,8 @@ var providerHistoryLockStatuses = []string{
 
 var sensitiveConfigPatterns = []string{"key", "pkey", "secret", "private", "password"}
 
+const maskedSensitiveConfigValue = "••••••••"
+
 func isSensitiveConfigField(fieldName string) bool {
 	lower := strings.ToLower(fieldName)
 	for _, p := range sensitiveConfigPatterns {
@@ -90,6 +96,52 @@ func isSensitiveConfigField(fieldName string) bool {
 		}
 	}
 	return false
+}
+
+func isMaskedSensitiveConfigValue(value string) bool {
+	return strings.TrimSpace(value) == maskedSensitiveConfigValue
+}
+
+func maskSensitiveConfig(cfg map[string]string) map[string]string {
+	if cfg == nil {
+		return nil
+	}
+	masked := make(map[string]string, len(cfg))
+	for k, v := range cfg {
+		if isSensitiveConfigField(k) && strings.TrimSpace(v) != "" {
+			masked[k] = maskedSensitiveConfigValue
+			continue
+		}
+		masked[k] = v
+	}
+	return masked
+}
+
+func mergeProviderConfig(existing, newConfig map[string]string) map[string]string {
+	if len(existing) == 0 {
+		if len(newConfig) == 0 {
+			return nil
+		}
+		merged := make(map[string]string, len(newConfig))
+		for k, v := range newConfig {
+			if isSensitiveConfigField(k) && isMaskedSensitiveConfigValue(v) {
+				continue
+			}
+			merged[k] = v
+		}
+		return merged
+	}
+	merged := make(map[string]string, len(existing)+len(newConfig))
+	for k, v := range existing {
+		merged[k] = v
+	}
+	for k, v := range newConfig {
+		if isSensitiveConfigField(k) && isMaskedSensitiveConfigValue(v) {
+			continue
+		}
+		merged[k] = v
+	}
+	return merged
 }
 
 func (s *PaymentConfigService) countPendingOrders(ctx context.Context, providerInstanceID int64) (int, error) {
@@ -257,13 +309,7 @@ func (s *PaymentConfigService) mergeConfig(ctx context.Context, id int64, newCon
 	if err != nil {
 		return nil, fmt.Errorf("decrypt existing config for instance %d: %w", id, err)
 	}
-	if existing == nil {
-		return newConfig, nil
-	}
-	for k, v := range newConfig {
-		existing[k] = v
-	}
-	return existing, nil
+	return mergeProviderConfig(existing, newConfig), nil
 }
 
 func (s *PaymentConfigService) decryptConfig(encrypted string) (map[string]string, error) {

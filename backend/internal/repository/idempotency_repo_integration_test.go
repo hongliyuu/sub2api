@@ -70,9 +70,12 @@ func TestIdempotencyRepo_TryReclaim_StatusAndLockWindow(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, owner)
 
+	newFingerprint := hashedTestValue(t, "idem-fp-reclaim-new")
 	require.NoError(t, repo.MarkFailedRetryable(
 		ctx,
 		record.ID,
+		record.RequestFingerprint,
+		*record.LockedUntil,
 		"RETRYABLE_FAILURE",
 		now.Add(-2*time.Second),
 		now.Add(24*time.Hour),
@@ -83,6 +86,7 @@ func TestIdempotencyRepo_TryReclaim_StatusAndLockWindow(t *testing.T) {
 		ctx,
 		record.ID,
 		service.IdempotencyStatusFailedRetryable,
+		newFingerprint,
 		now,
 		newLockedUntil,
 		now.Add(24*time.Hour),
@@ -96,10 +100,14 @@ func TestIdempotencyRepo_TryReclaim_StatusAndLockWindow(t *testing.T) {
 	require.Equal(t, service.IdempotencyStatusProcessing, got.Status)
 	require.NotNil(t, got.LockedUntil)
 	require.True(t, got.LockedUntil.After(now))
+	require.Equal(t, newFingerprint, got.RequestFingerprint)
 
+	record.RequestFingerprint = newFingerprint
 	require.NoError(t, repo.MarkFailedRetryable(
 		ctx,
 		record.ID,
+		record.RequestFingerprint,
+		newLockedUntil,
 		"RETRYABLE_FAILURE",
 		now.Add(20*time.Second),
 		now.Add(24*time.Hour),
@@ -109,6 +117,7 @@ func TestIdempotencyRepo_TryReclaim_StatusAndLockWindow(t *testing.T) {
 		ctx,
 		record.ID,
 		service.IdempotencyStatusFailedRetryable,
+		record.RequestFingerprint,
 		now,
 		now.Add(40*time.Second),
 		now.Add(24*time.Hour),
@@ -135,7 +144,7 @@ func TestIdempotencyRepo_StatusTransition_ToSucceeded(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, owner)
 
-	require.NoError(t, repo.MarkSucceeded(ctx, record.ID, 200, `{"ok":true}`, now.Add(24*time.Hour)))
+	require.NoError(t, repo.MarkSucceeded(ctx, record.ID, record.RequestFingerprint, *record.LockedUntil, 200, `{"ok":true}`, now.Add(24*time.Hour)))
 
 	got, err := repo.GetByScopeAndKeyHash(ctx, record.Scope, record.IdempotencyKeyHash)
 	require.NoError(t, err)
@@ -146,4 +155,52 @@ func TestIdempotencyRepo_StatusTransition_ToSucceeded(t *testing.T) {
 	require.NotNil(t, got.ResponseBody)
 	require.Equal(t, `{"ok":true}`, *got.ResponseBody)
 	require.Nil(t, got.LockedUntil)
+}
+
+func TestIdempotencyRepo_ReclaimRequiresCurrentLockedUntilOwner(t *testing.T) {
+	tx := testTx(t)
+	repo := &idempotencyRepository{sql: tx}
+	ctx := context.Background()
+
+	now := time.Now().UTC()
+	record := &service.IdempotencyRecord{
+		Scope:              uniqueTestValue(t, "idem-scope-owner"),
+		IdempotencyKeyHash: hashedTestValue(t, "idem-hash-owner"),
+		RequestFingerprint: hashedTestValue(t, "idem-fp-owner"),
+		Status:             service.IdempotencyStatusProcessing,
+		LockedUntil:        ptrTime(now.Add(5 * time.Second)),
+		ExpiresAt:          now.Add(24 * time.Hour),
+	}
+	owner, err := repo.CreateProcessing(ctx, record)
+	require.NoError(t, err)
+	require.True(t, owner)
+
+	oldLockedUntil := *record.LockedUntil
+	require.NoError(t, repo.MarkFailedRetryable(
+		ctx,
+		record.ID,
+		record.RequestFingerprint,
+		oldLockedUntil,
+		"RETRYABLE_FAILURE",
+		now.Add(-time.Second),
+		now.Add(24*time.Hour),
+	))
+
+	newLockedUntil := now.Add(30 * time.Second)
+	reclaimed, err := repo.TryReclaim(
+		ctx,
+		record.ID,
+		service.IdempotencyStatusFailedRetryable,
+		record.RequestFingerprint,
+		now,
+		newLockedUntil,
+		now.Add(24*time.Hour),
+	)
+	require.NoError(t, err)
+	require.True(t, reclaimed)
+
+	err = repo.MarkSucceeded(ctx, record.ID, record.RequestFingerprint, oldLockedUntil, 200, `{"stale":true}`, now.Add(24*time.Hour))
+	require.ErrorIs(t, err, service.ErrIdempotencyOwnershipLost)
+
+	require.NoError(t, repo.MarkSucceeded(ctx, record.ID, record.RequestFingerprint, newLockedUntil, 200, `{"ok":true}`, now.Add(24*time.Hour)))
 }

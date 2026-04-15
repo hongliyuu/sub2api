@@ -166,9 +166,14 @@ func (a *Alipay) QueryOrder(ctx context.Context, tradeNo string) (*payment.Query
 		status = payment.ProviderStatusFailed
 	}
 
-	amount, err := strconv.ParseFloat(result.TotalAmount, 64)
+	amount, err := parseAlipayAmount(
+		result.TotalAmount,
+		result.ReceiptAmount,
+		result.BuyerPayAmount,
+		result.InvoiceAmount,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("alipay parse amount %q: %w", result.TotalAmount, err)
+		return nil, fmt.Errorf("alipay parse amount: %w", err)
 	}
 
 	return &payment.QueryOrderResponse{
@@ -201,9 +206,13 @@ func (a *Alipay) VerifyNotification(ctx context.Context, rawBody string, _ map[s
 		status = payment.ProviderStatusSuccess
 	}
 
-	amount, err := strconv.ParseFloat(notification.TotalAmount, 64)
+	amount, err := parseAlipayAmount(
+		notification.TotalAmount,
+		notification.ReceiptAmount,
+		notification.BuyerPayAmount,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("alipay parse notification amount %q: %w", notification.TotalAmount, err)
+		return nil, fmt.Errorf("alipay parse notification amount: %w", err)
 	}
 
 	return &payment.PaymentNotification{
@@ -263,6 +272,25 @@ func (a *Alipay) CancelPayment(ctx context.Context, tradeNo string) error {
 		return fmt.Errorf("alipay TradeClose: %w", err)
 	}
 	return nil
+}
+
+func parseAlipayAmount(candidates ...string) (float64, error) {
+	var lastErr error
+	for _, candidate := range candidates {
+		trimmed := strings.TrimSpace(candidate)
+		if trimmed == "" {
+			continue
+		}
+		amount, err := strconv.ParseFloat(trimmed, 64)
+		if err == nil {
+			return amount, nil
+		}
+		lastErr = fmt.Errorf("parse amount %q: %w", candidate, err)
+	}
+	if lastErr != nil {
+		return 0, lastErr
+	}
+	return 0, nil
 }
 
 func isTradeNotExist(err error) bool {

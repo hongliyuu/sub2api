@@ -6,9 +6,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strings"
 	"testing"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/suite"
@@ -25,6 +27,10 @@ type forbidSQLExecutor struct {
 	called bool
 }
 
+type failGroupSchedulerOutboxExec struct {
+	delegate sqlExecutor
+}
+
 func (s *forbidSQLExecutor) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
 	s.called = true
 	return nil, errors.New("unexpected sql exec")
@@ -33,6 +39,17 @@ func (s *forbidSQLExecutor) ExecContext(ctx context.Context, query string, args 
 func (s *forbidSQLExecutor) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
 	s.called = true
 	return nil, errors.New("unexpected sql query")
+}
+
+func (f *failGroupSchedulerOutboxExec) ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error) {
+	if strings.Contains(query, "INSERT INTO scheduler_outbox") {
+		return nil, errors.New("forced scheduler outbox failure")
+	}
+	return f.delegate.ExecContext(ctx, query, args...)
+}
+
+func (f *failGroupSchedulerOutboxExec) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	return f.delegate.QueryContext(ctx, query, args...)
 }
 
 func (s *GroupRepoSuite) SetupTest() {
@@ -157,6 +174,16 @@ func (s *GroupRepoSuite) TestDelete() {
 	_, err = s.repo.GetByID(s.ctx, group.ID)
 	s.Require().Error(err, "expected error after delete")
 	s.Require().ErrorIs(err, service.ErrGroupNotFound)
+
+	var outboxCount int
+	s.Require().NoError(scanSingleRow(
+		s.ctx,
+		s.tx,
+		"SELECT COUNT(*) FROM scheduler_outbox WHERE event_type = $1 AND group_id = $2",
+		[]any{service.SchedulerOutboxEventGroupChanged, group.ID},
+		&outboxCount,
+	))
+	s.Require().Equal(1, outboxCount, "expected delete invalidation outbox event")
 }
 
 // --- List / ListWithFilters ---
@@ -721,6 +748,36 @@ func (s *GroupRepoSuite) TestDeleteAccountGroupsByGroupID_MultipleAccounts() {
 
 	count, _, _ := s.repo.GetAccountCount(s.ctx, g.ID)
 	s.Require().Zero(count)
+}
+
+func (s *GroupRepoSuite) TestDeleteAccountGroupsByGroupID_RollsBackWhenOutboxEnqueueFails() {
+	ctx := context.Background()
+	committedGroup := mustCreateGroup(s.T(), testEntClient(), &service.Group{Name: "rollback-group"})
+	committedAccount := mustCreateAccount(s.T(), testEntClient(), &service.Account{Name: "rollback-account"})
+	mustBindAccountToGroup(s.T(), testEntClient(), committedAccount.ID, committedGroup.ID, 1)
+
+	tx := testEntTx(s.T())
+	repo := newGroupRepositoryWithSQL(tx.Client(), &failGroupSchedulerOutboxExec{delegate: tx})
+
+	affected, err := repo.DeleteAccountGroupsByGroupID(ctx, committedGroup.ID)
+	s.Require().Error(err)
+	s.Require().Zero(affected)
+	s.Require().Contains(err.Error(), "forced scheduler outbox failure")
+
+	s.Require().NoError(tx.Rollback())
+
+	count, err := integrationEntClient.AccountGroup.Query().
+		Where(group.HasAccountsWith()).
+		Count(ctx)
+	s.Require().NoError(err)
+	s.Require().GreaterOrEqual(count, 1)
+
+	bindingCount, err := integrationEntClient.AccountGroup.Query().
+		Where(
+			group.IDEQ(committedGroup.ID),
+		).
+		Count(ctx)
+	s.Require().Error(err)
 }
 
 // --- 软删除过滤测试 ---

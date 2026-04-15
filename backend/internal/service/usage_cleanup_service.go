@@ -208,6 +208,10 @@ func (s *UsageCleanupService) executeTask(ctx context.Context, task *UsageCleanu
 	if task == nil {
 		return
 	}
+	if task.StartedAt == nil || task.StartedAt.IsZero() {
+		now := time.Now().UTC()
+		task.StartedAt = &now
+	}
 
 	batchSize := s.batchSize()
 	deletedTotal := task.DeletedRows
@@ -223,7 +227,7 @@ func (s *UsageCleanupService) executeTask(ctx context.Context, task *UsageCleanu
 		}
 		canceled, err := s.isTaskCanceled(ctx, task.ID)
 		if err != nil {
-			s.markTaskFailed(task.ID, deletedTotal, err)
+			s.markTaskFailed(task, deletedTotal, err)
 			return
 		}
 		if canceled {
@@ -240,13 +244,18 @@ func (s *UsageCleanupService) executeTask(ctx context.Context, task *UsageCleanu
 				logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] task interrupted: task=%d err=%v", task.ID, err)
 				return
 			}
-			s.markTaskFailed(task.ID, deletedTotal, err)
+			s.markTaskFailed(task, deletedTotal, err)
 			return
 		}
 		deletedTotal += deleted
 		if deleted > 0 {
 			updateCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-			if err := s.repo.UpdateTaskProgress(updateCtx, task.ID, deletedTotal); err != nil {
+			if err := s.repo.UpdateTaskProgress(updateCtx, task.ID, *task.StartedAt, deletedTotal); err != nil {
+				if errors.Is(err, ErrUsageCleanupTaskOwnershipLost) {
+					cancel()
+					s.handleTaskOwnershipLost(task.ID, deletedTotal, start, "progress")
+					return
+				}
 				logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] task progress update failed: task=%d deleted_rows=%d err=%v", task.ID, deletedTotal, err)
 			}
 			cancel()
@@ -261,7 +270,11 @@ func (s *UsageCleanupService) executeTask(ctx context.Context, task *UsageCleanu
 
 	updateCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if err := s.repo.MarkTaskSucceeded(updateCtx, task.ID, deletedTotal); err != nil {
+	if err := s.repo.MarkTaskSucceeded(updateCtx, task.ID, *task.StartedAt, deletedTotal); err != nil {
+		if errors.Is(err, ErrUsageCleanupTaskOwnershipLost) {
+			s.handleTaskOwnershipLost(task.ID, deletedTotal, start, "success")
+			return
+		}
 		logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] update task succeeded failed: task=%d err=%v", task.ID, err)
 	} else {
 		recordUsageCleanupTaskSucceeded(task.ID, deletedTotal, time.Now(), time.Since(start))
@@ -276,6 +289,24 @@ func (s *UsageCleanupService) executeTask(ctx context.Context, task *UsageCleanu
 		}
 	}
 	recordUsageCleanupStats(task.ID, deletedTotal)
+}
+
+func (s *UsageCleanupService) handleTaskOwnershipLost(taskID, deletedRows int64, startedAt time.Time, stage string) {
+	if startedAt.IsZero() {
+		startedAt = time.Now().UTC()
+	}
+	checkCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	status, err := s.repo.GetTaskStatus(checkCtx, taskID)
+	if err == nil && status == UsageCleanupStatusCanceled {
+		recordUsageCleanupTaskCanceled(time.Now(), time.Since(startedAt))
+		logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] task ownership lost after cancel: task=%d deleted_rows=%d stage=%s", taskID, deletedRows, stage)
+		return
+	}
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] task ownership loss status check failed: task=%d stage=%s err=%v", taskID, stage, err)
+	}
+	logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] task ownership lost: task=%d deleted_rows=%d stage=%s status=%s", taskID, deletedRows, stage, status)
 }
 
 func recordUsageCleanupStats(taskID, deletedTotal int64) {
@@ -321,18 +352,30 @@ type UsageCleanupStats struct {
 	LastError       string     `json:"last_error,omitempty"`
 }
 
-func (s *UsageCleanupService) markTaskFailed(taskID int64, deletedRows int64, err error) {
+func (s *UsageCleanupService) markTaskFailed(task *UsageCleanupTask, deletedRows int64, err error) {
+	if task == nil {
+		return
+	}
 	msg := strings.TrimSpace(err.Error())
 	if len(msg) > 500 {
 		msg = msg[:500]
 	}
-	recordUsageCleanupTaskFailed(time.Now(), msg)
-	logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] task failed: task=%d deleted_rows=%d err=%s", taskID, deletedRows, msg)
+	logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] task failed: task=%d deleted_rows=%d err=%s", task.ID, deletedRows, msg)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if updateErr := s.repo.MarkTaskFailed(ctx, taskID, deletedRows, msg); updateErr != nil {
-		logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] update task failed failed: task=%d err=%v", taskID, updateErr)
+	startedAt := time.Now().UTC()
+	if task.StartedAt != nil && !task.StartedAt.IsZero() {
+		startedAt = task.StartedAt.UTC()
 	}
+	if updateErr := s.repo.MarkTaskFailed(ctx, task.ID, startedAt, deletedRows, msg); updateErr != nil {
+		if errors.Is(updateErr, ErrUsageCleanupTaskOwnershipLost) {
+			s.handleTaskOwnershipLost(task.ID, deletedRows, startedAt, "failure")
+			return
+		}
+		logger.LegacyPrintf("service.usage_cleanup", "[UsageCleanup] update task failed failed: task=%d err=%v", task.ID, updateErr)
+		return
+	}
+	recordUsageCleanupTaskFailed(time.Now(), msg)
 }
 
 func (s *UsageCleanupService) isTaskCanceled(ctx context.Context, taskID int64) (bool, error) {

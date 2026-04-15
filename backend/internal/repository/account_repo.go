@@ -43,12 +43,14 @@ import (
 //   - schedulerCache: 调度器缓存，用于在账号状态变更时同步快照
 type accountRepository struct {
 	client *dbent.Client // Ent ORM 客户端
-	sql    sqlExecutor   // 原生 SQL 执行接口
+	db     *sql.DB
+	sql    sqlExecutor // 原生 SQL 执行接口
 	// schedulerCache 用于在账号状态变更时主动同步快照到缓存，
 	// 确保粘性会话能及时感知账号不可用状态。
 	// Used to proactively sync account snapshot to cache when status changes,
 	// ensuring sticky sessions can promptly detect unavailable accounts.
 	schedulerCache service.SchedulerCache
+	outboxExecFactory func(sqlExecutor) sqlExecutor
 }
 
 var schedulerNeutralExtraKeyPrefixes = []string{
@@ -72,8 +74,45 @@ func NewAccountRepository(client *dbent.Client, sqlDB *sql.DB, schedulerCache se
 
 // newAccountRepositoryWithSQL 是内部构造函数，支持依赖注入 SQL 执行器。
 // 这种设计便于单元测试时注入 mock 对象。
+func defaultAccountOutboxExecFactory(exec sqlExecutor) sqlExecutor {
+	return exec
+}
+
 func newAccountRepositoryWithSQL(client *dbent.Client, sqlq sqlExecutor, schedulerCache service.SchedulerCache) *accountRepository {
-	return &accountRepository{client: client, sql: sqlq, schedulerCache: schedulerCache}
+	repo := &accountRepository{
+		client:            client,
+		sql:               sqlq,
+		schedulerCache:    schedulerCache,
+		outboxExecFactory: defaultAccountOutboxExecFactory,
+	}
+	if db, ok := sqlq.(*sql.DB); ok {
+		repo.db = db
+	}
+	return repo
+}
+
+func (r *accountRepository) withSchedulerOutboxTx(ctx context.Context, fn func(ctx context.Context, client *dbent.Client, exec sqlExecutor) error) error {
+	tx, err := r.client.Tx(ctx)
+	if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
+		return err
+	}
+	if err == nil {
+		rollback := true
+		defer func() {
+			if rollback {
+				_ = tx.Rollback()
+			}
+		}()
+		if err := fn(ctx, tx.Client(), tx); err != nil {
+			return err
+		}
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+		rollback = false
+		return nil
+	}
+	return fn(ctx, r.client, r.sql)
 }
 
 func (r *accountRepository) Create(ctx context.Context, account *service.Account) error {
@@ -442,13 +481,18 @@ func (r *accountRepository) Delete(ctx context.Context, id int64) error {
 		return err
 	}
 
+	outboxExec := r.sql
+	if tx != nil {
+		outboxExec = tx
+	}
+	if err := enqueueSchedulerOutbox(ctx, outboxExec, service.SchedulerOutboxEventAccountChanged, &id, nil, buildSchedulerGroupPayload(groupIDs)); err != nil {
+		return err
+	}
+
 	if tx != nil {
 		if err := tx.Commit(); err != nil {
 			return err
 		}
-	}
-	if err := enqueueSchedulerOutbox(ctx, r.sql, service.SchedulerOutboxEventAccountChanged, &id, nil, buildSchedulerGroupPayload(groupIDs)); err != nil {
-		logger.LegacyPrintf("repository.account", "[SchedulerOutbox] enqueue account delete failed: account=%d err=%v", id, err)
 	}
 	return nil
 }

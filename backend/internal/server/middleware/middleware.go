@@ -3,11 +3,14 @@ package middleware
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/googleapi"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
 // ContextKey 定义上下文键类型
@@ -71,6 +74,31 @@ func NewErrorResponse(code, message string) ErrorResponse {
 
 // AbortWithError 中断请求并返回JSON错误
 func AbortWithError(c *gin.Context, statusCode int, code, message string) {
+	if c != nil && c.Request != nil {
+		logFields := []zap.Field{
+			zap.String("component", "http.abort"),
+			zap.Int("status_code", statusCode),
+			zap.String("error_code", strings.TrimSpace(code)),
+			zap.String("error_message", strings.TrimSpace(message)),
+			zap.String("method", c.Request.Method),
+			zap.String("path", c.Request.URL.Path),
+		}
+
+		if requestID, _ := c.Request.Context().Value(ctxkey.RequestID).(string); strings.TrimSpace(requestID) != "" {
+			logFields = append(logFields, zap.String("request_id", requestID))
+		}
+		if clientRequestID, _ := c.Request.Context().Value(ctxkey.ClientRequestID).(string); strings.TrimSpace(clientRequestID) != "" {
+			logFields = append(logFields, zap.String("client_request_id", clientRequestID))
+		}
+
+		reqLog := logger.FromContext(c.Request.Context()).With(logFields...)
+		if statusCode >= http.StatusInternalServerError {
+			reqLog.Error("http.abort_with_error")
+		} else {
+			reqLog.Warn("http.abort_with_error")
+		}
+	}
+
 	c.JSON(statusCode, NewErrorResponse(code, message))
 	c.Abort()
 }

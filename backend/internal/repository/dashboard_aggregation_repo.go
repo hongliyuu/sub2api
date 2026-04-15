@@ -96,6 +96,9 @@ func (r *dashboardAggregationRepository) aggregateRangeInTx(ctx context.Context,
 	if err := r.upsertDailyAggregates(ctx, dayStart, dayEnd); err != nil {
 		return err
 	}
+	if err := r.upsertDailyGroupCosts(ctx, hourStart, hourEnd); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -152,6 +155,14 @@ func (r *dashboardAggregationRepository) recomputeRangeInTx(ctx context.Context,
 	if _, err := r.sql.ExecContext(ctx, "DELETE FROM usage_dashboard_daily_users WHERE bucket_date >= $1::date AND bucket_date < $2::date", dayStart, dayEnd); err != nil {
 		return err
 	}
+	groupDayStartUTC := time.Date(hourStart.UTC().Year(), hourStart.UTC().Month(), hourStart.UTC().Day(), 0, 0, 0, 0, time.UTC)
+	groupDayEndUTC := time.Date(hourEnd.UTC().Year(), hourEnd.UTC().Month(), hourEnd.UTC().Day(), 0, 0, 0, 0, time.UTC)
+	if hourEnd.UTC().After(groupDayEndUTC) {
+		groupDayEndUTC = groupDayEndUTC.Add(24 * time.Hour)
+	}
+	if _, err := r.sql.ExecContext(ctx, "DELETE FROM usage_group_daily_costs WHERE bucket_date >= $1::date AND bucket_date < $2::date", groupDayStartUTC, groupDayEndUTC); err != nil {
+		return err
+	}
 
 	if err := r.insertHourlyActiveUsers(ctx, hourStart, hourEnd); err != nil {
 		return err
@@ -163,6 +174,9 @@ func (r *dashboardAggregationRepository) recomputeRangeInTx(ctx context.Context,
 		return err
 	}
 	if err := r.upsertDailyAggregates(ctx, dayStart, dayEnd); err != nil {
+		return err
+	}
+	if err := r.upsertDailyGroupCosts(ctx, hourStart, hourEnd); err != nil {
 		return err
 	}
 	return nil
@@ -204,6 +218,9 @@ func (r *dashboardAggregationRepository) CleanupAggregates(ctx context.Context, 
 		return err
 	}
 	if _, err := r.sql.ExecContext(ctx, "DELETE FROM usage_dashboard_daily_users WHERE bucket_date < $1::date", dailyCutoffUTC); err != nil {
+		return err
+	}
+	if _, err := r.sql.ExecContext(ctx, "DELETE FROM usage_group_daily_costs WHERE bucket_date < $1::date", dailyCutoffUTC); err != nil {
 		return err
 	}
 	return nil
@@ -451,6 +468,48 @@ func (r *dashboardAggregationRepository) upsertDailyAggregates(ctx context.Conte
 			computed_at = EXCLUDED.computed_at
 	`
 	_, err := r.sql.ExecContext(ctx, query, start, end, start, end, tzName)
+	return err
+}
+
+func (r *dashboardAggregationRepository) upsertDailyGroupCosts(ctx context.Context, start, end time.Time) error {
+	startUTC := start.UTC()
+	endUTC := end.UTC()
+	dayStartUTC := time.Date(startUTC.Year(), startUTC.Month(), startUTC.Day(), 0, 0, 0, 0, time.UTC)
+	dayEndUTC := time.Date(endUTC.Year(), endUTC.Month(), endUTC.Day(), 0, 0, 0, 0, time.UTC)
+	if endUTC.After(dayEndUTC) {
+		dayEndUTC = dayEndUTC.Add(24 * time.Hour)
+	}
+
+	query := `
+		WITH daily_group_costs AS (
+			SELECT
+				(created_at AT TIME ZONE 'UTC')::date AS bucket_date,
+				group_id,
+				COALESCE(SUM(actual_cost), 0) AS actual_cost
+			FROM usage_logs
+			WHERE created_at >= $1
+				AND created_at < $2
+				AND group_id IS NOT NULL
+			GROUP BY (created_at AT TIME ZONE 'UTC')::date, group_id
+		)
+		INSERT INTO usage_group_daily_costs (
+			bucket_date,
+			group_id,
+			actual_cost,
+			computed_at
+		)
+		SELECT
+			bucket_date,
+			group_id,
+			actual_cost,
+			NOW()
+		FROM daily_group_costs
+		ON CONFLICT (bucket_date, group_id)
+		DO UPDATE SET
+			actual_cost = EXCLUDED.actual_cost,
+			computed_at = EXCLUDED.computed_at
+	`
+	_, err := r.sql.ExecContext(ctx, query, dayStartUTC, dayEndUTC)
 	return err
 }
 

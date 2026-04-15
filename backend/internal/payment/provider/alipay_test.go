@@ -98,9 +98,9 @@ func TestNewAlipay(t *testing.T) {
 			errSubstr: "privateKey",
 		},
 		{
-			name:    "nil config map returns error for appId",
-			config:  map[string]string{},
-			wantErr: true,
+			name:      "nil config map returns error for appId",
+			config:    map[string]string{},
+			wantErr:   true,
 			errSubstr: "appId",
 		},
 	}
@@ -126,6 +126,63 @@ func TestNewAlipay(t *testing.T) {
 			}
 			if got.instanceID != "test-instance" {
 				t.Errorf("instanceID = %q, want %q", got.instanceID, "test-instance")
+			}
+		})
+	}
+}
+
+func TestParseAlipayAmount(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		candidates []string
+		want       float64
+		wantErr    bool
+	}{
+		{
+			name:       "uses total amount when present",
+			candidates: []string{"18.88", "19.99"},
+			want:       18.88,
+		},
+		{
+			name:       "falls back when total amount is blank",
+			candidates: []string{"", "18.88", "19.99"},
+			want:       18.88,
+		},
+		{
+			name:       "falls back after invalid primary candidate",
+			candidates: []string{"oops", "18.88"},
+			want:       18.88,
+		},
+		{
+			name:       "returns zero when all candidates are empty",
+			candidates: []string{"", "   "},
+			want:       0,
+		},
+		{
+			name:       "returns error when no candidate is parseable",
+			candidates: []string{"oops", "still-bad"},
+			wantErr:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := parseAlipayAmount(tt.candidates...)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("parseAlipayAmount(%v) = %v, want %v", tt.candidates, got, tt.want)
 			}
 		})
 	}

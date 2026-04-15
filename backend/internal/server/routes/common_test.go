@@ -21,8 +21,9 @@ func TestRegisterCommonRoutes_HealthReady(t *testing.T) {
 	r := gin.New()
 	now := time.Date(2026, 4, 12, 18, 4, 0, 0, time.UTC)
 	RegisterCommonRoutes(r, CommonRouteOptions{
-		DBProbe:    func(_ context.Context) error { return nil },
-		RedisProbe: func(_ context.Context) error { return nil },
+		DBProbe:      func(_ context.Context) error { return nil },
+		RedisProbe:   func(_ context.Context) error { return nil },
+		PublicHealth: true,
 		DBSnapshot: func() repository.DBPoolSnapshot {
 			return repository.DBPoolSnapshot{
 				OpenConnections:    12,
@@ -43,6 +44,14 @@ func TestRegisterCommonRoutes_HealthReady(t *testing.T) {
 				UsagePercent:              float64Ptr(20),
 				HitRatePercent:            float64Ptr(98.5),
 				ConnectionPressurePercent: float64Ptr(20),
+			}
+		},
+		OpsErrorLog: func() OpsErrorLogSnapshot {
+			return OpsErrorLogSnapshot{
+				QueueLength:    2,
+				QueueCapacity:  256,
+				EnqueuedTotal:  10,
+				ProcessedTotal: 8,
 			}
 		},
 		SchedulerSnapshot: func() service.SchedulerOutboxRuntimeMetrics {
@@ -76,6 +85,11 @@ func TestRegisterCommonRoutes_HealthReady(t *testing.T) {
 	require.Equal(t, "ok", redis["status"])
 	require.Equal(t, true, redis["ready"])
 
+	opsErrorLogger, ok := checks["ops_error_logger"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "ok", opsErrorLogger["status"])
+	require.Equal(t, "ops error logger healthy", opsErrorLogger["note"])
+
 	scheduler, ok := checks["scheduler_outbox"].(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, "ok", scheduler["status"])
@@ -86,8 +100,9 @@ func TestRegisterCommonRoutes_HealthDegraded(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	RegisterCommonRoutes(r, CommonRouteOptions{
-		DBProbe:    func(_ context.Context) error { return errors.New("db timeout") },
-		RedisProbe: func(_ context.Context) error { return nil },
+		DBProbe:      func(_ context.Context) error { return errors.New("db timeout") },
+		RedisProbe:   func(_ context.Context) error { return nil },
+		PublicHealth: true,
 		DBSnapshot: func() repository.DBPoolSnapshot {
 			return repository.DBPoolSnapshot{
 				OpenConnections:    90,
@@ -103,6 +118,12 @@ func TestRegisterCommonRoutes_HealthDegraded(t *testing.T) {
 				IdleConns:                 5,
 				UsagePercent:              float64Ptr(95),
 				ConnectionPressurePercent: float64Ptr(95),
+			}
+		},
+		OpsErrorLog: func() OpsErrorLogSnapshot {
+			return OpsErrorLogSnapshot{
+				QueueLength:   250,
+				QueueCapacity: 256,
 			}
 		},
 		SchedulerSnapshot: func() service.SchedulerOutboxRuntimeMetrics {
@@ -148,7 +169,9 @@ func TestRegisterCommonRoutes_HealthDegraded(t *testing.T) {
 func TestRegisterCommonRoutes_MetricsExposed(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	RegisterCommonRoutes(r)
+	RegisterCommonRoutes(r, CommonRouteOptions{
+		PublicMetrics: true,
+	})
 
 	w := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
@@ -158,6 +181,7 @@ func TestRegisterCommonRoutes_MetricsExposed(t *testing.T) {
 	require.Equal(t, prometheusContentType, w.Header().Get("Content-Type"))
 	require.Contains(t, w.Body.String(), "# HELP sub2api_up")
 	require.Contains(t, w.Body.String(), "sub2api_db_pool_open_connections")
+	require.Contains(t, w.Body.String(), "sub2api_ops_error_log_queue_length")
 	require.Contains(t, w.Body.String(), "sub2api_scheduler_outbox_lag_seconds")
 	require.NotContains(t, w.Body.String(), "<!doctype html>")
 }
@@ -165,7 +189,11 @@ func TestRegisterCommonRoutes_MetricsExposed(t *testing.T) {
 func TestRegisterCommonRoutes_ProbeAliases(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	RegisterCommonRoutes(r)
+	RegisterCommonRoutes(r, CommonRouteOptions{
+		DBProbe:      func(_ context.Context) error { return nil },
+		RedisProbe:   func(_ context.Context) error { return nil },
+		PublicHealth: true,
+	})
 
 	for _, path := range []string{"/readyz", "/api/health", "/api/readyz"} {
 		t.Run(path, func(t *testing.T) {
@@ -190,10 +218,61 @@ func TestRegisterCommonRoutes_ProbeAliases(t *testing.T) {
 	})
 }
 
+func TestRegisterCommonRoutes_ReadyzFailsClosedWhenNotReady(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	RegisterCommonRoutes(r, CommonRouteOptions{
+		DBProbe:    func(_ context.Context) error { return errors.New("db timeout") },
+		RedisProbe: func(_ context.Context) error { return nil },
+	})
+
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+	r.ServeHTTP(w, req)
+
+	require.Equal(t, http.StatusServiceUnavailable, w.Code)
+	require.Contains(t, w.Body.String(), `"status":"not_ready"`)
+	require.Contains(t, w.Body.String(), `"ready":false`)
+	require.NotContains(t, w.Body.String(), `"checks"`)
+}
+
+func TestRegisterCommonRoutes_ObservabilityEndpointsRequireExposure(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	RegisterCommonRoutes(r, CommonRouteOptions{
+		DBProbe:    func(_ context.Context) error { return nil },
+		RedisProbe: func(_ context.Context) error { return nil },
+		AllowCIDRs: []string{"127.0.0.1/32"},
+		ClientIP: func(c *gin.Context) string {
+			return c.GetHeader("X-Test-IP")
+		},
+	})
+
+	for _, tc := range []struct {
+		path       string
+		clientIP   string
+		wantStatus int
+	}{
+		{path: "/health", clientIP: "127.0.0.1", wantStatus: http.StatusOK},
+		{path: "/health", clientIP: "8.8.8.8", wantStatus: http.StatusForbidden},
+		{path: "/metrics", clientIP: "127.0.0.1", wantStatus: http.StatusOK},
+		{path: "/metrics", clientIP: "8.8.8.8", wantStatus: http.StatusForbidden},
+	} {
+		t.Run(tc.path+"_"+tc.clientIP, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, tc.path, nil)
+			req.Header.Set("X-Test-IP", tc.clientIP)
+			r.ServeHTTP(w, req)
+			require.Equal(t, tc.wantStatus, w.Code)
+		})
+	}
+}
+
 func TestRenderRuntimeMetrics_IsPrometheusText(t *testing.T) {
 	body := renderRuntimeMetrics()
 
 	require.True(t, strings.HasPrefix(body, "# HELP sub2api_up"))
+	require.Contains(t, body, "sub2api_ops_error_log_dropped_total ")
 	require.Contains(t, body, "# TYPE sub2api_usage_cleanup_started_total counter")
 	require.Contains(t, body, "sub2api_ops_cleanup_max_rows_hit ")
 	require.Contains(t, body, "sub2api_scheduler_outbox_coalesced_event_saved_total ")
