@@ -87,3 +87,24 @@ func TestWriteConfigFileKeepsDefaultUserConcurrency(t *testing.T) {
 		t.Fatalf("config missing default user concurrency, got:\n%s", string(data))
 	}
 }
+
+func TestResolveInstallServerConfigUsesBackendBootstrapPort(t *testing.T) {
+	t.Setenv("SERVER_HOST", "127.0.0.1")
+	t.Setenv("SERVER_PORT", "9090")
+
+	got := resolveInstallServerConfig(ServerConfig{
+		Host: "0.0.0.0",
+		Port: 443,
+		Mode: "release",
+	})
+
+	if got.Host != "127.0.0.1" {
+		t.Fatalf("Host = %q, want %q", got.Host, "127.0.0.1")
+	}
+	if got.Port != 9090 {
+		t.Fatalf("Port = %d, want %d", got.Port, 9090)
+	}
+	if got.Mode != "release" {
+		t.Fatalf("Mode = %q, want %q", got.Mode, "release")
+	}
+}
