@@ -470,6 +470,13 @@ const props = withDefaults(
 const { t } = useI18n()
 const desktopViewportQuery = '(min-width: 768px)'
 
+function getDesktopViewportMediaQuery(): MediaQueryList | null {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return null
+  }
+  return window.matchMedia(desktopViewportQuery)
+}
+
 const unmounted = ref(false)
 onBeforeUnmount(() => { unmounted.value = true })
 
@@ -479,7 +486,7 @@ const error = ref<string | null>(null)
 const usageInfo = ref<AccountUsageInfo | null>(null)
 const rootRef = ref<HTMLElement | null>(null)
 const isDesktopViewport = ref(
-  typeof window === 'undefined' ? true : window.matchMedia(desktopViewportQuery).matches
+  getDesktopViewportMediaQuery()?.matches ?? true
 )
 const hasEnteredViewport = ref(false)
 const pendingAutoLoad = ref(false)
@@ -966,7 +973,12 @@ const loadUsage = async (options?: { source?: 'passive' | 'active'; bypassCache?
   error.value = null
 
   try {
-    const fetchFn = () => adminAPI.accounts.getUsage(props.account.id, options?.source)
+    const fetchFn = () => {
+      if (options?.source) {
+        return adminAPI.accounts.getUsage(props.account.id, options.source)
+      }
+      return adminAPI.accounts.getUsage(props.account.id)
+    }
     const result = await enqueueUsageRequest(props.account, fetchFn)
     if (!unmounted.value) {
       usageInfo.value = result
@@ -992,14 +1004,17 @@ const flushPendingAutoLoad = () => {
   })
 }
 
-const requestAutoLoad = (source?: 'passive' | 'active') => {
+const requestAutoLoad = (
+  source?: 'passive' | 'active',
+  bypassCache?: boolean
+) => {
   if (!shouldFetchUsage.value) return
   if (shouldLazyLoadOnMobile.value && !hasEnteredViewport.value) {
     pendingAutoLoad.value = true
     pendingAutoLoadSource.value = source
     return
   }
-  loadUsage({ source }).catch((e) => {
+  loadUsage({ source, bypassCache }).catch((e) => {
     console.error('Failed to auto load usage:', e)
   })
 }
@@ -1131,8 +1146,8 @@ const formatKeyUserCost = computed(() => {
 })
 
 onMounted(() => {
-  if (typeof window !== 'undefined') {
-    desktopViewportMediaQuery = window.matchMedia(desktopViewportQuery)
+  desktopViewportMediaQuery = getDesktopViewportMediaQuery()
+  if (desktopViewportMediaQuery) {
     isDesktopViewport.value = desktopViewportMediaQuery.matches
     desktopViewportListener = (event: MediaQueryListEvent) => {
       isDesktopViewport.value = event.matches
@@ -1153,7 +1168,8 @@ watch(openAIUsageRefreshKey, (nextKey, prevKey) => {
   if (!prevKey || nextKey === prevKey) return
   if (props.account.platform !== 'openai' || props.account.type !== 'oauth') return
 
-  requestAutoLoad()
+  _usageCache.delete(props.account.id)
+  requestAutoLoad(undefined, true)
 })
 
 watch(
