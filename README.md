@@ -365,7 +365,71 @@ rm -rf data/ postgres_data/ redis_data/
 
 ---
 
-### Method 3: Build from Source
+### Method 3: Local Development (from Source)
+
+For development with hot reload on both frontend and backend.
+
+#### Prerequisites
+
+- Go 1.21+
+- Node.js 18+
+- PostgreSQL 15+ (running locally)
+- Redis 7+ (running locally)
+
+#### One-time Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/Wei-Shaw/sub2api.git
+cd sub2api
+
+# Run the setup script (safe to re-run)
+bash dev-setup.sh
+```
+
+The script will:
+1. Install `pnpm` if not present
+2. Install frontend dependencies
+3. Create the `sub2api` PostgreSQL database
+4. Generate `backend/config.yaml` from the example (patched for local dev)
+5. Run database migrations
+6. Create the initial admin user
+
+You can override defaults with environment variables before running:
+
+```bash
+ADMIN_EMAIL=me@example.com ADMIN_PASSWORD=secret123 bash dev-setup.sh
+
+# Custom PostgreSQL connection
+PGUSER=myuser PGHOST=localhost PGPORT=5432 bash dev-setup.sh
+```
+
+#### Start Development Servers
+
+Run each in a separate terminal:
+
+```bash
+# Terminal 1 — backend (Go, hot reload with air or plain go run)
+cd backend
+go run ./cmd/server
+
+# Terminal 2 — frontend (Vue + Vite, hot reload)
+cd frontend
+pnpm dev
+```
+
+Then open **http://localhost:3000** in your browser.
+
+Default admin login:
+| Email | Password |
+|-------|----------|
+| admin@example.com | admin123 |
+
+> The backend serves the API on `:8080`. The frontend Vite dev server runs on `:3000` and proxies `/api`, `/v1`, and `/setup` to the backend automatically.
+
+---
+
+### Method 4: Build from Source
 
 Build and run from source code for development or customization.
 
