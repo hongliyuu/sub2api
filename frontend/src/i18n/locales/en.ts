@@ -466,6 +466,12 @@ export default {
       completing: 'Completing registration…',
       completeRegistrationFailed: 'Registration failed. Please check your invitation code and try again.'
     },
+    wechat: {
+      callbackTitle: 'Returning from WeChat',
+      callbackProcessing: 'Restoring your payment and returning to the checkout page...',
+      callbackMissingOpenId: 'WeChat did not return a usable OpenID. Please restart the payment flow.',
+      backToPayment: 'Back to Payment'
+    },
     oauth: {
       code: 'Code',
       state: 'State',
@@ -4328,6 +4334,40 @@ export default {
         quickSetCopy: 'Generate & Copy (current site)',
         redirectUrlSetAndCopied: 'Redirect URL generated and copied to clipboard'
       },
+      wechat: {
+        title: 'WeChat Connect Login',
+        description: 'Configure WeChat Connect OAuth for login and registration entry points',
+        enable: 'Enable WeChat Login',
+        enableHint: 'Prepare WeChat login for the login/register pages',
+        publicSettingsHint:
+          'The admin toggle only configures backend settings. Login/register pages should show WeChat only when the backend also exposes public `wechat_oauth_enabled`.',
+        appId: 'App ID',
+        appIdPlaceholder: 'wx1234567890abcdef',
+        appIdHint: 'Use the WeChat Open Platform or backend-issued application identifier',
+        appSecret: 'App Secret',
+        appSecretPlaceholder: '********',
+        appSecretHint: 'Used by backend to exchange code for tokens (keep it secret)',
+        appSecretConfiguredPlaceholder: '********',
+        appSecretConfiguredHint: 'Secret configured. Leave empty to keep the current value.',
+        mode: 'Mode',
+        modePlaceholder: 'for example open',
+        modeHint:
+          'Backend-defined mode string. Keep this aligned with the backend implementation and provider registration.',
+        scopes: 'Scopes',
+        scopesPlaceholder: 'snsapi_login',
+        scopesHint:
+          'Space-separated scopes. Typical examples are `snsapi_login` for website QR login and `snsapi_base` / `snsapi_userinfo` for in-app flows.',
+        redirectUrl: 'Backend Redirect URL',
+        redirectUrlPlaceholder: 'https://your-domain.com/api/v1/auth/oauth/wechat/callback',
+        redirectUrlHint:
+          'Must match the callback URL registered with WeChat and should remain an absolute http(s) URL.',
+        frontendRedirectUrl: 'Frontend Callback Path',
+        frontendRedirectUrlPlaceholder: '/auth/wechat/callback',
+        frontendRedirectUrlHint:
+          'Frontend route to use after backend callback completes. Keep this aligned with the eventual WeChat callback page.',
+        quickSetCopy: 'Generate & Copy (current site)',
+        redirectUrlSetAndCopied: 'Redirect URL generated and copied to clipboard'
+      },
       oidc: {
         title: 'OIDC Login',
         description: 'Configure a standard OIDC provider (for example Keycloak)',
@@ -4613,8 +4653,8 @@ export default {
         field_publicKey: 'Public Key',
         field_mchId: 'Merchant ID',
         field_apiV3Key: 'API v3 Key',
-        field_publicKeyId: 'Public Key ID',
-        field_certSerial: 'Certificate Serial',
+        field_publicKeyId: 'WeChat Pay Public Key ID',
+        field_certSerial: 'Certificate Serial Number',
         field_secretKey: 'Secret Key',
         field_publishableKey: 'Publishable Key',
         field_webhookSecret: 'Webhook Secret',
@@ -5281,6 +5321,27 @@ export default {
       cancelledDesc: 'You have cancelled this payment.',
       waitingPayment: 'Waiting for payment...',
       cancelOrder: 'Cancel Order',
+    },
+    wechat: {
+      callbackRedirecting: 'Returning to the payment page...',
+      authRedirecting: 'Redirecting to WeChat authorization...',
+      authRetrying: 'Retrying WeChat authorization...',
+      authResuming: 'WeChat authorization completed, resuming payment...',
+      authResumeFailed: 'WeChat authorization finished, but the payment still requires authorization. Please restart the payment flow.',
+      authMissingUrl: 'Missing WeChat authorization URL. Please try again.',
+      authExpired: 'Saved WeChat payment context has expired. Please start the payment again.',
+      authStateMismatch: 'WeChat authorization state did not match the saved payment context. Please restart the payment flow.',
+      authRetryExceeded: 'WeChat authorization retried too many times. Please start again.',
+      callbackMissingOpenId: 'WeChat did not return a usable OpenID. Please restart the payment flow.',
+      resumePlanMissing: 'The saved subscription plan is no longer available. Please select it again.',
+      jsapiInvoking: 'Launching WeChat Pay...',
+      jsapiWaiting: 'Complete the payment inside WeChat',
+      jsapiPendingHint: 'WeChat Pay has been opened. This page will refresh automatically after payment completes.',
+      jsapiProcessing: 'Payment submitted. Waiting for WeChat confirmation...',
+      jsapiCancelled: 'WeChat Pay was cancelled. You can retry or cancel this order.',
+      jsapiUnavailable: 'Unable to launch WeChat Pay in the current environment. Please retry inside WeChat.',
+      jsapiInvalidPayload: 'Incomplete WeChat Pay parameters. Please create the order again.',
+      jsapiFailed: 'Failed to launch WeChat Pay: {reason}',
     },
     orders: {
       title: 'My Orders',

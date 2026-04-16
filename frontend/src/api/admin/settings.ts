@@ -62,6 +62,15 @@ export interface SystemSettings {
   linuxdo_connect_client_secret_configured: boolean
   linuxdo_connect_redirect_url: string
 
+  // WeChat Connect OAuth settings
+  wechat_connect_enabled: boolean
+  wechat_connect_app_id: string
+  wechat_connect_app_secret_configured: boolean
+  wechat_connect_mode: string
+  wechat_connect_scopes: string
+  wechat_connect_redirect_url: string
+  wechat_connect_frontend_redirect_url: string
+
   // Generic OIDC OAuth settings
   oidc_connect_enabled: boolean
   oidc_connect_provider_name: string
@@ -185,6 +194,13 @@ export interface UpdateSettingsRequest {
   linuxdo_connect_client_id?: string
   linuxdo_connect_client_secret?: string
   linuxdo_connect_redirect_url?: string
+  wechat_connect_enabled?: boolean
+  wechat_connect_app_id?: string
+  wechat_connect_app_secret?: string
+  wechat_connect_mode?: string
+  wechat_connect_scopes?: string
+  wechat_connect_redirect_url?: string
+  wechat_connect_frontend_redirect_url?: string
   oidc_connect_enabled?: boolean
   oidc_connect_provider_name?: string
   oidc_connect_client_id?: string

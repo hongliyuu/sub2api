@@ -127,8 +127,17 @@ Direct integration with WeChat Pay APIv3. Supports Native QR code and H5 payment
 | **Merchant API Private Key** | Merchant API private key (PEM format) | Yes |
 | **APIv3 Key** | 32-byte APIv3 key | Yes |
 | **WeChat Pay Public Key** | WeChat Pay public key (PEM format) | Yes |
-| **WeChat Pay Public Key ID** | WeChat Pay public key ID | No |
-| **Certificate Serial Number** | Merchant certificate serial number | No |
+| **WeChat Pay Public Key ID** | WeChat Pay public key ID | Yes |
+| **Certificate Serial Number** | Merchant certificate serial number | Yes |
+
+> Current backend runtime validation requires both **WeChat Pay Public Key ID** and **Certificate Serial Number**. Leaving either field empty will cause WeChat Pay provider initialization to fail.
+
+#### In-App JSAPI Payment
+
+- When a user is inside WeChat and calls `POST /api/v1/payment/orders` with `wxpay` / `wxpay_direct` but without `openid`, the backend returns `result_type=oauth_required`.
+- `oauth.authorize_url` starts a payment-only WeChat OAuth flow. This flow only fetches the payer `openid`; it does not create a login session and does not issue auth tokens.
+- After the callback completes, the backend redirects to the configured frontend callback with `openid` and the minimal payment resume parameters: `payment_type`, `amount`, `order_type`, `plan_id`, `redirect`.
+- The client should then retry `POST /api/v1/payment/orders` with `openid` populated. The backend will continue with JSAPI prepay and return `result_type=jsapi_ready`.
 
 ### Stripe
 

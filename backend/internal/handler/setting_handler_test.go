@@ -82,3 +82,32 @@ func TestSettingHandler_GetPublicSettings_IncludesTablePreferences(t *testing.T)
 	require.Equal(t, 50, body.Data.TableDefaultPageSize)
 	require.Equal(t, []int{20, 50, 100}, body.Data.TablePageSizeOptions)
 }
+
+func TestSettingHandler_GetPublicSettings_IncludesWeChatOAuthEnabled(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	svc := service.NewSettingService(&settingHandlerRepoStub{
+		values: map[string]string{},
+	}, &config.Config{
+		WeChat: config.WeChatConnectConfig{Enabled: true},
+	})
+	handler := NewSettingHandler(svc, "test-version")
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/settings/public", nil)
+
+	handler.GetPublicSettings(c)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	var body struct {
+		Code int `json:"code"`
+		Data struct {
+			WeChatOAuthEnabled bool `json:"wechat_oauth_enabled"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
+	require.Equal(t, 0, body.Code)
+	require.True(t, body.Data.WeChatOAuthEnabled)
+}

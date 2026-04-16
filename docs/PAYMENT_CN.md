@@ -127,8 +127,17 @@ Sub2API 内置支付系统，支持用户自助充值，无需部署独立的支
 | **商户 API 私钥** | 商户 API 私钥（PEM 格式） | 是 |
 | **APIv3 密钥** | 32 位 APIv3 密钥 | 是 |
 | **微信支付公钥** | 微信支付公钥（PEM 格式） | 是 |
-| **微信支付公钥 ID** | 微信支付公钥 ID | 否 |
-| **商户证书序列号** | 商户证书序列号 | 否 |
+| **微信支付公钥 ID** | 微信支付公钥 ID | 是 |
+| **商户证书序列号** | 商户证书序列号 | 是 |
+
+> 当前后端运行时校验要求 **微信支付公钥 ID** 和 **商户证书序列号** 都必须填写，任一留空都会导致微信支付服务商初始化失败。
+
+#### 微信内 JSAPI 支付
+
+- 当用户在微信内访问支付页，并选择 `wxpay` / `wxpay_direct` 且请求里没有 `openid` 时，`POST /api/v1/payment/orders` 会直接返回 `result_type=oauth_required`。
+- 返回体中的 `oauth.authorize_url` 用于拉起支付用途的微信 OAuth；该流程只获取支付所需 `openid`，不会创建登录态，也不会下发登录 token。
+- 微信回调完成后，后端会重定向到配置的前端回调地址，并把 `openid` 以及最小恢复参数 `payment_type`、`amount`、`order_type`、`plan_id`、`redirect` 一并带回。
+- 前端拿到 `openid` 后，应重新调用 `POST /api/v1/payment/orders`，并在请求体中补上 `openid`；此时后端会返回 `result_type=jsapi_ready` 和 JSAPI 支付参数。
 
 ### Stripe
 

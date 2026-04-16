@@ -223,3 +223,32 @@ func TestSettingService_UpdateSettings_TablePreferences(t *testing.T) {
 	require.Equal(t, "1000", repo.updates[SettingKeyTableDefaultPageSize])
 	require.Equal(t, "[20,100]", repo.updates[SettingKeyTablePageSizeOptions])
 }
+
+func TestSettingService_UpdateSettings_WeChatConnectSecretOnlyWritesWhenProvided(t *testing.T) {
+	repo := &settingUpdateRepoStub{}
+	svc := NewSettingService(repo, &config.Config{})
+
+	err := svc.UpdateSettings(context.Background(), &SystemSettings{
+		WeChatConnectEnabled:             true,
+		WeChatConnectAppID:               "wx1234567890abcdef",
+		WeChatConnectMode:                "open",
+		WeChatConnectScopes:              "snsapi_login",
+		WeChatConnectRedirectURL:         "https://example.com/api/v1/auth/oauth/wechat/callback",
+		WeChatConnectFrontendRedirectURL: "/auth/wechat/callback",
+	})
+	require.NoError(t, err)
+	_, exists := repo.updates[SettingKeyWeChatConnectAppSecret]
+	require.False(t, exists)
+
+	err = svc.UpdateSettings(context.Background(), &SystemSettings{
+		WeChatConnectEnabled:             true,
+		WeChatConnectAppID:               "wx1234567890abcdef",
+		WeChatConnectAppSecret:           "wechat-secret",
+		WeChatConnectMode:                "open",
+		WeChatConnectScopes:              "snsapi_login",
+		WeChatConnectRedirectURL:         "https://example.com/api/v1/auth/oauth/wechat/callback",
+		WeChatConnectFrontendRedirectURL: "/auth/wechat/callback",
+	})
+	require.NoError(t, err)
+	require.Equal(t, "wechat-secret", repo.updates[SettingKeyWeChatConnectAppSecret])
+}

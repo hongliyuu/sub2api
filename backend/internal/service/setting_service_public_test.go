@@ -77,3 +77,31 @@ func TestSettingService_GetPublicSettings_ExposesTablePreferences(t *testing.T) 
 	require.Equal(t, 50, settings.TableDefaultPageSize)
 	require.Equal(t, []int{20, 50, 100}, settings.TablePageSizeOptions)
 }
+
+func TestSettingService_GetPublicSettings_ExposesWeChatOAuthEnabledWithConfigFallback(t *testing.T) {
+	t.Run("falls back to config when setting is absent", func(t *testing.T) {
+		repo := &settingPublicRepoStub{values: map[string]string{}}
+		svc := NewSettingService(repo, &config.Config{
+			WeChat: config.WeChatConnectConfig{Enabled: true},
+		})
+
+		settings, err := svc.GetPublicSettings(context.Background())
+		require.NoError(t, err)
+		require.True(t, settings.WeChatOAuthEnabled)
+	})
+
+	t.Run("db override wins over config fallback", func(t *testing.T) {
+		repo := &settingPublicRepoStub{
+			values: map[string]string{
+				SettingKeyWeChatConnectEnabled: "false",
+			},
+		}
+		svc := NewSettingService(repo, &config.Config{
+			WeChat: config.WeChatConnectConfig{Enabled: true},
+		})
+
+		settings, err := svc.GetPublicSettings(context.Background())
+		require.NoError(t, err)
+		require.False(t, settings.WeChatOAuthEnabled)
+	})
+}

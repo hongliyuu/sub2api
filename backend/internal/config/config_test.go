@@ -381,6 +381,29 @@ func TestValidateLinuxDoPKCERequiredForPublicClient(t *testing.T) {
 	}
 }
 
+func TestValidateWeChatFrontendRedirectURL(t *testing.T) {
+	resetViperWithJWTSecret(t)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	cfg.WeChat.Enabled = true
+	cfg.WeChat.AppID = "wx1234567890abcdef"
+	cfg.WeChat.AppSecret = "wechat-secret"
+	cfg.WeChat.RedirectURL = "https://example.com/api/v1/auth/oauth/wechat/callback"
+	cfg.WeChat.FrontendRedirectURL = "javascript:alert(1)"
+
+	err = cfg.Validate()
+	if err == nil {
+		t.Fatalf("Validate() expected error for javascript scheme, got nil")
+	}
+	if !strings.Contains(err.Error(), "wechat_connect.frontend_redirect_url") {
+		t.Fatalf("Validate() expected frontend_redirect_url error, got: %v", err)
+	}
+}
+
 func TestValidateOIDCScopesMustContainOpenID(t *testing.T) {
 	resetViperWithJWTSecret(t)
 
@@ -1054,6 +1077,32 @@ func TestValidateConfigErrors(t *testing.T) {
 				c.LinuxDo.TokenAuthMethod = "invalid"
 			},
 			wantErr: "linuxdo_connect.token_auth_method",
+		},
+		{
+			name: "wechat app id required",
+			mutate: func(c *Config) {
+				c.WeChat.Enabled = true
+				c.WeChat.AppID = ""
+				c.WeChat.AppSecret = "secret"
+				c.WeChat.RedirectURL = "https://example.com/callback"
+				c.WeChat.FrontendRedirectURL = "/auth/wechat/callback"
+				c.WeChat.Mode = "open"
+				c.WeChat.Scopes = "snsapi_login"
+			},
+			wantErr: "wechat_connect.app_id",
+		},
+		{
+			name: "wechat app secret required",
+			mutate: func(c *Config) {
+				c.WeChat.Enabled = true
+				c.WeChat.AppID = "wx1234567890abcdef"
+				c.WeChat.AppSecret = ""
+				c.WeChat.RedirectURL = "https://example.com/callback"
+				c.WeChat.FrontendRedirectURL = "/auth/wechat/callback"
+				c.WeChat.Mode = "open"
+				c.WeChat.Scopes = "snsapi_login"
+			},
+			wantErr: "wechat_connect.app_secret",
 		},
 		{
 			name:    "billing circuit breaker threshold",
