@@ -92,30 +92,38 @@ func (s *PaymentService) getOrderByOutTradeNo(ctx context.Context, outTradeNo st
 }
 
 type CreateOrderRequest struct {
-	UserID      int64
-	Amount      float64
-	PaymentType string
-	ClientIP    string
-	IsMobile    bool
-	SrcHost     string
-	SrcURL      string
-	OrderType   string
-	PlanID      int64
+	UserID          int64
+	Amount          float64
+	PaymentType     string
+	OpenID          string
+	ClientIP        string
+	IsMobile        bool
+	IsWeChatBrowser bool
+	RequestScheme   string
+	SrcHost         string
+	SrcURL          string
+	OrderType       string
+	PlanID          int64
 }
 
 type CreateOrderResponse struct {
-	OrderID              int64     `json:"order_id"`
-	Amount               float64   `json:"amount"`
-	PayAmount            float64   `json:"pay_amount"`
-	FeeRate              float64   `json:"fee_rate"`
-	Status               string    `json:"status"`
-	PaymentType          string    `json:"payment_type"`
-	PayURL               string    `json:"pay_url,omitempty"`
-	QRCode               string    `json:"qr_code,omitempty"`
-	ClientSecret         string    `json:"client_secret,omitempty"`
-	StripePublishableKey string    `json:"stripe_publishable_key,omitempty"`
-	ExpiresAt            time.Time `json:"expires_at"`
-	PaymentMode          string    `json:"payment_mode,omitempty"`
+	OrderID              int64                       `json:"order_id"`
+	Amount               float64                     `json:"amount"`
+	PayAmount            float64                     `json:"pay_amount"`
+	FeeRate              float64                     `json:"fee_rate"`
+	Status               string                      `json:"status"`
+	ResultType           string                      `json:"result_type"`
+	PaymentType          string                      `json:"payment_type"`
+	OutTradeNo           string                      `json:"out_trade_no"`
+	PayURL               string                      `json:"pay_url,omitempty"`
+	QRCode               string                      `json:"qr_code,omitempty"`
+	ClientSecret         string                      `json:"client_secret,omitempty"`
+	StripePublishableKey string                      `json:"stripe_publishable_key,omitempty"`
+	OAuth                *payment.WechatOAuthInfo    `json:"oauth,omitempty"`
+	JSAPI                *payment.WechatJSAPIPayload `json:"jsapi,omitempty"`
+	JSAPIPayload         *payment.WechatJSAPIPayload `json:"jsapi_payload,omitempty"`
+	ExpiresAt            time.Time                   `json:"expires_at"`
+	PaymentMode          string                      `json:"payment_mode,omitempty"`
 }
 
 type stripePublishableKeyProvider interface {
@@ -197,6 +205,7 @@ type PaymentService struct {
 	redeemService   *RedeemService
 	subscriptionSvc *SubscriptionService
 	configService   *PaymentConfigService
+	settingService  *SettingService
 	userRepo        UserRepository
 	groupRepo       GroupRepository
 }
@@ -206,8 +215,8 @@ type webhookProviderCandidate struct {
 	provider   payment.Provider
 }
 
-func NewPaymentService(entClient *dbent.Client, registry *payment.Registry, loadBalancer payment.LoadBalancer, redeemService *RedeemService, subscriptionSvc *SubscriptionService, configService *PaymentConfigService, userRepo UserRepository, groupRepo GroupRepository) *PaymentService {
-	return &PaymentService{entClient: entClient, registry: registry, loadBalancer: loadBalancer, redeemService: redeemService, subscriptionSvc: subscriptionSvc, configService: configService, userRepo: userRepo, groupRepo: groupRepo}
+func NewPaymentService(entClient *dbent.Client, registry *payment.Registry, loadBalancer payment.LoadBalancer, redeemService *RedeemService, subscriptionSvc *SubscriptionService, configService *PaymentConfigService, settingService *SettingService, userRepo UserRepository, groupRepo GroupRepository) *PaymentService {
+	return &PaymentService{entClient: entClient, registry: registry, loadBalancer: loadBalancer, redeemService: redeemService, subscriptionSvc: subscriptionSvc, configService: configService, settingService: settingService, userRepo: userRepo, groupRepo: groupRepo}
 }
 
 // --- Provider Registry ---
@@ -493,7 +502,6 @@ func psComputeValidityDays(days int, unit string) int {
 		return days
 	}
 }
-
 
 func psStartOfDayUTC(t time.Time) time.Time {
 	y, m, d := t.UTC().Date()

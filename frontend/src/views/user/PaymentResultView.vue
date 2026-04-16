@@ -116,6 +116,14 @@ const returnInfo = ref<ReturnInfo | null>(null)
 
 const SUCCESS_STATUSES = new Set(['COMPLETED', 'PAID', 'RECHARGING'])
 
+function readQueryString(key: string): string {
+  const value = route.query[key]
+  if (Array.isArray(value)) {
+    return typeof value[0] === 'string' ? value[0] : ''
+  }
+  return typeof value === 'string' ? value : ''
+}
+
 const normalizedFeeRate = computed(() => {
   if (!order.value) return 0
   const feeRate = Number(order.value.fee_rate ?? 0)
@@ -140,8 +148,8 @@ const isSuccess = computed(() => {
     return SUCCESS_STATUSES.has(order.value.status)
   }
   // Fallback only when order not loaded
-  if (route.query.status === 'success') return true
-  if (route.query.trade_status === 'TRADE_SUCCESS') return true
+  if (readQueryString('status') === 'success') return true
+  if (readQueryString('trade_status') === 'TRADE_SUCCESS') return true
   return false
 })
 
@@ -153,18 +161,18 @@ function parseOutTradeNo(outTradeNo: string): number {
 
 onMounted(async () => {
   // Try order_id first (internal navigation from QRCode/Stripe pages)
-  let orderId = Number(route.query.order_id) || 0
-  const outTradeNo = String(route.query.out_trade_no || '')
+  let orderId = Number(readQueryString('order_id')) || 0
+  const outTradeNo = readQueryString('out_trade_no') || readQueryString('outTradeNo')
 
-  // Fallback: EasyPay return URL with out_trade_no
-  if (!orderId && outTradeNo) {
-    orderId = parseOutTradeNo(outTradeNo)
-    // Store return info for display when order lookup fails
+  if (outTradeNo) {
+    if (!orderId) {
+      orderId = parseOutTradeNo(outTradeNo)
+    }
     returnInfo.value = {
       outTradeNo,
-      money: String(route.query.money || ''),
-      type: String(route.query.type || ''),
-      tradeStatus: String(route.query.trade_status || ''),
+      money: readQueryString('money'),
+      type: readQueryString('payment_type') || readQueryString('type'),
+      tradeStatus: readQueryString('trade_status') || readQueryString('status'),
     }
   }
 

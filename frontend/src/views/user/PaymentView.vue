@@ -21,6 +21,7 @@
             :payment-type="paymentState.paymentType"
             :pay-url="paymentState.payUrl"
             :order-type="paymentState.orderType"
+            :status-mode="paymentState.statusMode"
             @done="onPaymentDone"
             @success="onPaymentSuccess"
           />
@@ -267,11 +268,17 @@ import { useAppStore } from '@/stores'
 import { paymentAPI } from '@/api/payment'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { isMobileDevice } from '@/utils/device'
-import type { SubscriptionPlan, CheckoutInfoResponse, OrderType } from '@/types/payment'
+import type {
+  CreateOrderResult,
+  CheckoutInfoResponse,
+  OrderType,
+  SubscriptionPlan,
+  WechatJsapiPayload
+} from '@/types/payment'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import AmountInput from '@/components/payment/AmountInput.vue'
 import PaymentMethodSelector from '@/components/payment/PaymentMethodSelector.vue'
-import { METHOD_ORDER, POPUP_WINDOW_FEATURES } from '@/components/payment/providerConfig'
+import { METHOD_ORDER, PAYMENT_MODE_QRCODE, POPUP_WINDOW_FEATURES } from '@/components/payment/providerConfig'
 import { platformAccentBarClass, platformBadgeLightClass, platformBadgeClass, platformTextClass, platformLabel } from '@/utils/platformColors'
 import SubscriptionPlanCard from '@/components/payment/SubscriptionPlanCard.vue'
 import PaymentStatusPanel from '@/components/payment/PaymentStatusPanel.vue'
@@ -288,6 +295,37 @@ const appStore = useAppStore()
 
 const user = computed(() => authStore.user)
 const activeSubscriptions = computed(() => subscriptionStore.activeSubscriptions)
+const isMobile = computed(() => isMobileDevice())
+
+const PENDING_WECHAT_PAYMENT_KEY = 'sub2api.pending_wechat_payment'
+const MAX_WECHAT_OAUTH_REDIRECTS = 2
+
+type PaymentStatusMode = 'popup' | 'jsapi'
+
+interface PendingWechatPaymentContext {
+  amount: number
+  paymentType: string
+  orderType: OrderType
+  planId?: number
+  state?: string
+  returnTab: 'recharge' | 'subscription'
+  oauthRedirectCount: number
+  savedAt: number
+}
+
+interface NormalizedWechatJsapiPayload {
+  appId: string
+  timeStamp: string
+  nonceStr: string
+  package: string
+  signType: string
+  paySign: string
+}
+
+interface CreateOrderOptions {
+  isResume?: boolean
+  openid?: string
+}
 
 function getDaysRemaining(expiresAt: string): number {
   const diff = new Date(expiresAt).getTime() - Date.now()
@@ -316,11 +354,12 @@ const paymentState = ref<{
   publishableKey: string
   payAmount: number
   orderType: OrderType | ''
-}>({ orderId: 0, amount: 0, qrCode: '', expiresAt: '', paymentType: '', payUrl: '', clientSecret: '', publishableKey: '', payAmount: 0, orderType: '' })
+  statusMode: PaymentStatusMode
+}>({ orderId: 0, amount: 0, qrCode: '', expiresAt: '', paymentType: '', payUrl: '', clientSecret: '', publishableKey: '', payAmount: 0, orderType: '', statusMode: 'popup' })
 
 function resetPayment() {
   paymentPhase.value = 'select'
-  paymentState.value = { orderId: 0, amount: 0, qrCode: '', expiresAt: '', paymentType: '', payUrl: '', clientSecret: '', publishableKey: '', payAmount: 0, orderType: '' }
+  paymentState.value = { orderId: 0, amount: 0, qrCode: '', expiresAt: '', paymentType: '', payUrl: '', clientSecret: '', publishableKey: '', payAmount: 0, orderType: '', statusMode: 'popup' }
 }
 
 function onPaymentDone() {
@@ -349,8 +388,523 @@ function onStripeDone() {
 }
 
 function onStripeRedirect(orderId: number, payUrl: string) {
-  paymentState.value = { ...paymentState.value, orderId, payUrl, qrCode: '' }
+  paymentState.value = { ...paymentState.value, orderId, payUrl, qrCode: '', statusMode: 'popup' }
   paymentPhase.value = 'paying'
+}
+
+function readQueryString(key: string): string {
+  const value = route.query[key]
+  if (Array.isArray(value)) {
+    return typeof value[0] === 'string' ? value[0] : ''
+  }
+  return typeof value === 'string' ? value : ''
+}
+
+function loadPendingWechatPayment(): PendingWechatPaymentContext | null {
+  try {
+    const raw = window.localStorage.getItem(PENDING_WECHAT_PAYMENT_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<PendingWechatPaymentContext>
+    if (
+      typeof parsed.amount !== 'number'
+      || !parsed.paymentType
+      || (parsed.orderType !== 'balance' && parsed.orderType !== 'subscription')
+      || (parsed.returnTab !== 'recharge' && parsed.returnTab !== 'subscription')
+      || typeof parsed.savedAt !== 'number'
+    ) {
+      window.localStorage.removeItem(PENDING_WECHAT_PAYMENT_KEY)
+      return null
+    }
+    const age = Date.now() - parsed.savedAt
+    if (age > 15 * 60 * 1000) {
+      window.localStorage.removeItem(PENDING_WECHAT_PAYMENT_KEY)
+      return null
+    }
+    return {
+      amount: parsed.amount,
+      paymentType: parsed.paymentType,
+      orderType: parsed.orderType,
+      planId: typeof parsed.planId === 'number' ? parsed.planId : undefined,
+      state: typeof parsed.state === 'string' ? parsed.state : undefined,
+      returnTab: parsed.returnTab,
+      oauthRedirectCount: typeof parsed.oauthRedirectCount === 'number' ? parsed.oauthRedirectCount : 0,
+      savedAt: parsed.savedAt,
+    }
+  } catch {
+    window.localStorage.removeItem(PENDING_WECHAT_PAYMENT_KEY)
+    return null
+  }
+}
+
+function savePendingWechatPayment(context: PendingWechatPaymentContext) {
+  window.localStorage.setItem(PENDING_WECHAT_PAYMENT_KEY, JSON.stringify(context))
+}
+
+function clearPendingWechatPayment() {
+  window.localStorage.removeItem(PENDING_WECHAT_PAYMENT_KEY)
+}
+
+function clearWechatCallbackQuery() {
+  const url = new URL(window.location.href)
+  const keys = [
+    'wechat_resume',
+    'openid',
+    'state',
+    'scope',
+    'payment_type',
+    'amount',
+    'order_type',
+    'plan_id',
+    'redirect',
+    'error',
+    'error_description',
+    'errmsg',
+    'message',
+  ]
+  keys.forEach((key) => url.searchParams.delete(key))
+  window.history.replaceState({}, document.title, url.toString())
+}
+
+function isWechatOAuthCallback(): boolean {
+  return readQueryString('wechat_resume') === '1'
+    || !!readQueryString('openid')
+    || !!readQueryString('state')
+}
+
+function isWechatBrowser(): boolean {
+  return /micromessenger/i.test(window.navigator.userAgent)
+}
+
+type PaymentRedirectParams = Record<string, string | number | boolean | null | undefined>
+
+function firstString(...values: unknown[]): string {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim()
+    }
+  }
+  return ''
+}
+
+function readResultString(result: Record<string, unknown>, ...keys: string[]): string {
+  return firstString(...keys.map((key) => result[key]))
+}
+
+function readResultObject(result: Record<string, unknown>, ...keys: string[]): Record<string, unknown> {
+  for (const key of keys) {
+    const value = result[key]
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      return value as Record<string, unknown>
+    }
+  }
+  return {}
+}
+
+function readResultParams(result: Record<string, unknown>, ...keys: string[]): PaymentRedirectParams {
+  for (const key of keys) {
+    const value = result[key]
+    if (!value) continue
+    if (typeof value === 'string') {
+      try {
+        const params = new URLSearchParams(value.startsWith('?') ? value.slice(1) : value)
+        const entries = Array.from(params.entries())
+        if (entries.length === 0) continue
+        return Object.fromEntries(entries)
+      } catch {
+        continue
+      }
+    }
+    if (typeof value === 'object' && !Array.isArray(value)) {
+      return value as PaymentRedirectParams
+    }
+  }
+  return {}
+}
+
+function readUrlParams(value: string): PaymentRedirectParams {
+  if (!value) return {}
+  try {
+    const url = new URL(value, window.location.origin)
+    const entries = Array.from(url.searchParams.entries())
+    return entries.length > 0 ? Object.fromEntries(entries) : {}
+  } catch {
+    try {
+      const params = new URLSearchParams(value.startsWith('?') ? value.slice(1) : value)
+      const entries = Array.from(params.entries())
+      return entries.length > 0 ? Object.fromEntries(entries) : {}
+    } catch {
+      return {}
+    }
+  }
+}
+
+function setSearchParam(params: URLSearchParams, key: string, value: unknown) {
+  if (value == null) return
+  const normalized = String(value).trim()
+  if (!normalized) return
+  params.set(key, normalized)
+}
+
+function buildPaymentResultUrl(result: Record<string, unknown>, orderType: OrderType): string {
+  const wechatH5 = readResultObject(result, 'wechat_h5', 'wechatH5')
+  const url = new URL('/payment/result', window.location.origin)
+  const extraParams = {
+    ...readUrlParams(readResultString(result, 'return_url', 'redirect_url')),
+    ...readUrlParams(readResultString(result, 'wechat_h5_return_url', 'wechatH5ReturnUrl')),
+    ...readUrlParams(readResultString(wechatH5, 'url', 'return_url', 'redirect_url')),
+    ...readResultParams(result, 'return_params', 'redirect_params', 'wechat_h5_return_params', 'wechatH5ReturnParams'),
+    ...readResultParams(wechatH5, 'params', 'return_params', 'redirect_params'),
+  }
+
+  Object.entries(extraParams).forEach(([key, value]) => setSearchParam(url.searchParams, key, value))
+  setSearchParam(url.searchParams, 'order_id', result.order_id)
+  setSearchParam(url.searchParams, 'out_trade_no', readResultString(result, 'out_trade_no', 'outTradeNo'))
+  setSearchParam(url.searchParams, 'payment_type', firstString(readResultString(result, 'payment_type', 'paymentType'), selectedMethod.value))
+  setSearchParam(url.searchParams, 'order_type', orderType)
+  return url.toString()
+}
+
+function buildWechatH5PayUrl(result: Record<string, unknown>, orderType: OrderType): string {
+  const wechatH5 = readResultObject(result, 'wechat_h5', 'wechatH5')
+  const payUrl = firstString(readResultString(result, 'pay_url', 'payUrl'), readResultString(wechatH5, 'pay_url', 'payUrl', 'url'))
+  if (!payUrl) return ''
+  try {
+    const url = new URL(payUrl)
+    url.searchParams.set('redirect_url', buildPaymentResultUrl(result, orderType))
+    return url.toString()
+  } catch {
+    return payUrl
+  }
+}
+
+function isMobileWechatQrDeclined(result: Record<string, unknown>): boolean {
+  const paymentMode = firstString(readResultString(result, 'payment_mode', 'paymentMode'))
+  return isMobile.value
+    && selectedMethod.value.includes('wxpay')
+    && paymentMode === PAYMENT_MODE_QRCODE
+    && !readResultString(result, 'pay_url', 'payUrl')
+    && !!readResultString(result, 'qr_code', 'qrCode')
+}
+
+function getWechatAuthorizeUrl(result: Record<string, unknown>): string {
+  const oauth = readResultObject(result, 'oauth')
+  return firstString(readResultString(oauth, 'authorize_url', 'authorizeUrl'), readResultString(result, 'authorize_url', 'authorizeUrl'))
+}
+
+function getWechatAuthorizeState(result: Record<string, unknown>): string {
+  const oauth = readResultObject(result, 'oauth')
+  const state = firstString(readResultString(oauth, 'state'), readResultString(result, 'state'))
+  if (state) return state
+  const authorizeUrl = getWechatAuthorizeUrl(result)
+  if (!authorizeUrl) return ''
+  try {
+    return new URL(authorizeUrl, window.location.origin).searchParams.get('state') || ''
+  } catch {
+    return ''
+  }
+}
+
+function normalizeWechatJsapiPayload(payload: WechatJsapiPayload | Record<string, unknown>): NormalizedWechatJsapiPayload | null {
+  const appId = firstString(payload.appId, payload.appid)
+  const timeStamp = firstString(payload.timeStamp, payload.timestamp)
+  const nonceStr = firstString(payload.nonceStr, payload.nonce_str)
+  const packageValue = firstString(payload.package)
+  const signType = firstString(payload.signType, payload.sign_type) || 'MD5'
+  const paySign = firstString(payload.paySign, payload.pay_sign)
+  if (!appId || !timeStamp || !nonceStr || !packageValue || !signType || !paySign) {
+    return null
+  }
+  return {
+    appId,
+    timeStamp,
+    nonceStr,
+    package: packageValue,
+    signType,
+    paySign,
+  }
+}
+
+function waitForWeixinJSBridge(timeoutMs = 4000): Promise<NonNullable<Window['WeixinJSBridge']> | null> {
+  if (window.WeixinJSBridge) {
+    return Promise.resolve(window.WeixinJSBridge)
+  }
+  return new Promise((resolve) => {
+    let settled = false
+    const cleanup = () => {
+      document.removeEventListener('WeixinJSBridgeReady', handleReady as EventListener)
+      document.removeEventListener('onWeixinJSBridgeReady', handleReady as EventListener)
+      window.clearTimeout(timer)
+    }
+    const finish = (bridge: NonNullable<Window['WeixinJSBridge']> | null) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      resolve(bridge)
+    }
+    const handleReady = () => finish(window.WeixinJSBridge ?? null)
+    const timer = window.setTimeout(() => finish(window.WeixinJSBridge ?? null), timeoutMs)
+    document.addEventListener('WeixinJSBridgeReady', handleReady as EventListener, false)
+    document.addEventListener('onWeixinJSBridgeReady', handleReady as EventListener, false)
+  })
+}
+
+function invokeWechatPay(payload: NormalizedWechatJsapiPayload): Promise<Record<string, unknown>> {
+  return new Promise(async (resolve) => {
+    const bridge = await waitForWeixinJSBridge()
+    if (!bridge) {
+      resolve({ err_msg: 'weixin_js_bridge_unavailable' })
+      return
+    }
+    bridge.invoke('getBrandWCPayRequest', { ...payload }, (response) => {
+      resolve((response ?? {}) as Record<string, unknown>)
+    })
+  })
+}
+
+function buildPendingWechatPaymentContext(orderAmount: number, orderType: OrderType, planId?: number): PendingWechatPaymentContext {
+  return {
+    amount: orderAmount,
+    paymentType: selectedMethod.value,
+    orderType,
+    planId,
+    state: '',
+    returnTab: orderType === 'subscription' ? 'subscription' : activeTab.value,
+    oauthRedirectCount: 0,
+    savedAt: Date.now(),
+  }
+}
+
+function createWaitingPaymentState(result: CreateOrderResult, orderType: OrderType, overrides: Partial<typeof paymentState.value> = {}) {
+  paymentState.value = {
+    orderId: result.order_id,
+    amount: result.amount,
+    qrCode: '',
+    expiresAt: result.expires_at || '',
+    paymentType: firstString(result.payment_type, selectedMethod.value),
+    payUrl: '',
+    clientSecret: '',
+    publishableKey: '',
+    payAmount: result.pay_amount,
+    orderType,
+    statusMode: 'popup',
+    ...overrides,
+  }
+}
+
+async function handleWechatOAuthRequired(
+  result: CreateOrderResult,
+  orderAmount: number,
+  orderType: OrderType,
+  planId?: number,
+  options: CreateOrderOptions = {}
+) {
+  if (options.isResume || options.openid) {
+    clearPendingWechatPayment()
+    errorMessage.value = t('payment.wechat.authResumeFailed')
+    appStore.showError(errorMessage.value)
+    return
+  }
+  const authorizeUrl = getWechatAuthorizeUrl(result as Record<string, unknown>)
+  if (!authorizeUrl) {
+    clearPendingWechatPayment()
+    errorMessage.value = t('payment.wechat.authMissingUrl')
+    appStore.showError(errorMessage.value)
+    return
+  }
+  const pending = options.isResume ? loadPendingWechatPayment() ?? buildPendingWechatPaymentContext(orderAmount, orderType, planId) : buildPendingWechatPaymentContext(orderAmount, orderType, planId)
+  const nextRedirectCount = (pending.oauthRedirectCount || 0) + 1
+  if (nextRedirectCount > MAX_WECHAT_OAUTH_REDIRECTS) {
+    clearPendingWechatPayment()
+    errorMessage.value = t('payment.wechat.authRetryExceeded')
+    appStore.showError(errorMessage.value)
+    return
+  }
+  savePendingWechatPayment({
+    ...pending,
+    amount: orderAmount,
+    orderType,
+    planId,
+    state: getWechatAuthorizeState(result as Record<string, unknown>),
+    paymentType: selectedMethod.value,
+    returnTab: orderType === 'subscription' ? 'subscription' : activeTab.value,
+    oauthRedirectCount: nextRedirectCount,
+    savedAt: Date.now(),
+  })
+  appStore.showInfo(
+    options.isResume ? t('payment.wechat.authRetrying') : t('payment.wechat.authRedirecting'),
+    2500
+  )
+  window.location.href = authorizeUrl
+}
+
+async function handleWechatJsapiReady(result: CreateOrderResult, orderType: OrderType) {
+  if (!isWechatBrowser()) {
+    errorMessage.value = t('payment.wechat.jsapiUnavailable')
+    appStore.showError(errorMessage.value)
+    return
+  }
+  const rawPayload = (result.jsapi_payload || result.jsapi || {}) as WechatJsapiPayload
+  const payload = normalizeWechatJsapiPayload(rawPayload)
+  if (!payload) {
+    errorMessage.value = t('payment.wechat.jsapiInvalidPayload')
+    appStore.showError(errorMessage.value)
+    return
+  }
+
+  clearPendingWechatPayment()
+  createWaitingPaymentState(result, orderType, {
+    paymentType: firstString(result.payment_type, selectedMethod.value),
+    statusMode: 'jsapi',
+  })
+  paymentPhase.value = 'paying'
+  appStore.showInfo(t('payment.wechat.jsapiInvoking'), 2500)
+
+  const response = await invokeWechatPay(payload)
+  const errMsg = firstString(response.err_msg, response.errMsg).toLowerCase()
+
+  if (errMsg.includes(':ok')) {
+    appStore.showInfo(t('payment.wechat.jsapiProcessing'), 3000)
+    return
+  }
+  if (errMsg.includes(':cancel')) {
+    appStore.showWarning(t('payment.wechat.jsapiCancelled'))
+    return
+  }
+  const failMessage = errMsg === 'weixin_js_bridge_unavailable'
+    ? t('payment.wechat.jsapiUnavailable')
+    : t('payment.wechat.jsapiFailed', { reason: firstString(response.err_msg, response.errMsg) || 'unknown' })
+  appStore.showError(failMessage)
+}
+
+async function consumeOrderCreatedResult(result: CreateOrderResult, orderType: OrderType) {
+  const rawResult = result as Record<string, unknown>
+  const openWindow = (url: string) => {
+    const win = window.open(url, 'paymentPopup', POPUP_WINDOW_FEATURES)
+    if (!win || win.closed) {
+      window.location.href = url
+    }
+  }
+
+  clearPendingWechatPayment()
+
+  if (result.client_secret) {
+    paymentState.value = {
+      orderId: result.order_id,
+      amount: result.amount,
+      qrCode: '',
+      expiresAt: result.expires_at || '',
+      paymentType: selectedMethod.value,
+      payUrl: '',
+      clientSecret: result.client_secret,
+      publishableKey: result.stripe_publishable_key || '',
+      payAmount: result.pay_amount,
+      orderType,
+      statusMode: 'popup',
+    }
+    paymentPhase.value = 'stripe'
+  } else if (isMobileWechatQrDeclined(rawResult)) {
+    errorMessage.value = `${t('payment.methods.' + selectedMethod.value, selectedMethod.value)} ${t('payment.notAvailable')}`
+    appStore.showError(errorMessage.value)
+  } else if (isMobile.value && result.pay_url) {
+    const mobilePayUrl = selectedMethod.value.includes('wxpay')
+      ? buildWechatH5PayUrl(rawResult, orderType)
+      : result.pay_url
+    createWaitingPaymentState(result, orderType, {
+      paymentType: selectedMethod.value,
+      payUrl: mobilePayUrl,
+      statusMode: 'popup',
+    })
+    paymentPhase.value = 'paying'
+    window.location.href = mobilePayUrl
+  } else if (result.qr_code) {
+    createWaitingPaymentState(result, orderType, {
+      paymentType: selectedMethod.value,
+      qrCode: result.qr_code,
+      statusMode: 'popup',
+    })
+    paymentPhase.value = 'paying'
+  } else if (result.pay_url) {
+    const payUrl = selectedMethod.value.includes('wxpay')
+      ? buildWechatH5PayUrl(rawResult, orderType)
+      : result.pay_url
+    openWindow(payUrl)
+    createWaitingPaymentState(result, orderType, {
+      paymentType: selectedMethod.value,
+      payUrl,
+      statusMode: 'popup',
+    })
+    paymentPhase.value = 'paying'
+  } else {
+    errorMessage.value = t('payment.result.failed')
+    appStore.showError(errorMessage.value)
+  }
+}
+
+async function maybeResumeWechatPayment() {
+  if (!isWechatOAuthCallback()) return
+
+  const callbackError = firstString(
+    readQueryString('error'),
+    readQueryString('error_description'),
+    readQueryString('errmsg'),
+    readQueryString('message')
+  )
+  if (callbackError) {
+    clearPendingWechatPayment()
+    clearWechatCallbackQuery()
+    errorMessage.value = callbackError
+    appStore.showError(callbackError)
+    return
+  }
+
+  const pending = loadPendingWechatPayment()
+  const callbackState = readQueryString('state')
+  const openid = readQueryString('openid')
+  if (!pending) {
+    clearWechatCallbackQuery()
+    errorMessage.value = t('payment.wechat.authExpired')
+    appStore.showError(errorMessage.value)
+    return
+  }
+  if (!openid) {
+    clearPendingWechatPayment()
+    clearWechatCallbackQuery()
+    errorMessage.value = t('payment.wechat.callbackMissingOpenId')
+    appStore.showError(errorMessage.value)
+    return
+  }
+  if (pending.state && callbackState && pending.state !== callbackState) {
+    clearPendingWechatPayment()
+    clearWechatCallbackQuery()
+    errorMessage.value = t('payment.wechat.authStateMismatch')
+    appStore.showError(errorMessage.value)
+    return
+  }
+
+  selectedMethod.value = pending.paymentType
+  activeTab.value = pending.returnTab
+
+  if (pending.orderType === 'subscription') {
+    activeTab.value = 'subscription'
+    const resumePlan = checkout.value.plans.find((plan) => plan.id === pending.planId)
+    if (!resumePlan) {
+      clearPendingWechatPayment()
+      clearWechatCallbackQuery()
+      errorMessage.value = t('payment.wechat.resumePlanMissing')
+      appStore.showError(errorMessage.value)
+      return
+    }
+    selectedPlan.value = resumePlan
+  } else {
+    amount.value = pending.amount
+  }
+
+  clearWechatCallbackQuery()
+  appStore.showInfo(t('payment.wechat.authResuming'), 2500)
+  await createOrder(pending.amount, pending.orderType, pending.planId, {
+    isResume: true,
+    openid,
+  })
 }
 
 const checkout = ref<CheckoutInfoResponse>({
@@ -547,84 +1101,25 @@ async function confirmSubscribe() {
   await createOrder(selectedPlan.value.price, 'subscription', selectedPlan.value.id)
 }
 
-async function createOrder(orderAmount: number, orderType: OrderType, planId?: number) {
+async function createOrder(orderAmount: number, orderType: OrderType, planId?: number, options: CreateOrderOptions = {}) {
   submitting.value = true
   errorMessage.value = ''
   try {
     const result = await paymentStore.createOrder({
       amount: orderAmount,
       payment_type: selectedMethod.value,
+      openid: options.openid,
       order_type: orderType,
       plan_id: planId,
     })
-    const openWindow = (url: string) => {
-      const win = window.open(url, 'paymentPopup', POPUP_WINDOW_FEATURES)
-      if (!win || win.closed) {
-        window.location.href = url
-      }
-    }
-    if (result.client_secret) {
-      paymentState.value = {
-        orderId: result.order_id,
-        amount: result.amount,
-        qrCode: '',
-        expiresAt: result.expires_at || '',
-        paymentType: selectedMethod.value,
-        payUrl: '',
-        clientSecret: result.client_secret,
-        publishableKey: result.stripe_publishable_key || '',
-        payAmount: result.pay_amount,
-        orderType,
-      }
-      paymentPhase.value = 'stripe'
-    } else if (isMobileDevice() && result.pay_url) {
-      paymentState.value = {
-        orderId: result.order_id,
-        amount: result.amount,
-        qrCode: '',
-        expiresAt: result.expires_at || '',
-        paymentType: selectedMethod.value,
-        payUrl: result.pay_url,
-        clientSecret: '',
-        publishableKey: '',
-        payAmount: 0,
-        orderType,
-      }
-      paymentPhase.value = 'paying'
-      window.location.href = result.pay_url
-      return
-    } else if (result.qr_code) {
-      paymentState.value = {
-        orderId: result.order_id,
-        amount: result.amount,
-        qrCode: result.qr_code,
-        expiresAt: result.expires_at || '',
-        paymentType: selectedMethod.value,
-        payUrl: '',
-        clientSecret: '',
-        publishableKey: '',
-        payAmount: 0,
-        orderType,
-      }
-      paymentPhase.value = 'paying'
-    } else if (result.pay_url) {
-      openWindow(result.pay_url)
-      paymentState.value = {
-        orderId: result.order_id,
-        amount: result.amount,
-        qrCode: '',
-        expiresAt: result.expires_at || '',
-        paymentType: selectedMethod.value,
-        payUrl: result.pay_url,
-        clientSecret: '',
-        publishableKey: '',
-        payAmount: 0,
-        orderType,
-      }
-      paymentPhase.value = 'paying'
+    const resultType = result.result_type || 'order_created'
+
+    if (resultType === 'oauth_required') {
+      await handleWechatOAuthRequired(result, orderAmount, orderType, planId, options)
+    } else if (resultType === 'jsapi_ready') {
+      await handleWechatJsapiReady(result, orderType)
     } else {
-      errorMessage.value = t('payment.result.failed')
-      appStore.showError(errorMessage.value)
+      await consumeOrderCreatedResult(result, orderType)
     }
   } catch (err: unknown) {
     const apiErr = err as Record<string, unknown>
@@ -673,6 +1168,7 @@ onMounted(async () => {
         }
       }
     }
+    await maybeResumeWechatPayment()
   } catch (err: unknown) {
     appStore.showError(extractApiErrorMessage(err, t('common.error')))
   } finally {

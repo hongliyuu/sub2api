@@ -77,9 +77,9 @@
           <div :class="['relative rounded-lg border-2 p-4', qrBorderClass]">
             <canvas ref="qrCanvas" class="mx-auto"></canvas>
             <!-- Brand logo overlay -->
-            <div class="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <div v-if="isWxpay" class="pointer-events-none absolute inset-0 flex items-center justify-center">
               <span :class="['rounded-full p-2 shadow ring-2 ring-white', qrLogoBgClass]">
-                <img :src="isAlipay ? alipayIcon : wxpayIcon" alt="" class="h-5 w-5 brightness-0 invert" />
+                <img :src="wxpayIcon" alt="" class="h-5 w-5 brightness-0 invert" />
               </span>
             </div>
           </div>
@@ -101,7 +101,7 @@
       <div class="card p-6">
         <div class="flex flex-col items-center space-y-4 py-4">
           <div class="h-10 w-10 animate-spin rounded-full border-4 border-primary-500 border-t-transparent"></div>
-          <p class="text-sm text-gray-500 dark:text-gray-400">{{ t('payment.qr.payInNewWindowHint') }}</p>
+          <p class="text-sm text-gray-500 dark:text-gray-400">{{ waitingTitle }}</p>
           <button v-if="payUrl" class="btn btn-secondary text-sm" @click="reopenPopup">
             {{ t('payment.qr.openPayWindow') }}
           </button>
@@ -109,7 +109,7 @@
       </div>
       <div class="card p-4 text-center">
         <p class="mt-1 text-2xl font-bold tabular-nums text-gray-900 dark:text-white">{{ countdownDisplay }}</p>
-        <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">{{ t('payment.qr.waitingPayment') }}</p>
+        <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">{{ waitingHint }}</p>
       </div>
       <button class="btn btn-secondary w-full" :disabled="cancelling" @click="handleCancel">
         {{ cancelling ? t('common.processing') : t('payment.qr.cancelOrder') }}
@@ -129,7 +129,6 @@ import { POPUP_WINDOW_FEATURES } from '@/components/payment/providerConfig'
 import type { PaymentOrder } from '@/types/payment'
 import Icon from '@/components/icons/Icon.vue'
 import QRCode from 'qrcode'
-import alipayIcon from '@/assets/icons/alipay.svg'
 import wxpayIcon from '@/assets/icons/wxpay.svg'
 
 const props = defineProps<{
@@ -139,6 +138,7 @@ const props = defineProps<{
   paymentType: string
   payUrl?: string
   orderType?: string
+  statusMode?: 'popup' | 'jsapi'
 }>()
 
 const emit = defineEmits<{ done: []; success: [] }>()
@@ -186,6 +186,18 @@ const scanHint = computed(() => {
   return ''
 })
 
+const waitingTitle = computed(() => (
+  props.statusMode === 'jsapi'
+    ? t('payment.wechat.jsapiWaiting')
+    : t('payment.qr.payInNewWindowHint')
+))
+
+const waitingHint = computed(() => (
+  props.statusMode === 'jsapi'
+    ? t('payment.wechat.jsapiPendingHint')
+    : t('payment.qr.waitingPayment')
+))
+
 const countdownDisplay = computed(() => {
   const m = Math.floor(remainingSeconds.value / 60)
   const s = remainingSeconds.value % 60
@@ -203,7 +215,7 @@ async function renderQR() {
   if (!qrCanvas.value || !qrUrl.value) return
   await QRCode.toCanvas(qrCanvas.value, qrUrl.value, {
     width: 220, margin: 2,
-    errorCorrectionLevel: 'M',
+    errorCorrectionLevel: isWxpay.value ? 'M' : 'L',
   })
 }
 

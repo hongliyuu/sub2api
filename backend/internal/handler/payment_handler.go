@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/internal/payment"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -18,14 +20,16 @@ type PaymentHandler struct {
 	channelService *service.ChannelService
 	paymentService *service.PaymentService
 	configService  *service.PaymentConfigService
+	settingService *service.SettingService
 }
 
 // NewPaymentHandler creates a new PaymentHandler.
-func NewPaymentHandler(paymentService *service.PaymentService, configService *service.PaymentConfigService, channelService *service.ChannelService) *PaymentHandler {
+func NewPaymentHandler(paymentService *service.PaymentService, configService *service.PaymentConfigService, channelService *service.ChannelService, settingService *service.SettingService) *PaymentHandler {
 	return &PaymentHandler{
 		channelService: channelService,
 		paymentService: paymentService,
 		configService:  configService,
+		settingService: settingService,
 	}
 }
 
@@ -205,6 +209,7 @@ func (h *PaymentHandler) GetLimits(c *gin.Context) {
 type CreateOrderRequest struct {
 	Amount      float64 `json:"amount"`
 	PaymentType string  `json:"payment_type" binding:"required"`
+	OpenID      string  `json:"openid"`
 	OrderType   string  `json:"order_type"`
 	PlanID      int64   `json:"plan_id"`
 }
@@ -223,16 +228,40 @@ func (h *PaymentHandler) CreateOrder(c *gin.Context) {
 		return
 	}
 
+	if h.shouldRequireWeChatOAuth(c, req) {
+		if h.paymentService == nil {
+			response.ErrorFrom(c, infraerrors.ServiceUnavailable("PAYMENT_SERVICE_UNAVAILABLE", "payment service not ready"))
+			return
+		}
+		result, err := h.paymentService.PreviewWeChatOAuthRequiredResponse(c.Request.Context(), service.CreateOrderRequest{
+			Amount:          req.Amount,
+			PaymentType:     req.PaymentType,
+			IsWeChatBrowser: true,
+			SrcURL:          c.Request.Referer(),
+			OrderType:       req.OrderType,
+			PlanID:          req.PlanID,
+		})
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		response.Success(c, result)
+		return
+	}
+
 	result, err := h.paymentService.CreateOrder(c.Request.Context(), service.CreateOrderRequest{
-		UserID:      subject.UserID,
-		Amount:      req.Amount,
-		PaymentType: req.PaymentType,
-		ClientIP:    c.ClientIP(),
-		IsMobile:    isMobile(c),
-		SrcHost:     c.Request.Host,
-		SrcURL:      c.Request.Referer(),
-		OrderType:   req.OrderType,
-		PlanID:      req.PlanID,
+		UserID:          subject.UserID,
+		Amount:          req.Amount,
+		PaymentType:     req.PaymentType,
+		OpenID:          req.OpenID,
+		ClientIP:        c.ClientIP(),
+		IsMobile:        isMobile(c),
+		IsWeChatBrowser: isWeChatBrowser(c),
+		RequestScheme:   requestScheme(c),
+		SrcHost:         c.Request.Host,
+		SrcURL:          c.Request.Referer(),
+		OrderType:       req.OrderType,
+		PlanID:          req.PlanID,
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -443,4 +472,37 @@ func isMobile(c *gin.Context) bool {
 		}
 	}
 	return false
+}
+
+func isWeChatBrowser(c *gin.Context) bool {
+	return strings.Contains(strings.ToLower(c.GetHeader("User-Agent")), "micromessenger")
+}
+
+func isWeChatPaymentType(paymentType string) bool {
+	switch strings.TrimSpace(paymentType) {
+	case payment.TypeWxpay, payment.TypeWxpayDirect:
+		return true
+	default:
+		return false
+	}
+}
+
+func (h *PaymentHandler) shouldRequireWeChatOAuth(c *gin.Context, req CreateOrderRequest) bool {
+	if strings.TrimSpace(req.OpenID) != "" {
+		return false
+	}
+	return isWeChatBrowser(c) && isWeChatPaymentType(req.PaymentType)
+}
+
+func requestScheme(c *gin.Context) string {
+	if c == nil {
+		return "http"
+	}
+	if xfProto := strings.TrimSpace(c.GetHeader("X-Forwarded-Proto")); xfProto != "" {
+		return strings.TrimSpace(strings.Split(xfProto, ",")[0])
+	}
+	if c.Request != nil && c.Request.TLS != nil {
+		return "https"
+	}
+	return "http"
 }
