@@ -82,7 +82,6 @@ import { extractApiErrorMessage } from '@/utils/apiError'
 import { POPUP_WINDOW_FEATURES } from '@/components/payment/providerConfig'
 import type { PaymentOrder } from '@/types/payment'
 import QRCode from 'qrcode'
-import alipayIcon from '@/assets/icons/alipay.svg'
 import wxpayIcon from '@/assets/icons/wxpay.svg'
 
 const props = defineProps<{
@@ -139,7 +138,6 @@ const countdownDisplay = computed(() => {
 })
 
 function getLogoForType(): string | null {
-  if (isAlipay.value) return alipayIcon
   if (isWxpay.value) return wxpayIcon
   return null
 }

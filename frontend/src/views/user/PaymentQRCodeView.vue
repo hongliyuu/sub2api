@@ -42,7 +42,6 @@ import { paymentAPI } from '@/api/payment'
 import { extractApiErrorMessage } from '@/utils/apiError'
 import { useAppStore } from '@/stores'
 import QRCode from 'qrcode'
-import alipayIcon from '@/assets/icons/alipay.svg'
 import wxpayIcon from '@/assets/icons/wxpay.svg'
 
 const { t } = useI18n()
@@ -85,7 +84,6 @@ const scanHint = computed(() => {
 })
 
 function getLogoForType(): string | null {
-  if (isAlipay.value) return alipayIcon
   if (isWxpay.value) return wxpayIcon
   return null
 }
