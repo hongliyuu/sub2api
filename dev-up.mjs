@@ -12,6 +12,9 @@ const frontend = path.join(root, "frontend");
 
 $.verbose = false;
 
+// ── proxy ─────────────────────────────────────────────────────────────────────
+const PROXY = process.env.HTTPS_PROXY || process.env.HTTP_PROXY || "http://127.0.0.1:8668";
+
 // ── helpers ───────────────────────────────────────────────────────────────────
 const info = (s) => console.log(`${chalk.green("[dev-up]")} ${s}`);
 const die  = (s) => { console.error(chalk.red(`[dev-up] ${s}`)); process.exit(1); };
@@ -55,8 +58,17 @@ if (await isPortInUse(8080)) die("Port 8080 already in use. Stop the existing pr
 if (await isPortInUse(3000)) die("Port 3000 already in use. Stop the existing process first.");
 
 // ── start backend ─────────────────────────────────────────────────────────────
-info("Starting backend on :8080 ...");
-const backendProc = $({ cwd: backend })`go run ./cmd/server`.nothrow();
+info(`Starting backend on :8080 (proxy: ${PROXY}) ...`);
+const backendProc = $({
+  cwd: backend,
+  env: {
+    ...process.env,
+    HTTPS_PROXY: PROXY,
+    HTTP_PROXY: PROXY,
+    https_proxy: PROXY,
+    http_proxy: PROXY,
+  },
+})`go run ./cmd/server`.nothrow();
 
 const backendReady = await waitForPort(8080, 60_000);
 if (!backendReady) {
@@ -106,6 +118,5 @@ async function shutdown() {
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
 
-// If either exits unexpectedly, shut everything down
 await Promise.race([backendProc, frontendProc]);
 await shutdown();
