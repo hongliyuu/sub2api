@@ -96,6 +96,11 @@ export interface PaymentOrder {
   provider_instance_id?: string
 }
 
+export type PaymentResultOrder = Pick<
+  PaymentOrder,
+  'id' | 'amount' | 'pay_amount' | 'fee_rate' | 'payment_type' | 'out_trade_no' | 'status' | 'order_type'
+>
+
 // ==================== Plans & Channels ====================
 
 export interface SubscriptionPlan {

@@ -391,6 +391,7 @@ type PublicOrderResult struct {
 	OutTradeNo  string  `json:"out_trade_no"`
 	Amount      float64 `json:"amount"`
 	PayAmount   float64 `json:"pay_amount"`
+	FeeRate     float64 `json:"fee_rate"`
 	PaymentType string  `json:"payment_type"`
 	OrderType   string  `json:"order_type"`
 	Status      string  `json:"status"`
@@ -415,6 +416,7 @@ func (h *PaymentHandler) VerifyOrderPublic(c *gin.Context) {
 		OutTradeNo:  order.OutTradeNo,
 		Amount:      order.Amount,
 		PayAmount:   order.PayAmount,
+		FeeRate:     order.FeeRate,
 		PaymentType: order.PaymentType,
 		OrderType:   order.OrderType,
 		Status:      order.Status,

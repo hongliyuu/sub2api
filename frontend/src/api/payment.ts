@@ -12,7 +12,8 @@ import type {
   CheckoutInfoResponse,
   CreateOrderRequest,
   CreateOrderResult,
-  PaymentOrder
+  PaymentOrder,
+  PaymentResultOrder
 } from '@/types/payment'
 import type { BasePaginationResponse } from '@/types'
 
@@ -69,7 +70,7 @@ export const paymentAPI = {
 
   /** Verify order payment status without auth (public endpoint for result page) */
   verifyOrderPublic(outTradeNo: string) {
-    return apiClient.post<PaymentOrder>('/payment/public/orders/verify', { out_trade_no: outTradeNo })
+    return apiClient.post<PaymentResultOrder>('/payment/public/orders/verify', { out_trade_no: outTradeNo })
   },
 
   /** Request a refund for a completed order */

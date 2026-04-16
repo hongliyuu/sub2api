@@ -40,8 +40,8 @@
               <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.baseAmount') }}</span>
               <span class="font-medium text-gray-900 dark:text-white">&#165;{{ baseAmount.toFixed(2) }}</span>
             </div>
-            <div v-if="order.fee_rate > 0" class="flex justify-between">
-              <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.fee') }} ({{ order.fee_rate }}%)</span>
+            <div v-if="normalizedFeeRate > 0" class="flex justify-between">
+              <span class="text-gray-500 dark:text-gray-400">{{ t('payment.orders.fee') }} ({{ normalizedFeeRate }}%)</span>
               <span class="font-medium text-gray-900 dark:text-white">&#165;{{ feeAmount.toFixed(2) }}</span>
             </div>
             <div class="flex justify-between">
@@ -96,14 +96,14 @@ import { useRoute, useRouter } from 'vue-router'
 import OrderStatusBadge from '@/components/payment/OrderStatusBadge.vue'
 import { usePaymentStore } from '@/stores/payment'
 import { paymentAPI } from '@/api/payment'
-import type { PaymentOrder } from '@/types/payment'
+import type { PaymentResultOrder } from '@/types/payment'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const paymentStore = usePaymentStore()
 
-const order = ref<PaymentOrder | null>(null)
+const order = ref<PaymentResultOrder | null>(null)
 const loading = ref(true)
 
 interface ReturnInfo {
@@ -116,15 +116,21 @@ const returnInfo = ref<ReturnInfo | null>(null)
 
 const SUCCESS_STATUSES = new Set(['COMPLETED', 'PAID', 'RECHARGING'])
 
+const normalizedFeeRate = computed(() => {
+  if (!order.value) return 0
+  const feeRate = Number(order.value.fee_rate ?? 0)
+  return Number.isFinite(feeRate) ? feeRate : 0
+})
+
 /** 充值金额 = pay_amount / (1 + fee_rate/100)，fee_rate=0 时等于 pay_amount */
 const baseAmount = computed(() => {
-  if (!order.value || order.value.fee_rate <= 0) return order.value?.pay_amount ?? 0
-  return Math.round((order.value.pay_amount / (1 + order.value.fee_rate / 100)) * 100) / 100
+  if (!order.value || normalizedFeeRate.value <= 0) return order.value?.pay_amount ?? 0
+  return Math.round((order.value.pay_amount / (1 + normalizedFeeRate.value / 100)) * 100) / 100
 })
 
 /** 手续费 = pay_amount - baseAmount */
 const feeAmount = computed(() => {
-  if (!order.value || order.value.fee_rate <= 0) return 0
+  if (!order.value || normalizedFeeRate.value <= 0) return 0
   return Math.round((order.value.pay_amount - baseAmount.value) * 100) / 100
 })
 
