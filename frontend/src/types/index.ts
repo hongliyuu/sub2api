@@ -120,7 +120,6 @@ export interface PublicSettings {
   payment_enabled: boolean
   table_default_page_size: number
   table_page_size_options: number[]
-  payment_enabled: boolean
   custom_menu_items: CustomMenuItem[]
   custom_endpoints: CustomEndpoint[]
   linuxdo_oauth_enabled: boolean
