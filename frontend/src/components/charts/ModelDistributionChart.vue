@@ -470,7 +470,12 @@ const rankingDoughnutOptions = computed(() => ({
   }
 }))
 
+const normalizeNumericValue = (value: number | null | undefined): number => {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0
+}
+
 const formatTokens = (value: number): string => {
+  value = normalizeNumericValue(value)
   if (value >= 1_000_000_000) {
     return `${(value / 1_000_000_000).toFixed(2)}B`
   } else if (value >= 1_000_000) {
@@ -482,6 +487,7 @@ const formatTokens = (value: number): string => {
 }
 
 const formatNumber = (value: number): string => {
+  value = normalizeNumericValue(value)
   return value.toLocaleString()
 }
 
@@ -496,6 +502,7 @@ const getRankingRowLabel = (item: RankingDisplayItem): string => {
 }
 
 const formatCost = (value: number): string => {
+  value = normalizeNumericValue(value)
   if (value >= 1000) {
     return (value / 1000).toFixed(2) + 'K'
   } else if (value >= 1) {

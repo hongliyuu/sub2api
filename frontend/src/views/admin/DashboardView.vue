@@ -537,7 +537,12 @@ const formatNumber = (value: number): string => {
   return value.toLocaleString()
 }
 
+const normalizeNumericValue = (value: number | null | undefined): number => {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0
+}
+
 const formatCost = (value: number): string => {
+  value = normalizeNumericValue(value)
   if (value >= 1000) {
     return (value / 1000).toFixed(2) + 'K'
   } else if (value >= 1) {
