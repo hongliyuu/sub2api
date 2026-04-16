@@ -2323,6 +2323,8 @@ export default {
         creditsExhausted: '积分已用尽',
         creditsExhaustedUntil: 'AI Credits 已用尽，预计 {time} 恢复',
         overloadedUntil: '负载过重，重置时间：{time}',
+        resetOverload: '点击重置冷却状态',
+        resetRateLimit: '点击重置限流状态',
         viewTempUnschedDetails: '查看临时不可调度详情'
       },
       tempUnschedulable: {

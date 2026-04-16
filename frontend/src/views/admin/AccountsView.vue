@@ -201,7 +201,7 @@
           </template>
           <template #cell-status="{ row }">
             <div class="flex items-center gap-1.5">
-              <AccountStatusIndicator :account="row" @show-temp-unsched="handleShowTempUnsched" />
+              <AccountStatusIndicator :account="row" @show-temp-unsched="handleShowTempUnsched" @reset-overload="handleRecoverState" />
             </div>
           </template>
           <template #cell-schedulable="{ row }">

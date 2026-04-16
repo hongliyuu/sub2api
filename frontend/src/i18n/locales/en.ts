@@ -2134,6 +2134,8 @@ export default {
         creditsExhausted: 'Credits Exhausted',
         creditsExhaustedUntil: 'AI Credits exhausted, expected recovery at {time}',
         overloadedUntil: 'Overloaded until {time}',
+        resetOverload: 'Click to reset cooldown',
+        resetRateLimit: 'Click to reset rate limit',
         viewTempUnschedDetails: 'View temp unschedulable details'
       },
       columns: {

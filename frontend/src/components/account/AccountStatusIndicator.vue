@@ -2,13 +2,23 @@
   <div class="flex items-center gap-2">
     <!-- Rate Limit Display (429) - Two-line layout -->
     <div v-if="isRateLimited" class="flex flex-col items-center gap-1">
-      <span class="badge text-xs badge-warning">{{ t('admin.accounts.status.rateLimited') }}</span>
+      <button
+        type="button"
+        class="badge text-xs badge-warning cursor-pointer"
+        :title="t('admin.accounts.status.resetRateLimit')"
+        @click="emit('reset-overload', account)"
+      >{{ t('admin.accounts.status.rateLimited') }}</button>
       <span class="text-[11px] text-gray-400 dark:text-gray-500">{{ rateLimitResumeText }}</span>
     </div>
 
     <!-- Overload Display (529) - Two-line layout -->
     <div v-else-if="isOverloaded" class="flex flex-col items-center gap-1">
-      <span class="badge text-xs badge-danger">{{ t('admin.accounts.status.overloaded') }}</span>
+      <button
+        type="button"
+        class="badge text-xs badge-danger cursor-pointer"
+        :title="t('admin.accounts.status.resetOverload')"
+        @click="emit('reset-overload', account)"
+      >{{ t('admin.accounts.status.overloaded') }}</button>
       <span class="text-[11px] text-gray-400 dark:text-gray-500">{{ overloadCountdown }}</span>
     </div>
 
@@ -169,6 +179,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'show-temp-unsched', account: Account): void
+  (e: 'reset-overload', account: Account): void
 }>()
 
 // Computed: is rate limited (429)
