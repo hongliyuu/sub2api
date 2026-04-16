@@ -113,7 +113,7 @@ if [ "$TABLES_EXIST" != "1" ]; then
   go run ./cmd/server &
   BACKEND_PID=$!
   # Wait until the server is up or 15s, then stop it
-  for i in $(seq 1 15); do
+  for i in $(seq 1 30); do
     sleep 1
     if curl -sf http://localhost:8080/api/v1/settings/public >/dev/null 2>&1; then
       break
@@ -135,7 +135,8 @@ if [ "$ADMIN_EXISTS" != "1" ]; then
   info "Creating admin user ($ADMIN_EMAIL)..."
 
   # Generate bcrypt hash via Go to match the app's algorithm exactly
-  HASH=$(cd "$BACKEND" && go run - "$ADMIN_PASSWORD" <<'GOEOF'
+  GENHASH_DIR=$(mktemp -d)
+  cat > "$GENHASH_DIR/main.go" <<'GOEOF'
 package main
 
 import (
@@ -154,7 +155,9 @@ func main() {
 	fmt.Print(string(hash))
 }
 GOEOF
-)
+  # Reuse the backend's go.mod so golang.org/x/crypto is already available
+  HASH=$(cd "$BACKEND" && go run "$GENHASH_DIR/main.go" "$ADMIN_PASSWORD")
+  rm -rf "$GENHASH_DIR"
 
   psql -U "$PG_USER" -h "$PG_HOST" -p "$PG_PORT" -d sub2api -c \
     "INSERT INTO users (email, password_hash, role, username, status)
