@@ -800,6 +800,7 @@ onMounted(() => {
 
 .sidebar-header-collapsed {
   gap: 0;
+  overflow: hidden;
   padding-left: 1.125rem;
   padding-right: 1.125rem;
 }
@@ -807,7 +808,6 @@ onMounted(() => {
 .sidebar-brand {
   min-width: 0;
   flex: 1 1 auto;
-  overflow: hidden;
   white-space: nowrap;
   transition:
     max-width 0.22s ease,
