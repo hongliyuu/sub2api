@@ -40,9 +40,16 @@ func (s *PaymentService) confirmPayment(ctx context.Context, oid int64, tradeNo 
 		slog.Error("order not found", "orderID", oid)
 		return nil
 	}
-	if math.Abs(paid-o.PayAmount) > amountToleranceCNY {
-		s.writeAuditLog(ctx, o.ID, "PAYMENT_AMOUNT_MISMATCH", pk, map[string]any{"expected": o.PayAmount, "paid": paid, "tradeNo": tradeNo})
-		return fmt.Errorf("amount mismatch: expected %.2f, got %.2f", o.PayAmount, paid)
+	// Some providers do not return the paid amount on query/notify paths.
+	// Only enforce mismatch checks when the upstream amount is positive and finite.
+	if paid > 0 && !math.IsNaN(paid) && !math.IsInf(paid, 0) {
+		if math.Abs(paid-o.PayAmount) > amountToleranceCNY {
+			s.writeAuditLog(ctx, o.ID, "PAYMENT_AMOUNT_MISMATCH", pk, map[string]any{"expected": o.PayAmount, "paid": paid, "tradeNo": tradeNo})
+			return fmt.Errorf("amount mismatch: expected %.2f, got %.2f", o.PayAmount, paid)
+		}
+	}
+	if paid <= 0 || math.IsNaN(paid) || math.IsInf(paid, 0) {
+		paid = o.PayAmount
 	}
 	return s.toPaid(ctx, o, tradeNo, paid, pk)
 }
@@ -227,6 +234,18 @@ func (s *PaymentService) doSub(ctx context.Context, o *dbent.PaymentOrder) error
 	if err != nil || g.Status != payment.EntityStatusActive {
 		return fmt.Errorf("group %d no longer exists or inactive", gid)
 	}
+	if s.hasAuditLog(ctx, o.ID, "SUBSCRIPTION_SUCCESS") {
+		now := time.Now()
+		_, err = s.entClient.PaymentOrder.Update().
+			Where(paymentorder.IDEQ(o.ID), paymentorder.StatusEQ(OrderStatusRecharging)).
+			SetStatus(OrderStatusCompleted).
+			SetCompletedAt(now).
+			Save(ctx)
+		if err != nil {
+			return fmt.Errorf("mark completed: %w", err)
+		}
+		return nil
+	}
 	_, _, err = s.subscriptionSvc.AssignOrExtendSubscription(ctx, &AssignSubscriptionInput{UserID: o.UserID, GroupID: gid, ValidityDays: days, AssignedBy: 0, Notes: fmt.Sprintf("payment order %d", o.ID)})
 	if err != nil {
 		return fmt.Errorf("assign subscription: %w", err)
@@ -243,11 +262,18 @@ func (s *PaymentService) doSub(ctx context.Context, o *dbent.PaymentOrder) error
 func (s *PaymentService) markFailed(ctx context.Context, oid int64, cause error) {
 	now := time.Now()
 	r := psErrMsg(cause)
-	_, e := s.entClient.PaymentOrder.UpdateOneID(oid).SetStatus(OrderStatusFailed).SetFailedAt(now).SetFailedReason(r).Save(ctx)
+	c, e := s.entClient.PaymentOrder.Update().
+		Where(paymentorder.IDEQ(oid), paymentorder.StatusEQ(OrderStatusRecharging)).
+		SetStatus(OrderStatusFailed).
+		SetFailedAt(now).
+		SetFailedReason(r).
+		Save(ctx)
 	if e != nil {
 		slog.Error("mark FAILED", "orderID", oid, "error", e)
 	}
-	s.writeAuditLog(ctx, oid, "FULFILLMENT_FAILED", "system", map[string]any{"reason": r})
+	if c > 0 {
+		s.writeAuditLog(ctx, oid, "FULFILLMENT_FAILED", "system", map[string]any{"reason": r})
+	}
 }
 
 func (s *PaymentService) RetryFulfillment(ctx context.Context, oid int64) error {
