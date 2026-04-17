@@ -182,10 +182,19 @@ func TestOpenAIGatewayService_GenerateSessionHash_Priority(t *testing.T) {
 		t.Fatalf("expected different hashes for different keys")
 	}
 
-	// 4) empty when no signals
-	h4 := svc.GenerateSessionHash(c, []byte(`{}`))
-	if h4 != "" {
-		t.Fatalf("expected empty hash when no signals")
+	// 4) content-based fallback when no explicit signals
+	h4 := svc.GenerateSessionHash(c, []byte(`{"model":"gpt-5.4","messages":[{"role":"system","content":"You are helpful."},{"role":"user","content":"Hello"}]}`))
+	if h4 == "" {
+		t.Fatalf("expected non-empty hash when content fallback is available")
+	}
+	if h3 == h4 {
+		t.Fatalf("expected content fallback hash to differ from prompt_cache_key hash")
+	}
+
+	// 5) still empty when body also lacks stable content
+	h5 := svc.GenerateSessionHash(c, []byte(`{}`))
+	if h5 != "" {
+		t.Fatalf("expected empty hash when no signals and no content seed")
 	}
 }
 

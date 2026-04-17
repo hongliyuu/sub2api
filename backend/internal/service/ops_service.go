@@ -301,7 +301,7 @@ func sanitizeOpsUpstreamErrors(entry *OpsInsertErrorLogInput) error {
 		if out.UpstreamRequestBody != "" {
 			// Reuse the same sanitization/trimming strategy as request body storage.
 			// Keep it small so it is safe to persist in ops_error_logs JSON.
-			sanitizedBody, truncated, _ := sanitizeAndTrimRequestBody([]byte(out.UpstreamRequestBody), 10*1024)
+			sanitizedBody, truncated, _ := sanitizeAndTrimRequestBody([]byte(out.UpstreamRequestBody), opsMaxStoredRequestBodyBytes)
 			if sanitizedBody != "" {
 				out.UpstreamRequestBody = sanitizedBody
 				if truncated {

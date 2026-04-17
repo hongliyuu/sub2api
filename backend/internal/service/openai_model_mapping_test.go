@@ -101,3 +101,17 @@ func TestResolveOpenAIUpstreamModel(t *testing.T) {
 		}
 	}
 }
+
+func TestNormalizeOpenAIModelForUpstream_PreservesAPIKeyModels(t *testing.T) {
+	account := &Account{Type: AccountTypeAPIKey}
+	if got := normalizeOpenAIModelForUpstream(account, "gpt-5.3"); got != "gpt-5.3" {
+		t.Fatalf("normalizeOpenAIModelForUpstream(api key) = %q, want %q", got, "gpt-5.3")
+	}
+}
+
+func TestNormalizeOpenAIModelForUpstream_NormalizesOAuthModels(t *testing.T) {
+	account := &Account{Type: AccountTypeOAuth}
+	if got := normalizeOpenAIModelForUpstream(account, "gpt-5.3"); got != "gpt-5.3-codex" {
+		t.Fatalf("normalizeOpenAIModelForUpstream(oauth) = %q, want %q", got, "gpt-5.3-codex")
+	}
+}
