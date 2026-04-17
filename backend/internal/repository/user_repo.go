@@ -97,6 +97,9 @@ func (r *userRepository) GetByID(ctx context.Context, id int64) (*service.User, 
 	if v, ok := groups[id]; ok {
 		out.AllowedGroups = v
 	}
+	if err := r.hydrateProfileData(ctx, out); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 
@@ -113,6 +116,9 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*service
 	}
 	if v, ok := groups[m.ID]; ok {
 		out.AllowedGroups = v
+	}
+	if err := r.hydrateProfileData(ctx, out); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
@@ -486,6 +492,9 @@ func (r *userRepository) GetFirstAdmin(ctx context.Context) (*service.User, erro
 	}
 	if v, ok := groups[m.ID]; ok {
 		out.AllowedGroups = v
+	}
+	if err := r.hydrateProfileData(ctx, out); err != nil {
+		return nil, err
 	}
 	return out, nil
 }

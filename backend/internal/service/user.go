@@ -35,6 +35,12 @@ type User struct {
 	BalanceNotifyThreshold   *float64
 	BalanceNotifyExtraEmails []NotifyEmailEntry
 
+	ExternalIdentities []UserExternalIdentity
+	Avatar             *UserAvatar
+	AvatarURL          string
+	HasCustomAvatar    bool
+	AvatarUpdatedAt    *time.Time
+
 	APIKeys       []APIKey
 	Subscriptions []UserSubscription
 }

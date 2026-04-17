@@ -200,3 +200,27 @@ func (s *stubUserRepo) EnableTotp(ctx context.Context, userID int64) error {
 func (s *stubUserRepo) DisableTotp(ctx context.Context, userID int64) error {
 	panic("unexpected DisableTotp call")
 }
+
+func (s *stubUserRepo) ListExternalIdentities(ctx context.Context, userID int64) ([]service.UserExternalIdentity, error) {
+	panic("unexpected ListExternalIdentities call")
+}
+
+func (s *stubUserRepo) UpsertExternalIdentity(ctx context.Context, userID int64, input service.UpsertUserExternalIdentityInput) (*service.UserExternalIdentity, error) {
+	panic("unexpected UpsertExternalIdentity call")
+}
+
+func (s *stubUserRepo) DeleteExternalIdentity(ctx context.Context, userID int64, provider string) error {
+	panic("unexpected DeleteExternalIdentity call")
+}
+
+func (s *stubUserRepo) GetAvatar(ctx context.Context, userID int64) (*service.UserAvatar, error) {
+	panic("unexpected GetAvatar call")
+}
+
+func (s *stubUserRepo) UpsertAvatar(ctx context.Context, userID int64, input service.UpsertUserAvatarInput) (*service.UserAvatar, error) {
+	panic("unexpected UpsertAvatar call")
+}
+
+func (s *stubUserRepo) DeleteAvatar(ctx context.Context, userID int64) error {
+	panic("unexpected DeleteAvatar call")
+}

@@ -4,7 +4,54 @@
  */
 
 import { apiClient } from './client'
-import type { User, ChangePasswordRequest, NotifyEmailEntry } from '@/types'
+import type {
+  User,
+  ChangePasswordRequest,
+  NotifyEmailEntry,
+  UserAccountBindingProvider
+} from '@/types'
+
+type ProfileMutationResponse = User | { user?: User | null } | null
+
+function extractUserFromMutationResponse(payload: ProfileMutationResponse): User | null {
+  if (!payload) {
+    return null
+  }
+
+  if ('id' in payload && 'email' in payload) {
+    return payload
+  }
+
+  return payload.user ?? null
+}
+
+function isEndpointFallbackError(error: unknown): boolean {
+  const status = (error as any)?.response?.status ?? (error as any)?.status
+  return status === 404 || status === 405
+}
+
+async function requestFirstSupported<T>(requests: Array<() => Promise<T>>): Promise<T> {
+  let fallbackError: unknown = null
+
+  for (const request of requests) {
+    try {
+      return await request()
+    } catch (error) {
+      if (isEndpointFallbackError(error)) {
+        fallbackError = error
+        continue
+      }
+      throw error
+    }
+  }
+
+  throw fallbackError ?? new Error('No supported endpoint available')
+}
+
+async function normalizeProfileMutation(payload: Promise<{ data: ProfileMutationResponse }>): Promise<User> {
+  const { data } = await payload
+  return extractUserFromMutationResponse(data) ?? getProfile()
+}
 
 /**
  * Get current user profile
@@ -83,6 +130,50 @@ export async function toggleNotifyEmail(email: string, disabled: boolean): Promi
   return data
 }
 
+export async function uploadAvatar(file: File | Blob): Promise<User> {
+  const formData = new FormData()
+  formData.append('avatar', file, file instanceof File ? file.name : 'avatar.webp')
+
+  return requestFirstSupported([
+    () => normalizeProfileMutation(apiClient.post<ProfileMutationResponse>('/user/avatar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })),
+    () => normalizeProfileMutation(apiClient.put<ProfileMutationResponse>('/user/avatar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })),
+    () => normalizeProfileMutation(apiClient.post<ProfileMutationResponse>('/user/profile/avatar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }))
+  ])
+}
+
+export async function removeAvatar(): Promise<User> {
+  return requestFirstSupported([
+    () => normalizeProfileMutation(apiClient.delete<ProfileMutationResponse>('/user/avatar')),
+    () => normalizeProfileMutation(apiClient.delete<ProfileMutationResponse>('/user/profile/avatar'))
+  ])
+}
+
+export async function unbindAccount(provider: UserAccountBindingProvider): Promise<User> {
+  return requestFirstSupported([
+    () => normalizeProfileMutation(apiClient.delete<ProfileMutationResponse>(`/user/account-bindings/${provider}`)),
+    () => normalizeProfileMutation(apiClient.delete<ProfileMutationResponse>(`/user/bindings/${provider}`)),
+    () => normalizeProfileMutation(apiClient.delete<ProfileMutationResponse>(`/user/binding/${provider}`)),
+    () => normalizeProfileMutation(apiClient.delete<ProfileMutationResponse>('/user/account-bindings', { data: { provider } })),
+    () => normalizeProfileMutation(apiClient.delete<ProfileMutationResponse>('/user/bindings', { data: { provider } }))
+  ])
+}
+
+export function getOAuthBindingStartUrl(
+  provider: Extract<UserAccountBindingProvider, 'linuxdo' | 'wechat'>,
+  redirectTo: string,
+  intent = 'bind'
+): string {
+  const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined) || '/api/v1'
+  const normalized = apiBase.replace(/\/$/, '')
+  return `${normalized}/auth/oauth/${provider}/start?redirect=${encodeURIComponent(redirectTo)}&intent=${encodeURIComponent(intent)}`
+}
+
 export const userAPI = {
   getProfile,
   updateProfile,
@@ -90,7 +181,11 @@ export const userAPI = {
   sendNotifyEmailCode,
   verifyNotifyEmail,
   removeNotifyEmail,
-  toggleNotifyEmail
+  toggleNotifyEmail,
+  uploadAvatar,
+  removeAvatar,
+  unbindAccount,
+  getOAuthBindingStartUrl
 }
 
 export default userAPI

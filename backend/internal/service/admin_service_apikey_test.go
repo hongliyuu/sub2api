@@ -73,6 +73,24 @@ func (s *userRepoStubForGroupUpdate) DisableTotp(context.Context, int64) error {
 func (s *userRepoStubForGroupUpdate) RemoveGroupFromUserAllowedGroups(context.Context, int64, int64) error {
 	panic("unexpected")
 }
+func (s *userRepoStubForGroupUpdate) ListExternalIdentities(context.Context, int64) ([]UserExternalIdentity, error) {
+	panic("unexpected")
+}
+func (s *userRepoStubForGroupUpdate) UpsertExternalIdentity(context.Context, int64, UpsertUserExternalIdentityInput) (*UserExternalIdentity, error) {
+	panic("unexpected")
+}
+func (s *userRepoStubForGroupUpdate) DeleteExternalIdentity(context.Context, int64, string) error {
+	panic("unexpected")
+}
+func (s *userRepoStubForGroupUpdate) GetAvatar(context.Context, int64) (*UserAvatar, error) {
+	panic("unexpected")
+}
+func (s *userRepoStubForGroupUpdate) UpsertAvatar(context.Context, int64, UpsertUserAvatarInput) (*UserAvatar, error) {
+	panic("unexpected")
+}
+func (s *userRepoStubForGroupUpdate) DeleteAvatar(context.Context, int64) error {
+	panic("unexpected")
+}
 
 // apiKeyRepoStubForGroupUpdate implements APIKeyRepository for AdminUpdateAPIKeyGroupID tests.
 type apiKeyRepoStubForGroupUpdate struct {

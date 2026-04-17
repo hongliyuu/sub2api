@@ -2,11 +2,22 @@
 package dto
 
 import (
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
 
 func UserFromServiceShallow(u *service.User) *User {
 	if u == nil {
@@ -34,6 +45,20 @@ func UserFromService(u *service.User) *User {
 		return nil
 	}
 	out := UserFromServiceShallow(u)
+	if len(u.ExternalIdentities) > 0 {
+		out.ExternalIdentities = make([]UserExternalIdentity, 0, len(u.ExternalIdentities))
+		for i := range u.ExternalIdentities {
+			out.ExternalIdentities = append(out.ExternalIdentities, UserExternalIdentityFromService(u.ExternalIdentities[i]))
+		}
+	}
+	if u.Avatar != nil {
+		out.Avatar = UserAvatarFromService(u.Avatar)
+	}
+	out.AvatarURL = strings.TrimSpace(u.AvatarURL)
+	if out.AvatarURL == "" {
+		out.AvatarURL = service.ResolvePreferredUserAvatarURL(u.Avatar, u.ExternalIdentities)
+	}
+	out.AccountBindings = AccountBindingsFromService(u)
 	if len(u.APIKeys) > 0 {
 		out.APIKeys = make([]APIKey, 0, len(u.APIKeys))
 		for i := range u.APIKeys {
@@ -49,6 +74,102 @@ func UserFromService(u *service.User) *User {
 		}
 	}
 	return out
+}
+
+func profileBindConnectURL(provider string) string {
+	return "/api/v1/auth/oauth/" + provider + "/start?intent=bind&redirect=" + url.QueryEscape("/profile?oauth_intent=bind")
+}
+
+func AccountBindingsFromService(u *service.User) map[string]AccountBinding {
+	if u == nil {
+		return nil
+	}
+
+	emailVerified := true
+	bindings := map[string]AccountBinding{
+		"email": {
+			Provider:      "email",
+			Bound:         strings.TrimSpace(u.Email) != "",
+			Value:         strings.TrimSpace(u.Email),
+			Identifier:    strings.TrimSpace(u.Email),
+			DisplayName:   strings.TrimSpace(u.Email),
+			Verified:      &emailVerified,
+			CanDisconnect: false,
+		},
+		"linuxdo": {
+			Provider:      "linuxdo",
+			CanDisconnect: service.CanDisconnectExternalIdentity(u, service.ExternalIdentityProviderLinuxDo),
+			ConnectURL:    profileBindConnectURL(service.ExternalIdentityProviderLinuxDo),
+			DisconnectURL: "/api/v1/user/account-bindings/linuxdo",
+		},
+		"wechat": {
+			Provider:      "wechat",
+			CanDisconnect: service.CanDisconnectExternalIdentity(u, service.ExternalIdentityProviderWeChat),
+			ConnectURL:    profileBindConnectURL(service.ExternalIdentityProviderWeChat),
+			DisconnectURL: "/api/v1/user/account-bindings/wechat",
+		},
+	}
+
+	for _, identity := range u.ExternalIdentities {
+		provider := strings.TrimSpace(identity.Provider)
+		if provider == "" {
+			continue
+		}
+		binding := bindings[provider]
+		binding.Provider = provider
+		binding.Bound = true
+		unionID := ""
+		if identity.ProviderUnionID != nil {
+			unionID = strings.TrimSpace(*identity.ProviderUnionID)
+		}
+		binding.Value = firstNonEmpty(
+			strings.TrimSpace(identity.DisplayName),
+			strings.TrimSpace(identity.ProviderUsername),
+			unionID,
+			strings.TrimSpace(identity.ProviderUserID),
+		)
+		binding.Identifier = firstNonEmpty(unionID, strings.TrimSpace(identity.ProviderUserID))
+		binding.DisplayName = firstNonEmpty(strings.TrimSpace(identity.DisplayName), strings.TrimSpace(identity.ProviderUsername))
+		connectedAt := identity.CreatedAt
+		binding.ConnectedAt = &connectedAt
+		binding.CanDisconnect = service.CanDisconnectExternalIdentity(u, provider)
+		bindings[provider] = binding
+	}
+
+	return bindings
+}
+
+func UserExternalIdentityFromService(identity service.UserExternalIdentity) UserExternalIdentity {
+	return UserExternalIdentity{
+		Provider:         identity.Provider,
+		ProviderUserID:   identity.ProviderUserID,
+		ProviderUnionID:  identity.ProviderUnionID,
+		ProviderUsername: identity.ProviderUsername,
+		DisplayName:      identity.DisplayName,
+		ProfileURL:       identity.ProfileURL,
+		AvatarURL:        identity.AvatarURL,
+		Metadata:         identity.Metadata,
+		CreatedAt:        identity.CreatedAt,
+		UpdatedAt:        identity.UpdatedAt,
+	}
+}
+
+func UserAvatarFromService(avatar *service.UserAvatar) *UserAvatar {
+	if avatar == nil {
+		return nil
+	}
+	return &UserAvatar{
+		StorageProvider: avatar.StorageProvider,
+		StorageKey:      avatar.StorageKey,
+		URL:             avatar.URL,
+		ContentType:     avatar.ContentType,
+		ByteSize:        avatar.ByteSize,
+		SHA256:          avatar.SHA256,
+		Width:           avatar.Width,
+		Height:          avatar.Height,
+		CreatedAt:       avatar.CreatedAt,
+		UpdatedAt:       avatar.UpdatedAt,
+	}
 }
 
 // UserFromServiceAdmin converts a service User to DTO for admin users.

@@ -140,6 +140,76 @@ func (s *UserRepoSuite) TestUpdate() {
 	s.Require().Equal("updated", updated.Username)
 }
 
+func (s *UserRepoSuite) TestGetByID_LoadsExternalIdentitiesAndAvatar() {
+	user := s.mustCreateUser(&service.User{Email: "profile@test.com", Username: "profile-user"})
+	unionID := "wx-union-1"
+
+	identity, err := s.repo.UpsertExternalIdentity(s.ctx, user.ID, service.UpsertUserExternalIdentityInput{
+		Provider:         service.ExternalIdentityProviderWeChat,
+		ProviderUserID:   "wx-openid-1",
+		ProviderUnionID:  &unionID,
+		ProviderUsername: "wechat_profile",
+		DisplayName:      "WeChat Profile",
+		ProfileURL:       "https://example.com/wechat/profile",
+		AvatarURL:        "https://cdn.example.com/wechat/avatar.png",
+		Metadata:         map[string]any{"source": "integration"},
+	})
+	s.Require().NoError(err)
+	s.Require().NotZero(identity.ID)
+
+	avatar, err := s.repo.UpsertAvatar(s.ctx, user.ID, service.UpsertUserAvatarInput{
+		StorageProvider: "s3",
+		StorageKey:      "avatars/user-1.png",
+		URL:             "https://cdn.example.com/avatars/user-1.png",
+		ContentType:     "image/png",
+		ByteSize:        2048,
+		SHA256:          "abc123",
+	})
+	s.Require().NoError(err)
+	s.Require().NotZero(avatar.ID)
+
+	got, err := s.repo.GetByID(s.ctx, user.ID)
+	s.Require().NoError(err)
+	s.Require().Len(got.ExternalIdentities, 1)
+	s.Require().Equal(service.ExternalIdentityProviderWeChat, got.ExternalIdentities[0].Provider)
+	s.Require().Equal("wx-openid-1", got.ExternalIdentities[0].ProviderUserID)
+	s.Require().Equal("wechat_profile", got.ExternalIdentities[0].ProviderUsername)
+	s.Require().NotNil(got.ExternalIdentities[0].ProviderUnionID)
+	s.Require().Equal(unionID, *got.ExternalIdentities[0].ProviderUnionID)
+	s.Require().Equal("integration", got.ExternalIdentities[0].Metadata["source"])
+	s.Require().NotNil(got.Avatar)
+	s.Require().Equal("s3", got.Avatar.StorageProvider)
+	s.Require().Equal(int64(2048), got.Avatar.ByteSize)
+}
+
+func (s *UserRepoSuite) TestUpsertExternalIdentity_RebindsSameProviderForUser() {
+	user := s.mustCreateUser(&service.User{Email: "identity-update@test.com"})
+
+	first, err := s.repo.UpsertExternalIdentity(s.ctx, user.ID, service.UpsertUserExternalIdentityInput{
+		Provider:         service.ExternalIdentityProviderLinuxDo,
+		ProviderUserID:   "linuxdo-subject-1",
+		ProviderUsername: "linuxdo_a",
+		DisplayName:      "LinuxDo A",
+	})
+	s.Require().NoError(err)
+
+	second, err := s.repo.UpsertExternalIdentity(s.ctx, user.ID, service.UpsertUserExternalIdentityInput{
+		Provider:         service.ExternalIdentityProviderLinuxDo,
+		ProviderUserID:   "linuxdo-subject-2",
+		ProviderUsername: "linuxdo_b",
+		DisplayName:      "LinuxDo B",
+	})
+	s.Require().NoError(err)
+	s.Require().Equal(first.ID, second.ID)
+	s.Require().Equal("linuxdo-subject-2", second.ProviderUserID)
+	s.Require().Equal("linuxdo_b", second.ProviderUsername)
+
+	identities, err := s.repo.ListExternalIdentities(s.ctx, user.ID)
+	s.Require().NoError(err)
+	s.Require().Len(identities, 1)
+	s.Require().Equal("linuxdo-subject-2", identities[0].ProviderUserID)
+}
+
 func (s *UserRepoSuite) TestDelete() {
 	user := s.mustCreateUser(&service.User{Email: "delete@test.com"})
 

@@ -32,6 +32,21 @@ export interface NotifyEmailEntry {
   verified: boolean
 }
 
+export type UserAccountBindingProvider = 'email' | 'linuxdo' | 'wechat'
+
+export interface UserAccountBinding {
+  provider?: UserAccountBindingProvider | string
+  bound?: boolean
+  value?: string | null
+  identifier?: string | null
+  display_name?: string | null
+  verified?: boolean | null
+  connected_at?: string | null
+  can_disconnect?: boolean | null
+  connect_url?: string | null
+  disconnect_url?: string | null
+}
+
 // ==================== User & Auth Types ====================
 
 export interface User {
@@ -46,6 +61,21 @@ export interface User {
   balance_notify_enabled: boolean
   balance_notify_threshold: number | null
   balance_notify_extra_emails: NotifyEmailEntry[]
+  email_verified?: boolean
+  avatar_url?: string | null
+  avatar_thumbnail_url?: string | null
+  avatar_updated_at?: string | null
+  avatar_mime_type?: string | null
+  linuxdo_username?: string | null
+  linuxdo_id?: string | null
+  linuxdo_subject?: string | null
+  linuxdo_bound?: boolean
+  wechat?: string | null
+  wechat_openid?: string | null
+  wechat_unionid?: string | null
+  wechat_nickname?: string | null
+  wechat_bound?: boolean
+  account_bindings?: Partial<Record<UserAccountBindingProvider, UserAccountBinding | null>> | UserAccountBinding[] | null
   subscriptions?: UserSubscription[] // User's active subscriptions
   created_at: string
   updated_at: string
@@ -78,6 +108,7 @@ export interface RegisterRequest {
 export interface SendVerifyCodeRequest {
   email: string
   turnstile_token?: string
+  pending_oauth_token?: string
 }
 
 export interface SendVerifyCodeResponse {
@@ -123,6 +154,7 @@ export interface PublicSettings {
   custom_menu_items: CustomMenuItem[]
   custom_endpoints: CustomEndpoint[]
   linuxdo_oauth_enabled: boolean
+  wechat_oauth_enabled?: boolean
   oidc_oauth_enabled: boolean
   oidc_oauth_provider_name: string
   backend_mode_enabled: boolean
@@ -1596,12 +1628,14 @@ export interface TotpVerificationMethod {
 export interface TotpLoginResponse {
   requires_2fa: boolean
   temp_token?: string
+  pending_oauth_token?: string
   user_email_masked?: string
 }
 
 export interface TotpLogin2FARequest {
   temp_token: string
   totp_code: string
+  pending_oauth_token?: string
 }
 
 // ==================== Scheduled Test Types ====================

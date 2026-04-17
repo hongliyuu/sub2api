@@ -64,6 +64,7 @@ const handleUpdateProfile = async () => {
       username: username.value
     })
     authStore.user = updatedUser
+    localStorage.setItem('auth_user', JSON.stringify(updatedUser))
     appStore.showSuccess(t('profile.updateSuccess'))
   } catch (error: any) {
     appStore.showError(error.response?.data?.detail || t('profile.updateFailed'))

@@ -25,6 +25,9 @@ func RegisterUserRoutes(
 			user.GET("/profile", h.User.GetProfile)
 			user.PUT("/password", h.User.ChangePassword)
 			user.PUT("", h.User.UpdateProfile)
+			user.POST("/avatar", h.User.UploadAvatar)
+			user.DELETE("/avatar", h.User.DeleteAvatar)
+			user.DELETE("/account-bindings/:provider", h.User.DeleteAccountBinding)
 
 			// 通知邮箱管理
 			notifyEmail := user.Group("/notify-email")

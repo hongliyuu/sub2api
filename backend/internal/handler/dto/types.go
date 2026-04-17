@@ -19,12 +19,55 @@ type User struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 
 	// 余额不足通知
-	BalanceNotifyEnabled     bool               `json:"balance_notify_enabled"`
-	BalanceNotifyThreshold   *float64           `json:"balance_notify_threshold"`
-	BalanceNotifyExtraEmails []NotifyEmailEntry `json:"balance_notify_extra_emails"`
+	BalanceNotifyEnabled     bool                      `json:"balance_notify_enabled"`
+	BalanceNotifyThreshold   *float64                  `json:"balance_notify_threshold"`
+	BalanceNotifyExtraEmails []NotifyEmailEntry        `json:"balance_notify_extra_emails"`
+	ExternalIdentities       []UserExternalIdentity    `json:"external_identities,omitempty"`
+	Avatar                   *UserAvatar               `json:"avatar,omitempty"`
+	AvatarURL                string                    `json:"avatar_url,omitempty"`
+	AccountBindings          map[string]AccountBinding `json:"account_bindings,omitempty"`
 
 	APIKeys       []APIKey           `json:"api_keys,omitempty"`
 	Subscriptions []UserSubscription `json:"subscriptions,omitempty"`
+}
+
+type AccountBinding struct {
+	Provider      string     `json:"provider"`
+	Bound         bool       `json:"bound"`
+	Value         string     `json:"value,omitempty"`
+	Identifier    string     `json:"identifier,omitempty"`
+	DisplayName   string     `json:"display_name,omitempty"`
+	Verified      *bool      `json:"verified,omitempty"`
+	ConnectedAt   *time.Time `json:"connected_at,omitempty"`
+	CanDisconnect bool       `json:"can_disconnect"`
+	ConnectURL    string     `json:"connect_url,omitempty"`
+	DisconnectURL string     `json:"disconnect_url,omitempty"`
+}
+
+type UserExternalIdentity struct {
+	Provider         string         `json:"provider"`
+	ProviderUserID   string         `json:"provider_user_id"`
+	ProviderUnionID  *string        `json:"provider_union_id,omitempty"`
+	ProviderUsername string         `json:"provider_username,omitempty"`
+	DisplayName      string         `json:"display_name,omitempty"`
+	ProfileURL       string         `json:"profile_url,omitempty"`
+	AvatarURL        string         `json:"avatar_url,omitempty"`
+	Metadata         map[string]any `json:"metadata,omitempty"`
+	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
+}
+
+type UserAvatar struct {
+	StorageProvider string    `json:"storage_provider"`
+	StorageKey      string    `json:"storage_key"`
+	URL             string    `json:"url,omitempty"`
+	ContentType     string    `json:"content_type"`
+	ByteSize        int64     `json:"byte_size"`
+	SHA256          string    `json:"sha256,omitempty"`
+	Width           *int      `json:"width,omitempty"`
+	Height          *int      `json:"height,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 }
 
 // AdminUser 是管理员接口使用的 user DTO（包含敏感/内部字段）。

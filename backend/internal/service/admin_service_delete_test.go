@@ -113,6 +113,30 @@ func (s *userRepoStub) DisableTotp(ctx context.Context, userID int64) error {
 	panic("unexpected DisableTotp call")
 }
 
+func (s *userRepoStub) ListExternalIdentities(ctx context.Context, userID int64) ([]UserExternalIdentity, error) {
+	panic("unexpected ListExternalIdentities call")
+}
+
+func (s *userRepoStub) UpsertExternalIdentity(ctx context.Context, userID int64, input UpsertUserExternalIdentityInput) (*UserExternalIdentity, error) {
+	panic("unexpected UpsertExternalIdentity call")
+}
+
+func (s *userRepoStub) DeleteExternalIdentity(ctx context.Context, userID int64, provider string) error {
+	panic("unexpected DeleteExternalIdentity call")
+}
+
+func (s *userRepoStub) GetAvatar(ctx context.Context, userID int64) (*UserAvatar, error) {
+	panic("unexpected GetAvatar call")
+}
+
+func (s *userRepoStub) UpsertAvatar(ctx context.Context, userID int64, input UpsertUserAvatarInput) (*UserAvatar, error) {
+	panic("unexpected UpsertAvatar call")
+}
+
+func (s *userRepoStub) DeleteAvatar(ctx context.Context, userID int64) error {
+	panic("unexpected DeleteAvatar call")
+}
+
 type groupRepoStub struct {
 	affectedUserIDs []int64
 	deleteErr       error

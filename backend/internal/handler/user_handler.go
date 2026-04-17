@@ -1,6 +1,13 @@
 package handler
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
+	"io"
+	"net/http"
+	"strings"
+
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -248,5 +255,110 @@ func (h *UserHandler) ToggleNotifyEmail(c *gin.Context) {
 		return
 	}
 
+	response.Success(c, dto.UserFromService(updatedUser))
+}
+
+func (h *UserHandler) UploadAvatar(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+
+	fileHeader, err := c.FormFile("avatar")
+	if err != nil {
+		response.BadRequest(c, "avatar file is required")
+		return
+	}
+
+	src, err := fileHeader.Open()
+	if err != nil {
+		response.InternalError(c, "Failed to read avatar file")
+		return
+	}
+	defer func() { _ = src.Close() }()
+
+	reader := io.LimitReader(src, service.DefaultUserAvatarMaxBytes+1)
+	payload, err := io.ReadAll(reader)
+	if err != nil {
+		response.InternalError(c, "Failed to read avatar file")
+		return
+	}
+	if int64(len(payload)) > service.DefaultUserAvatarMaxBytes {
+		response.ErrorFrom(c, service.ErrUserAvatarTooLarge)
+		return
+	}
+
+	contentType := strings.TrimSpace(fileHeader.Header.Get("Content-Type"))
+	if contentType == "" {
+		contentType = http.DetectContentType(payload)
+	}
+	switch contentType {
+	case "image/png", "image/jpeg", "image/jpg", "image/webp", "image/gif":
+	default:
+		response.BadRequest(c, "Unsupported avatar format")
+		return
+	}
+
+	sum := sha256.Sum256(payload)
+	input := service.UpsertUserAvatarInput{
+		StorageProvider: "inline",
+		StorageKey:      hex.EncodeToString(sum[:]),
+		URL:             "data:" + contentType + ";base64," + base64.StdEncoding.EncodeToString(payload),
+		ContentType:     contentType,
+		ByteSize:        int64(len(payload)),
+		SHA256:          hex.EncodeToString(sum[:]),
+	}
+	if _, err := h.userService.UpsertAvatar(c.Request.Context(), subject.UserID, input); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	updatedUser, err := h.userService.GetByID(c.Request.Context(), subject.UserID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, dto.UserFromService(updatedUser))
+}
+
+func (h *UserHandler) DeleteAvatar(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+
+	if err := h.userService.DeleteAvatar(c.Request.Context(), subject.UserID); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	updatedUser, err := h.userService.GetByID(c.Request.Context(), subject.UserID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, dto.UserFromService(updatedUser))
+}
+
+func (h *UserHandler) DeleteAccountBinding(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+
+	provider := c.Param("provider")
+	if err := h.userService.DeleteExternalIdentity(c.Request.Context(), subject.UserID, provider); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	updatedUser, err := h.userService.GetByID(c.Request.Context(), subject.UserID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
 	response.Success(c, dto.UserFromService(updatedUser))
 }

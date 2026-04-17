@@ -19,6 +19,10 @@ import (
 type mockUserRepo struct {
 	updateBalanceErr error
 	updateBalanceFn  func(ctx context.Context, id int64, amount float64) error
+	avatar           *UserAvatar
+	avatarErr        error
+	externalIDs      []UserExternalIdentity
+	externalIDsErr   error
 }
 
 func (m *mockUserRepo) Create(context.Context, *User) error               { return nil }
@@ -52,6 +56,29 @@ func (m *mockUserRepo) DisableTotp(context.Context, int64) error                
 func (m *mockUserRepo) RemoveGroupFromUserAllowedGroups(context.Context, int64, int64) error {
 	return nil
 }
+func (m *mockUserRepo) ListExternalIdentities(context.Context, int64) ([]UserExternalIdentity, error) {
+	return m.externalIDs, m.externalIDsErr
+}
+func (m *mockUserRepo) UpsertExternalIdentity(context.Context, int64, UpsertUserExternalIdentityInput) (*UserExternalIdentity, error) {
+	if m.externalIDsErr != nil {
+		return nil, m.externalIDsErr
+	}
+	if len(m.externalIDs) == 0 {
+		return &UserExternalIdentity{}, nil
+	}
+	identity := m.externalIDs[0]
+	return &identity, nil
+}
+func (m *mockUserRepo) DeleteExternalIdentity(context.Context, int64, string) error {
+	return m.externalIDsErr
+}
+func (m *mockUserRepo) GetAvatar(context.Context, int64) (*UserAvatar, error) {
+	return m.avatar, m.avatarErr
+}
+func (m *mockUserRepo) UpsertAvatar(context.Context, int64, UpsertUserAvatarInput) (*UserAvatar, error) {
+	return m.avatar, m.avatarErr
+}
+func (m *mockUserRepo) DeleteAvatar(context.Context, int64) error { return m.avatarErr }
 
 // --- mock: APIKeyAuthCacheInvalidator ---
 
@@ -199,4 +226,39 @@ func TestNewUserService_FieldsAssignment(t *testing.T) {
 	require.Equal(t, repo, svc.userRepo)
 	require.Equal(t, auth, svc.authCacheInvalidator)
 	require.Equal(t, cache, svc.billingCache)
+}
+
+func TestUserService_UpsertAvatar_RejectsTooLarge(t *testing.T) {
+	repo := &mockUserRepo{}
+	svc := NewUserService(repo, nil, nil, nil)
+
+	_, err := svc.UpsertAvatar(context.Background(), 1, UpsertUserAvatarInput{
+		StorageProvider: "s3",
+		StorageKey:      "avatars/u1.png",
+		ContentType:     "image/png",
+		ByteSize:        DefaultUserAvatarMaxBytes + 1,
+	})
+	require.ErrorIs(t, err, ErrUserAvatarTooLarge)
+}
+
+func TestUserService_UpsertExternalIdentity_NormalizesProvider(t *testing.T) {
+	repo := &mockUserRepo{
+		externalIDs: []UserExternalIdentity{
+			{
+				ID:             10,
+				UserID:         7,
+				Provider:       ExternalIdentityProviderLinuxDo,
+				ProviderUserID: "linuxdo-subject",
+			},
+		},
+	}
+	svc := NewUserService(repo, nil, nil, nil)
+
+	got, err := svc.UpsertExternalIdentity(context.Background(), 7, UpsertUserExternalIdentityInput{
+		Provider:       " LinuxDo ",
+		ProviderUserID: "linuxdo-subject",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	require.Equal(t, ExternalIdentityProviderLinuxDo, got.Provider)
 }

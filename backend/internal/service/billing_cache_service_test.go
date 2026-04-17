@@ -105,6 +105,18 @@ func (userRepoBase) RemoveGroupFromUserAllowedGroups(context.Context, int64, int
 func (userRepoBase) UpdateTotpSecret(context.Context, int64, *string) error               { return nil }
 func (userRepoBase) EnableTotp(context.Context, int64) error                              { return nil }
 func (userRepoBase) DisableTotp(context.Context, int64) error                             { return nil }
+func (userRepoBase) ListExternalIdentities(context.Context, int64) ([]UserExternalIdentity, error) {
+	return nil, nil
+}
+func (userRepoBase) UpsertExternalIdentity(context.Context, int64, UpsertUserExternalIdentityInput) (*UserExternalIdentity, error) {
+	return nil, nil
+}
+func (userRepoBase) DeleteExternalIdentity(context.Context, int64, string) error { return nil }
+func (userRepoBase) GetAvatar(context.Context, int64) (*UserAvatar, error)       { return nil, nil }
+func (userRepoBase) UpsertAvatar(context.Context, int64, UpsertUserAvatarInput) (*UserAvatar, error) {
+	return nil, nil
+}
+func (userRepoBase) DeleteAvatar(context.Context, int64) error { return nil }
 
 type fallbackUserRepo struct {
 	userRepoBase

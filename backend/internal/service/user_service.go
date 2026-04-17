@@ -13,9 +13,9 @@ import (
 )
 
 var (
-	ErrUserNotFound           = infraerrors.NotFound("USER_NOT_FOUND", "user not found")
-	ErrPasswordIncorrect      = infraerrors.BadRequest("PASSWORD_INCORRECT", "current password is incorrect")
-	ErrInsufficientPerms      = infraerrors.Forbidden("INSUFFICIENT_PERMISSIONS", "insufficient permissions")
+	ErrUserNotFound            = infraerrors.NotFound("USER_NOT_FOUND", "user not found")
+	ErrPasswordIncorrect       = infraerrors.BadRequest("PASSWORD_INCORRECT", "current password is incorrect")
+	ErrInsufficientPerms       = infraerrors.Forbidden("INSUFFICIENT_PERMISSIONS", "insufficient permissions")
 	ErrNotifyCodeUserRateLimit = infraerrors.TooManyRequests("NOTIFY_CODE_USER_RATE_LIMIT", "too many verification codes requested, please try again later")
 )
 
@@ -65,6 +65,14 @@ type UserRepository interface {
 	UpdateTotpSecret(ctx context.Context, userID int64, encryptedSecret *string) error
 	EnableTotp(ctx context.Context, userID int64) error
 	DisableTotp(ctx context.Context, userID int64) error
+
+	// 用户第三方绑定 / 头像
+	ListExternalIdentities(ctx context.Context, userID int64) ([]UserExternalIdentity, error)
+	UpsertExternalIdentity(ctx context.Context, userID int64, input UpsertUserExternalIdentityInput) (*UserExternalIdentity, error)
+	DeleteExternalIdentity(ctx context.Context, userID int64, provider string) error
+	GetAvatar(ctx context.Context, userID int64) (*UserAvatar, error)
+	UpsertAvatar(ctx context.Context, userID int64, input UpsertUserAvatarInput) (*UserAvatar, error)
+	DeleteAvatar(ctx context.Context, userID int64) error
 }
 
 // UpdateProfileRequest 更新用户资料请求
@@ -199,6 +207,14 @@ func (s *UserService) ChangePassword(ctx context.Context, userID int64, req Chan
 // GetByID 根据ID获取用户（管理员功能）
 func (s *UserService) GetByID(ctx context.Context, id int64) (*User, error) {
 	user, err := s.userRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("get user: %w", err)
+	}
+	return user, nil
+}
+
+func (s *UserService) GetByEmail(ctx context.Context, email string) (*User, error) {
+	user, err := s.userRepo.GetByEmail(ctx, email)
 	if err != nil {
 		return nil, fmt.Errorf("get user: %w", err)
 	}

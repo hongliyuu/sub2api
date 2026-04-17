@@ -919,6 +919,30 @@ func (r *stubUserRepo) DisableTotp(ctx context.Context, userID int64) error {
 	return errors.New("not implemented")
 }
 
+func (r *stubUserRepo) ListExternalIdentities(ctx context.Context, userID int64) ([]service.UserExternalIdentity, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (r *stubUserRepo) UpsertExternalIdentity(ctx context.Context, userID int64, input service.UpsertUserExternalIdentityInput) (*service.UserExternalIdentity, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (r *stubUserRepo) DeleteExternalIdentity(ctx context.Context, userID int64, provider string) error {
+	return errors.New("not implemented")
+}
+
+func (r *stubUserRepo) GetAvatar(ctx context.Context, userID int64) (*service.UserAvatar, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (r *stubUserRepo) UpsertAvatar(ctx context.Context, userID int64, input service.UpsertUserAvatarInput) (*service.UserAvatar, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (r *stubUserRepo) DeleteAvatar(ctx context.Context, userID int64) error {
+	return errors.New("not implemented")
+}
+
 type stubApiKeyCache struct{}
 
 func (stubApiKeyCache) GetCreateAttemptCount(ctx context.Context, userID int64) (int, error) {

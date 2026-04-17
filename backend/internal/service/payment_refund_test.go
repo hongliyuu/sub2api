@@ -114,6 +114,30 @@ func (s *refundUserRepoStub) DisableTotp(context.Context, int64) error {
 	panic("unexpected DisableTotp call")
 }
 
+func (s *refundUserRepoStub) ListExternalIdentities(context.Context, int64) ([]UserExternalIdentity, error) {
+	panic("unexpected ListExternalIdentities call")
+}
+
+func (s *refundUserRepoStub) UpsertExternalIdentity(context.Context, int64, UpsertUserExternalIdentityInput) (*UserExternalIdentity, error) {
+	panic("unexpected UpsertExternalIdentity call")
+}
+
+func (s *refundUserRepoStub) DeleteExternalIdentity(context.Context, int64, string) error {
+	panic("unexpected DeleteExternalIdentity call")
+}
+
+func (s *refundUserRepoStub) GetAvatar(context.Context, int64) (*UserAvatar, error) {
+	panic("unexpected GetAvatar call")
+}
+
+func (s *refundUserRepoStub) UpsertAvatar(context.Context, int64, UpsertUserAvatarInput) (*UserAvatar, error) {
+	panic("unexpected UpsertAvatar call")
+}
+
+func (s *refundUserRepoStub) DeleteAvatar(context.Context, int64) error {
+	panic("unexpected DeleteAvatar call")
+}
+
 func TestResolveRefundTradeNo(t *testing.T) {
 	t.Parallel()
 
