@@ -97,6 +97,26 @@ func TestSettingService_GetWeChatConnectOAuthConfig(t *testing.T) {
 		require.Equal(t, "open", got.Mode)
 	})
 
+	t.Run("uses defaults when db values are blank strings", func(t *testing.T) {
+		svc := NewSettingService(&settingWeChatRepoStub{
+			values: map[string]string{
+				SettingKeyWeChatConnectEnabled:             "true",
+				SettingKeyWeChatConnectAppID:               "wx-db-app",
+				SettingKeyWeChatConnectAppSecret:           "db-secret",
+				SettingKeyWeChatConnectMode:                "   ",
+				SettingKeyWeChatConnectScopes:              "",
+				SettingKeyWeChatConnectRedirectURL:         "https://example.com/api/v1/auth/oauth/wechat/callback",
+				SettingKeyWeChatConnectFrontendRedirectURL: " ",
+			},
+		}, &config.Config{})
+
+		got, err := svc.GetWeChatConnectOAuthConfig(context.Background())
+		require.NoError(t, err)
+		require.Equal(t, "open", got.Mode)
+		require.Equal(t, "snsapi_login", got.Scopes)
+		require.Equal(t, "/auth/wechat/callback", got.FrontendRedirectURL)
+	})
+
 	t.Run("rejects disabled config", func(t *testing.T) {
 		svc := NewSettingService(&settingWeChatRepoStub{
 			values: map[string]string{SettingKeyWeChatConnectEnabled: "false"},

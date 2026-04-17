@@ -25,6 +25,12 @@ var semverPattern = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
 // menuItemIDPattern validates custom menu item IDs: alphanumeric, hyphens, underscores only.
 var menuItemIDPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
+const (
+	weChatConnectAdminFixedMode             = "mp"
+	weChatConnectAdminFixedScopes           = "snsapi_userinfo"
+	weChatConnectDefaultFrontendRedirectURL = "/auth/wechat/callback"
+)
+
 // generateMenuItemID generates a short random hex ID for a custom menu item.
 func generateMenuItemID() (string, error) {
 	b := make([]byte, 8)
@@ -480,26 +486,16 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	req.WeChatConnectScopes = strings.TrimSpace(req.WeChatConnectScopes)
 	req.WeChatConnectRedirectURL = strings.TrimSpace(req.WeChatConnectRedirectURL)
 	req.WeChatConnectFrontendRedirectURL = strings.TrimSpace(req.WeChatConnectFrontendRedirectURL)
+	req.WeChatConnectMode = weChatConnectAdminFixedMode
+	req.WeChatConnectScopes = weChatConnectAdminFixedScopes
 
 	// WeChat Connect 参数验证
 	if req.WeChatConnectEnabled {
-		if req.WeChatConnectMode == "" {
-			req.WeChatConnectMode = previousSettings.WeChatConnectMode
-		}
-		if req.WeChatConnectMode == "" {
-			req.WeChatConnectMode = "open"
-		}
-		if req.WeChatConnectScopes == "" {
-			req.WeChatConnectScopes = previousSettings.WeChatConnectScopes
-		}
-		if req.WeChatConnectScopes == "" {
-			req.WeChatConnectScopes = "snsapi_login"
-		}
 		if req.WeChatConnectFrontendRedirectURL == "" {
 			req.WeChatConnectFrontendRedirectURL = previousSettings.WeChatConnectFrontendRedirectURL
 		}
 		if req.WeChatConnectFrontendRedirectURL == "" {
-			req.WeChatConnectFrontendRedirectURL = "/auth/wechat/callback"
+			req.WeChatConnectFrontendRedirectURL = weChatConnectDefaultFrontendRedirectURL
 		}
 
 		if req.WeChatConnectAppID == "" {

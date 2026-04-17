@@ -107,7 +107,7 @@ func TestSettingHandler_UpdateSettings_PreservesWeChatSecretAndDefaults(t *testi
 
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.Equal(t, "existing-secret", repo.updates[service.SettingKeyWeChatConnectAppSecret])
-	require.Equal(t, "open", repo.updates[service.SettingKeyWeChatConnectMode])
-	require.Equal(t, "snsapi_login", repo.updates[service.SettingKeyWeChatConnectScopes])
+	require.Equal(t, "mp", repo.updates[service.SettingKeyWeChatConnectMode])
+	require.Equal(t, "snsapi_userinfo", repo.updates[service.SettingKeyWeChatConnectScopes])
 	require.Equal(t, "/auth/wechat/callback", repo.updates[service.SettingKeyWeChatConnectFrontendRedirectURL])
 }

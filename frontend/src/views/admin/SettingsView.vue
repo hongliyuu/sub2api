@@ -1247,36 +1247,14 @@
                 </div>
               </div>
 
-              <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                <div>
-                  <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {{ t('admin.settings.wechat.mode') }}
-                  </label>
-                  <input
-                    v-model="form.wechat_connect_mode"
-                    type="text"
-                    class="input font-mono text-sm"
-                    :placeholder="t('admin.settings.wechat.modePlaceholder')"
-                  />
-                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                    {{ t('admin.settings.wechat.modeHint') }}
-                  </p>
-                </div>
-
-                <div>
-                  <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {{ t('admin.settings.wechat.scopes') }}
-                  </label>
-                  <input
-                    v-model="form.wechat_connect_scopes"
-                    type="text"
-                    class="input font-mono text-sm"
-                    :placeholder="t('admin.settings.wechat.scopesPlaceholder')"
-                  />
-                  <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                    {{ t('admin.settings.wechat.scopesHint') }}
-                  </p>
-                </div>
+              <div
+                class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-xs text-gray-600 dark:border-dark-700 dark:bg-dark-800/60 dark:text-gray-300"
+              >
+                <p class="font-medium text-gray-900 dark:text-white">
+                  {{ t('admin.settings.wechat.presetBehaviorTitle') }}
+                </p>
+                <p class="mt-1">{{ t('admin.settings.wechat.presetBehaviorDesc') }}</p>
+                <p class="mt-1">{{ t('admin.settings.wechat.presetBehaviorHint') }}</p>
               </div>
 
               <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -3154,6 +3132,9 @@ const betaPolicyForm = reactive({
 const tablePageSizeMin = 5
 const tablePageSizeMax = 1000
 const tablePageSizeDefault = 20
+const WECHAT_CONNECT_FIXED_MODE = 'mp'
+const WECHAT_CONNECT_FIXED_SCOPES = 'snsapi_userinfo'
+const WECHAT_CONNECT_DEFAULT_FRONTEND_REDIRECT_URL = '/auth/wechat/callback'
 
 interface DefaultSubscriptionGroupOption {
   value: number
@@ -3243,10 +3224,10 @@ const form = reactive<SettingsForm>({
   wechat_connect_app_id: '',
   wechat_connect_app_secret: '',
   wechat_connect_app_secret_configured: false,
-  wechat_connect_mode: '',
-  wechat_connect_scopes: 'snsapi_base',
+  wechat_connect_mode: WECHAT_CONNECT_FIXED_MODE,
+  wechat_connect_scopes: WECHAT_CONNECT_FIXED_SCOPES,
   wechat_connect_redirect_url: '',
-  wechat_connect_frontend_redirect_url: '/auth/wechat/callback',
+  wechat_connect_frontend_redirect_url: WECHAT_CONNECT_DEFAULT_FRONTEND_REDIRECT_URL,
   // Generic OIDC OAuth 登录
   oidc_connect_enabled: false,
   oidc_connect_provider_name: 'OIDC',
@@ -3670,6 +3651,14 @@ function parseTablePageSizeOptionsInput(raw: string): number[] | null {
   return deduped
 }
 
+function applyFixedWeChatConnectPreset() {
+  form.wechat_connect_mode = WECHAT_CONNECT_FIXED_MODE
+  form.wechat_connect_scopes = WECHAT_CONNECT_FIXED_SCOPES
+  if (!form.wechat_connect_frontend_redirect_url) {
+    form.wechat_connect_frontend_redirect_url = WECHAT_CONNECT_DEFAULT_FRONTEND_REDIRECT_URL
+  }
+}
+
 async function loadSettings() {
   loading.value = true
   loadFailed.value = false
@@ -3682,6 +3671,7 @@ async function loadSettings() {
         (form as Record<string, unknown>)[key] = value
       }
     }
+    applyFixedWeChatConnectPreset()
     form.backend_mode_enabled = settings.backend_mode_enabled
     form.default_subscriptions = Array.isArray(settings.default_subscriptions)
       ? settings.default_subscriptions
@@ -3815,6 +3805,7 @@ async function saveSettings() {
 
     const balanceLowNotifyRechargeUrl = form.balance_low_notify_recharge_url || currentOrigin
     form.balance_low_notify_recharge_url = balanceLowNotifyRechargeUrl
+    applyFixedWeChatConnectPreset()
 
     const payload: UpdateSettingsRequest = {
       registration_enabled: form.registration_enabled,
@@ -3934,6 +3925,7 @@ async function saveSettings() {
         (form as Record<string, unknown>)[key] = value
       }
     }
+    applyFixedWeChatConnectPreset()
     registrationEmailSuffixWhitelistTags.value = normalizeRegistrationEmailSuffixDomains(
       updated.registration_email_suffix_whitelist
     )

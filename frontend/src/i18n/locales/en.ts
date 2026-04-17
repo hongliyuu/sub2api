@@ -467,10 +467,37 @@ export default {
       completeRegistrationFailed: 'Registration failed. Please check your invitation code and try again.'
     },
     wechat: {
+      signIn: 'Continue with WeChat',
+      callbackTitle: 'Signing you in with WeChat',
+      callbackProcessing: 'Completing WeChat login, please wait...',
+      callbackHint: 'If you are not redirected automatically, go back to the login page and try again.',
+      callbackMissingToken: 'Missing WeChat login token, please try again.',
+      invalidPendingToken: 'The WeChat login session has expired. Please sign in again.',
+      backToLogin: 'Back to Login'
+    },
+    wechatPayment: {
       callbackTitle: 'Returning from WeChat',
       callbackProcessing: 'Restoring your payment and returning to the checkout page...',
       callbackMissingOpenId: 'WeChat did not return a usable OpenID. Please restart the payment flow.',
       backToPayment: 'Back to Payment'
+    },
+    thirdParty: {
+      chooseActionHint: 'Choose how to continue with {providerName}.',
+      unboundAccount: 'This {providerName} login is not linked to an account yet.',
+      bindExistingAccount: 'Bind Existing Account',
+      createNewAccount: 'Create New Account',
+      bindHint: 'Sign in with your existing account to link this {providerName} login.',
+      createHint: 'Create a new account and link this {providerName} login.',
+      chooseAnotherAction: 'Choose Another Action',
+      invitationRequired: 'An invitation code is required before a new {providerName} account can be created.',
+      bindSubmit: 'Sign In and Bind',
+      binding: 'Binding Account...',
+      createSubmit: 'Create Account',
+      creating: 'Creating Account...',
+      bindFailed: 'Failed to bind the account. Please check your credentials and try again.',
+      createFailed: 'Failed to create the account. Please try again.',
+      invalidPendingToken: 'The login session has expired. Please start again.',
+      bindingOnly: 'This {providerName} flow can only link to the signed-in account. Creating a new account here is disabled.'
     },
     oauth: {
       code: 'Code',
@@ -946,6 +973,61 @@ export default {
       maxEmailsReached: 'Maximum number of notification emails reached',
       unverified: 'Unverified',
       verified: 'Verified',
+    },
+    avatar: {
+      title: 'Profile Avatar',
+      description: 'Upload a custom avatar for your profile and user menu.',
+      selectImage: 'Upload Avatar',
+      uploading: 'Uploading...',
+      remove: 'Remove Avatar',
+      ready: 'Avatar preview ready',
+      empty: 'Using initials fallback',
+      hint: 'Static images are compressed in the browser to stay within 100 KB before upload.',
+      formatsHint: 'Accepted formats: JPG, PNG, WebP, GIF. Maximum upload size: 100 KB.',
+      gifHint: 'GIF files are supported when already under 100 KB. Larger GIFs cannot be compressed safely here.',
+      sizeReady: 'Ready to upload: {size}',
+      compressedReady: 'Compressed for upload: {from} -> {to}',
+      uploadSuccess: 'Avatar updated successfully',
+      uploadFailed: 'Failed to update avatar',
+      removeSuccess: 'Avatar removed',
+      removeFailed: 'Failed to remove avatar',
+      invalidType: 'Please choose an image file.',
+      gifTooLarge: 'GIF avatars must already be 100 KB or smaller.',
+      compressTooLarge: 'Unable to compress this image below 100 KB. Try a smaller image.',
+      compressFailed: 'Failed to compress the selected image.',
+      readFailed: 'Failed to read the selected image.',
+    },
+    bindings: {
+      title: 'Account Bindings',
+      description: 'Review which login identities are linked to this account.',
+      providers: {
+        email: 'Email',
+        linuxdo: 'LinuxDo',
+        wechat: 'WeChat',
+      },
+      bound: 'Bound',
+      unbound: 'Not Bound',
+      unavailable: 'Unavailable',
+      connect: 'Connect',
+      disconnect: 'Disconnect',
+      connected: 'This provider is linked to your account.',
+      connectedAs: 'Connected as {value}',
+      emailPrimary: 'Primary sign-in email',
+      emailVerifiedValue: '{value} (verified)',
+      emailUnverifiedValue: '{value} (verification pending)',
+      providerDescriptions: {
+        linuxdo: 'Link your LinuxDo identity for account recovery and unified sign-in.',
+        wechat: 'Link your WeChat identity once the account binding backend is available.',
+      },
+      providerHints: {
+        email: 'This is your current primary account identity.',
+        linuxdo: 'Connect from here when the new account binding flow is enabled.',
+        wechat: 'WeChat binding appears here once the shared account system exposes it.',
+      },
+      providerDisabled: 'This provider is not enabled in public settings.',
+      providerPending: 'Binding management will appear here after the backend exposes the new account contract.',
+      disconnectSuccess: '{provider} binding removed',
+      disconnectFailed: 'Failed to remove the selected binding.',
     }
   },
 
@@ -4336,12 +4418,16 @@ export default {
       },
       wechat: {
         title: 'WeChat Connect Login',
-        description: 'Configure Official Account webpage OAuth. In this project it is primarily used to resolve openid for in-WeChat payment, and can also be reused for login/register entry points.',
+        description:
+          'Configure the Official Account webpage OAuth settings shared by WeChat login/register entry points and in-WeChat payment openid resolution. WeChat Pay merchant credentials remain separate.',
         enable: 'Enable WeChat Login',
-        enableHint: 'Enabling this prepares WeChat entry points for login/register pages and also provides Official Account webpage OAuth settings for in-WeChat payment.',
-        paymentUsageTitle: 'These are Official Account webpage OAuth credentials, not WeChat Pay merchant credentials',
-        paymentUsageDesc: 'When a user selects `wxpay` / `wxpay_direct` inside WeChat, the backend first uses this Official Account AppID / AppSecret to run webpage OAuth and obtain an openid, then starts WeChat Pay.',
-        paymentCompatibilityHint: 'If this section is not configured, Alipay and out-of-WeChat payments still work, but in-WeChat `wxpay` / `wxpay_direct` will fail to create an order because no openid can be resolved.',
+        enableHint:
+          'Enabling this turns on the shared Official Account OAuth configuration used by WeChat login/register flows and by in-WeChat payment before the merchant payment request starts.',
+        paymentUsageTitle: 'One Official Account configuration serves login and in-WeChat payment',
+        paymentUsageDesc:
+          'The AppID and AppSecret here are reused for WeChat login/register and for resolving openid before `wxpay` / `wxpay_direct` starts. Merchant ID, APIv3 key, certificates, and other WeChat Pay credentials stay in the payment channel settings.',
+        paymentCompatibilityHint:
+          'If this section is not configured, other payment methods can still work, but WeChat login entry points and in-WeChat `wxpay` / `wxpay_direct` order creation cannot complete.',
         authDomainTitle: 'Configure "Webpage Authorization Domain" in the Official Account backend',
         authDomainDesc: 'On the WeChat side, configure a plain domain such as `crs.qazwc.com`. Do not include `https://`, do not use a full callback URL, and do not append `/api/v1/...` paths.',
         authDomainDiff: '"Webpage Authorization Domain" is different from "JS Security Domain" and from message push settings such as URL / Token / EncodingAESKey. Having only JS Security Domain configured usually does not fix `10003 redirect_uri domain mismatch`.',
@@ -4364,14 +4450,11 @@ export default {
         appSecretHint: 'Use the App Secret that matches the Official Account AppID above. The backend uses it during webpage OAuth to exchange for openid.',
         appSecretConfiguredPlaceholder: '********',
         appSecretConfiguredHint: 'Secret configured. Leave empty to keep the current value.',
-        mode: 'Mode',
-        modePlaceholder: 'for example open',
-        modeHint:
-          'Backend-defined mode string. Keep the default `open` unless you explicitly changed the WeChat OAuth provider mode in this deployment.',
-        scopes: 'Scopes',
-        scopesPlaceholder: 'snsapi_base',
-        scopesHint:
-          'Space-separated scopes. For the current in-WeChat payment flow, `snsapi_base` is the recommended value; use `snsapi_userinfo` only if you truly need user profile data. Do not use `snsapi_login` here because that scope is typically for website QR login, not this Official Account webpage OAuth flow.',
+        presetBehaviorTitle: 'Fixed to the Official Account webpage preset',
+        presetBehaviorDesc:
+          'This admin page no longer exposes raw WeChat OAuth mode or scope inputs. Saving now writes the shared Official Account webpage-login preset, and blank new setups use the same backend defaults.',
+        presetBehaviorHint:
+          'Login/register flows consistently use Official Account webpage OAuth, and in-WeChat payment still selects a compatible scope from the same preset when it needs openid.',
         redirectUrl: 'Backend Redirect URL',
         redirectUrlPlaceholder: 'https://your-domain.com/api/v1/auth/oauth/wechat/callback',
         redirectUrlHint:

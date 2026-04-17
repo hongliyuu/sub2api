@@ -66,6 +66,12 @@ const versionBoundsErrorTTL = 5 * time.Second
 // versionBoundsDBTimeout singleflight 内 DB 查询超时，独立于请求 context
 const versionBoundsDBTimeout = 5 * time.Second
 
+const (
+	defaultWeChatConnectMode                = "mp"
+	defaultWeChatConnectScopes              = "snsapi_userinfo"
+	defaultWeChatConnectFrontendRedirectURL = "/auth/wechat/callback"
+)
+
 // cachedBackendMode Backend Mode cache (in-process, 60s TTL)
 type cachedBackendMode struct {
 	value     bool
@@ -512,6 +518,12 @@ func (s *SettingService) updateSettings(ctx context.Context, settings *SystemSet
 		normalizedWhitelist = []string{}
 	}
 	settings.RegistrationEmailSuffixWhitelist = normalizedWhitelist
+	settings.WeChatConnectMode = defaultWeChatConnectMode
+	settings.WeChatConnectScopes = defaultWeChatConnectScopes
+	settings.WeChatConnectFrontendRedirectURL = strings.TrimSpace(settings.WeChatConnectFrontendRedirectURL)
+	if settings.WeChatConnectFrontendRedirectURL == "" {
+		settings.WeChatConnectFrontendRedirectURL = defaultWeChatConnectFrontendRedirectURL
+	}
 
 	updates := make(map[string]string)
 
@@ -993,9 +1005,9 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyCustomMenuItems:                  "[]",
 		SettingKeyCustomEndpoints:                  "[]",
 		SettingKeyWeChatConnectEnabled:             "false",
-		SettingKeyWeChatConnectMode:                "open",
-		SettingKeyWeChatConnectScopes:              "snsapi_login",
-		SettingKeyWeChatConnectFrontendRedirectURL: "/auth/wechat/callback",
+		SettingKeyWeChatConnectMode:                defaultWeChatConnectMode,
+		SettingKeyWeChatConnectScopes:              defaultWeChatConnectScopes,
+		SettingKeyWeChatConnectFrontendRedirectURL: defaultWeChatConnectFrontendRedirectURL,
 		SettingKeyOIDCConnectEnabled:               "false",
 		SettingKeyOIDCConnectProviderName:          "OIDC",
 		SettingKeyDefaultConcurrency:               strconv.Itoa(s.cfg.Default.UserConcurrency),
@@ -1151,7 +1163,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		result.WeChatConnectMode = strings.TrimSpace(weChatBase.Mode)
 	}
 	if result.WeChatConnectMode == "" {
-		result.WeChatConnectMode = "open"
+		result.WeChatConnectMode = defaultWeChatConnectMode
 	}
 	if v, ok := settings[SettingKeyWeChatConnectScopes]; ok && strings.TrimSpace(v) != "" {
 		result.WeChatConnectScopes = strings.TrimSpace(v)
@@ -1159,7 +1171,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		result.WeChatConnectScopes = strings.TrimSpace(weChatBase.Scopes)
 	}
 	if result.WeChatConnectScopes == "" {
-		result.WeChatConnectScopes = "snsapi_login"
+		result.WeChatConnectScopes = defaultWeChatConnectScopes
 	}
 	if v, ok := settings[SettingKeyWeChatConnectRedirectURL]; ok && strings.TrimSpace(v) != "" {
 		result.WeChatConnectRedirectURL = strings.TrimSpace(v)
@@ -1172,7 +1184,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		result.WeChatConnectFrontendRedirectURL = strings.TrimSpace(weChatBase.FrontendRedirectURL)
 	}
 	if result.WeChatConnectFrontendRedirectURL == "" {
-		result.WeChatConnectFrontendRedirectURL = "/auth/wechat/callback"
+		result.WeChatConnectFrontendRedirectURL = defaultWeChatConnectFrontendRedirectURL
 	}
 	result.WeChatConnectAppSecret = strings.TrimSpace(settings[SettingKeyWeChatConnectAppSecret])
 	if result.WeChatConnectAppSecret == "" {
@@ -1723,13 +1735,13 @@ func (s *SettingService) GetWeChatConnectOAuthConfig(ctx context.Context) (confi
 		effective.Mode = strings.TrimSpace(v)
 	}
 	if strings.TrimSpace(effective.Mode) == "" {
-		effective.Mode = "open"
+		effective.Mode = defaultWeChatConnectMode
 	}
 	if v, ok := settings[SettingKeyWeChatConnectScopes]; ok && strings.TrimSpace(v) != "" {
 		effective.Scopes = strings.TrimSpace(v)
 	}
 	if strings.TrimSpace(effective.Scopes) == "" {
-		effective.Scopes = "snsapi_login"
+		effective.Scopes = defaultWeChatConnectScopes
 	}
 	if v, ok := settings[SettingKeyWeChatConnectRedirectURL]; ok && strings.TrimSpace(v) != "" {
 		effective.RedirectURL = strings.TrimSpace(v)
@@ -1738,7 +1750,7 @@ func (s *SettingService) GetWeChatConnectOAuthConfig(ctx context.Context) (confi
 		effective.FrontendRedirectURL = strings.TrimSpace(v)
 	}
 	if strings.TrimSpace(effective.FrontendRedirectURL) == "" {
-		effective.FrontendRedirectURL = "/auth/wechat/callback"
+		effective.FrontendRedirectURL = defaultWeChatConnectFrontendRedirectURL
 	}
 
 	if !effective.Enabled {
