@@ -468,6 +468,10 @@ export default {
     },
     wechat: {
       signIn: 'Continue with WeChat',
+      inAppHint: 'Best used inside WeChat, where Official Account authorization can continue directly.',
+      externalHint: 'This entry works best inside WeChat. Desktop browsers will still attempt Official Account authorization, not the standard QR login flow.',
+      desktopHint: 'This WeChat login works best inside WeChat. On desktop we will still attempt Official Account authorization instead of the standard QR login page.',
+      mobileBrowserHint: 'This WeChat login works best inside WeChat. If the redirect is blocked, open this page in WeChat and try again.',
       callbackTitle: 'Signing you in with WeChat',
       callbackProcessing: 'Completing WeChat login, please wait...',
       callbackHint: 'If you are not redirected automatically, go back to the login page and try again.',

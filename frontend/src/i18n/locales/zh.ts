@@ -466,6 +466,10 @@ export default {
     },
     wechat: {
       signIn: '使用微信登录',
+      inAppHint: '推荐在微信内打开后使用，可直接走公众号授权登录。',
+      externalHint: '当前入口更适合在微信内使用；PC 浏览器会继续尝试公众号授权，不是标准扫码登录。',
+      desktopHint: '当前微信登录更适合在微信内使用；PC 浏览器将继续尝试公众号授权，而不是标准扫码页。',
+      mobileBrowserHint: '当前微信登录更适合在微信内使用；如遇跳转受限，请改用微信打开本页。',
       callbackTitle: '正在完成微信登录',
       callbackProcessing: '正在验证微信登录信息，请稍候...',
       callbackHint: '如果页面未自动跳转，请返回登录页重试。',
