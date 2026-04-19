@@ -25,6 +25,7 @@ func RegisterUserRoutes(
 			user.GET("/profile", h.User.GetProfile)
 			user.PUT("/password", h.User.ChangePassword)
 			user.PUT("", h.User.UpdateProfile)
+			user.GET("/aff", h.User.GetAffCode)
 
 			// 通知邮箱管理
 			notifyEmail := user.Group("/notify-email")

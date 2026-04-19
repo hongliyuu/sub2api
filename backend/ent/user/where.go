@@ -150,6 +150,26 @@ func TotalRecharged(v float64) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldTotalRecharged, v))
 }
 
+// AffCode applies equality check predicate on the "aff_code" field. It's identical to AffCodeEQ.
+func AffCode(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldAffCode, v))
+}
+
+// AffCount applies equality check predicate on the "aff_count" field. It's identical to AffCountEQ.
+func AffCount(v int) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldAffCount, v))
+}
+
+// AffHistoryBalance applies equality check predicate on the "aff_history_balance" field. It's identical to AffHistoryBalanceEQ.
+func AffHistoryBalance(v float64) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldAffHistoryBalance, v))
+}
+
+// InviterID applies equality check predicate on the "inviter_id" field. It's identical to InviterIDEQ.
+func InviterID(v int64) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldInviterID, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldCreatedAt, v))
@@ -1113,6 +1133,201 @@ func TotalRechargedLT(v float64) predicate.User {
 // TotalRechargedLTE applies the LTE predicate on the "total_recharged" field.
 func TotalRechargedLTE(v float64) predicate.User {
 	return predicate.User(sql.FieldLTE(FieldTotalRecharged, v))
+}
+
+// AffCodeEQ applies the EQ predicate on the "aff_code" field.
+func AffCodeEQ(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldAffCode, v))
+}
+
+// AffCodeNEQ applies the NEQ predicate on the "aff_code" field.
+func AffCodeNEQ(v string) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldAffCode, v))
+}
+
+// AffCodeIn applies the In predicate on the "aff_code" field.
+func AffCodeIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldIn(FieldAffCode, vs...))
+}
+
+// AffCodeNotIn applies the NotIn predicate on the "aff_code" field.
+func AffCodeNotIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldAffCode, vs...))
+}
+
+// AffCodeGT applies the GT predicate on the "aff_code" field.
+func AffCodeGT(v string) predicate.User {
+	return predicate.User(sql.FieldGT(FieldAffCode, v))
+}
+
+// AffCodeGTE applies the GTE predicate on the "aff_code" field.
+func AffCodeGTE(v string) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldAffCode, v))
+}
+
+// AffCodeLT applies the LT predicate on the "aff_code" field.
+func AffCodeLT(v string) predicate.User {
+	return predicate.User(sql.FieldLT(FieldAffCode, v))
+}
+
+// AffCodeLTE applies the LTE predicate on the "aff_code" field.
+func AffCodeLTE(v string) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldAffCode, v))
+}
+
+// AffCodeContains applies the Contains predicate on the "aff_code" field.
+func AffCodeContains(v string) predicate.User {
+	return predicate.User(sql.FieldContains(FieldAffCode, v))
+}
+
+// AffCodeHasPrefix applies the HasPrefix predicate on the "aff_code" field.
+func AffCodeHasPrefix(v string) predicate.User {
+	return predicate.User(sql.FieldHasPrefix(FieldAffCode, v))
+}
+
+// AffCodeHasSuffix applies the HasSuffix predicate on the "aff_code" field.
+func AffCodeHasSuffix(v string) predicate.User {
+	return predicate.User(sql.FieldHasSuffix(FieldAffCode, v))
+}
+
+// AffCodeEqualFold applies the EqualFold predicate on the "aff_code" field.
+func AffCodeEqualFold(v string) predicate.User {
+	return predicate.User(sql.FieldEqualFold(FieldAffCode, v))
+}
+
+// AffCodeContainsFold applies the ContainsFold predicate on the "aff_code" field.
+func AffCodeContainsFold(v string) predicate.User {
+	return predicate.User(sql.FieldContainsFold(FieldAffCode, v))
+}
+
+// AffCountEQ applies the EQ predicate on the "aff_count" field.
+func AffCountEQ(v int) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldAffCount, v))
+}
+
+// AffCountNEQ applies the NEQ predicate on the "aff_count" field.
+func AffCountNEQ(v int) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldAffCount, v))
+}
+
+// AffCountIn applies the In predicate on the "aff_count" field.
+func AffCountIn(vs ...int) predicate.User {
+	return predicate.User(sql.FieldIn(FieldAffCount, vs...))
+}
+
+// AffCountNotIn applies the NotIn predicate on the "aff_count" field.
+func AffCountNotIn(vs ...int) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldAffCount, vs...))
+}
+
+// AffCountGT applies the GT predicate on the "aff_count" field.
+func AffCountGT(v int) predicate.User {
+	return predicate.User(sql.FieldGT(FieldAffCount, v))
+}
+
+// AffCountGTE applies the GTE predicate on the "aff_count" field.
+func AffCountGTE(v int) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldAffCount, v))
+}
+
+// AffCountLT applies the LT predicate on the "aff_count" field.
+func AffCountLT(v int) predicate.User {
+	return predicate.User(sql.FieldLT(FieldAffCount, v))
+}
+
+// AffCountLTE applies the LTE predicate on the "aff_count" field.
+func AffCountLTE(v int) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldAffCount, v))
+}
+
+// AffHistoryBalanceEQ applies the EQ predicate on the "aff_history_balance" field.
+func AffHistoryBalanceEQ(v float64) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldAffHistoryBalance, v))
+}
+
+// AffHistoryBalanceNEQ applies the NEQ predicate on the "aff_history_balance" field.
+func AffHistoryBalanceNEQ(v float64) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldAffHistoryBalance, v))
+}
+
+// AffHistoryBalanceIn applies the In predicate on the "aff_history_balance" field.
+func AffHistoryBalanceIn(vs ...float64) predicate.User {
+	return predicate.User(sql.FieldIn(FieldAffHistoryBalance, vs...))
+}
+
+// AffHistoryBalanceNotIn applies the NotIn predicate on the "aff_history_balance" field.
+func AffHistoryBalanceNotIn(vs ...float64) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldAffHistoryBalance, vs...))
+}
+
+// AffHistoryBalanceGT applies the GT predicate on the "aff_history_balance" field.
+func AffHistoryBalanceGT(v float64) predicate.User {
+	return predicate.User(sql.FieldGT(FieldAffHistoryBalance, v))
+}
+
+// AffHistoryBalanceGTE applies the GTE predicate on the "aff_history_balance" field.
+func AffHistoryBalanceGTE(v float64) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldAffHistoryBalance, v))
+}
+
+// AffHistoryBalanceLT applies the LT predicate on the "aff_history_balance" field.
+func AffHistoryBalanceLT(v float64) predicate.User {
+	return predicate.User(sql.FieldLT(FieldAffHistoryBalance, v))
+}
+
+// AffHistoryBalanceLTE applies the LTE predicate on the "aff_history_balance" field.
+func AffHistoryBalanceLTE(v float64) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldAffHistoryBalance, v))
+}
+
+// InviterIDEQ applies the EQ predicate on the "inviter_id" field.
+func InviterIDEQ(v int64) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldInviterID, v))
+}
+
+// InviterIDNEQ applies the NEQ predicate on the "inviter_id" field.
+func InviterIDNEQ(v int64) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldInviterID, v))
+}
+
+// InviterIDIn applies the In predicate on the "inviter_id" field.
+func InviterIDIn(vs ...int64) predicate.User {
+	return predicate.User(sql.FieldIn(FieldInviterID, vs...))
+}
+
+// InviterIDNotIn applies the NotIn predicate on the "inviter_id" field.
+func InviterIDNotIn(vs ...int64) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldInviterID, vs...))
+}
+
+// InviterIDGT applies the GT predicate on the "inviter_id" field.
+func InviterIDGT(v int64) predicate.User {
+	return predicate.User(sql.FieldGT(FieldInviterID, v))
+}
+
+// InviterIDGTE applies the GTE predicate on the "inviter_id" field.
+func InviterIDGTE(v int64) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldInviterID, v))
+}
+
+// InviterIDLT applies the LT predicate on the "inviter_id" field.
+func InviterIDLT(v int64) predicate.User {
+	return predicate.User(sql.FieldLT(FieldInviterID, v))
+}
+
+// InviterIDLTE applies the LTE predicate on the "inviter_id" field.
+func InviterIDLTE(v int64) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldInviterID, v))
+}
+
+// InviterIDIsNil applies the IsNil predicate on the "inviter_id" field.
+func InviterIDIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldInviterID))
+}
+
+// InviterIDNotNil applies the NotNil predicate on the "inviter_id" field.
+func InviterIDNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldInviterID))
 }
 
 // HasAPIKeys applies the HasEdge predicate on the "api_keys" edge.

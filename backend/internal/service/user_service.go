@@ -17,6 +17,7 @@ var (
 	ErrPasswordIncorrect       = infraerrors.BadRequest("PASSWORD_INCORRECT", "current password is incorrect")
 	ErrInsufficientPerms       = infraerrors.Forbidden("INSUFFICIENT_PERMISSIONS", "insufficient permissions")
 	ErrNotifyCodeUserRateLimit = infraerrors.TooManyRequests("NOTIFY_CODE_USER_RATE_LIMIT", "too many verification codes requested, please try again later")
+	ErrAffCodeExists           = infraerrors.Conflict("AFF_CODE_EXISTS", "referral code already exists")
 )
 
 const (
@@ -65,6 +66,13 @@ type UserRepository interface {
 	UpdateTotpSecret(ctx context.Context, userID int64, encryptedSecret *string) error
 	EnableTotp(ctx context.Context, userID int64) error
 	DisableTotp(ctx context.Context, userID int64) error
+
+	// 邀请返利
+	GetByAffCode(ctx context.Context, affCode string) (*User, error)
+	SetAffCode(ctx context.Context, userID int64, affCode string) error
+	SetInviterID(ctx context.Context, userID int64, inviterID int64) error
+	// IncrementAffStats 原子增加邀请统计和邀请人余额
+	IncrementAffStats(ctx context.Context, userID int64, bonusAmount float64) error
 }
 
 // UpdateProfileRequest 更新用户资料请求

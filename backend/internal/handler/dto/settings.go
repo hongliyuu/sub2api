@@ -157,6 +157,10 @@ type SystemSettings struct {
 	BalanceLowNotifyRechargeURL string             `json:"balance_low_notify_recharge_url"`
 	AccountQuotaNotifyEnabled   bool               `json:"account_quota_notify_enabled"`
 	AccountQuotaNotifyEmails    []NotifyEmailEntry `json:"account_quota_notify_emails"`
+
+	// 邀请返利设置
+	ReferralEnabled      bool    `json:"referral_enabled"`
+	ReferralRebateRate float64 `json:"referral_rebate_rate"`
 }
 
 type DefaultSubscriptionSetting struct {
@@ -199,6 +203,7 @@ type PublicSettings struct {
 	AccountQuotaNotifyEnabled        bool             `json:"account_quota_notify_enabled"`
 	BalanceLowNotifyThreshold        float64          `json:"balance_low_notify_threshold"`
 	BalanceLowNotifyRechargeURL      string           `json:"balance_low_notify_recharge_url"`
+	ReferralEnabled                  bool             `json:"referral_enabled"`
 }
 
 // OverloadCooldownSettings 529过载冷却配置 DTO

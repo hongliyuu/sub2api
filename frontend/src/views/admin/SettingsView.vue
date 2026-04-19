@@ -2483,6 +2483,29 @@
           @reorder="handleReorderProviders"
         />
 
+          <!-- Referral / Invitation Rebate Settings -->
+          <div class="card">
+            <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ t('admin.settings.referral.title') }}</h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ t('admin.settings.referral.description') }}</p>
+            </div>
+            <div class="space-y-4 p-6">
+              <div class="flex items-center justify-between">
+                <div>
+                  <label class="font-medium text-gray-900 dark:text-white">{{ t('admin.settings.referral.enabled') }}</label>
+                  <p class="text-sm text-gray-500 dark:text-gray-400">{{ t('admin.settings.referral.enabledHint') }}</p>
+                </div>
+                <Toggle v-model="form.referral_enabled" />
+              </div>
+              <template v-if="form.referral_enabled">
+                <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
+                  <label class="input-label">{{ t('admin.settings.referral.rebateRate') }}</label>
+                  <input v-model.number="form.referral_rebate_rate" type="number" min="0" max="1" step="0.01" class="input" placeholder="0.10" />
+                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t('admin.settings.referral.rebateRateHint') }}</p>
+                </div>
+              </template>
+            </div>
+          </div>
         </div>
 
         <div v-show="activeTab === 'email'" class="space-y-6">
@@ -3060,7 +3083,10 @@ const form = reactive<SettingsForm>({
   balance_low_notify_threshold: 0,
   balance_low_notify_recharge_url: '',
   account_quota_notify_enabled: false,
-  account_quota_notify_emails: [] as NotifyEmailEntry[]
+  account_quota_notify_emails: [] as NotifyEmailEntry[],
+  // Referral / invitation rebate
+  referral_enabled: false,
+  referral_rebate_rate: 0,
 })
 
 // Proxies for web search emulation ProxySelector
@@ -3661,6 +3687,9 @@ async function saveSettings() {
       balance_low_notify_recharge_url: (form.balance_low_notify_recharge_url = form.balance_low_notify_recharge_url || currentOrigin),
       account_quota_notify_enabled: form.account_quota_notify_enabled,
       account_quota_notify_emails: (form.account_quota_notify_emails || []).filter((e) => e.email.trim() !== ''),
+      // Referral
+      referral_enabled: form.referral_enabled,
+      referral_rebate_rate: Number(form.referral_rebate_rate) || 0,
     }
 
     const updated = await adminAPI.settings.updateSettings(payload)

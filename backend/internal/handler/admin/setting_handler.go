@@ -180,6 +180,8 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		BalanceLowNotifyRechargeURL:          settings.BalanceLowNotifyRechargeURL,
 		AccountQuotaNotifyEnabled:            settings.AccountQuotaNotifyEnabled,
 		AccountQuotaNotifyEmails:             dto.NotifyEmailEntriesFromService(settings.AccountQuotaNotifyEmails),
+		ReferralEnabled:                      settings.ReferralEnabled,
+		ReferralRebateRate:                   settings.ReferralRebateRate,
 		PaymentEnabled:                       paymentCfg.Enabled,
 		PaymentMinAmount:                     paymentCfg.MinAmount,
 		PaymentMaxAmount:                     paymentCfg.MaxAmount,
@@ -317,6 +319,10 @@ type UpdateSettingsRequest struct {
 	BalanceLowNotifyRechargeURL *string                 `json:"balance_low_notify_recharge_url"`
 	AccountQuotaNotifyEnabled   *bool                   `json:"account_quota_notify_enabled"`
 	AccountQuotaNotifyEmails    *[]dto.NotifyEmailEntry `json:"account_quota_notify_emails"`
+
+	// 邀请返利设置
+	ReferralEnabled      *bool    `json:"referral_enabled"`
+	ReferralRebateRate *float64 `json:"referral_rebate_rate"`
 
 	// Payment configuration (integrated into settings, full replace)
 	PaymentEnabled                   *bool    `json:"payment_enabled"`
@@ -927,6 +933,18 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			return previousSettings.AccountQuotaNotifyEmails
 		}(),
+		ReferralEnabled: func() bool {
+			if req.ReferralEnabled != nil {
+				return *req.ReferralEnabled
+			}
+			return previousSettings.ReferralEnabled
+		}(),
+		ReferralRebateRate: func() float64 {
+			if req.ReferralRebateRate != nil {
+				return *req.ReferralRebateRate
+			}
+			return previousSettings.ReferralRebateRate
+		}(),
 	}
 
 	if err := h.settingService.UpdateSettings(c.Request.Context(), settings); err != nil {
@@ -1080,6 +1098,8 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		BalanceLowNotifyRechargeURL:          updatedSettings.BalanceLowNotifyRechargeURL,
 		AccountQuotaNotifyEnabled:            updatedSettings.AccountQuotaNotifyEnabled,
 		AccountQuotaNotifyEmails:             dto.NotifyEmailEntriesFromService(updatedSettings.AccountQuotaNotifyEmails),
+			ReferralEnabled:                      updatedSettings.ReferralEnabled,
+			ReferralRebateRate:                   updatedSettings.ReferralRebateRate,
 		PaymentEnabled:                       updatedPaymentCfg.Enabled,
 		PaymentMinAmount:                     updatedPaymentCfg.MinAmount,
 		PaymentMaxAmount:                     updatedPaymentCfg.MaxAmount,

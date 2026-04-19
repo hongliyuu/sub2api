@@ -153,6 +153,10 @@ const (
 	SettingKeyDefaultBalance       = "default_balance"       // 新用户默认余额
 	SettingKeyDefaultSubscriptions = "default_subscriptions" // 新用户默认订阅列表（JSON）
 
+	// 邀请返利设置
+	SettingKeyReferralEnabled      = "referral_enabled"       // 是否启用邀请返利功能
+	SettingKeyReferralRebateRate  = "referral_rebate_rate"  // 充值返利比例（0~1，如 0.1 表示 10%）
+
 	// 管理员 API Key
 	SettingKeyAdminAPIKey = "admin_api_key" // 全局管理员 API Key（用于外部系统集成）
 

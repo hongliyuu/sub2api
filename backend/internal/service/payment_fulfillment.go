@@ -207,6 +207,12 @@ func (s *PaymentService) doBalance(ctx context.Context, o *dbent.PaymentOrder) e
 	if _, err := s.redeemService.Redeem(ctx, o.UserID, o.RechargeCode); err != nil {
 		return fmt.Errorf("redeem balance: %w", err)
 	}
+	// 充值成功后触发邀请返利
+	if s.referralService != nil {
+		if err := s.referralService.RewardRecharge(ctx, o.UserID, o.Amount); err != nil {
+			slog.Warn("[Payment] referral rebate failed", "userID", o.UserID, "amount", o.Amount, "error", err)
+		}
+	}
 	return s.markCompleted(ctx, o, "RECHARGE_SUCCESS")
 }
 

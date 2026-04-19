@@ -186,6 +186,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyBalanceLowNotifyThreshold,
 		SettingKeyBalanceLowNotifyRechargeURL,
 		SettingKeyAccountQuotaNotifyEnabled,
+		SettingKeyReferralEnabled,
 	}
 
 	settings, err := s.settingRepo.GetMultiple(ctx, keys)
@@ -262,6 +263,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		AccountQuotaNotifyEnabled:        settings[SettingKeyAccountQuotaNotifyEnabled] == "true",
 		BalanceLowNotifyThreshold:        balanceLowNotifyThreshold,
 		BalanceLowNotifyRechargeURL:      settings[SettingKeyBalanceLowNotifyRechargeURL],
+		ReferralEnabled:                  settings[SettingKeyReferralEnabled] == "true",
 	}, nil
 }
 
@@ -634,6 +636,10 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	updates[SettingKeyAccountQuotaNotifyEnabled] = strconv.FormatBool(settings.AccountQuotaNotifyEnabled)
 	updates[SettingKeyAccountQuotaNotifyEmails] = MarshalNotifyEmails(settings.AccountQuotaNotifyEmails)
 
+	// 邀请返利设置
+	updates[SettingKeyReferralEnabled] = strconv.FormatBool(settings.ReferralEnabled)
+	updates[SettingKeyReferralRebateRate] = strconv.FormatFloat(settings.ReferralRebateRate, 'f', 8, 64)
+
 	err = s.settingRepo.SetMultiple(ctx, updates)
 	if err == nil {
 		// 先使 inflight singleflight 失效，再刷新缓存，缩小旧值覆盖新值的竞态窗口
@@ -917,6 +923,27 @@ func (s *SettingService) GetDefaultSubscriptions(ctx context.Context) []DefaultS
 		return nil
 	}
 	return parseDefaultSubscriptions(value)
+}
+
+// IsReferralEnabled 检查是否启用邀请返利功能
+func (s *SettingService) IsReferralEnabled(ctx context.Context) bool {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyReferralEnabled)
+	if err != nil {
+		return false
+	}
+	return value == "true"
+}
+
+// GetReferralRebateRate 获取充值返利比例（0~1）
+func (s *SettingService) GetReferralRebateRate(ctx context.Context) float64 {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyReferralRebateRate)
+	if err != nil {
+		return 0
+	}
+	if v, err := strconv.ParseFloat(value, 64); err == nil && v >= 0 && v <= 1 {
+		return v
+	}
+	return 0
 }
 
 // InitializeDefaultSettings 初始化默认设置
@@ -1278,6 +1305,12 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	}
 	if result.AccountQuotaNotifyEmails == nil {
 		result.AccountQuotaNotifyEmails = []NotifyEmailEntry{}
+	}
+
+	// 邀请返利设置
+	result.ReferralEnabled = settings[SettingKeyReferralEnabled] == "true"
+	if v, err := strconv.ParseFloat(settings[SettingKeyReferralRebateRate], 64); err == nil && v >= 0 {
+		result.ReferralRebateRate = v
 	}
 
 	return result
