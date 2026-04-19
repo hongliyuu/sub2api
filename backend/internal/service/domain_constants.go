@@ -74,11 +74,19 @@ const LinuxDoConnectSyntheticEmailDomain = "@linuxdo-connect.invalid"
 // OIDCConnectSyntheticEmailDomain 是 OIDC 用户的合成邮箱后缀（RFC 保留域名）。
 const OIDCConnectSyntheticEmailDomain = "@oidc-connect.invalid"
 
+// WeChatLoginUnionIDHealthStatus* 用于评估 open/mp 配置是否满足 UnionID 归并前提。
+const (
+	WeChatLoginUnionIDHealthStatusOK      = "ok"
+	WeChatLoginUnionIDHealthStatusWarning = "warning"
+	WeChatLoginUnionIDHealthStatusError   = "error"
+)
+
 // Setting keys
 const (
 	// 注册设置
-	SettingKeyRegistrationEnabled              = "registration_enabled"                // 是否开放注册
-	SettingKeyEmailVerifyEnabled               = "email_verify_enabled"                // 是否开启邮件验证
+	SettingKeyRegistrationEnabled              = "registration_enabled" // 是否开放注册
+	SettingKeyEmailVerifyEnabled               = "email_verify_enabled" // 是否开启邮件验证
+	SettingKeyThirdPartyFirstLoginRequireEmail = "third_party_first_login_require_email"
 	SettingKeyRegistrationEmailSuffixWhitelist = "registration_email_suffix_whitelist" // 注册邮箱后缀白名单（JSON 数组）
 	SettingKeyPromoCodeEnabled                 = "promo_code_enabled"                  // 是否启用优惠码功能
 	SettingKeyPasswordResetEnabled             = "password_reset_enabled"              // 是否启用忘记密码功能（需要先开启邮件验证）
@@ -107,6 +115,14 @@ const (
 	SettingKeyLinuxDoConnectClientID     = "linuxdo_connect_client_id"
 	SettingKeyLinuxDoConnectClientSecret = "linuxdo_connect_client_secret"
 	SettingKeyLinuxDoConnectRedirectURL  = "linuxdo_connect_redirect_url"
+
+	// WeChat 登录设置
+	SettingKeyWeChatLoginOpenEnabled   = "wechat_login_open_enabled"
+	SettingKeyWeChatLoginOpenAppID     = "wechat_login_open_app_id"
+	SettingKeyWeChatLoginOpenAppSecret = "wechat_login_open_app_secret"
+	SettingKeyWeChatLoginMPEnabled     = "wechat_login_mp_enabled"
+	SettingKeyWeChatLoginMPAppID       = "wechat_login_mp_app_id"
+	SettingKeyWeChatLoginMPAppSecret   = "wechat_login_mp_app_secret"
 
 	// Generic OIDC OAuth 登录设置
 	SettingKeyOIDCConnectEnabled              = "oidc_connect_enabled"
@@ -149,9 +165,25 @@ const (
 	SettingKeyCustomEndpoints             = "custom_endpoints"              // 自定义端点列表（JSON 数组）
 
 	// 默认配置
-	SettingKeyDefaultConcurrency   = "default_concurrency"   // 新用户默认并发量
-	SettingKeyDefaultBalance       = "default_balance"       // 新用户默认余额
-	SettingKeyDefaultSubscriptions = "default_subscriptions" // 新用户默认订阅列表（JSON）
+	SettingKeyDefaultConcurrency          = "default_concurrency"   // 新用户默认并发量
+	SettingKeyDefaultBalance              = "default_balance"       // 新用户默认余额
+	SettingKeyDefaultSubscriptions        = "default_subscriptions" // 新用户默认订阅列表（JSON）
+	SettingKeyDefaultApplyOnBindEmail     = "default_apply_on_bind_email"
+	SettingKeyDefaultConcurrencyEmail     = "default_concurrency_email"
+	SettingKeyDefaultBalanceEmail         = "default_balance_email"
+	SettingKeyDefaultSubscriptionsEmail   = "default_subscriptions_email"
+	SettingKeyDefaultApplyOnBindLinuxDo   = "default_apply_on_bind_linuxdo"
+	SettingKeyDefaultConcurrencyLinuxDo   = "default_concurrency_linuxdo"
+	SettingKeyDefaultBalanceLinuxDo       = "default_balance_linuxdo"
+	SettingKeyDefaultSubscriptionsLinuxDo = "default_subscriptions_linuxdo"
+	SettingKeyDefaultApplyOnBindWeChat    = "default_apply_on_bind_wechat"
+	SettingKeyDefaultConcurrencyWeChat    = "default_concurrency_wechat"
+	SettingKeyDefaultBalanceWeChat        = "default_balance_wechat"
+	SettingKeyDefaultSubscriptionsWeChat  = "default_subscriptions_wechat"
+	SettingKeyDefaultApplyOnBindOIDC      = "default_apply_on_bind_oidc"
+	SettingKeyDefaultConcurrencyOIDC      = "default_concurrency_oidc"
+	SettingKeyDefaultBalanceOIDC          = "default_balance_oidc"
+	SettingKeyDefaultSubscriptionsOIDC    = "default_subscriptions_oidc"
 
 	// 管理员 API Key
 	SettingKeyAdminAPIKey = "admin_api_key" // 全局管理员 API Key（用于外部系统集成）

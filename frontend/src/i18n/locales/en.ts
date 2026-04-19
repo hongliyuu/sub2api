@@ -466,6 +466,78 @@ export default {
       completing: 'Completing registration…',
       completeRegistrationFailed: 'Registration failed. Please check your invitation code and try again.'
     },
+    wechat: {
+      signIn: 'Continue with WeChat',
+      disabledUnavailable: 'WeChat login is not configured right now.',
+      disabledNeedWechatEnv: 'This WeChat login is available only inside the WeChat browser.',
+      disabledNeedExternalBrowser: 'This WeChat login is available only in a standard browser outside WeChat.'
+    },
+    pendingAuth: {
+      login: {
+        title: 'Continue account verification',
+        defaultDescription: 'Sign in with your existing local account to bind this third-party identity.',
+        adoptExistingDescription: 'Verify your local account to confirm ownership before attaching this third-party identity.',
+        bindCurrentDescription: 'Sign in again to continue binding this third-party identity to your current account.'
+      },
+      register: {
+        title: 'Complete local account setup',
+        description: 'Create a local email/password account for this third-party login. Provider emails are not treated as verified local email bindings.'
+      }
+    },
+    thirdParty: {
+      pendingSessionTitle: 'Finish account setup',
+      useProviderNickname: 'Use provider nickname',
+      useProviderAvatar: 'Use provider avatar',
+      callback: {
+        idle: 'Waiting for authentication callback',
+        idleDescription: 'No callback payload has been parsed yet.',
+        error: {
+          title: 'Authentication could not be completed',
+          description: 'The callback payload is missing required fields or returned an explicit error.',
+          invalidPendingPayload: 'Invalid pending auth session callback payload.',
+          missingResult: 'Missing callback result.'
+        },
+        pending: {
+          login: {
+            title: 'Finish setting up your account',
+            description: 'Choose whether to create a new account or verify ownership of an existing one.',
+            summaryTitle: 'Create a new account or bind an existing account',
+            summaryDescription: 'A pending session was created. Continue with account creation or existing-account verification.',
+            actions: {
+              createAccount: 'Create account',
+              bindExisting: 'Bind existing account'
+            }
+          },
+          bindCurrent: {
+            title: 'Bind this identity to your current account',
+            description: 'The provider identity is authenticated. Finish the bind flow against the currently signed-in account.',
+            summaryTitle: 'Bind this identity to your current account',
+            summaryDescription: 'This callback intentionally stopped before token issuance so the bind can complete against the active session.',
+            actions: {
+              continue: 'Continue binding'
+            }
+          },
+          adoptExisting: {
+            title: 'Confirm account ownership',
+            description: 'The provider identity is authenticated, but account ownership must still be verified through your site email.',
+            summaryTitle: 'Confirm account ownership',
+            summaryDescription: 'Continue with local account verification before this identity can be attached to an existing account.',
+            actions: {
+              verifyAndBind: 'Verify and bind'
+            }
+          }
+        },
+        success: {
+          title: 'Authentication completed',
+          description: 'The callback returned tokens for an existing account or a completed bind flow.',
+          summaryTitle: 'Authentication response received',
+          adoptionRequired: 'Before finishing, review whether to adopt the provider nickname or avatar.',
+          noAdoptionRequired: 'No additional adoption decision is required.',
+          redirectLabel: 'Redirect',
+          tokenTypeLabel: 'Token type'
+        }
+      }
+    },
     oauth: {
       code: 'Code',
       state: 'State',
@@ -940,6 +1012,36 @@ export default {
       maxEmailsReached: 'Maximum number of notification emails reached',
       unverified: 'Unverified',
       verified: 'Verified',
+    },
+    bindings: {
+      title: 'Login Methods',
+      description: 'Connect and review the sign-in methods available on your account.',
+      status: {
+        bound: 'Connected',
+        notBound: 'Not connected'
+      },
+      actions: {
+        connect: 'Connect',
+        connected: 'Connected'
+      },
+      providers: {
+        email: 'Email',
+        linuxdo: 'Linux.do',
+        wechat: 'WeChat',
+        oidc: 'OIDC'
+      },
+      providerDescriptions: {
+        email: 'Primary email and password sign-in for this account.',
+        linuxdo: 'Bind your Linux.do identity to sign in without a password.',
+        wechat: 'A single WeChat binding works across supported open and mp login channels.',
+        oidc: 'Bind your organization or identity-provider account as a first-class login method.'
+      },
+      providerHints: {
+        email: 'Add an email address to keep password login available.',
+        linuxdo: 'Connect Linux.do from this profile page.',
+        wechat: 'Connect WeChat from this profile page.',
+        oidc: 'Connect your OIDC provider from this profile page.'
+      }
     }
   },
 
@@ -4600,9 +4702,15 @@ export default {
         helpImagePlaceholder: 'Upload or enter image URL',
         helpTextPlaceholder: 'Enter help text...',
         providerEasypay: 'EasyPay',
-        providerAlipay: 'Alipay (Direct)',
-        providerWxpay: 'WeChat Pay (Direct)',
+        providerAlipay: 'Official Alipay',
+        providerWxpay: 'Official WeChat Pay',
         providerStripe: 'Stripe',
+        providerUiCapabilityNotice: 'Frontend payment capabilities are normalized to Alipay / WeChat Pay / Stripe. The providers below only decide whether those capabilities are carried by Official Alipay, Official WeChat Pay, EasyPay, or Stripe.',
+        frontendCapabilityLabel: 'Frontend Capability',
+        providerIntro_easypay: 'The frontend still shows “Alipay / WeChat Pay”. This form configures the EasyPay aggregator and its channel mapping.',
+        providerIntro_alipay: 'The frontend still shows “Alipay”. This form configures the credentials for the official Alipay channel.',
+        providerIntro_wxpay: 'The frontend still shows “WeChat Pay”. This form configures official WeChat Pay merchant credentials plus optional MP web auth fields.',
+        providerIntro_stripe: 'The frontend still shows “Stripe”. Inside Stripe Payment Element you can still carry sub-methods such as cards, Alipay, WeChat Pay, and Link.',
         typeDisabled: 'type disabled',
         enableTypesFirst: 'Enable at least one payment type above first',
         easypayRedirect: 'Redirect',
@@ -4613,22 +4721,54 @@ export default {
         validationNameRequired: 'Provider name is required',
         validationTypesRequired: 'Please select at least one supported payment type',
         validationFieldRequired: '{field} is required',
+        field_pid: 'PID',
+        field_pkey: 'PKey',
         field_apiBase: 'API Base URL',
         field_notifyUrl: 'Notify URL',
         field_returnUrl: 'Return URL',
         callbackBaseUrl: 'Callback Base URL',
+        field_appId: 'App ID',
         field_privateKey: 'Private Key',
         field_publicKey: 'Public Key',
         field_mchId: 'Merchant ID',
         field_apiV3Key: 'API v3 Key',
         field_publicKeyId: 'Public Key ID',
         field_certSerial: 'Certificate Serial',
+        field_mpAppId: 'MP AppID',
+        field_mpAppSecret: 'MP AppSecret',
         field_secretKey: 'Secret Key',
         field_publishableKey: 'Publishable Key',
         field_webhookSecret: 'Webhook Secret',
         field_cid: 'Channel ID',
         field_cidAlipay: 'Alipay Channel ID',
         field_cidWxpay: 'WeChat Channel ID',
+        fieldHint_easypay_pid: 'Merchant PID assigned by the EasyPay platform.',
+        fieldHint_easypay_pkey: 'EasyPay merchant signing key.',
+        fieldHint_easypay_apiBase: 'EasyPay gateway base URL, for example https://pay.example.com.',
+        fieldHint_easypay_cidAlipay: 'Optional. Fill this when Alipay should be mapped to a dedicated EasyPay channel.',
+        fieldHint_easypay_cidWxpay: 'Optional. Fill this when WeChat Pay should be mapped to a dedicated EasyPay channel.',
+        fieldHint_alipay_appId: 'Alipay application AppID for the frontend “Alipay” capability without exposing the implementation detail.',
+        fieldHint_alipay_privateKey: 'Alipay application private key used to sign requests.',
+        fieldHint_alipay_publicKey: 'Alipay platform public key used to verify callbacks.',
+        fieldHint_wxpay_appId: 'Merchant-side AppID for WeChat Pay. It is payment config and should not be overwritten from WeChat login MP config.',
+        fieldHint_wxpay_mchId: 'WeChat Pay merchant ID used only for the payment merchant identity.',
+        fieldHint_wxpay_privateKey: 'Merchant API certificate private key content.',
+        fieldHint_wxpay_apiV3Key: '32-byte API v3 key.',
+        fieldHint_wxpay_publicKey: 'WeChat Pay platform public key content for callback verification.',
+        fieldHint_wxpay_publicKeyId: 'Platform public key ID, optional depending on your current integration.',
+        fieldHint_wxpay_certSerial: 'Merchant API certificate serial number, optional.',
+        fieldHint_wxpay_mpAppId: 'MP web auth AppID. Use it only for in-WeChat web auth / JSAPI related capabilities, and it can be copied from WeChat login MP config.',
+        fieldHint_wxpay_mpAppSecret: 'MP web auth AppSecret. It only supplements MP login / JSAPI related capability and does not replace merchant ID, certificates, or API keys.',
+        fieldHint_stripe_secretKey: 'Stripe Secret Key used by the server to create payment intents.',
+        fieldHint_stripe_publishableKey: 'Stripe Publishable Key used by the frontend to load Payment Element.',
+        fieldHint_stripe_webhookSecret: 'Stripe Webhook Secret used to verify webhook signatures.',
+        wxpayMerchantSectionTitle: 'WeChat Pay Merchant Credentials',
+        wxpayMerchantSectionDesc: 'These fields belong only to the WeChat Pay merchant config and should never be overwritten by login config.',
+        wxpayMpSectionTitle: 'MP Web Auth Supplement',
+        wxpayMpSectionDesc: 'Fill these only when you need in-WeChat web auth / JSAPI supplemental info. Do not confuse them with merchant ID, certificates, platform keys, or other payment merchant config.',
+        wxpayMpSyncAction: 'Sync appid/appsecret from WeChat login mp config',
+        wxpayMpSyncHint: 'One-click sync copies the WeChat login MP AppID / AppSecret to supplement web authorization only, and never reads or overwrites merchant ID, API v3 key, certificates, or platform keys.',
+        wxpayMpSyncPlaceholderToast: 'Sync reads only the WeChat login MP AppID / AppSecret and never changes merchant ID, API v3 key, certificates, or platform keys.',
         stripeWebhookHint: 'Configure the following URL as a Webhook endpoint in Stripe Dashboard:',
         limitsTitle: 'Limits',
         limitSingleMin: 'Min per order',
@@ -5348,8 +5488,8 @@ export default {
       stripe: 'Stripe',
       card: 'Card',
       link: 'Link',
-      alipay_direct: 'Alipay (Direct)',
-      wxpay_direct: 'WeChat Pay (Direct)',
+      alipay_direct: 'Alipay',
+      wxpay_direct: 'WeChat Pay',
     },
     status: {
       pending: 'Pending',

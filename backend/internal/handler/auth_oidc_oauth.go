@@ -37,6 +37,7 @@ const (
 	oidcOAuthVerifierCookie    = "oidc_oauth_verifier"
 	oidcOAuthRedirectCookie    = "oidc_oauth_redirect"
 	oidcOAuthNonceCookie       = "oidc_oauth_nonce"
+	oidcOAuthIntentCookieName  = "oidc_oauth_intent"
 	oidcOAuthCookieMaxAgeSec   = 10 * 60 // 10 minutes
 	oidcOAuthDefaultRedirectTo = "/dashboard"
 	oidcOAuthDefaultFrontendCB = "/auth/oidc/callback"
@@ -77,6 +78,7 @@ type oidcIDTokenClaims struct {
 	EmailVerified     *bool  `json:"email_verified,omitempty"`
 	PreferredUsername string `json:"preferred_username,omitempty"`
 	Name              string `json:"name,omitempty"`
+	Picture           string `json:"picture,omitempty"`
 	Nonce             string `json:"nonce,omitempty"`
 	Azp               string `json:"azp,omitempty"`
 	jwt.RegisteredClaims
@@ -87,6 +89,8 @@ type oidcUserInfoClaims struct {
 	Username      string
 	Subject       string
 	EmailVerified *bool
+	DisplayName   string
+	AvatarURL     string
 }
 
 type oidcJWKSet struct {
@@ -126,10 +130,12 @@ func (h *AuthHandler) OIDCOAuthStart(c *gin.Context) {
 	if redirectTo == "" {
 		redirectTo = oidcOAuthDefaultRedirectTo
 	}
+	intent := normalizeOAuthIntent(c.Query("intent"))
 
 	secureCookie := isRequestHTTPS(c)
 	oidcSetCookie(c, oidcOAuthStateCookieName, encodeCookieValue(state), oidcOAuthCookieMaxAgeSec, secureCookie)
 	oidcSetCookie(c, oidcOAuthRedirectCookie, encodeCookieValue(redirectTo), oidcOAuthCookieMaxAgeSec, secureCookie)
+	oidcSetCookie(c, oidcOAuthIntentCookieName, encodeCookieValue(intent), oidcOAuthCookieMaxAgeSec, secureCookie)
 
 	codeChallenge := ""
 	if cfg.UsePKCE {
@@ -199,6 +205,7 @@ func (h *AuthHandler) OIDCOAuthCallback(c *gin.Context) {
 		oidcClearCookie(c, oidcOAuthVerifierCookie, secureCookie)
 		oidcClearCookie(c, oidcOAuthRedirectCookie, secureCookie)
 		oidcClearCookie(c, oidcOAuthNonceCookie, secureCookie)
+		oidcClearCookie(c, oidcOAuthIntentCookieName, secureCookie)
 	}()
 
 	expectedState, err := readCookieDecoded(c, oidcOAuthStateCookieName)
@@ -212,6 +219,7 @@ func (h *AuthHandler) OIDCOAuthCallback(c *gin.Context) {
 	if redirectTo == "" {
 		redirectTo = oidcOAuthDefaultRedirectTo
 	}
+	intent := normalizedOAuthIntentFromCookie(c, oidcOAuthIntentCookieName)
 
 	codeVerifier := ""
 	if cfg.UsePKCE {
@@ -294,58 +302,43 @@ func (h *AuthHandler) OIDCOAuthCallback(c *gin.Context) {
 		return
 	}
 
-	emailVerified := userInfoClaims.EmailVerified
-	if emailVerified == nil {
-		emailVerified = idClaims.EmailVerified
-	}
-	if cfg.RequireEmailVerified {
-		if emailVerified == nil || !*emailVerified {
-			redirectOAuthError(c, frontendCallback, "email_not_verified", "email is not verified", "")
-			return
-		}
-	}
-
 	identityKey := oidcIdentityKey(issuer, subject)
-	email := oidcSelectLoginEmail(userInfoClaims.Email, idClaims.Email, identityKey)
+	email := oidcSelectLoginEmail(identityKey)
 	username := firstNonEmpty(
 		userInfoClaims.Username,
 		idClaims.PreferredUsername,
 		idClaims.Name,
 		oidcFallbackUsername(subject),
 	)
+	suggestedDisplayName := firstNonEmpty(
+		userInfoClaims.DisplayName,
+		idClaims.Name,
+		userInfoClaims.Username,
+		idClaims.PreferredUsername,
+	)
+	suggestedAvatarURL := firstNonEmpty(userInfoClaims.AvatarURL, idClaims.Picture)
 
-	// 传入空邀请码；如果需要邀请码，服务层返回 ErrOAuthInvitationRequired
-	tokenPair, _, err := h.authService.LoginOrRegisterOAuthWithTokenPair(c.Request.Context(), email, username, "")
-	if err != nil {
-		if errors.Is(err, service.ErrOAuthInvitationRequired) {
-			pendingToken, tokenErr := h.authService.CreatePendingOAuthToken(email, username)
-			if tokenErr != nil {
-				redirectOAuthError(c, frontendCallback, "login_failed", "service_error", "")
-				return
-			}
-			fragment := url.Values{}
-			fragment.Set("error", "invitation_required")
-			fragment.Set("pending_oauth_token", pendingToken)
-			fragment.Set("redirect", redirectTo)
-			redirectWithFragment(c, frontendCallback, fragment)
-			return
-		}
-		redirectOAuthError(c, frontendCallback, "login_failed", infraerrors.Reason(err), infraerrors.Message(err))
-		return
-	}
-
-	fragment := url.Values{}
-	fragment.Set("access_token", tokenPair.AccessToken)
-	fragment.Set("refresh_token", tokenPair.RefreshToken)
-	fragment.Set("expires_in", fmt.Sprintf("%d", tokenPair.ExpiresIn))
-	fragment.Set("token_type", "Bearer")
-	fragment.Set("redirect", redirectTo)
-	redirectWithFragment(c, frontendCallback, fragment)
+	h.completeOAuthCallback(c, frontendCallback, redirectTo, oauthCallbackIdentity{
+		Provider:        "oidc",
+		Intent:          intent,
+		ProviderType:    "oidc",
+		ProviderKey:     issuer,
+		ProviderSubject: subject,
+		CompatEmail:     email,
+		CompatUsername:  username,
+		Metadata: map[string]any{
+			"compat_email":    email,
+			"compat_username": username,
+		},
+		SuggestedDisplayName: suggestedDisplayName,
+		SuggestedAvatarURL:   suggestedAvatarURL,
+	})
 }
 
 type completeOIDCOAuthRequest struct {
-	PendingOAuthToken string `json:"pending_oauth_token" binding:"required"`
-	InvitationCode    string `json:"invitation_code"     binding:"required"`
+	PendingAuthToken  string `json:"pending_auth_token,omitempty"`
+	PendingOAuthToken string `json:"pending_oauth_token,omitempty"`
+	InvitationCode    string `json:"invitation_code"      binding:"required"`
 }
 
 // CompleteOIDCOAuthRegistration completes a pending OAuth registration by validating
@@ -358,16 +351,22 @@ func (h *AuthHandler) CompleteOIDCOAuthRegistration(c *gin.Context) {
 		return
 	}
 
-	email, username, err := h.authService.VerifyPendingOAuthToken(req.PendingOAuthToken)
+	email, username, pendingAuthToken, err := h.resolveOIDCRegistrationIdentity(c.Request.Context(), req)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "INVALID_TOKEN", "message": "invalid or expired registration token"})
 		return
 	}
 
-	tokenPair, _, err := h.authService.LoginOrRegisterOAuthWithTokenPair(c.Request.Context(), email, username, req.InvitationCode)
+	tokenPair, user, err := h.authService.LoginOrRegisterOAuthWithTokenPair(c.Request.Context(), email, username, req.InvitationCode)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
+	}
+	if pendingAuthToken != "" && user != nil {
+		if _, err := h.authService.CompletePendingAuthSessionBind(c.Request.Context(), pendingAuthToken, user.ID); err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -376,6 +375,40 @@ func (h *AuthHandler) CompleteOIDCOAuthRegistration(c *gin.Context) {
 		"expires_in":    tokenPair.ExpiresIn,
 		"token_type":    "Bearer",
 	})
+}
+
+func (h *AuthHandler) resolveOIDCRegistrationIdentity(ctx context.Context, req completeOIDCOAuthRequest) (email, username, pendingAuthToken string, err error) {
+	pendingAuthToken = strings.TrimSpace(req.PendingAuthToken)
+	pendingOAuthToken := strings.TrimSpace(req.PendingOAuthToken)
+
+	if pendingOAuthToken != "" {
+		email, username, err = h.authService.VerifyPendingOAuthToken(pendingOAuthToken)
+		if err == nil {
+			return email, username, pendingAuthToken, nil
+		}
+		if pendingAuthToken == "" {
+			return "", "", "", err
+		}
+	}
+	if pendingAuthToken == "" {
+		return "", "", "", service.ErrInvalidToken
+	}
+
+	session, err := h.authService.GetPendingAuthSessionForProgress(ctx, pendingAuthToken, nil)
+	if err != nil {
+		return "", "", "", err
+	}
+	if !strings.EqualFold(session.ProviderType, "oidc") {
+		return "", "", "", service.ErrInvalidToken
+	}
+
+	email = oauthMetadataString(session.Metadata, "compat_email")
+	username = oauthMetadataString(session.Metadata, "compat_username")
+	if email == "" || username == "" {
+		return "", "", "", service.ErrInvalidToken
+	}
+
+	return email, username, pendingAuthToken, nil
 }
 
 func (h *AuthHandler) getOIDCOAuthConfig(ctx context.Context) (config.OIDCConnectConfig, error) {
@@ -557,12 +590,36 @@ func oidcParseUserInfo(body string, cfg config.OIDCConnectConfig) *oidcUserInfoC
 		getGJSON(body, "uid"),
 		getGJSON(body, "user.id"),
 	)
+	claims.DisplayName = firstNonEmpty(
+		getGJSON(body, "name"),
+		getGJSON(body, "nickname"),
+		getGJSON(body, "preferred_username"),
+		getGJSON(body, "username"),
+		getGJSON(body, "user.name"),
+		getGJSON(body, "user.username"),
+		getGJSON(body, "data.name"),
+		getGJSON(body, "data.username"),
+	)
+	claims.AvatarURL = firstNonEmpty(
+		getGJSON(body, "picture"),
+		getGJSON(body, "avatar"),
+		getGJSON(body, "avatar_url"),
+		getGJSON(body, "profile_image_url"),
+		getGJSON(body, "user.avatar"),
+		getGJSON(body, "user.avatar_url"),
+		getGJSON(body, "data.avatar"),
+		getGJSON(body, "data.avatar_url"),
+		getGJSON(body, "attributes.avatar"),
+		getGJSON(body, "attributes.avatar_url"),
+	)
 	if verified, ok := getGJSONBool(body, "email_verified"); ok {
 		claims.EmailVerified = &verified
 	}
 	claims.Email = strings.TrimSpace(claims.Email)
 	claims.Username = strings.TrimSpace(claims.Username)
 	claims.Subject = strings.TrimSpace(claims.Subject)
+	claims.DisplayName = strings.TrimSpace(claims.DisplayName)
+	claims.AvatarURL = strings.TrimSpace(claims.AvatarURL)
 	return claims
 }
 
@@ -831,11 +888,7 @@ func oidcSyntheticEmailFromIdentityKey(identityKey string) string {
 	return "oidc-" + hex.EncodeToString(sum[:16]) + service.OIDCConnectSyntheticEmailDomain
 }
 
-func oidcSelectLoginEmail(userInfoEmail, idTokenEmail, identityKey string) string {
-	email := strings.TrimSpace(firstNonEmpty(userInfoEmail, idTokenEmail))
-	if email != "" {
-		return email
-	}
+func oidcSelectLoginEmail(identityKey string) string {
 	return oidcSyntheticEmailFromIdentityKey(identityKey)
 }
 

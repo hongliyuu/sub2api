@@ -11,7 +11,14 @@
         </p>
       </div>
 
-      <div v-if="linuxdoOAuthEnabled || oidcOAuthEnabled" class="space-y-4">
+      <div v-if="linuxdoOAuthEnabled || oidcOAuthEnabled || wechatOAuthVisible" class="space-y-4">
+        <WechatOAuthSection
+          v-if="wechatOAuthVisible"
+          :disabled="isLoading"
+          :open-enabled="wechatOpenEnabled"
+          :mp-enabled="wechatMpEnabled"
+          :show-divider="false"
+        />
         <LinuxDoOAuthSection
           v-if="linuxdoOAuthEnabled"
           :disabled="isLoading"
@@ -30,6 +37,18 @@
           </span>
           <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
         </div>
+      </div>
+
+      <div
+        v-if="pendingAuthSession"
+        class="rounded-xl border border-brand-200 bg-brand-50/80 p-4 dark:border-brand-500/30 dark:bg-brand-500/10"
+      >
+        <p class="text-sm font-medium text-brand-900 dark:text-brand-100">
+          {{ t('auth.pendingAuth.register.title') }}
+        </p>
+        <p class="mt-1 text-sm text-brand-700 dark:text-brand-200">
+          {{ t('auth.pendingAuth.register.description') }}
+        </p>
       </div>
 
       <!-- Registration Disabled Message -->
@@ -291,7 +310,7 @@
       <p class="text-gray-500 dark:text-dark-400">
         {{ t('auth.alreadyHaveAccount') }}
         <router-link
-          to="/login"
+          :to="loginRoute"
           class="font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
         >
           {{ t('auth.signIn') }}
@@ -302,16 +321,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { computed, ref, reactive, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { AuthLayout } from '@/components/layout'
 import LinuxDoOAuthSection from '@/components/auth/LinuxDoOAuthSection.vue'
 import OidcOAuthSection from '@/components/auth/OidcOAuthSection.vue'
+import WechatOAuthSection from '@/components/auth/WechatOAuthSection.vue'
 import Icon from '@/components/icons/Icon.vue'
 import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import { useAuthStore, useAppStore } from '@/stores'
-import { getPublicSettings, validatePromoCode, validateInvitationCode } from '@/api/auth'
+import {
+  createOAuthAccount,
+  getPendingAuthSessionAdoptionDecision,
+  getPublicSettings,
+  persistOAuthTokenPair,
+  sanitizeAuthRedirectPath,
+  validatePromoCode,
+  validateInvitationCode
+} from '@/api/auth'
 import { buildAuthErrorMessage } from '@/utils/authError'
 import {
   isRegistrationEmailSuffixAllowed,
@@ -345,6 +373,8 @@ const siteName = ref<string>('Sub2API')
 const linuxdoOAuthEnabled = ref<boolean>(false)
 const oidcOAuthEnabled = ref<boolean>(false)
 const oidcOAuthProviderName = ref<string>('OIDC')
+const wechatOpenEnabled = ref<boolean>(false)
+const wechatMpEnabled = ref<boolean>(false)
 const registrationEmailSuffixWhitelist = ref<string[]>([])
 
 // Turnstile
@@ -384,11 +414,28 @@ const errors = reactive({
   invitation_code: ''
 })
 
+const wechatOAuthVisible = computed<boolean>(() => wechatOpenEnabled.value || wechatMpEnabled.value)
+const pendingAuthSession = computed(() => authStore.pendingAuthSession)
+const activeRedirectPath = computed(() =>
+  sanitizeAuthRedirectPath(
+    pendingAuthSession.value?.redirect || (route.query.redirect as string | undefined)
+  )
+)
+const loginRoute = computed(() =>
+  activeRedirectPath.value === '/dashboard'
+    ? '/login'
+    : {
+        path: '/login',
+        query: { redirect: activeRedirectPath.value }
+      }
+)
+
 // ==================== Lifecycle ====================
 
 onMounted(async () => {
   try {
     const settings = await getPublicSettings()
+    const settingsRecord = settings as unknown as Record<string, unknown>
     registrationEnabled.value = settings.registration_enabled
     emailVerifyEnabled.value = settings.email_verify_enabled
     promoCodeEnabled.value = settings.promo_code_enabled
@@ -399,6 +446,8 @@ onMounted(async () => {
     linuxdoOAuthEnabled.value = settings.linuxdo_oauth_enabled
     oidcOAuthEnabled.value = settings.oidc_oauth_enabled
     oidcOAuthProviderName.value = settings.oidc_oauth_provider_name || 'OIDC'
+    wechatOpenEnabled.value = settingsRecord.wechat_login_open_enabled === true
+    wechatMpEnabled.value = settingsRecord.wechat_login_mp_enabled === true
     registrationEmailSuffixWhitelist.value = normalizeRegistrationEmailSuffixWhitelist(
       settings.registration_email_suffix_whitelist || []
     )
@@ -703,6 +752,9 @@ async function handleRegister(): Promise<void> {
   isLoading.value = true
 
   try {
+    const activePendingSession = pendingAuthSession.value
+    const adoptionDecision = getPendingAuthSessionAdoptionDecision(activePendingSession)
+
     // If email verification is enabled, redirect to verification page
     if (emailVerifyEnabled.value) {
       // Store registration data in sessionStorage
@@ -713,7 +765,16 @@ async function handleRegister(): Promise<void> {
           password: formData.password,
           turnstile_token: turnstileToken.value,
           promo_code: formData.promo_code || undefined,
-          invitation_code: formData.invitation_code || undefined
+          invitation_code: formData.invitation_code || undefined,
+          pending_auth_token: activePendingSession?.token || undefined,
+          pending_provider: activePendingSession?.provider || undefined,
+          pending_redirect: activePendingSession?.redirect || undefined,
+          pending_adoption_decision: adoptionDecision
+            ? {
+                adopt_display_name: adoptionDecision.adoptDisplayName,
+                adopt_avatar: adoptionDecision.adoptAvatar
+              }
+            : undefined
         })
       )
 
@@ -722,20 +783,38 @@ async function handleRegister(): Promise<void> {
       return
     }
 
-    // Otherwise, directly register
-    await authStore.register({
-      email: formData.email,
-      password: formData.password,
-      turnstile_token: turnstileEnabled.value ? turnstileToken.value : undefined,
-      promo_code: formData.promo_code || undefined,
-      invitation_code: formData.invitation_code || undefined
-    })
+    if (activePendingSession) {
+      const response = await createOAuthAccount(activePendingSession.provider, {
+        pendingAuthToken: activePendingSession.token,
+        email: formData.email,
+        password: formData.password,
+        verifyCode: undefined,
+        invitationCode: formData.invitation_code || undefined,
+        adoptDisplayName: adoptionDecision?.adoptDisplayName,
+        adoptAvatar: adoptionDecision?.adoptAvatar
+      })
+      persistOAuthTokenPair(response)
+      authStore.clearPendingAuthSession()
+      await authStore.setToken(response.access_token)
+    } else {
+      await authStore.register({
+        email: formData.email,
+        password: formData.password,
+        turnstile_token: turnstileEnabled.value ? turnstileToken.value : undefined,
+        promo_code: formData.promo_code || undefined,
+        invitation_code: formData.invitation_code || undefined
+      })
+    }
 
     // Show success toast
     appStore.showSuccess(t('auth.accountCreatedSuccess', { siteName: siteName.value }))
 
     // Redirect to dashboard
-    await router.push('/dashboard')
+    await router.push(
+      sanitizeAuthRedirectPath(
+        activePendingSession?.redirect || (route.query.redirect as string | undefined)
+      )
+    )
   } catch (error: unknown) {
     // Reset Turnstile on error
     if (turnstileRef.value) {

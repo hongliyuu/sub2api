@@ -5,6 +5,8 @@ package server_test
 import (
 	"bytes"
 	"context"
+	"database/sql"
+	"encoding/json"
 	"errors"
 	"io"
 	"math"
@@ -14,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	dbent "github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/ent/enttest"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	adminhandler "github.com/Wei-Shaw/sub2api/internal/handler/admin"
@@ -24,6 +28,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+
+	"entgo.io/ent/dialect"
+	entsql "entgo.io/ent/dialect/sql"
+	_ "modernc.org/sqlite"
 )
 
 func TestAPIContracts(t *testing.T) {
@@ -55,6 +63,29 @@ func TestAPIContracts(t *testing.T) {
 					"balance": 12.5,
 					"concurrency": 5,
 					"status": "active",
+					"signup_source": "unknown",
+					"account_bindings": {
+						"email": {
+							"provider": "email",
+							"bound": false,
+							"can_disconnect": false
+						},
+						"linuxdo": {
+							"provider": "linuxdo",
+							"bound": false,
+							"can_disconnect": false
+						},
+						"wechat": {
+							"provider": "wechat",
+							"bound": false,
+							"can_disconnect": false
+						},
+						"oidc": {
+							"provider": "oidc",
+							"bound": false,
+							"can_disconnect": false
+						}
+					},
 					"allowed_groups": null,
 					"created_at": "2025-01-02T03:04:05Z",
 					"updated_at": "2025-01-02T03:04:05Z",
@@ -451,6 +482,7 @@ func TestAPIContracts(t *testing.T) {
 				deps.settingRepo.SetAll(map[string]string{
 					service.SettingKeyRegistrationEnabled:              "true",
 					service.SettingKeyEmailVerifyEnabled:               "false",
+					service.SettingKeyThirdPartyFirstLoginRequireEmail: "true",
 					service.SettingKeyRegistrationEmailSuffixWhitelist: "[]",
 					service.SettingKeyPromoCodeEnabled:                 "true",
 
@@ -465,6 +497,13 @@ func TestAPIContracts(t *testing.T) {
 					service.SettingKeyTurnstileEnabled:   "true",
 					service.SettingKeyTurnstileSiteKey:   "site-key",
 					service.SettingKeyTurnstileSecretKey: "secret-key",
+
+					service.SettingKeyWeChatLoginOpenEnabled:   "true",
+					service.SettingKeyWeChatLoginOpenAppID:     "wx-open-app",
+					service.SettingKeyWeChatLoginOpenAppSecret: "open-secret",
+					service.SettingKeyWeChatLoginMPEnabled:     "false",
+					service.SettingKeyWeChatLoginMPAppID:       "",
+					service.SettingKeyWeChatLoginMPAppSecret:   "",
 
 					service.SettingKeyOIDCConnectEnabled:              "false",
 					service.SettingKeyOIDCConnectProviderName:         "OIDC",
@@ -515,6 +554,7 @@ func TestAPIContracts(t *testing.T) {
 				"data": {
 					"registration_enabled": true,
 					"email_verify_enabled": false,
+					"third_party_first_login_require_email": true,
 					"registration_email_suffix_whitelist": [],
 					"promo_code_enabled": true,
 					"password_reset_enabled": false,
@@ -535,6 +575,11 @@ func TestAPIContracts(t *testing.T) {
 						"linuxdo_connect_client_id": "",
 						"linuxdo_connect_client_secret_configured": false,
 						"linuxdo_connect_redirect_url": "",
+						"wechat_login_open_enabled": true,
+						"wechat_login_open_app_id": "wx-open-app",
+						"wechat_login_mp_enabled": false,
+						"wechat_login_mp_app_id": "",
+						"wechat_login_unionid_health_status": "warning",
 						"oidc_connect_enabled": false,
 						"oidc_connect_provider_name": "OIDC",
 						"oidc_connect_client_id": "",
@@ -623,6 +668,95 @@ func TestAPIContracts(t *testing.T) {
 			}`,
 		},
 		{
+			name: "GET /api/v1/settings/public",
+			setup: func(t *testing.T, deps *contractDeps) {
+				t.Helper()
+				deps.settingRepo.SetAll(map[string]string{
+					service.SettingKeyRegistrationEnabled:              "true",
+					service.SettingKeyEmailVerifyEnabled:               "false",
+					service.SettingKeyThirdPartyFirstLoginRequireEmail: "true",
+					service.SettingKeyRegistrationEmailSuffixWhitelist: "[]",
+					service.SettingKeyPromoCodeEnabled:                 "true",
+					service.SettingKeyPasswordResetEnabled:             "true",
+					service.SettingKeyInvitationCodeEnabled:            "false",
+					service.SettingKeyTurnstileEnabled:                 "true",
+					service.SettingKeyTurnstileSiteKey:                 "site-key",
+					service.SettingKeySiteName:                         "Sub2API",
+					service.SettingKeySiteLogo:                         "",
+					service.SettingKeySiteSubtitle:                     "Subtitle",
+					service.SettingKeyAPIBaseURL:                       "https://api.example.com",
+					service.SettingKeyContactInfo:                      "support",
+					service.SettingKeyDocURL:                           "https://docs.example.com",
+					service.SettingKeyHomeContent:                      "",
+					service.SettingKeyHideCcsImportButton:              "false",
+					service.SettingKeyPurchaseSubscriptionEnabled:      "false",
+					service.SettingKeyPurchaseSubscriptionURL:          "",
+					service.SettingKeyTableDefaultPageSize:             "20",
+					service.SettingKeyTablePageSizeOptions:             "[10,20,50,100]",
+					service.SettingKeyCustomMenuItems:                  "[]",
+					service.SettingKeyCustomEndpoints:                  "[]",
+					service.SettingKeyLinuxDoConnectEnabled:            "false",
+					service.SettingKeyWeChatLoginOpenEnabled:           "true",
+					service.SettingKeyWeChatLoginOpenAppID:             "wx-open-app",
+					service.SettingKeyWeChatLoginOpenAppSecret:         "open-secret",
+					service.SettingKeyWeChatLoginMPEnabled:             "false",
+					service.SettingKeyOIDCConnectEnabled:               "false",
+					service.SettingKeyOIDCConnectProviderName:          "OIDC",
+					service.SettingKeyBackendModeEnabled:               "false",
+					service.SettingPaymentEnabled:                      "false",
+					service.SettingKeyBalanceLowNotifyEnabled:          "false",
+					service.SettingKeyAccountQuotaNotifyEnabled:        "false",
+				})
+			},
+			method:     http.MethodGet,
+			path:       "/api/v1/settings/public",
+			wantStatus: http.StatusOK,
+			wantJSON: `{
+				"code": 0,
+				"message": "success",
+				"data": {
+					"registration_enabled": true,
+					"email_verify_enabled": false,
+					"third_party_first_login_require_email": true,
+					"registration_email_suffix_whitelist": [],
+					"promo_code_enabled": true,
+					"password_reset_enabled": false,
+					"invitation_code_enabled": false,
+					"totp_enabled": false,
+					"turnstile_enabled": true,
+					"turnstile_site_key": "site-key",
+					"site_name": "Sub2API",
+					"site_logo": "",
+					"site_subtitle": "Subtitle",
+					"sora_client_enabled": false,
+					"api_base_url": "https://api.example.com",
+					"contact_info": "support",
+					"doc_url": "https://docs.example.com",
+					"home_content": "",
+					"hide_ccs_import_button": false,
+					"purchase_subscription_enabled": false,
+					"purchase_subscription_url": "",
+					"table_default_page_size": 20,
+					"table_page_size_options": [10, 20, 50, 100],
+					"custom_menu_items": [],
+					"custom_endpoints": [],
+					"linuxdo_oauth_enabled": false,
+					"wechat_login_open_enabled": true,
+					"wechat_login_mp_enabled": false,
+					"wechat_login_unionid_health_status": "warning",
+					"oidc_oauth_enabled": false,
+					"oidc_oauth_provider_name": "OIDC",
+					"backend_mode_enabled": false,
+					"payment_enabled": false,
+					"version": "",
+					"balance_low_notify_enabled": false,
+					"account_quota_notify_enabled": false,
+					"balance_low_notify_threshold": 0,
+					"balance_low_notify_recharge_url": ""
+				}
+			}`,
+		},
+		{
 			name:   "POST /api/v1/admin/accounts/bulk-update",
 			method: http.MethodPost,
 			path:   "/api/v1/admin/accounts/bulk-update",
@@ -660,6 +794,113 @@ func TestAPIContracts(t *testing.T) {
 			require.JSONEq(t, tt.wantJSON, body)
 		})
 	}
+}
+
+func TestAdminPaymentDashboardContractNormalizesPaymentTypes(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	db, err := sql.Open("sqlite", "file:payment_dashboard_contract?mode=memory&cache=shared&_fk=1")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	_, err = db.Exec("PRAGMA foreign_keys = ON")
+	require.NoError(t, err)
+
+	drv := entsql.OpenDB(dialect.SQLite, db)
+	client := enttest.NewClient(t, enttest.WithOptions(dbent.Driver(drv)))
+	t.Cleanup(func() { _ = client.Close() })
+
+	ctx := context.Background()
+	user, err := client.User.Create().
+		SetEmail("alice@example.com").
+		SetPasswordHash("password-hash").
+		SetRole(service.RoleUser).
+		SetStatus(service.StatusActive).
+		Save(ctx)
+	require.NoError(t, err)
+
+	now := time.Now().UTC().Truncate(time.Second)
+	mustCreatePaymentDashboardContractOrder(t, ctx, client, user.ID, "alipay", 5, service.OrderStatusCompleted, now.Add(-4*time.Hour))
+	mustCreatePaymentDashboardContractOrder(t, ctx, client, user.ID, "alipay_direct", 10, service.OrderStatusPaid, now.Add(-3*time.Hour))
+	mustCreatePaymentDashboardContractOrder(t, ctx, client, user.ID, "wxpay_direct", 20, service.OrderStatusCompleted, now.Add(-25*time.Hour))
+	mustCreatePaymentDashboardContractOrder(t, ctx, client, user.ID, "card", 3, service.OrderStatusPaid, now.Add(-2*time.Hour))
+	mustCreatePaymentDashboardContractOrder(t, ctx, client, user.ID, "link", 7.5, service.OrderStatusRecharging, now.Add(-90*time.Minute))
+	mustCreatePaymentDashboardContractOrder(t, ctx, client, user.ID, "stripe", 9, service.OrderStatusPending, time.Time{})
+
+	paymentHandler := adminhandler.NewPaymentHandler(service.NewPaymentService(client, nil, nil, nil, nil, nil, nil, nil), nil)
+	adminAuth := func(c *gin.Context) {
+		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: user.ID})
+		c.Set(string(middleware.ContextKeyUserRole), service.RoleAdmin)
+		c.Next()
+	}
+
+	router := gin.New()
+	adminGroup := router.Group("/api/v1/admin/payment")
+	adminGroup.Use(adminAuth)
+	adminGroup.GET("/dashboard", paymentHandler.GetDashboard)
+
+	status, body := doRequest(t, router, http.MethodGet, "/api/v1/admin/payment/dashboard?days=2", "", nil)
+	require.Equal(t, http.StatusOK, status)
+
+	var resp struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+		Data    struct {
+			TodayAmount    float64                     `json:"today_amount"`
+			TotalAmount    float64                     `json:"total_amount"`
+			TodayCount     int                         `json:"today_count"`
+			TotalCount     int                         `json:"total_count"`
+			AvgAmount      float64                     `json:"avg_amount"`
+			PendingOrders  int                         `json:"pending_orders"`
+			DailySeries    []service.DailyStats        `json:"daily_series"`
+			PaymentMethods []service.PaymentMethodStat `json:"payment_methods"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(body), &resp))
+
+	require.Equal(t, 0, resp.Code)
+	require.Equal(t, "success", resp.Message)
+	require.Equal(t, 25.5, resp.Data.TodayAmount)
+	require.Equal(t, 45.5, resp.Data.TotalAmount)
+	require.Equal(t, 4, resp.Data.TodayCount)
+	require.Equal(t, 5, resp.Data.TotalCount)
+	require.Equal(t, 9.1, resp.Data.AvgAmount)
+	require.Equal(t, 1, resp.Data.PendingOrders)
+	require.Len(t, resp.Data.DailySeries, 2)
+
+	sort.Slice(resp.Data.PaymentMethods, func(i, j int) bool {
+		return resp.Data.PaymentMethods[i].Type < resp.Data.PaymentMethods[j].Type
+	})
+	require.Equal(t, []service.PaymentMethodStat{
+		{Type: "alipay", Amount: 15, Count: 2},
+		{Type: "stripe", Amount: 10.5, Count: 2},
+		{Type: "wxpay", Amount: 20, Count: 1},
+	}, resp.Data.PaymentMethods)
+}
+
+func mustCreatePaymentDashboardContractOrder(t *testing.T, ctx context.Context, client *dbent.Client, userID int64, paymentType string, payAmount float64, status string, paidAt time.Time) {
+	t.Helper()
+
+	builder := client.PaymentOrder.Create().
+		SetUserID(userID).
+		SetUserEmail("alice@example.com").
+		SetUserName("alice").
+		SetAmount(payAmount).
+		SetPayAmount(payAmount).
+		SetRechargeCode("contract-code-" + paymentType).
+		SetPaymentType(paymentType).
+		SetPaymentTradeNo("trade-" + paymentType).
+		SetStatus(status).
+		SetExpiresAt(time.Now().UTC().Add(30 * time.Minute)).
+		SetClientIP("127.0.0.1").
+		SetSrcHost("localhost")
+
+	if !paidAt.IsZero() {
+		builder.SetPaidAt(paidAt)
+	}
+
+	_, err := builder.Save(ctx)
+	require.NoError(t, err)
 }
 
 type contractDeps struct {
@@ -725,6 +966,7 @@ func newContractDeps(t *testing.T) *contractDeps {
 
 	settingRepo := newStubSettingRepo()
 	settingService := service.NewSettingService(settingRepo, cfg)
+	publicSettingHandler := handler.NewSettingHandler(settingService, "")
 
 	adminService := service.NewAdminService(userRepo, groupRepo, &accountRepo, proxyRepo, apiKeyRepo, redeemRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
 	authHandler := handler.NewAuthHandler(cfg, nil, userService, settingService, nil, redeemService, nil)
@@ -776,6 +1018,8 @@ func newContractDeps(t *testing.T) *contractDeps {
 	v1Redeem := v1.Group("")
 	v1Redeem.Use(jwtAuth)
 	v1Redeem.GET("/redeem/history", redeemHandler.GetHistory)
+
+	v1.GET("/settings/public", publicSettingHandler.GetPublicSettings)
 
 	v1Admin := v1.Group("/admin")
 	v1Admin.Use(adminAuth)

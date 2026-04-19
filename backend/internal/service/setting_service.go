@@ -34,6 +34,29 @@ var (
 	)
 )
 
+const SettingKeyAuthForceEmailOnThirdPartySignup = "auth_force_email_on_third_party_signup"
+
+type PublicAuthPolicy struct {
+	RegistrationEnabled              bool
+	EmailVerifyEnabled               bool
+	RegistrationEmailSuffixWhitelist []string
+	InvitationCodeEnabled            bool
+	ForceEmailOnThirdPartySignup     bool
+	LinuxDoOAuthEnabled              bool
+	WeChatLoginOpenEnabled           bool
+	WeChatLoginMPEnabled             bool
+	WeChatLoginUnionIDHealthStatus   string
+	OIDCOAuthEnabled                 bool
+	OIDCOAuthProviderName            string
+}
+
+type DefaultUserSettings struct {
+	ApplyOnBind   bool
+	Balance       float64
+	Concurrency   int
+	Subscriptions []DefaultSubscriptionSetting
+}
+
 type SettingRepository interface {
 	Get(ctx context.Context, key string) (*Setting, error)
 	GetValue(ctx context.Context, key string) (string, error)
@@ -156,6 +179,8 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 	keys := []string{
 		SettingKeyRegistrationEnabled,
 		SettingKeyEmailVerifyEnabled,
+		SettingKeyThirdPartyFirstLoginRequireEmail,
+		SettingKeyAuthForceEmailOnThirdPartySignup,
 		SettingKeyRegistrationEmailSuffixWhitelist,
 		SettingKeyPromoCodeEnabled,
 		SettingKeyPasswordResetEnabled,
@@ -178,6 +203,12 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyCustomMenuItems,
 		SettingKeyCustomEndpoints,
 		SettingKeyLinuxDoConnectEnabled,
+		SettingKeyWeChatLoginOpenEnabled,
+		SettingKeyWeChatLoginOpenAppID,
+		SettingKeyWeChatLoginOpenAppSecret,
+		SettingKeyWeChatLoginMPEnabled,
+		SettingKeyWeChatLoginMPAppID,
+		SettingKeyWeChatLoginMPAppSecret,
 		SettingKeyBackendModeEnabled,
 		SettingPaymentEnabled,
 		SettingKeyOIDCConnectEnabled,
@@ -212,6 +243,17 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 	if oidcProviderName == "" {
 		oidcProviderName = "OIDC"
 	}
+	thirdPartyFirstLoginRequireEmail := getThirdPartyFirstLoginRequireEmailSetting(settings)
+	wechatLoginOpenEnabled := settings[SettingKeyWeChatLoginOpenEnabled] == "true"
+	wechatLoginMPEnabled := settings[SettingKeyWeChatLoginMPEnabled] == "true"
+	wechatLoginUnionIDHealthStatus := deriveWeChatLoginUnionIDHealthStatus(
+		wechatLoginOpenEnabled,
+		settings[SettingKeyWeChatLoginOpenAppID],
+		settings[SettingKeyWeChatLoginOpenAppSecret],
+		wechatLoginMPEnabled,
+		settings[SettingKeyWeChatLoginMPAppID],
+		settings[SettingKeyWeChatLoginMPAppSecret],
+	)
 
 	// Password reset requires email verification to be enabled
 	emailVerifyEnabled := settings[SettingKeyEmailVerifyEnabled] == "true"
@@ -232,6 +274,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 	return &PublicSettings{
 		RegistrationEnabled:              settings[SettingKeyRegistrationEnabled] == "true",
 		EmailVerifyEnabled:               emailVerifyEnabled,
+		ThirdPartyFirstLoginRequireEmail: thirdPartyFirstLoginRequireEmail,
 		RegistrationEmailSuffixWhitelist: registrationEmailSuffixWhitelist,
 		PromoCodeEnabled:                 settings[SettingKeyPromoCodeEnabled] != "false", // 默认启用
 		PasswordResetEnabled:             passwordResetEnabled,
@@ -254,6 +297,9 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		CustomMenuItems:                  settings[SettingKeyCustomMenuItems],
 		CustomEndpoints:                  settings[SettingKeyCustomEndpoints],
 		LinuxDoOAuthEnabled:              linuxDoEnabled,
+		WeChatLoginOpenEnabled:           wechatLoginOpenEnabled,
+		WeChatLoginMPEnabled:             wechatLoginMPEnabled,
+		WeChatLoginUnionIDHealthStatus:   wechatLoginUnionIDHealthStatus,
 		BackendModeEnabled:               settings[SettingKeyBackendModeEnabled] == "true",
 		PaymentEnabled:                   settings[SettingPaymentEnabled] == "true",
 		OIDCOAuthEnabled:                 oidcEnabled,
@@ -262,6 +308,77 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		AccountQuotaNotifyEnabled:        settings[SettingKeyAccountQuotaNotifyEnabled] == "true",
 		BalanceLowNotifyThreshold:        balanceLowNotifyThreshold,
 		BalanceLowNotifyRechargeURL:      settings[SettingKeyBalanceLowNotifyRechargeURL],
+	}, nil
+}
+
+func (s *SettingService) GetPublicAuthPolicy(ctx context.Context) (*PublicAuthPolicy, error) {
+	keys := []string{
+		SettingKeyRegistrationEnabled,
+		SettingKeyEmailVerifyEnabled,
+		SettingKeyRegistrationEmailSuffixWhitelist,
+		SettingKeyInvitationCodeEnabled,
+		SettingKeyThirdPartyFirstLoginRequireEmail,
+		SettingKeyAuthForceEmailOnThirdPartySignup,
+		SettingKeyLinuxDoConnectEnabled,
+		SettingKeyWeChatLoginOpenEnabled,
+		SettingKeyWeChatLoginOpenAppID,
+		SettingKeyWeChatLoginOpenAppSecret,
+		SettingKeyWeChatLoginMPEnabled,
+		SettingKeyWeChatLoginMPAppID,
+		SettingKeyWeChatLoginMPAppSecret,
+		SettingKeyOIDCConnectEnabled,
+		SettingKeyOIDCConnectProviderName,
+	}
+
+	settings, err := s.settingRepo.GetMultiple(ctx, keys)
+	if err != nil {
+		return nil, fmt.Errorf("get public auth policy: %w", err)
+	}
+
+	linuxDoEnabled := false
+	if raw, ok := settings[SettingKeyLinuxDoConnectEnabled]; ok {
+		linuxDoEnabled = raw == "true"
+	} else {
+		linuxDoEnabled = s.cfg != nil && s.cfg.LinuxDo.Enabled
+	}
+
+	oidcEnabled := false
+	if raw, ok := settings[SettingKeyOIDCConnectEnabled]; ok {
+		oidcEnabled = raw == "true"
+	} else {
+		oidcEnabled = s.cfg != nil && s.cfg.OIDC.Enabled
+	}
+
+	oidcProviderName := strings.TrimSpace(settings[SettingKeyOIDCConnectProviderName])
+	if oidcProviderName == "" && s.cfg != nil {
+		oidcProviderName = strings.TrimSpace(s.cfg.OIDC.ProviderName)
+	}
+	if oidcProviderName == "" {
+		oidcProviderName = "OIDC"
+	}
+	wechatLoginOpenEnabled := settings[SettingKeyWeChatLoginOpenEnabled] == "true"
+	wechatLoginMPEnabled := settings[SettingKeyWeChatLoginMPEnabled] == "true"
+	wechatLoginUnionIDHealthStatus := deriveWeChatLoginUnionIDHealthStatus(
+		wechatLoginOpenEnabled,
+		settings[SettingKeyWeChatLoginOpenAppID],
+		settings[SettingKeyWeChatLoginOpenAppSecret],
+		wechatLoginMPEnabled,
+		settings[SettingKeyWeChatLoginMPAppID],
+		settings[SettingKeyWeChatLoginMPAppSecret],
+	)
+
+	return &PublicAuthPolicy{
+		RegistrationEnabled:              settings[SettingKeyRegistrationEnabled] == "true",
+		EmailVerifyEnabled:               settings[SettingKeyEmailVerifyEnabled] == "true",
+		RegistrationEmailSuffixWhitelist: ParseRegistrationEmailSuffixWhitelist(settings[SettingKeyRegistrationEmailSuffixWhitelist]),
+		InvitationCodeEnabled:            settings[SettingKeyInvitationCodeEnabled] == "true",
+		ForceEmailOnThirdPartySignup:     getThirdPartyFirstLoginRequireEmailSetting(settings),
+		LinuxDoOAuthEnabled:              linuxDoEnabled,
+		WeChatLoginOpenEnabled:           wechatLoginOpenEnabled,
+		WeChatLoginMPEnabled:             wechatLoginMPEnabled,
+		WeChatLoginUnionIDHealthStatus:   wechatLoginUnionIDHealthStatus,
+		OIDCOAuthEnabled:                 oidcEnabled,
+		OIDCOAuthProviderName:            oidcProviderName,
 	}, nil
 }
 
@@ -288,6 +405,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 	return &struct {
 		RegistrationEnabled              bool            `json:"registration_enabled"`
 		EmailVerifyEnabled               bool            `json:"email_verify_enabled"`
+		ThirdPartyFirstLoginRequireEmail bool            `json:"third_party_first_login_require_email"`
 		RegistrationEmailSuffixWhitelist []string        `json:"registration_email_suffix_whitelist"`
 		PromoCodeEnabled                 bool            `json:"promo_code_enabled"`
 		PasswordResetEnabled             bool            `json:"password_reset_enabled"`
@@ -310,6 +428,9 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		CustomMenuItems                  json.RawMessage `json:"custom_menu_items"`
 		CustomEndpoints                  json.RawMessage `json:"custom_endpoints"`
 		LinuxDoOAuthEnabled              bool            `json:"linuxdo_oauth_enabled"`
+		WeChatLoginOpenEnabled           bool            `json:"wechat_login_open_enabled"`
+		WeChatLoginMPEnabled             bool            `json:"wechat_login_mp_enabled"`
+		WeChatLoginUnionIDHealthStatus   string          `json:"wechat_login_unionid_health_status"`
 		BackendModeEnabled               bool            `json:"backend_mode_enabled"`
 		PaymentEnabled                   bool            `json:"payment_enabled"`
 		OIDCOAuthEnabled                 bool            `json:"oidc_oauth_enabled"`
@@ -322,6 +443,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 	}{
 		RegistrationEnabled:              settings.RegistrationEnabled,
 		EmailVerifyEnabled:               settings.EmailVerifyEnabled,
+		ThirdPartyFirstLoginRequireEmail: settings.ThirdPartyFirstLoginRequireEmail,
 		RegistrationEmailSuffixWhitelist: settings.RegistrationEmailSuffixWhitelist,
 		PromoCodeEnabled:                 settings.PromoCodeEnabled,
 		PasswordResetEnabled:             settings.PasswordResetEnabled,
@@ -344,6 +466,9 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		CustomMenuItems:                  filterUserVisibleMenuItems(settings.CustomMenuItems),
 		CustomEndpoints:                  safeRawJSONArray(settings.CustomEndpoints),
 		LinuxDoOAuthEnabled:              settings.LinuxDoOAuthEnabled,
+		WeChatLoginOpenEnabled:           settings.WeChatLoginOpenEnabled,
+		WeChatLoginMPEnabled:             settings.WeChatLoginMPEnabled,
+		WeChatLoginUnionIDHealthStatus:   settings.WeChatLoginUnionIDHealthStatus,
 		BackendModeEnabled:               settings.BackendModeEnabled,
 		PaymentEnabled:                   settings.PaymentEnabled,
 		OIDCOAuthEnabled:                 settings.OIDCOAuthEnabled,
@@ -483,6 +608,18 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	if err := s.validateDefaultSubscriptionGroups(ctx, settings.DefaultSubscriptions); err != nil {
 		return err
 	}
+	if err := s.validateDefaultSubscriptionGroups(ctx, settings.DefaultSettingsEmail.Subscriptions); err != nil {
+		return err
+	}
+	if err := s.validateDefaultSubscriptionGroups(ctx, settings.DefaultSettingsLinuxDo.Subscriptions); err != nil {
+		return err
+	}
+	if err := s.validateDefaultSubscriptionGroups(ctx, settings.DefaultSettingsWeChat.Subscriptions); err != nil {
+		return err
+	}
+	if err := s.validateDefaultSubscriptionGroups(ctx, settings.DefaultSettingsOIDC.Subscriptions); err != nil {
+		return err
+	}
 	normalizedWhitelist, err := NormalizeRegistrationEmailSuffixWhitelist(settings.RegistrationEmailSuffixWhitelist)
 	if err != nil {
 		return infraerrors.BadRequest("INVALID_REGISTRATION_EMAIL_SUFFIX_WHITELIST", err.Error())
@@ -497,6 +634,8 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	// 注册设置
 	updates[SettingKeyRegistrationEnabled] = strconv.FormatBool(settings.RegistrationEnabled)
 	updates[SettingKeyEmailVerifyEnabled] = strconv.FormatBool(settings.EmailVerifyEnabled)
+	updates[SettingKeyThirdPartyFirstLoginRequireEmail] = strconv.FormatBool(settings.ThirdPartyFirstLoginRequireEmail)
+	updates[SettingKeyAuthForceEmailOnThirdPartySignup] = strconv.FormatBool(settings.ThirdPartyFirstLoginRequireEmail)
 	registrationEmailSuffixWhitelistJSON, err := json.Marshal(settings.RegistrationEmailSuffixWhitelist)
 	if err != nil {
 		return fmt.Errorf("marshal registration email suffix whitelist: %w", err)
@@ -532,6 +671,18 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	updates[SettingKeyLinuxDoConnectRedirectURL] = settings.LinuxDoConnectRedirectURL
 	if settings.LinuxDoConnectClientSecret != "" {
 		updates[SettingKeyLinuxDoConnectClientSecret] = settings.LinuxDoConnectClientSecret
+	}
+
+	// WeChat 登录
+	updates[SettingKeyWeChatLoginOpenEnabled] = strconv.FormatBool(settings.WeChatLoginOpenEnabled)
+	updates[SettingKeyWeChatLoginOpenAppID] = settings.WeChatLoginOpenAppID
+	if settings.WeChatLoginOpenAppSecret != "" {
+		updates[SettingKeyWeChatLoginOpenAppSecret] = settings.WeChatLoginOpenAppSecret
+	}
+	updates[SettingKeyWeChatLoginMPEnabled] = strconv.FormatBool(settings.WeChatLoginMPEnabled)
+	updates[SettingKeyWeChatLoginMPAppID] = settings.WeChatLoginMPAppID
+	if settings.WeChatLoginMPAppSecret != "" {
+		updates[SettingKeyWeChatLoginMPAppSecret] = settings.WeChatLoginMPAppSecret
 	}
 
 	// Generic OIDC OAuth 登录
@@ -592,6 +743,25 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 		return fmt.Errorf("marshal default subscriptions: %w", err)
 	}
 	updates[SettingKeyDefaultSubscriptions] = string(defaultSubsJSON)
+	providerDefaults := []struct {
+		settings                                            ProviderDefaultUserSettings
+		applyOnBindKey, concurrencyKey, balanceKey, subsKey string
+	}{
+		{settings: settings.DefaultSettingsEmail, applyOnBindKey: SettingKeyDefaultApplyOnBindEmail, concurrencyKey: SettingKeyDefaultConcurrencyEmail, balanceKey: SettingKeyDefaultBalanceEmail, subsKey: SettingKeyDefaultSubscriptionsEmail},
+		{settings: settings.DefaultSettingsLinuxDo, applyOnBindKey: SettingKeyDefaultApplyOnBindLinuxDo, concurrencyKey: SettingKeyDefaultConcurrencyLinuxDo, balanceKey: SettingKeyDefaultBalanceLinuxDo, subsKey: SettingKeyDefaultSubscriptionsLinuxDo},
+		{settings: settings.DefaultSettingsWeChat, applyOnBindKey: SettingKeyDefaultApplyOnBindWeChat, concurrencyKey: SettingKeyDefaultConcurrencyWeChat, balanceKey: SettingKeyDefaultBalanceWeChat, subsKey: SettingKeyDefaultSubscriptionsWeChat},
+		{settings: settings.DefaultSettingsOIDC, applyOnBindKey: SettingKeyDefaultApplyOnBindOIDC, concurrencyKey: SettingKeyDefaultConcurrencyOIDC, balanceKey: SettingKeyDefaultBalanceOIDC, subsKey: SettingKeyDefaultSubscriptionsOIDC},
+	}
+	for _, item := range providerDefaults {
+		updates[item.applyOnBindKey] = strconv.FormatBool(item.settings.ApplyOnBind)
+		updates[item.concurrencyKey] = strconv.Itoa(item.settings.Concurrency)
+		updates[item.balanceKey] = strconv.FormatFloat(item.settings.Balance, 'f', 8, 64)
+		raw, marshalErr := json.Marshal(item.settings.Subscriptions)
+		if marshalErr != nil {
+			return fmt.Errorf("marshal provider default subscriptions: %w", marshalErr)
+		}
+		updates[item.subsKey] = string(raw)
+	}
 
 	// Model fallback configuration
 	updates[SettingKeyEnableModelFallback] = strconv.FormatBool(settings.EnableModelFallback)
@@ -821,6 +991,17 @@ func (s *SettingService) IsEmailVerifyEnabled(ctx context.Context) bool {
 	return value == "true"
 }
 
+func (s *SettingService) IsForceEmailOnThirdPartySignupEnabled(ctx context.Context) bool {
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyThirdPartyFirstLoginRequireEmail)
+	if err != nil {
+		value, err = s.settingRepo.GetValue(ctx, SettingKeyAuthForceEmailOnThirdPartySignup)
+		if err != nil {
+			return false
+		}
+	}
+	return value == "true"
+}
+
 // GetRegistrationEmailSuffixWhitelist returns normalized registration email suffix whitelist.
 func (s *SettingService) GetRegistrationEmailSuffixWhitelist(ctx context.Context) []string {
 	value, err := s.settingRepo.GetValue(ctx, SettingKeyRegistrationEmailSuffixWhitelist)
@@ -888,35 +1069,101 @@ func (s *SettingService) GetSiteName(ctx context.Context) string {
 
 // GetDefaultConcurrency 获取默认并发量
 func (s *SettingService) GetDefaultConcurrency(ctx context.Context) int {
-	value, err := s.settingRepo.GetValue(ctx, SettingKeyDefaultConcurrency)
-	if err != nil {
-		return s.cfg.Default.UserConcurrency
-	}
-	if v, err := strconv.Atoi(value); err == nil && v > 0 {
-		return v
-	}
-	return s.cfg.Default.UserConcurrency
+	return s.GetDefaultConcurrencyBySignupSource(ctx, SignupSourceEmail)
 }
 
 // GetDefaultBalance 获取默认余额
 func (s *SettingService) GetDefaultBalance(ctx context.Context) float64 {
-	value, err := s.settingRepo.GetValue(ctx, SettingKeyDefaultBalance)
-	if err != nil {
-		return s.cfg.Default.UserBalance
-	}
-	if v, err := strconv.ParseFloat(value, 64); err == nil && v >= 0 {
-		return v
-	}
-	return s.cfg.Default.UserBalance
+	return s.GetDefaultBalanceBySignupSource(ctx, SignupSourceEmail)
 }
 
 // GetDefaultSubscriptions 获取新用户默认订阅配置列表。
 func (s *SettingService) GetDefaultSubscriptions(ctx context.Context) []DefaultSubscriptionSetting {
-	value, err := s.settingRepo.GetValue(ctx, SettingKeyDefaultSubscriptions)
-	if err != nil {
-		return nil
+	return s.GetDefaultSubscriptionsBySignupSource(ctx, SignupSourceEmail)
+}
+
+func (s *SettingService) GetDefaultUserSettings(ctx context.Context) DefaultUserSettings {
+	return s.GetDefaultUserSettingsBySignupSource(ctx, SignupSourceEmail)
+}
+
+func (s *SettingService) GetDefaultConcurrencyBySignupSource(ctx context.Context, signupSource string) int {
+	return s.getDefaultConcurrencyWithFallback(ctx, defaultConcurrencySettingLookupChain(signupSource)...)
+}
+
+func (s *SettingService) GetDefaultBalanceBySignupSource(ctx context.Context, signupSource string) float64 {
+	return s.getDefaultBalanceWithFallback(ctx, defaultBalanceSettingLookupChain(signupSource)...)
+}
+
+func (s *SettingService) GetDefaultSubscriptionsBySignupSource(ctx context.Context, signupSource string) []DefaultSubscriptionSetting {
+	return s.getDefaultSubscriptionsWithFallback(ctx, defaultSubscriptionsSettingLookupChain(signupSource)...)
+}
+
+func (s *SettingService) GetDefaultApplyOnBindBySignupSource(ctx context.Context, signupSource string) bool {
+	return s.getDefaultApplyOnBindWithFallback(ctx, defaultApplyOnBindSettingLookupChain(signupSource)...)
+}
+
+func (s *SettingService) GetDefaultUserSettingsBySignupSource(ctx context.Context, signupSource string) DefaultUserSettings {
+	return DefaultUserSettings{
+		ApplyOnBind:   s.GetDefaultApplyOnBindBySignupSource(ctx, signupSource),
+		Balance:       s.GetDefaultBalanceBySignupSource(ctx, signupSource),
+		Concurrency:   s.GetDefaultConcurrencyBySignupSource(ctx, signupSource),
+		Subscriptions: s.GetDefaultSubscriptionsBySignupSource(ctx, signupSource),
 	}
-	return parseDefaultSubscriptions(value)
+}
+
+func normalizeDefaultSettingsSignupSource(signupSource string) string {
+	switch NormalizeSignupSource(signupSource) {
+	case SignupSourceLinuxDo:
+		return SignupSourceLinuxDo
+	case SignupSourceWeChat:
+		return SignupSourceWeChat
+	case SignupSourceOIDC:
+		return SignupSourceOIDC
+	default:
+		return SignupSourceEmail
+	}
+}
+
+func (s *SettingService) getDefaultBalanceWithFallback(ctx context.Context, keys ...string) float64 {
+	for _, key := range keys {
+		if value, err := s.settingRepo.GetValue(ctx, key); err == nil {
+			if v, err := strconv.ParseFloat(value, 64); err == nil && v >= 0 {
+				return v
+			}
+		}
+	}
+	return s.cfg.Default.UserBalance
+}
+
+func (s *SettingService) getDefaultConcurrencyWithFallback(ctx context.Context, keys ...string) int {
+	for _, key := range keys {
+		if value, err := s.settingRepo.GetValue(ctx, key); err == nil {
+			if v, err := strconv.Atoi(value); err == nil && v > 0 {
+				return v
+			}
+		}
+	}
+	return s.cfg.Default.UserConcurrency
+}
+
+func (s *SettingService) getDefaultSubscriptionsWithFallback(ctx context.Context, keys ...string) []DefaultSubscriptionSetting {
+	for _, key := range keys {
+		if value, err := s.settingRepo.GetValue(ctx, key); err == nil && strings.TrimSpace(value) != "" {
+			return parseDefaultSubscriptions(value)
+		}
+	}
+	return nil
+}
+
+func (s *SettingService) getDefaultApplyOnBindWithFallback(ctx context.Context, keys ...string) bool {
+	for _, key := range keys {
+		if value, err := s.settingRepo.GetValue(ctx, key); err == nil {
+			if v, parseErr := strconv.ParseBool(strings.TrimSpace(value)); parseErr == nil {
+				return v
+			}
+		}
+	}
+	return false
 }
 
 // InitializeDefaultSettings 初始化默认设置
@@ -935,8 +1182,10 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 	defaults := map[string]string{
 		SettingKeyRegistrationEnabled:              "true",
 		SettingKeyEmailVerifyEnabled:               "false",
+		SettingKeyThirdPartyFirstLoginRequireEmail: "false",
 		SettingKeyRegistrationEmailSuffixWhitelist: "[]",
 		SettingKeyPromoCodeEnabled:                 "true", // 默认启用优惠码功能
+		SettingKeyAuthForceEmailOnThirdPartySignup: "false",
 		SettingKeySiteName:                         "Sub2API",
 		SettingKeySiteLogo:                         "",
 		SettingKeyPurchaseSubscriptionEnabled:      "false",
@@ -950,6 +1199,22 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyDefaultConcurrency:               strconv.Itoa(s.cfg.Default.UserConcurrency),
 		SettingKeyDefaultBalance:                   strconv.FormatFloat(s.cfg.Default.UserBalance, 'f', 8, 64),
 		SettingKeyDefaultSubscriptions:             "[]",
+		SettingKeyDefaultApplyOnBindEmail:          "false",
+		SettingKeyDefaultConcurrencyEmail:          strconv.Itoa(s.cfg.Default.UserConcurrency),
+		SettingKeyDefaultBalanceEmail:              strconv.FormatFloat(s.cfg.Default.UserBalance, 'f', 8, 64),
+		SettingKeyDefaultSubscriptionsEmail:        "[]",
+		SettingKeyDefaultApplyOnBindLinuxDo:        "false",
+		SettingKeyDefaultConcurrencyLinuxDo:        strconv.Itoa(s.cfg.Default.UserConcurrency),
+		SettingKeyDefaultBalanceLinuxDo:            strconv.FormatFloat(s.cfg.Default.UserBalance, 'f', 8, 64),
+		SettingKeyDefaultSubscriptionsLinuxDo:      "[]",
+		SettingKeyDefaultApplyOnBindWeChat:         "false",
+		SettingKeyDefaultConcurrencyWeChat:         strconv.Itoa(s.cfg.Default.UserConcurrency),
+		SettingKeyDefaultBalanceWeChat:             strconv.FormatFloat(s.cfg.Default.UserBalance, 'f', 8, 64),
+		SettingKeyDefaultSubscriptionsWeChat:       "[]",
+		SettingKeyDefaultApplyOnBindOIDC:           "false",
+		SettingKeyDefaultConcurrencyOIDC:           strconv.Itoa(s.cfg.Default.UserConcurrency),
+		SettingKeyDefaultBalanceOIDC:               strconv.FormatFloat(s.cfg.Default.UserBalance, 'f', 8, 64),
+		SettingKeyDefaultSubscriptionsOIDC:         "[]",
 		SettingKeySMTPPort:                         "587",
 		SettingKeySMTPUseTLS:                       "false",
 		// Model fallback defaults
@@ -985,6 +1250,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	result := &SystemSettings{
 		RegistrationEnabled:              settings[SettingKeyRegistrationEnabled] == "true",
 		EmailVerifyEnabled:               emailVerifyEnabled,
+		ThirdPartyFirstLoginRequireEmail: getThirdPartyFirstLoginRequireEmailSetting(settings),
 		RegistrationEmailSuffixWhitelist: ParseRegistrationEmailSuffixWhitelist(settings[SettingKeyRegistrationEmailSuffixWhitelist]),
 		PromoCodeEnabled:                 settings[SettingKeyPromoCodeEnabled] != "false", // 默认启用
 		PasswordResetEnabled:             emailVerifyEnabled && settings[SettingKeyPasswordResetEnabled] == "true",
@@ -1025,20 +1291,13 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	} else {
 		result.SMTPPort = 587
 	}
-
-	if concurrency, err := strconv.Atoi(settings[SettingKeyDefaultConcurrency]); err == nil {
-		result.DefaultConcurrency = concurrency
-	} else {
-		result.DefaultConcurrency = s.cfg.Default.UserConcurrency
-	}
-
-	// 解析浮点数类型
-	if balance, err := strconv.ParseFloat(settings[SettingKeyDefaultBalance], 64); err == nil {
-		result.DefaultBalance = balance
-	} else {
-		result.DefaultBalance = s.cfg.Default.UserBalance
-	}
-	result.DefaultSubscriptions = parseDefaultSubscriptions(settings[SettingKeyDefaultSubscriptions])
+	result.DefaultSettingsEmail = s.parseProviderDefaultUserSettings(settings, SignupSourceEmail)
+	result.DefaultSettingsLinuxDo = s.parseProviderDefaultUserSettings(settings, SignupSourceLinuxDo)
+	result.DefaultSettingsWeChat = s.parseProviderDefaultUserSettings(settings, SignupSourceWeChat)
+	result.DefaultSettingsOIDC = s.parseProviderDefaultUserSettings(settings, SignupSourceOIDC)
+	result.DefaultConcurrency = result.DefaultSettingsEmail.Concurrency
+	result.DefaultBalance = result.DefaultSettingsEmail.Balance
+	result.DefaultSubscriptions = cloneDefaultSubscriptionSettings(result.DefaultSettingsEmail.Subscriptions)
 
 	// 敏感信息直接返回，方便测试连接时使用
 	result.SMTPPassword = settings[SettingKeySMTPPassword]
@@ -1075,6 +1334,21 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		result.LinuxDoConnectClientSecret = strings.TrimSpace(linuxDoBase.ClientSecret)
 	}
 	result.LinuxDoConnectClientSecretConfigured = result.LinuxDoConnectClientSecret != ""
+
+	result.WeChatLoginOpenEnabled = settings[SettingKeyWeChatLoginOpenEnabled] == "true"
+	result.WeChatLoginOpenAppID = strings.TrimSpace(settings[SettingKeyWeChatLoginOpenAppID])
+	result.WeChatLoginOpenAppSecret = strings.TrimSpace(settings[SettingKeyWeChatLoginOpenAppSecret])
+	result.WeChatLoginMPEnabled = settings[SettingKeyWeChatLoginMPEnabled] == "true"
+	result.WeChatLoginMPAppID = strings.TrimSpace(settings[SettingKeyWeChatLoginMPAppID])
+	result.WeChatLoginMPAppSecret = strings.TrimSpace(settings[SettingKeyWeChatLoginMPAppSecret])
+	result.WeChatLoginUnionIDHealthStatus = deriveWeChatLoginUnionIDHealthStatus(
+		result.WeChatLoginOpenEnabled,
+		result.WeChatLoginOpenAppID,
+		result.WeChatLoginOpenAppSecret,
+		result.WeChatLoginMPEnabled,
+		result.WeChatLoginMPAppID,
+		result.WeChatLoginMPAppSecret,
+	)
 
 	// Generic OIDC 设置：
 	// - 兼容 config.yaml/env
@@ -1292,6 +1566,31 @@ func isFalseSettingValue(value string) bool {
 	}
 }
 
+func getThirdPartyFirstLoginRequireEmailSetting(settings map[string]string) bool {
+	if value, ok := settings[SettingKeyThirdPartyFirstLoginRequireEmail]; ok && strings.TrimSpace(value) != "" {
+		return value == "true"
+	}
+	return settings[SettingKeyAuthForceEmailOnThirdPartySignup] == "true"
+}
+
+func deriveWeChatLoginUnionIDHealthStatus(openEnabled bool, openAppID, openAppSecret string, mpEnabled bool, mpAppID, mpAppSecret string) string {
+	openReady := !openEnabled || (strings.TrimSpace(openAppID) != "" && strings.TrimSpace(openAppSecret) != "")
+	mpReady := !mpEnabled || (strings.TrimSpace(mpAppID) != "" && strings.TrimSpace(mpAppSecret) != "")
+
+	if !openReady || !mpReady {
+		return WeChatLoginUnionIDHealthStatusError
+	}
+
+	switch {
+	case openEnabled && mpEnabled:
+		return WeChatLoginUnionIDHealthStatusOK
+	case openEnabled || mpEnabled:
+		return WeChatLoginUnionIDHealthStatusWarning
+	default:
+		return WeChatLoginUnionIDHealthStatusError
+	}
+}
+
 func parseDefaultSubscriptions(raw string) []DefaultSubscriptionSetting {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -1315,6 +1614,128 @@ func parseDefaultSubscriptions(raw string) []DefaultSubscriptionSetting {
 	}
 
 	return normalized
+}
+
+func cloneDefaultSubscriptionSettings(items []DefaultSubscriptionSetting) []DefaultSubscriptionSetting {
+	if len(items) == 0 {
+		return nil
+	}
+	cloned := make([]DefaultSubscriptionSetting, len(items))
+	copy(cloned, items)
+	return cloned
+}
+
+func (s *SettingService) parseProviderDefaultUserSettings(settings map[string]string, signupSource string) ProviderDefaultUserSettings {
+	defaultBalance := s.cfg.Default.UserBalance
+	defaultConcurrency := s.cfg.Default.UserConcurrency
+	if balance, ok := parseDefaultBalanceFromSettings(settings, defaultBalance, defaultBalanceSettingLookupChain(signupSource)...); ok {
+		defaultBalance = balance
+	}
+	if concurrency, ok := parseDefaultConcurrencyFromSettings(settings, defaultConcurrency, defaultConcurrencySettingLookupChain(signupSource)...); ok {
+		defaultConcurrency = concurrency
+	}
+	return ProviderDefaultUserSettings{
+		ApplyOnBind:   parseDefaultApplyOnBindFromSettings(settings, defaultApplyOnBindSettingLookupChain(signupSource)...),
+		Balance:       defaultBalance,
+		Concurrency:   defaultConcurrency,
+		Subscriptions: parseDefaultSubscriptionsFromSettings(settings, defaultSubscriptionsSettingLookupChain(signupSource)...),
+	}
+}
+
+func defaultApplyOnBindSettingLookupChain(signupSource string) []string {
+	switch normalizeDefaultSettingsSignupSource(signupSource) {
+	case SignupSourceLinuxDo:
+		return []string{SettingKeyDefaultApplyOnBindLinuxDo}
+	case SignupSourceWeChat:
+		return []string{SettingKeyDefaultApplyOnBindWeChat}
+	case SignupSourceOIDC:
+		return []string{SettingKeyDefaultApplyOnBindOIDC}
+	default:
+		return []string{SettingKeyDefaultApplyOnBindEmail}
+	}
+}
+
+func defaultBalanceSettingLookupChain(signupSource string) []string {
+	switch normalizeDefaultSettingsSignupSource(signupSource) {
+	case SignupSourceLinuxDo:
+		return []string{SettingKeyDefaultBalanceLinuxDo, SettingKeyDefaultBalanceEmail, SettingKeyDefaultBalance}
+	case SignupSourceWeChat:
+		return []string{SettingKeyDefaultBalanceWeChat, SettingKeyDefaultBalanceEmail, SettingKeyDefaultBalance}
+	case SignupSourceOIDC:
+		return []string{SettingKeyDefaultBalanceOIDC, SettingKeyDefaultBalanceEmail, SettingKeyDefaultBalance}
+	default:
+		return []string{SettingKeyDefaultBalanceEmail, SettingKeyDefaultBalance}
+	}
+}
+
+func defaultConcurrencySettingLookupChain(signupSource string) []string {
+	switch normalizeDefaultSettingsSignupSource(signupSource) {
+	case SignupSourceLinuxDo:
+		return []string{SettingKeyDefaultConcurrencyLinuxDo, SettingKeyDefaultConcurrencyEmail, SettingKeyDefaultConcurrency}
+	case SignupSourceWeChat:
+		return []string{SettingKeyDefaultConcurrencyWeChat, SettingKeyDefaultConcurrencyEmail, SettingKeyDefaultConcurrency}
+	case SignupSourceOIDC:
+		return []string{SettingKeyDefaultConcurrencyOIDC, SettingKeyDefaultConcurrencyEmail, SettingKeyDefaultConcurrency}
+	default:
+		return []string{SettingKeyDefaultConcurrencyEmail, SettingKeyDefaultConcurrency}
+	}
+}
+
+func defaultSubscriptionsSettingLookupChain(signupSource string) []string {
+	switch normalizeDefaultSettingsSignupSource(signupSource) {
+	case SignupSourceLinuxDo:
+		return []string{SettingKeyDefaultSubscriptionsLinuxDo, SettingKeyDefaultSubscriptionsEmail, SettingKeyDefaultSubscriptions}
+	case SignupSourceWeChat:
+		return []string{SettingKeyDefaultSubscriptionsWeChat, SettingKeyDefaultSubscriptionsEmail, SettingKeyDefaultSubscriptions}
+	case SignupSourceOIDC:
+		return []string{SettingKeyDefaultSubscriptionsOIDC, SettingKeyDefaultSubscriptionsEmail, SettingKeyDefaultSubscriptions}
+	default:
+		return []string{SettingKeyDefaultSubscriptionsEmail, SettingKeyDefaultSubscriptions}
+	}
+}
+
+func parseDefaultBalanceFromSettings(settings map[string]string, fallback float64, keys ...string) (float64, bool) {
+	for _, key := range keys {
+		if raw, ok := settings[key]; ok && strings.TrimSpace(raw) != "" {
+			if v, err := strconv.ParseFloat(raw, 64); err == nil && v >= 0 {
+				return v, true
+			}
+			return fallback, true
+		}
+	}
+	return fallback, false
+}
+
+func parseDefaultApplyOnBindFromSettings(settings map[string]string, keys ...string) bool {
+	for _, key := range keys {
+		if raw, ok := settings[key]; ok {
+			if v, err := strconv.ParseBool(strings.TrimSpace(raw)); err == nil {
+				return v
+			}
+		}
+	}
+	return false
+}
+
+func parseDefaultConcurrencyFromSettings(settings map[string]string, fallback int, keys ...string) (int, bool) {
+	for _, key := range keys {
+		if raw, ok := settings[key]; ok && strings.TrimSpace(raw) != "" {
+			if v, err := strconv.Atoi(raw); err == nil && v > 0 {
+				return v, true
+			}
+			return fallback, true
+		}
+	}
+	return fallback, false
+}
+
+func parseDefaultSubscriptionsFromSettings(settings map[string]string, keys ...string) []DefaultSubscriptionSetting {
+	for _, key := range keys {
+		if raw, ok := settings[key]; ok && strings.TrimSpace(raw) != "" {
+			return parseDefaultSubscriptions(raw)
+		}
+	}
+	return nil
 }
 
 func parseTablePreferences(defaultPageSizeRaw, optionsRaw string) (int, []int) {

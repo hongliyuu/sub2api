@@ -22,6 +22,49 @@ var (
 	testUserName     = "e2e-test-user"
 )
 
+func TestRegistrationRejectsLegacySyntheticOAuthEmails(t *testing.T) {
+	cases := []struct {
+		name  string
+		email string
+	}{
+		{name: "linuxdo synthetic email", email: "linuxdo-e2e-legacy@linuxdo-connect.invalid"},
+		{name: "oidc synthetic email", email: "oidc-e2e-legacy@oidc-connect.invalid"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			payload := map[string]string{
+				"email":    tc.email,
+				"password": testUserPassword,
+				"username": "legacy-regression-check",
+			}
+			body, _ := json.Marshal(payload)
+
+			resp, err := doRequest(t, "POST", "/api/auth/register", body, "")
+			if err != nil {
+				t.Skipf("注册接口不可用，跳过兼容性回归测试: %v", err)
+				return
+			}
+			defer resp.Body.Close()
+
+			respBody, _ := io.ReadAll(resp.Body)
+			if resp.StatusCode == http.StatusForbidden {
+				t.Skipf("注册功能已关闭: %s", string(respBody))
+				return
+			}
+
+			if resp.StatusCode != http.StatusBadRequest {
+				t.Fatalf("expected synthetic email to be rejected with HTTP 400, got %d: %s", resp.StatusCode, string(respBody))
+			}
+
+			bodyText := strings.ToLower(string(respBody))
+			if !strings.Contains(bodyText, "reserved") && !strings.Contains(bodyText, "保留") {
+				t.Fatalf("expected reserved-email rejection body, got: %s", string(respBody))
+			}
+		})
+	}
+}
+
 // TestUserRegistrationAndLogin 测试用户注册和登录流程
 func TestUserRegistrationAndLogin(t *testing.T) {
 	// 步骤 1: 注册新用户
@@ -263,12 +306,10 @@ func doRequest(t *testing.T, method, path string, body []byte, token string) (*h
 func loginTestUser(t *testing.T) string {
 	t.Helper()
 
-	// 先尝试用管理员账户登录
 	adminEmail := getEnv("ADMIN_EMAIL", "admin@sub2api.local")
 	adminPassword := getEnv("ADMIN_PASSWORD", "")
 
 	if adminPassword == "" {
-		// 尝试用测试用户
 		adminEmail = testUserEmail
 		adminPassword = testUserPassword
 	}
@@ -281,33 +322,35 @@ func loginTestUser(t *testing.T) string {
 
 	resp, err := doRequest(t, "POST", "/api/auth/login", body, "")
 	if err != nil {
+		t.Skipf("登录接口不可用，跳过测试: %v", err)
 		return ""
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != 200 {
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		t.Skipf("登录失败 HTTP %d: %s", resp.StatusCode, string(respBody))
 		return ""
 	}
 
-	respBody, _ := io.ReadAll(resp.Body)
 	var result map[string]any
 	if err := json.Unmarshal(respBody, &result); err != nil {
-		return ""
+		t.Fatalf("解析登录响应失败: %v", err)
 	}
 
-	if token, ok := result["access_token"].(string); ok {
+	if token, ok := result["access_token"].(string); ok && token != "" {
 		return token
 	}
 	if data, ok := result["data"].(map[string]any); ok {
-		if token, ok := data["access_token"].(string); ok {
+		if token, ok := data["access_token"].(string); ok && token != "" {
 			return token
 		}
 	}
 
+	t.Skipf("未获取到 access_token，响应: %s", string(respBody))
 	return ""
 }
 
-// redactAPIKey API Key 脱敏，只显示前 8 位
 func redactAPIKey(key string) string {
 	key = strings.TrimSpace(key)
 	if len(key) <= 8 {

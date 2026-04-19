@@ -6,7 +6,15 @@
 import { defineStore } from 'pinia'
 import { ref, computed, readonly } from 'vue'
 import { authAPI, isTotp2FARequired, type LoginResponse } from '@/api'
-import type { User, LoginRequest, RegisterRequest, AuthResponse } from '@/types'
+import type {
+  User,
+  LoginRequest,
+  RegisterRequest,
+  AuthResponse,
+  PendingAuthSessionSummary,
+  OAuthCallbackResult,
+  OAuthTokenPairResponse
+} from '@/types'
 
 const AUTH_TOKEN_KEY = 'auth_token'
 const AUTH_USER_KEY = 'auth_user'
@@ -14,6 +22,65 @@ const REFRESH_TOKEN_KEY = 'refresh_token'
 const TOKEN_EXPIRES_AT_KEY = 'token_expires_at' // 存储过期时间戳而非有效期
 const AUTO_REFRESH_INTERVAL = 60 * 1000 // 60 seconds for user data refresh
 const TOKEN_REFRESH_BUFFER = 120 * 1000 // 120 seconds before expiry to refresh token
+
+function isPendingAuthSessionPayload(
+  result: OAuthCallbackResult | null
+): result is Extract<OAuthCallbackResult, { auth_result: 'pending_session' }> {
+  return !!result && 'auth_result' in result && result.auth_result === 'pending_session'
+}
+
+function normalizePendingSession(result: Extract<OAuthCallbackResult, { auth_result: 'pending_session' }>): PendingAuthSessionSummary {
+  return {
+    token: result.pending_auth_token,
+    provider: result.provider,
+    intent: result.intent,
+    auth_result: result.auth_result,
+    redirect: result.redirect,
+    adoption_required: result.adoption_required,
+    suggested_display_name: result.suggested_display_name,
+    suggested_avatar_url: result.suggested_avatar_url
+  }
+}
+
+function getPersistedPendingSession(): PendingAuthSessionSummary | null {
+  const getter = (authAPI as {
+    getPersistedPendingAuthSession?: () => PendingAuthSessionSummary | null
+  }).getPersistedPendingAuthSession
+  return getter ? getter() : null
+}
+
+function persistPendingSession(session: PendingAuthSessionSummary): void {
+  const persist = (authAPI as {
+    persistPendingAuthSession?: (session: PendingAuthSessionSummary) => void
+  }).persistPendingAuthSession
+  persist?.(session)
+}
+
+function clearPersistedPendingSession(): void {
+  const clear = (authAPI as {
+    clearPendingAuthSessionStorage?: () => void
+  }).clearPendingAuthSessionStorage
+  clear?.()
+}
+
+function persistTokenPair(response: OAuthTokenPairResponse): void {
+  const persist = (authAPI as {
+    persistOAuthTokenPair?: (response: OAuthTokenPairResponse) => void
+  }).persistOAuthTokenPair
+
+  if (persist) {
+    persist(response)
+    return
+  }
+
+  localStorage.setItem(AUTH_TOKEN_KEY, response.access_token)
+  if (response.refresh_token) {
+    localStorage.setItem(REFRESH_TOKEN_KEY, response.refresh_token)
+  }
+  if (response.expires_in) {
+    localStorage.setItem(TOKEN_EXPIRES_AT_KEY, String(Date.now() + response.expires_in * 1000))
+  }
+}
 
 export const useAuthStore = defineStore('auth', () => {
   // ==================== State ====================
@@ -23,6 +90,7 @@ export const useAuthStore = defineStore('auth', () => {
   const refreshTokenValue = ref<string | null>(null)
   const tokenExpiresAt = ref<number | null>(null) // 过期时间戳（毫秒）
   const runMode = ref<'standard' | 'simple'>('standard')
+  const pendingAuthSession = ref<PendingAuthSessionSummary | null>(null)
   let refreshIntervalId: ReturnType<typeof setInterval> | null = null
   let tokenRefreshTimeoutId: ReturnType<typeof setTimeout> | null = null
 
@@ -37,6 +105,7 @@ export const useAuthStore = defineStore('auth', () => {
   })
 
   const isSimpleMode = computed(() => runMode.value === 'simple')
+  const hasPendingAuthSession = computed(() => pendingAuthSession.value !== null)
 
   // ==================== Actions ====================
 
@@ -50,6 +119,7 @@ export const useAuthStore = defineStore('auth', () => {
     const savedUser = localStorage.getItem(AUTH_USER_KEY)
     const savedRefreshToken = localStorage.getItem(REFRESH_TOKEN_KEY)
     const savedExpiresAt = localStorage.getItem(TOKEN_EXPIRES_AT_KEY)
+    pendingAuthSession.value = getPersistedPendingSession()
 
     if (savedToken && savedUser) {
       try {
@@ -73,7 +143,7 @@ export const useAuthStore = defineStore('auth', () => {
         }
       } catch (error) {
         console.error('Failed to parse saved user data:', error)
-        clearAuth()
+        clearAuth({ preservePendingAuthSession: true })
       }
     }
   }
@@ -196,7 +266,7 @@ export const useAuthStore = defineStore('auth', () => {
       return response
     } catch (error) {
       // Clear any partial state on error
-      clearAuth()
+      clearAuth({ preservePendingAuthSession: pendingAuthSession.value !== null })
       throw error
     }
   }
@@ -208,13 +278,25 @@ export const useAuthStore = defineStore('auth', () => {
    * @returns Promise resolving to the authenticated user
    * @throws Error if 2FA verification fails
    */
-  async function login2FA(tempToken: string, totpCode: string): Promise<User> {
+  async function login2FA(
+    tempToken: string,
+    totpCode: string,
+    pendingAuthToken?: string
+  ): Promise<User> {
     try {
-      const response = await authAPI.login2FA({ temp_token: tempToken, totp_code: totpCode })
+      const response = await authAPI.login2FA({
+        temp_token: tempToken,
+        totp_code: totpCode,
+        pending_auth_token: pendingAuthToken,
+        pending_oauth_token: pendingAuthToken
+      })
       setAuthFromResponse(response)
       return user.value!
     } catch (error) {
-      clearAuth()
+      clearAuth({
+        preservePendingAuthSession:
+          pendingAuthSession.value !== null || typeof pendingAuthToken === 'string'
+      })
       throw error
     }
   }
@@ -243,6 +325,7 @@ export const useAuthStore = defineStore('auth', () => {
     // Persist to localStorage
     localStorage.setItem(AUTH_TOKEN_KEY, response.access_token)
     localStorage.setItem(AUTH_USER_KEY, JSON.stringify(userData))
+    clearPendingAuthSession()
 
     // Start auto-refresh interval for user data
     startAutoRefresh()
@@ -270,7 +353,7 @@ export const useAuthStore = defineStore('auth', () => {
       return user.value!
     } catch (error) {
       // Clear any partial state on error
-      clearAuth()
+      clearAuth({ preservePendingAuthSession: pendingAuthSession.value !== null })
       throw error
     }
   }
@@ -314,9 +397,60 @@ export const useAuthStore = defineStore('auth', () => {
 
       return userData
     } catch (error) {
-      clearAuth()
+      clearAuth({ preservePendingAuthSession: pendingAuthSession.value !== null })
       throw error
     }
+  }
+
+  function setPendingAuthSession(session: PendingAuthSessionSummary | null): void {
+    pendingAuthSession.value = session
+
+    if (session) {
+      persistPendingSession(session)
+      return
+    }
+
+    clearPersistedPendingSession()
+  }
+
+  function clearPendingAuthSession(): void {
+    setPendingAuthSession(null)
+  }
+
+  function consumePendingAuthSession(): PendingAuthSessionSummary | null {
+    const session = pendingAuthSession.value
+    clearPendingAuthSession()
+    return session
+  }
+
+  function cacheOAuthTokenPair(response: OAuthTokenPairResponse): void {
+    persistTokenPair(response)
+    token.value = response.access_token
+    refreshTokenValue.value = response.refresh_token ?? null
+
+    const savedExpiresAt = localStorage.getItem(TOKEN_EXPIRES_AT_KEY)
+    tokenExpiresAt.value = savedExpiresAt ? parseInt(savedExpiresAt, 10) : null
+
+    if (tokenExpiresAt.value !== null && refreshTokenValue.value) {
+      scheduleTokenRefreshAt(tokenExpiresAt.value)
+    }
+  }
+
+  function applyOAuthCallbackResult(result: OAuthCallbackResult | null): PendingAuthSessionSummary | null {
+    if (!result) {
+      clearPendingAuthSession()
+      return null
+    }
+
+    if (isPendingAuthSessionPayload(result)) {
+      const session = normalizePendingSession(result)
+      setPendingAuthSession(session)
+      return session
+    }
+
+    cacheOAuthTokenPair(result)
+    clearPendingAuthSession()
+    return null
   }
 
   /**
@@ -357,7 +491,7 @@ export const useAuthStore = defineStore('auth', () => {
     } catch (error) {
       // If refresh fails with 401, clear auth state
       if ((error as { status?: number }).status === 401) {
-        clearAuth()
+        clearAuth({ preservePendingAuthSession: pendingAuthSession.value !== null })
       }
       throw error
     }
@@ -367,7 +501,7 @@ export const useAuthStore = defineStore('auth', () => {
    * Clear all authentication state
    * Internal helper function
    */
-  function clearAuth(): void {
+  function clearAuth(options?: { preservePendingAuthSession?: boolean }): void {
     // Stop auto-refresh
     stopAutoRefresh()
     // Stop token refresh
@@ -377,10 +511,19 @@ export const useAuthStore = defineStore('auth', () => {
     refreshTokenValue.value = null
     tokenExpiresAt.value = null
     user.value = null
+    pendingAuthSession.value = null
     localStorage.removeItem(AUTH_TOKEN_KEY)
     localStorage.removeItem(AUTH_USER_KEY)
     localStorage.removeItem(REFRESH_TOKEN_KEY)
     localStorage.removeItem(TOKEN_EXPIRES_AT_KEY)
+
+    if (options?.preservePendingAuthSession === true) {
+      pendingAuthSession.value = getPersistedPendingSession()
+      return
+    }
+
+    pendingAuthSession.value = null
+    clearPersistedPendingSession()
   }
 
   // ==================== Return Store API ====================
@@ -390,11 +533,13 @@ export const useAuthStore = defineStore('auth', () => {
     user,
     token,
     runMode: readonly(runMode),
+    pendingAuthSession: readonly(pendingAuthSession),
 
     // Computed
     isAuthenticated,
     isAdmin,
     isSimpleMode,
+    hasPendingAuthSession,
 
     // Actions
     login,
@@ -403,6 +548,11 @@ export const useAuthStore = defineStore('auth', () => {
     setToken,
     logout,
     checkAuth,
-    refreshUser
+    refreshUser,
+    setPendingAuthSession,
+    clearPendingAuthSession,
+    consumePendingAuthSession,
+    cacheOAuthTokenPair,
+    applyOAuthCallbackResult
   }
 })

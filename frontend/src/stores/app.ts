@@ -13,6 +13,13 @@ import {
 } from '@/api/admin/system'
 import { getPublicSettings as fetchPublicSettingsAPI } from '@/api/auth'
 
+type PublicAuthSettings = PublicSettings & {
+  third_party_first_login_require_email?: boolean
+  wechat_login_open_enabled?: boolean
+  wechat_login_mp_enabled?: boolean
+  wechat_login_unionid_health_status?: 'ok' | 'warning' | 'error'
+}
+
 export const useAppStore = defineStore('app', () => {
   // ==================== State ====================
 
@@ -30,7 +37,7 @@ export const useAppStore = defineStore('app', () => {
   const contactInfo = ref<string>('')
   const apiBaseUrl = ref<string>('')
   const docUrl = ref<string>('')
-  const cachedPublicSettings = ref<PublicSettings | null>(null)
+  const cachedPublicSettings = ref<PublicAuthSettings | null>(null)
 
   // Version cache state
   const versionLoaded = ref<boolean>(false)
@@ -48,6 +55,21 @@ export const useAppStore = defineStore('app', () => {
 
   const hasActiveToasts = computed(() => toasts.value.length > 0)
   const backendModeEnabled = computed(() => cachedPublicSettings.value?.backend_mode_enabled ?? false)
+  const thirdPartyFirstLoginRequireEmail = computed(
+    () => cachedPublicSettings.value?.third_party_first_login_require_email ?? false
+  )
+  const wechatLoginOpenEnabled = computed(
+    () => cachedPublicSettings.value?.wechat_login_open_enabled ?? false
+  )
+  const wechatLoginMpEnabled = computed(
+    () => cachedPublicSettings.value?.wechat_login_mp_enabled ?? false
+  )
+  const wechatLoginEnabled = computed(
+    () => wechatLoginOpenEnabled.value || wechatLoginMpEnabled.value
+  )
+  const wechatLoginUnionidHealthStatus = computed(
+    () => cachedPublicSettings.value?.wechat_login_unionid_health_status
+  )
 
   const loadingCount = ref<number>(0)
 
@@ -283,9 +305,9 @@ export const useAppStore = defineStore('app', () => {
   /**
    * Apply settings to store state (internal helper to avoid code duplication)
    */
-  function applySettings(config: PublicSettings): void {
+  function applySettings(config: PublicAuthSettings): void {
     if (typeof window !== 'undefined') {
-      window.__APP_CONFIG__ = { ...config }
+      window.__APP_CONFIG__ = { ...config } as PublicSettings
     }
     cachedPublicSettings.value = config
     siteName.value = config.site_name || 'Sub2API'
@@ -301,11 +323,12 @@ export const useAppStore = defineStore('app', () => {
    * Fetch public settings (uses cache unless force=true)
    * @param force - Force refresh from API
    */
-  async function fetchPublicSettings(force = false): Promise<PublicSettings | null> {
+  async function fetchPublicSettings(force = false): Promise<PublicAuthSettings | null> {
     // Check for injected config from server (eliminates flash)
     if (!publicSettingsLoaded.value && !force && window.__APP_CONFIG__) {
-      applySettings(window.__APP_CONFIG__)
-      return window.__APP_CONFIG__
+      const injectedConfig = window.__APP_CONFIG__ as PublicAuthSettings
+      applySettings(injectedConfig)
+      return injectedConfig
     }
 
     // Return cached data if available and not forcing refresh
@@ -338,6 +361,10 @@ export const useAppStore = defineStore('app', () => {
         linuxdo_oauth_enabled: false,
         oidc_oauth_enabled: false,
         oidc_oauth_provider_name: 'OIDC',
+        third_party_first_login_require_email: false,
+        wechat_login_open_enabled: false,
+        wechat_login_mp_enabled: false,
+        wechat_login_unionid_health_status: 'error',
         backend_mode_enabled: false,
         version: siteVersion.value,
         balance_low_notify_enabled: false,
@@ -353,7 +380,7 @@ export const useAppStore = defineStore('app', () => {
 
     publicSettingsLoading.value = true
     try {
-      const data = await fetchPublicSettingsAPI()
+      const data = (await fetchPublicSettingsAPI()) as PublicAuthSettings
       applySettings(data)
       return data
     } catch (error) {
@@ -416,6 +443,11 @@ export const useAppStore = defineStore('app', () => {
     // Computed
     hasActiveToasts,
     backendModeEnabled,
+    thirdPartyFirstLoginRequireEmail,
+    wechatLoginOpenEnabled,
+    wechatLoginMpEnabled,
+    wechatLoginEnabled,
+    wechatLoginUnionidHealthStatus,
 
     // Actions
     toggleSidebar,

@@ -1,9 +1,18 @@
 package service
 
 import (
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
+)
+
+const (
+	SignupSourceUnknown = "unknown"
+	SignupSourceEmail   = "email"
+	SignupSourceLinuxDo = "linuxdo"
+	SignupSourceOIDC    = "oidc"
+	SignupSourceWeChat  = "wechat"
 )
 
 type User struct {
@@ -12,6 +21,7 @@ type User struct {
 	Username      string
 	Notes         string
 	PasswordHash  string
+	SignupSource  string
 	Role          string
 	Balance       float64
 	Concurrency   int
@@ -36,6 +46,10 @@ type User struct {
 	BalanceNotifyThreshold     *float64
 	BalanceNotifyExtraEmails   []NotifyEmailEntry
 	TotalRecharged             float64
+	Avatar                     *UserAvatar
+	AvatarURL                  string
+	AvatarUpdatedAt            *time.Time
+	HasCustomAvatar            bool
 
 	APIKeys       []APIKey
 	Subscriptions []UserSubscription
@@ -78,4 +92,35 @@ func (u *User) SetPassword(password string) error {
 
 func (u *User) CheckPassword(password string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)) == nil
+}
+
+func NormalizeSignupSource(source string) string {
+	switch strings.ToLower(strings.TrimSpace(source)) {
+	case SignupSourceEmail:
+		return SignupSourceEmail
+	case SignupSourceLinuxDo:
+		return SignupSourceLinuxDo
+	case SignupSourceOIDC:
+		return SignupSourceOIDC
+	case SignupSourceWeChat:
+		return SignupSourceWeChat
+	default:
+		return SignupSourceUnknown
+	}
+}
+
+func (u *User) HasLocalIdentity() bool {
+	if u == nil {
+		return false
+	}
+	if strings.TrimSpace(u.PasswordHash) == "" {
+		return false
+	}
+
+	email := strings.ToLower(strings.TrimSpace(u.Email))
+	if email == "" {
+		return false
+	}
+
+	return !isSyntheticOAuthEmail(email)
 }

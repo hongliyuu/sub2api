@@ -41,6 +41,11 @@ func (User) Fields() []ent.Field {
 		field.String("password_hash").
 			MaxLen(255).
 			NotEmpty(),
+		field.String("signup_source").
+			MaxLen(20).
+			Default("email").
+			Validate(validateAuthProviderType).
+			Comment("immutable signup source used for exact-once defaults"),
 		field.String("role").
 			MaxLen(20).
 			Default(domain.RoleUser),
@@ -104,6 +109,8 @@ func (User) Edges() []ent.Edge {
 		edge.To("attribute_values", UserAttributeValue.Type),
 		edge.To("promo_code_usages", PromoCodeUsage.Type),
 		edge.To("payment_orders", PaymentOrder.Type),
+		edge.To("auth_identities", AuthIdentity.Type),
+		edge.To("pending_auth_sessions", PendingAuthSession.Type),
 	}
 }
 

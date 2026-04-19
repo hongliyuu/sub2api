@@ -176,7 +176,7 @@ import { AuthLayout } from '@/components/layout'
 import Icon from '@/components/icons/Icon.vue'
 import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import { useAuthStore, useAppStore } from '@/stores'
-import { getPublicSettings, sendVerifyCode } from '@/api/auth'
+import { createOAuthAccount, getPublicSettings, persistOAuthTokenPair, sendVerifyCode } from '@/api/auth'
 import { buildAuthErrorMessage } from '@/utils/authError'
 import {
   isRegistrationEmailSuffixAllowed,
@@ -207,6 +207,13 @@ const password = ref<string>('')
 const initialTurnstileToken = ref<string>('')
 const promoCode = ref<string>('')
 const invitationCode = ref<string>('')
+const pendingAuthToken = ref<string>('')
+const pendingProvider = ref<string>('')
+const pendingRedirect = ref<string>('')
+const pendingAdoptionDecision = ref<{
+  adoptDisplayName: boolean
+  adoptAvatar: boolean
+} | null>(null)
 const hasRegisterData = ref<boolean>(false)
 
 // Public settings
@@ -238,6 +245,15 @@ onMounted(async () => {
       initialTurnstileToken.value = registerData.turnstile_token || ''
       promoCode.value = registerData.promo_code || ''
       invitationCode.value = registerData.invitation_code || ''
+      pendingAuthToken.value = registerData.pending_auth_token || ''
+      pendingProvider.value = registerData.pending_provider || ''
+      pendingRedirect.value = registerData.pending_redirect || ''
+      pendingAdoptionDecision.value = registerData.pending_adoption_decision
+        ? {
+            adoptDisplayName: registerData.pending_adoption_decision.adopt_display_name === true,
+            adoptAvatar: registerData.pending_adoption_decision.adopt_avatar === true
+          }
+        : null
       hasRegisterData.value = !!(email.value && password.value)
     } catch {
       hasRegisterData.value = false
@@ -323,6 +339,8 @@ async function sendCode(): Promise<void> {
 
     const response = await sendVerifyCode({
       email: email.value,
+      pending_auth_token: pendingAuthToken.value || undefined,
+      pending_oauth_token: pendingAuthToken.value || undefined,
       // 优先使用重发时新获取的 token（因为初始 token 可能已被使用）
       turnstile_token: resendTurnstileToken.value || initialTurnstileToken.value || undefined
     })
@@ -395,15 +413,29 @@ async function handleVerify(): Promise<void> {
       return
     }
 
-    // Register with verification code
-    await authStore.register({
-      email: email.value,
-      password: password.value,
-      verify_code: verifyCode.value.trim(),
-      turnstile_token: initialTurnstileToken.value || undefined,
-      promo_code: promoCode.value || undefined,
-      invitation_code: invitationCode.value || undefined
-    })
+    if (pendingAuthToken.value && pendingProvider.value) {
+      const response = await createOAuthAccount(pendingProvider.value as 'linuxdo' | 'wechat' | 'oidc', {
+        pendingAuthToken: pendingAuthToken.value,
+        email: email.value,
+        password: password.value,
+        verifyCode: verifyCode.value.trim(),
+        invitationCode: invitationCode.value || undefined,
+        adoptDisplayName: pendingAdoptionDecision.value?.adoptDisplayName,
+        adoptAvatar: pendingAdoptionDecision.value?.adoptAvatar
+      })
+      persistOAuthTokenPair(response)
+      authStore.clearPendingAuthSession()
+      await authStore.setToken(response.access_token)
+    } else {
+      await authStore.register({
+        email: email.value,
+        password: password.value,
+        verify_code: verifyCode.value.trim(),
+        turnstile_token: initialTurnstileToken.value || undefined,
+        promo_code: promoCode.value || undefined,
+        invitation_code: invitationCode.value || undefined
+      })
+    }
 
     // Clear session data
     sessionStorage.removeItem('register_data')
@@ -412,7 +444,7 @@ async function handleVerify(): Promise<void> {
     appStore.showSuccess(t('auth.accountCreatedSuccess', { siteName: siteName.value }))
 
     // Redirect to dashboard
-    await router.push('/dashboard')
+    await router.push(pendingRedirect.value || '/dashboard')
   } catch (error: unknown) {
     errorMessage.value = buildAuthErrorMessage(error, {
       fallback: t('auth.verifyFailed')

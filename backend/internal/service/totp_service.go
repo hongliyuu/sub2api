@@ -58,9 +58,10 @@ type TotpSetupSession struct {
 
 // TotpLoginSession represents a pending 2FA login session
 type TotpLoginSession struct {
-	UserID      int64
-	Email       string
-	TokenExpiry time.Time
+	UserID           int64
+	Email            string
+	TokenExpiry      time.Time
+	PendingAuthToken string
 }
 
 // TotpStatus represents the TOTP status for a user
@@ -397,6 +398,12 @@ func (s *TotpService) VerifyCode(ctx context.Context, userID int64, code string)
 
 // CreateLoginSession creates a temporary login session for 2FA
 func (s *TotpService) CreateLoginSession(ctx context.Context, userID int64, email string) (string, error) {
+	return s.CreateLoginSessionForPendingAuth(ctx, userID, email, "")
+}
+
+// CreateLoginSessionForPendingAuth creates a temporary login session for 2FA and
+// binds it to a pending auth token when the login flow is resuming an identity bind.
+func (s *TotpService) CreateLoginSessionForPendingAuth(ctx context.Context, userID int64, email, pendingAuthToken string) (string, error) {
 	// Generate a random temp token
 	tempToken, err := generateRandomToken(32)
 	if err != nil {
@@ -404,9 +411,10 @@ func (s *TotpService) CreateLoginSession(ctx context.Context, userID int64, emai
 	}
 
 	session := &TotpLoginSession{
-		UserID:      userID,
-		Email:       email,
-		TokenExpiry: time.Now().Add(totpLoginTTL),
+		UserID:           userID,
+		Email:            email,
+		TokenExpiry:      time.Now().Add(totpLoginTTL),
+		PendingAuthToken: pendingAuthToken,
 	}
 
 	if err := s.cache.SetLoginSession(ctx, tempToken, session, totpLoginTTL); err != nil {

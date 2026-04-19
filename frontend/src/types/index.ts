@@ -32,6 +32,103 @@ export interface NotifyEmailEntry {
   verified: boolean
 }
 
+export type UserAccountBindingProvider = 'email' | 'linuxdo' | 'wechat' | 'oidc'
+
+export type OAuthProvider = Extract<UserAccountBindingProvider, 'linuxdo' | 'wechat' | 'oidc'>
+
+export type PendingAuthIntent = 'login' | 'bind_current_user' | 'adopt_existing_user_by_email'
+
+export type OAuthBindingStartIntent = PendingAuthIntent | 'bind'
+
+export interface UserAccountBindingChannel {
+  channel: 'open' | 'mp' | string
+  app_id?: string | null
+  subject?: string | null
+  display_name?: string | null
+  metadata?: Record<string, unknown> | null
+}
+
+export interface UserAccountBinding {
+  provider?: UserAccountBindingProvider | string
+  provider_key?: string | null
+  provider_subject?: string | null
+  issuer?: string | null
+  bound?: boolean
+  managed?: boolean | null
+  value?: string | null
+  identifier?: string | null
+  display_name?: string | null
+  verified?: boolean | null
+  connected_at?: string | null
+  can_disconnect?: boolean | null
+  connect_url?: string | null
+  disconnect_url?: string | null
+  channels?: UserAccountBindingChannel[] | null
+  metadata?: Record<string, unknown> | null
+}
+
+export interface UserExternalIdentity {
+  provider: UserAccountBindingProvider | string
+  provider_key?: string | null
+  provider_subject?: string | null
+  provider_user_id?: string | null
+  provider_union_id?: string | null
+  provider_username?: string | null
+  issuer?: string | null
+  channel?: string | null
+  channel_app_id?: string | null
+  display_name?: string | null
+  profile_url?: string | null
+  avatar_url?: string | null
+  metadata?: Record<string, unknown> | null
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+export interface UserAvatar {
+  storage_provider?: string | null
+  storage_key?: string | null
+  url?: string | null
+  content_type?: string | null
+  byte_size?: number | null
+  sha256?: string | null
+  width?: number | null
+  height?: number | null
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+export interface OAuthTokenPairResponse {
+  access_token: string
+  refresh_token?: string
+  expires_in?: number
+  token_type: string
+}
+
+export interface PendingAuthSessionSummary {
+  token: string
+  provider: OAuthProvider
+  intent: PendingAuthIntent
+  auth_result: 'pending_session'
+  redirect?: string
+  adoption_required?: boolean
+  suggested_display_name?: string | null
+  suggested_avatar_url?: string | null
+}
+
+export interface PendingAuthSessionCallbackPayload {
+  auth_result: 'pending_session'
+  pending_auth_token: string
+  provider: OAuthProvider
+  intent: PendingAuthIntent
+  redirect?: string
+  adoption_required?: boolean
+  suggested_display_name?: string | null
+  suggested_avatar_url?: string | null
+}
+
+export type OAuthCallbackResult = OAuthTokenPairResponse | PendingAuthSessionCallbackPayload
+
 // ==================== User & Auth Types ====================
 
 export interface User {
@@ -46,6 +143,28 @@ export interface User {
   balance_notify_enabled: boolean
   balance_notify_threshold: number | null
   balance_notify_extra_emails: NotifyEmailEntry[]
+  email_verified?: boolean
+  signup_source?: UserAccountBindingProvider | string | null
+  external_identities?: UserExternalIdentity[]
+  avatar?: UserAvatar | null
+  avatar_url?: string | null
+  avatar_thumbnail_url?: string | null
+  avatar_updated_at?: string | null
+  avatar_mime_type?: string | null
+  has_custom_avatar?: boolean
+  linuxdo_username?: string | null
+  linuxdo_id?: string | null
+  linuxdo_subject?: string | null
+  linuxdo_bound?: boolean
+  wechat?: string | null
+  wechat_openid?: string | null
+  wechat_unionid?: string | null
+  wechat_nickname?: string | null
+  wechat_bound?: boolean
+  account_bindings?:
+    | Partial<Record<UserAccountBindingProvider, UserAccountBinding | null>>
+    | UserAccountBinding[]
+    | null
   subscriptions?: UserSubscription[] // User's active subscriptions
   created_at: string
   updated_at: string
@@ -78,6 +197,8 @@ export interface RegisterRequest {
 export interface SendVerifyCodeRequest {
   email: string
   turnstile_token?: string
+  pending_auth_token?: string
+  pending_oauth_token?: string
 }
 
 export interface SendVerifyCodeResponse {
@@ -103,6 +224,7 @@ export interface CustomEndpoint {
 export interface PublicSettings {
   registration_enabled: boolean
   email_verify_enabled: boolean
+  third_party_first_login_require_email?: boolean
   registration_email_suffix_whitelist: string[]
   promo_code_enabled: boolean
   password_reset_enabled: boolean
@@ -123,8 +245,16 @@ export interface PublicSettings {
   custom_menu_items: CustomMenuItem[]
   custom_endpoints: CustomEndpoint[]
   linuxdo_oauth_enabled: boolean
+  wechat_oauth_enabled?: boolean
   oidc_oauth_enabled: boolean
   oidc_oauth_provider_name: string
+  wechat_login_open_app_id?: string
+  wechat_login_open_app_secret?: string
+  wechat_login_mp_app_id?: string
+  wechat_login_mp_app_secret?: string
+  wechat_login_open_enabled?: boolean
+  wechat_login_mp_enabled?: boolean
+  wechat_login_unionid_health_status?: 'ok' | 'warning' | 'error'
   backend_mode_enabled: boolean
   version: string
   balance_low_notify_enabled: boolean
@@ -132,11 +262,7 @@ export interface PublicSettings {
   balance_low_notify_threshold: number
 }
 
-export interface AuthResponse {
-  access_token: string
-  refresh_token?: string  // New: Refresh Token for token renewal
-  expires_in?: number     // New: Access Token expiry time in seconds
-  token_type: string
+export interface AuthResponse extends OAuthTokenPairResponse {
   user: User & { run_mode?: 'standard' | 'simple' }
 }
 
@@ -1597,12 +1723,16 @@ export interface TotpVerificationMethod {
 export interface TotpLoginResponse {
   requires_2fa: boolean
   temp_token?: string
+  pending_auth_token?: string
+  pending_oauth_token?: string
   user_email_masked?: string
 }
 
 export interface TotpLogin2FARequest {
   temp_token: string
   totp_code: string
+  pending_auth_token?: string
+  pending_oauth_token?: string
 }
 
 // ==================== Scheduled Test Types ====================

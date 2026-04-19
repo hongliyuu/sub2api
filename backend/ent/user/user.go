@@ -25,6 +25,8 @@ const (
 	FieldEmail = "email"
 	// FieldPasswordHash holds the string denoting the password_hash field in the database.
 	FieldPasswordHash = "password_hash"
+	// FieldSignupSource holds the string denoting the signup_source field in the database.
+	FieldSignupSource = "signup_source"
 	// FieldRole holds the string denoting the role field in the database.
 	FieldRole = "role"
 	// FieldBalance holds the string denoting the balance field in the database.
@@ -73,6 +75,10 @@ const (
 	EdgePromoCodeUsages = "promo_code_usages"
 	// EdgePaymentOrders holds the string denoting the payment_orders edge name in mutations.
 	EdgePaymentOrders = "payment_orders"
+	// EdgeAuthIdentities holds the string denoting the auth_identities edge name in mutations.
+	EdgeAuthIdentities = "auth_identities"
+	// EdgePendingAuthSessions holds the string denoting the pending_auth_sessions edge name in mutations.
+	EdgePendingAuthSessions = "pending_auth_sessions"
 	// EdgeUserAllowedGroups holds the string denoting the user_allowed_groups edge name in mutations.
 	EdgeUserAllowedGroups = "user_allowed_groups"
 	// Table holds the table name of the user in the database.
@@ -145,6 +151,20 @@ const (
 	PaymentOrdersInverseTable = "payment_orders"
 	// PaymentOrdersColumn is the table column denoting the payment_orders relation/edge.
 	PaymentOrdersColumn = "user_id"
+	// AuthIdentitiesTable is the table that holds the auth_identities relation/edge.
+	AuthIdentitiesTable = "auth_identities"
+	// AuthIdentitiesInverseTable is the table name for the AuthIdentity entity.
+	// It exists in this package in order to avoid circular dependency with the "authidentity" package.
+	AuthIdentitiesInverseTable = "auth_identities"
+	// AuthIdentitiesColumn is the table column denoting the auth_identities relation/edge.
+	AuthIdentitiesColumn = "user_id"
+	// PendingAuthSessionsTable is the table that holds the pending_auth_sessions relation/edge.
+	PendingAuthSessionsTable = "pending_auth_sessions"
+	// PendingAuthSessionsInverseTable is the table name for the PendingAuthSession entity.
+	// It exists in this package in order to avoid circular dependency with the "pendingauthsession" package.
+	PendingAuthSessionsInverseTable = "pending_auth_sessions"
+	// PendingAuthSessionsColumn is the table column denoting the pending_auth_sessions relation/edge.
+	PendingAuthSessionsColumn = "target_user_id"
 	// UserAllowedGroupsTable is the table that holds the user_allowed_groups relation/edge.
 	UserAllowedGroupsTable = "user_allowed_groups"
 	// UserAllowedGroupsInverseTable is the table name for the UserAllowedGroup entity.
@@ -162,6 +182,7 @@ var Columns = []string{
 	FieldDeletedAt,
 	FieldEmail,
 	FieldPasswordHash,
+	FieldSignupSource,
 	FieldRole,
 	FieldBalance,
 	FieldConcurrency,
@@ -212,6 +233,10 @@ var (
 	EmailValidator func(string) error
 	// PasswordHashValidator is a validator for the "password_hash" field. It is called by the builders before save.
 	PasswordHashValidator func(string) error
+	// DefaultSignupSource holds the default value on creation for the "signup_source" field.
+	DefaultSignupSource string
+	// SignupSourceValidator is a validator for the "signup_source" field. It is called by the builders before save.
+	SignupSourceValidator func(string) error
 	// DefaultRole holds the default value on creation for the "role" field.
 	DefaultRole string
 	// RoleValidator is a validator for the "role" field. It is called by the builders before save.
@@ -273,6 +298,11 @@ func ByEmail(opts ...sql.OrderTermOption) OrderOption {
 // ByPasswordHash orders the results by the password_hash field.
 func ByPasswordHash(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldPasswordHash, opts...).ToFunc()
+}
+
+// BySignupSource orders the results by the signup_source field.
+func BySignupSource(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSignupSource, opts...).ToFunc()
 }
 
 // ByRole orders the results by the role field.
@@ -485,6 +515,34 @@ func ByPaymentOrders(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
 	}
 }
 
+// ByAuthIdentitiesCount orders the results by auth_identities count.
+func ByAuthIdentitiesCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newAuthIdentitiesStep(), opts...)
+	}
+}
+
+// ByAuthIdentities orders the results by auth_identities terms.
+func ByAuthIdentities(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newAuthIdentitiesStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
+// ByPendingAuthSessionsCount orders the results by pending_auth_sessions count.
+func ByPendingAuthSessionsCount(opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborsCount(s, newPendingAuthSessionsStep(), opts...)
+	}
+}
+
+// ByPendingAuthSessions orders the results by pending_auth_sessions terms.
+func ByPendingAuthSessions(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newPendingAuthSessionsStep(), append([]sql.OrderTerm{term}, terms...)...)
+	}
+}
+
 // ByUserAllowedGroupsCount orders the results by user_allowed_groups count.
 func ByUserAllowedGroupsCount(opts ...sql.OrderTermOption) OrderOption {
 	return func(s *sql.Selector) {
@@ -566,6 +624,20 @@ func newPaymentOrdersStep() *sqlgraph.Step {
 		sqlgraph.From(Table, FieldID),
 		sqlgraph.To(PaymentOrdersInverseTable, FieldID),
 		sqlgraph.Edge(sqlgraph.O2M, false, PaymentOrdersTable, PaymentOrdersColumn),
+	)
+}
+func newAuthIdentitiesStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(AuthIdentitiesInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, AuthIdentitiesTable, AuthIdentitiesColumn),
+	)
+}
+func newPendingAuthSessionsStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(PendingAuthSessionsInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.O2M, false, PendingAuthSessionsTable, PendingAuthSessionsColumn),
 	)
 }
 func newUserAllowedGroupsStep() *sqlgraph.Step {

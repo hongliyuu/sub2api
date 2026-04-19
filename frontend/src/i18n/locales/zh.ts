@@ -464,6 +464,78 @@ export default {
       completing: '正在完成注册...',
       completeRegistrationFailed: '注册失败，请检查邀请码后重试。'
     },
+    wechat: {
+      signIn: '使用微信登录',
+      disabledUnavailable: '当前未启用可用的微信登录方式。',
+      disabledNeedWechatEnv: '当前仅支持在微信内打开后使用该微信登录方式。',
+      disabledNeedExternalBrowser: '当前仅支持在微信外的普通浏览器中使用该微信登录方式。'
+    },
+    pendingAuth: {
+      login: {
+        title: '继续完成账户校验',
+        defaultDescription: '请登录您已有的本站账户，以绑定这个第三方身份。',
+        adoptExistingDescription: '请先验证您已有的本站账户所有权，再把这个第三方身份绑定进去。',
+        bindCurrentDescription: '请重新登录，以继续把这个第三方身份绑定到当前账户。'
+      },
+      register: {
+        title: '继续完成本站账户创建',
+        description: '请为这个第三方登录创建本站邮箱和密码账户。第三方返回的邮箱不会被当作已验证的本站邮箱绑定。'
+      }
+    },
+    thirdParty: {
+      pendingSessionTitle: '完成账户接入',
+      useProviderNickname: '使用第三方昵称',
+      useProviderAvatar: '使用第三方头像',
+      callback: {
+        idle: '等待授权回调结果',
+        idleDescription: '当前还没有解析到授权回调参数。',
+        error: {
+          title: '无法完成认证',
+          description: '回调参数缺失，或第三方返回了错误信息。',
+          invalidPendingPayload: '待处理认证会话参数无效。',
+          missingResult: '缺少回调结果。'
+        },
+        pending: {
+          login: {
+            title: '继续完成账户接入',
+            description: '请选择创建新账户，或验证并绑定您已有的本站账户。',
+            summaryTitle: '创建新账户或绑定已有账户',
+            summaryDescription: '已生成待处理认证会话。请继续创建账户，或验证已有账户后完成绑定。',
+            actions: {
+              createAccount: '创建账户',
+              bindExisting: '绑定已有账户'
+            }
+          },
+          bindCurrent: {
+            title: '绑定到当前账户',
+            description: '第三方身份已完成认证。继续把它绑定到当前已登录账户。',
+            summaryTitle: '绑定到当前账户',
+            summaryDescription: '该回调会在发放访问令牌前暂停，以便先完成当前账户绑定。',
+            actions: {
+              continue: '继续绑定'
+            }
+          },
+          adoptExisting: {
+            title: '确认账户所有权',
+            description: '第三方身份已完成认证，但仍需通过站内邮箱验证已有账户所有权。',
+            summaryTitle: '确认账户所有权',
+            summaryDescription: '请先完成本站已有账户验证，再把这个第三方身份附加到现有账户。',
+            actions: {
+              verifyAndBind: '验证并绑定'
+            }
+          }
+        },
+        success: {
+          title: '认证已完成',
+          description: '回调已返回现有账户登录结果，或完成了绑定流程。',
+          summaryTitle: '已收到认证结果',
+          adoptionRequired: '完成前，请确认是否采用第三方提供的昵称或头像。',
+          noAdoptionRequired: '当前无需额外的资料采用确认。',
+          redirectLabel: '跳转路径',
+          tokenTypeLabel: '令牌类型'
+        }
+      }
+    },
     oauth: {
       code: '授权码',
       state: '状态',
@@ -944,6 +1016,36 @@ export default {
       maxEmailsReached: '已达到通知邮箱数量上限',
       unverified: '未验证',
       verified: '已验证',
+    },
+    bindings: {
+      title: '登录方式',
+      description: '查看并管理当前账户可用的登录方式。',
+      status: {
+        bound: '已绑定',
+        notBound: '未绑定'
+      },
+      actions: {
+        connect: '立即绑定',
+        connected: '已连接'
+      },
+      providers: {
+        email: '邮箱',
+        linuxdo: 'Linux.do',
+        wechat: '微信',
+        oidc: 'OIDC'
+      },
+      providerDescriptions: {
+        email: '当前账户的主邮箱与密码登录方式。',
+        linuxdo: '绑定 Linux.do 账号后可直接使用第三方登录。',
+        wechat: '微信绑定会统一归并支持的 open 与 mp 登录渠道。',
+        oidc: '将组织或身份提供方账户作为正式的登录绑定方式。'
+      },
+      providerHints: {
+        email: '补齐邮箱后可保留密码登录能力。',
+        linuxdo: '可在个人资料页发起 Linux.do 绑定。',
+        wechat: '可在个人资料页发起微信绑定。',
+        oidc: '可在个人资料页发起 OIDC 绑定。'
+      }
     }
   },
 
@@ -4767,6 +4869,12 @@ export default {
         providerAlipay: '支付宝官方',
         providerWxpay: '微信官方',
         providerStripe: 'Stripe',
+        providerUiCapabilityNotice: '前台支付能力统一显示为 支付宝 / 微信 / Stripe。下方 provider 仅用于选择由官方支付宝、官方微信、易支付或 Stripe 承载这些能力。',
+        frontendCapabilityLabel: '前台能力',
+        providerIntro_easypay: '前台仍显示“支付宝 / 微信”，这里配置的是易支付聚合通道及其映射能力。',
+        providerIntro_alipay: '前台仍显示“支付宝”，这里配置的是官方支付宝渠道所需凭证。',
+        providerIntro_wxpay: '前台仍显示“微信支付”，这里配置的是官方微信支付商户参数，以及可选的公众号网页授权补充字段。',
+        providerIntro_stripe: '前台仍显示“Stripe”。Stripe Payment Element 内部可继续承载银行卡、Alipay、WeChat Pay、Link 等子方式。',
         typeDisabled: '类型已禁用',
         enableTypesFirst: '请先在上方启用至少一种服务商',
         easypayRedirect: '跳转',
@@ -4777,22 +4885,54 @@ export default {
         validationNameRequired: '服务商名称不能为空',
         validationTypesRequired: '请至少选择一种支持的支付方式',
         validationFieldRequired: '{field} 不能为空',
+        field_pid: 'PID',
+        field_pkey: 'PKey',
         field_apiBase: 'API 基础地址',
         field_notifyUrl: '异步通知地址',
         field_returnUrl: '同步跳转地址',
         callbackBaseUrl: '回调基础地址',
+        field_appId: 'App ID',
         field_privateKey: '私钥',
         field_publicKey: '公钥',
         field_mchId: '商户号',
         field_apiV3Key: 'API v3 密钥',
         field_publicKeyId: '公钥 ID',
         field_certSerial: '证书序列号',
+        field_mpAppId: '公众号 AppID',
+        field_mpAppSecret: '公众号 AppSecret',
         field_secretKey: '密钥',
         field_publishableKey: '公开密钥',
         field_webhookSecret: 'Webhook 密钥',
         field_cid: '支付渠道 ID',
         field_cidAlipay: '支付宝渠道 ID',
         field_cidWxpay: '微信渠道 ID',
+        fieldHint_easypay_pid: '易支付平台分配的商户 PID。',
+        fieldHint_easypay_pkey: '易支付商户签名密钥。',
+        fieldHint_easypay_apiBase: '易支付网关基础地址，例如 https://pay.example.com。',
+        fieldHint_easypay_cidAlipay: '可选。需要将支付宝能力映射到指定易支付渠道时填写。',
+        fieldHint_easypay_cidWxpay: '可选。需要将微信能力映射到指定易支付渠道时填写。',
+        fieldHint_alipay_appId: '支付宝应用 AppID，对应前台“支付宝”能力，不会额外暴露底层接入实现。',
+        fieldHint_alipay_privateKey: '支付宝应用私钥内容，用于签名请求。',
+        fieldHint_alipay_publicKey: '支付宝平台公钥内容，用于验签回调。',
+        fieldHint_wxpay_appId: '微信支付主体 AppID。它属于商户支付配置，不会从微信登录 mp 配置自动覆盖。',
+        fieldHint_wxpay_mchId: '微信支付商户号，仅用于支付商户身份。',
+        fieldHint_wxpay_privateKey: '商户 API 证书私钥内容。',
+        fieldHint_wxpay_apiV3Key: '32 字节 API v3 密钥。',
+        fieldHint_wxpay_publicKey: '微信支付平台公钥内容，用于回调验签。',
+        fieldHint_wxpay_publicKeyId: '平台公钥 ID，可按当前接入方式选填。',
+        fieldHint_wxpay_certSerial: '商户 API 证书序列号，可选。',
+        fieldHint_wxpay_mpAppId: '公众号网页授权 AppID。只用于微信内网页授权 / JSAPI 相关能力，可从微信登录 mp 配置复制。',
+        fieldHint_wxpay_mpAppSecret: '公众号网页授权 AppSecret。仅补充公众号登录 / JSAPI 相关能力，不会替代商户号、证书或密钥。',
+        fieldHint_stripe_secretKey: 'Stripe Secret Key，用于服务端创建支付意图。',
+        fieldHint_stripe_publishableKey: 'Stripe Publishable Key，用于前端加载 Payment Element。',
+        fieldHint_stripe_webhookSecret: 'Stripe Webhook Secret，用于校验 webhook 签名。',
+        wxpayMerchantSectionTitle: '微信支付商户参数',
+        wxpayMerchantSectionDesc: '这些字段只属于微信支付商户配置，不与微信登录配置互相覆盖。',
+        wxpayMpSectionTitle: '公众号网页授权补充',
+        wxpayMpSectionDesc: '仅在你需要微信内网页授权 / JSAPI 补充信息时填写。不要把它与商户号、证书、公钥等支付商户配置混淆。',
+        wxpayMpSyncAction: '从微信登录 mp 配置一键同步 appid/appsecret',
+        wxpayMpSyncHint: '可一键同步微信登录里的公众号 AppID / AppSecret，仅补充网页授权能力；不会读取或覆盖商户号、API v3 密钥、证书、公钥等微信支付商户配置。',
+        wxpayMpSyncPlaceholderToast: '同步只会读取微信登录里的公众号 AppID / AppSecret，不会改动商户号、API v3 密钥、证书、公钥等微信支付商户配置。',
         stripeWebhookHint: '请在 Stripe Dashboard 中将以下地址配置为 Webhook 端点：',
         limitsTitle: '限额配置',
         limitSingleMin: '单笔最低',
@@ -5536,8 +5676,8 @@ export default {
       stripe: 'Stripe',
       card: '银行卡',
       link: 'Link',
-      alipay_direct: '支付宝（直连）',
-      wxpay_direct: '微信支付（直连）',
+      alipay_direct: '支付宝',
+      wxpay_direct: '微信支付',
     },
     status: {
       pending: '待支付',

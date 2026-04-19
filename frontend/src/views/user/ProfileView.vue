@@ -14,6 +14,7 @@
         </div>
       </div>
       <ProfileEditForm :initial-username="user?.username || ''" />
+      <ProfileAccountBindingsCard :user="user" />
       <ProfileBalanceNotifyCard
         v-if="user && balanceLowNotifyEnabled"
         :enabled="user.balance_notify_enabled ?? true"
@@ -35,6 +36,7 @@ import { authAPI } from '@/api'; import AppLayout from '@/components/layout/AppL
 import StatCard from '@/components/common/StatCard.vue'
 import ProfileInfoCard from '@/components/user/profile/ProfileInfoCard.vue'
 import ProfileEditForm from '@/components/user/profile/ProfileEditForm.vue'
+import ProfileAccountBindingsCard from '@/components/user/profile/ProfileAccountBindingsCard.vue'
 import ProfileBalanceNotifyCard from '@/components/user/profile/ProfileBalanceNotifyCard.vue'
 import ProfilePasswordForm from '@/components/user/profile/ProfilePasswordForm.vue'
 import ProfileTotpCard from '@/components/user/profile/ProfileTotpCard.vue'

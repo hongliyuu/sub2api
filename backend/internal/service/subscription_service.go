@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"math/rand/v2"
@@ -211,21 +212,28 @@ func (s *SubscriptionService) AssignOrExtendSubscription(ctx context.Context, in
 
 		// 开启事务：ExtendExpiry + UpdateStatus + UpdateNotes 在同一事务中完成
 		tx, err := s.entClient.Tx(ctx)
-		if err != nil {
+		if err != nil && !errors.Is(err, dbent.ErrTxStarted) {
 			return nil, false, fmt.Errorf("begin transaction: %w", err)
 		}
-		txCtx := dbent.NewTxContext(ctx, tx)
+		txCtx := ctx
+		if err == nil {
+			txCtx = dbent.NewTxContext(ctx, tx)
+		}
 
 		// 更新过期时间
 		if err := s.userSubRepo.ExtendExpiry(txCtx, existingSub.ID, newExpiresAt); err != nil {
-			_ = tx.Rollback()
+			if tx != nil {
+				_ = tx.Rollback()
+			}
 			return nil, false, fmt.Errorf("extend subscription: %w", err)
 		}
 
 		// 如果订阅已过期或被暂停，恢复为active状态
 		if existingSub.Status != SubscriptionStatusActive {
 			if err := s.userSubRepo.UpdateStatus(txCtx, existingSub.ID, SubscriptionStatusActive); err != nil {
-				_ = tx.Rollback()
+				if tx != nil {
+					_ = tx.Rollback()
+				}
 				return nil, false, fmt.Errorf("update subscription status: %w", err)
 			}
 		}
@@ -238,14 +246,18 @@ func (s *SubscriptionService) AssignOrExtendSubscription(ctx context.Context, in
 			}
 			newNotes += input.Notes
 			if err := s.userSubRepo.UpdateNotes(txCtx, existingSub.ID, newNotes); err != nil {
-				_ = tx.Rollback()
+				if tx != nil {
+					_ = tx.Rollback()
+				}
 				return nil, false, fmt.Errorf("update subscription notes: %w", err)
 			}
 		}
 
 		// 提交事务
-		if err := tx.Commit(); err != nil {
-			return nil, false, fmt.Errorf("commit transaction: %w", err)
+		if tx != nil {
+			if err := tx.Commit(); err != nil {
+				return nil, false, fmt.Errorf("commit transaction: %w", err)
+			}
 		}
 
 		// 失效订阅缓存

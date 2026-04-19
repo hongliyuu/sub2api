@@ -1,5 +1,5 @@
 <template>
-  <div class="space-y-4">
+  <div class="space-y-3">
     <button type="button" :disabled="disabled" class="btn btn-secondary w-full" @click="startLogin">
       <span
         class="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary-100 text-xs font-semibold text-primary-700 dark:bg-primary-900/30 dark:text-primary-300"
@@ -8,6 +8,10 @@
       </span>
       {{ t('auth.oidc.signIn', { providerName: normalizedProviderName }) }}
     </button>
+
+    <p class="text-sm text-gray-500 dark:text-dark-400">
+      {{ t('profile.bindings.providerDescriptions.oidc') }}
+    </p>
 
     <div v-if="showDivider" class="flex items-center gap-3">
       <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>

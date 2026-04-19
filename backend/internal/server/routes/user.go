@@ -25,6 +25,20 @@ func RegisterUserRoutes(
 			user.GET("/profile", h.User.GetProfile)
 			user.PUT("/password", h.User.ChangePassword)
 			user.PUT("", h.User.UpdateProfile)
+			if confirmBindingHandler := resolveOptionalGinHandler(h.User, "ConfirmAccountBinding"); confirmBindingHandler != nil {
+				user.POST("/account-bindings/:provider", confirmBindingHandler)
+			}
+			if deleteBindingHandler := resolveOptionalGinHandler(h.User, "DeleteAccountBinding"); deleteBindingHandler != nil {
+				user.DELETE("/account-bindings/:provider", deleteBindingHandler)
+			}
+			if adoptionDecisionHandler := resolveOptionalGinHandler(
+				h.User,
+				"CompleteIdentityAdoptionDecision",
+				"CompleteAccountBindingAdoptionDecision",
+				"CompleteAdoptionDecision",
+			); adoptionDecisionHandler != nil {
+				user.POST("/account-bindings/:provider/adoption-decision", adoptionDecisionHandler)
+			}
 
 			// 通知邮箱管理
 			notifyEmail := user.Group("/notify-email")

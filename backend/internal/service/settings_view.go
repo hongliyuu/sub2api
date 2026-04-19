@@ -3,6 +3,7 @@ package service
 type SystemSettings struct {
 	RegistrationEnabled              bool
 	EmailVerifyEnabled               bool
+	ThirdPartyFirstLoginRequireEmail bool
 	RegistrationEmailSuffixWhitelist []string
 	PromoCodeEnabled                 bool
 	PasswordResetEnabled             bool
@@ -30,6 +31,13 @@ type SystemSettings struct {
 	LinuxDoConnectClientSecret           string
 	LinuxDoConnectClientSecretConfigured bool
 	LinuxDoConnectRedirectURL            string
+	WeChatLoginOpenEnabled               bool
+	WeChatLoginOpenAppID                 string
+	WeChatLoginOpenAppSecret             string
+	WeChatLoginMPEnabled                 bool
+	WeChatLoginMPAppID                   string
+	WeChatLoginMPAppSecret               string
+	WeChatLoginUnionIDHealthStatus       string
 
 	// Generic OIDC OAuth 登录
 	OIDCConnectEnabled                bool
@@ -71,9 +79,13 @@ type SystemSettings struct {
 	CustomMenuItems             string // JSON array of custom menu items
 	CustomEndpoints             string // JSON array of custom endpoints
 
-	DefaultConcurrency   int
-	DefaultBalance       float64
-	DefaultSubscriptions []DefaultSubscriptionSetting
+	DefaultConcurrency     int
+	DefaultBalance         float64
+	DefaultSubscriptions   []DefaultSubscriptionSetting
+	DefaultSettingsEmail   ProviderDefaultUserSettings
+	DefaultSettingsLinuxDo ProviderDefaultUserSettings
+	DefaultSettingsWeChat  ProviderDefaultUserSettings
+	DefaultSettingsOIDC    ProviderDefaultUserSettings
 
 	// Model fallback configuration
 	EnableModelFallback      bool   `json:"enable_model_fallback"`
@@ -125,9 +137,17 @@ type DefaultSubscriptionSetting struct {
 	ValidityDays int   `json:"validity_days"`
 }
 
+type ProviderDefaultUserSettings struct {
+	ApplyOnBind   bool
+	Balance       float64
+	Concurrency   int
+	Subscriptions []DefaultSubscriptionSetting
+}
+
 type PublicSettings struct {
 	RegistrationEnabled              bool
 	EmailVerifyEnabled               bool
+	ThirdPartyFirstLoginRequireEmail bool
 	RegistrationEmailSuffixWhitelist []string
 	PromoCodeEnabled                 bool
 	PasswordResetEnabled             bool
@@ -151,12 +171,15 @@ type PublicSettings struct {
 	CustomMenuItems             string // JSON array of custom menu items
 	CustomEndpoints             string // JSON array of custom endpoints
 
-	LinuxDoOAuthEnabled   bool
-	BackendModeEnabled    bool
-	PaymentEnabled        bool
-	OIDCOAuthEnabled      bool
-	OIDCOAuthProviderName string
-	Version               string
+	LinuxDoOAuthEnabled            bool
+	WeChatLoginOpenEnabled         bool
+	WeChatLoginMPEnabled           bool
+	WeChatLoginUnionIDHealthStatus string
+	BackendModeEnabled             bool
+	PaymentEnabled                 bool
+	OIDCOAuthEnabled               bool
+	OIDCOAuthProviderName          string
+	Version                        string
 
 	BalanceLowNotifyEnabled     bool
 	AccountQuotaNotifyEnabled   bool

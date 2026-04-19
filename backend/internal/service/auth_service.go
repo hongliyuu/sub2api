@@ -532,17 +532,26 @@ func (s *AuthService) LoginOrRegisterOAuth(ctx context.Context, email, username 
 // 与 LoginOrRegisterOAuth 功能相同，但返回 TokenPair 而非单个 token。
 // invitationCode 仅在邀请码注册模式下新用户注册时使用；已有账号登录时忽略。
 func (s *AuthService) LoginOrRegisterOAuthWithTokenPair(ctx context.Context, email, username, invitationCode string) (*TokenPair, *User, error) {
+	tokenPair, user, _, err := s.loginOrRegisterOAuthWithTokenPairDetailed(ctx, email, username, invitationCode)
+	return tokenPair, user, err
+}
+
+func (s *AuthService) LoginOrRegisterOAuthWithTokenPairDetailed(ctx context.Context, email, username, invitationCode string) (*TokenPair, *User, bool, error) {
+	return s.loginOrRegisterOAuthWithTokenPairDetailed(ctx, email, username, invitationCode)
+}
+
+func (s *AuthService) loginOrRegisterOAuthWithTokenPairDetailed(ctx context.Context, email, username, invitationCode string) (*TokenPair, *User, bool, error) {
 	// 检查 refreshTokenCache 是否可用
 	if s.refreshTokenCache == nil {
-		return nil, nil, errors.New("refresh token cache not configured")
+		return nil, nil, false, errors.New("refresh token cache not configured")
 	}
 
 	email = strings.TrimSpace(email)
 	if email == "" || len(email) > 255 {
-		return nil, nil, infraerrors.BadRequest("INVALID_EMAIL", "invalid email")
+		return nil, nil, false, infraerrors.BadRequest("INVALID_EMAIL", "invalid email")
 	}
 	if _, err := mail.ParseAddress(email); err != nil {
-		return nil, nil, infraerrors.BadRequest("INVALID_EMAIL", "invalid email")
+		return nil, nil, false, infraerrors.BadRequest("INVALID_EMAIL", "invalid email")
 	}
 
 	username = strings.TrimSpace(username)
@@ -550,26 +559,27 @@ func (s *AuthService) LoginOrRegisterOAuthWithTokenPair(ctx context.Context, ema
 		username = string([]rune(username)[:100])
 	}
 
+	created := false
 	user, err := s.userRepo.GetByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
 			// OAuth 首次登录视为注册
 			if s.settingService == nil || !s.settingService.IsRegistrationEnabled(ctx) {
-				return nil, nil, ErrRegDisabled
+				return nil, nil, false, ErrRegDisabled
 			}
 
 			// 检查是否需要邀请码
 			var invitationRedeemCode *RedeemCode
 			if s.settingService != nil && s.settingService.IsInvitationCodeEnabled(ctx) {
 				if invitationCode == "" {
-					return nil, nil, ErrOAuthInvitationRequired
+					return nil, nil, false, ErrOAuthInvitationRequired
 				}
 				redeemCode, err := s.redeemRepo.GetByCode(ctx, invitationCode)
 				if err != nil {
-					return nil, nil, ErrInvitationCodeInvalid
+					return nil, nil, false, ErrInvitationCodeInvalid
 				}
 				if redeemCode.Type != RedeemTypeInvitation || redeemCode.Status != StatusUnused {
-					return nil, nil, ErrInvitationCodeInvalid
+					return nil, nil, false, ErrInvitationCodeInvalid
 				}
 				invitationRedeemCode = redeemCode
 			}
@@ -577,11 +587,11 @@ func (s *AuthService) LoginOrRegisterOAuthWithTokenPair(ctx context.Context, ema
 			randomPassword, err := randomHexString(32)
 			if err != nil {
 				logger.LegacyPrintf("service.auth", "[Auth] Failed to generate random password for oauth signup: %v", err)
-				return nil, nil, ErrServiceUnavailable
+				return nil, nil, false, ErrServiceUnavailable
 			}
 			hashedPassword, err := s.HashPassword(randomPassword)
 			if err != nil {
-				return nil, nil, fmt.Errorf("hash password: %w", err)
+				return nil, nil, false, fmt.Errorf("hash password: %w", err)
 			}
 
 			defaultBalance := s.cfg.Default.UserBalance
@@ -605,7 +615,7 @@ func (s *AuthService) LoginOrRegisterOAuthWithTokenPair(ctx context.Context, ema
 				tx, err := s.entClient.Tx(ctx)
 				if err != nil {
 					logger.LegacyPrintf("service.auth", "[Auth] Failed to begin transaction for oauth registration: %v", err)
-					return nil, nil, ErrServiceUnavailable
+					return nil, nil, false, ErrServiceUnavailable
 				}
 				defer func() { _ = tx.Rollback() }()
 				txCtx := dbent.NewTxContext(ctx, tx)
@@ -615,21 +625,22 @@ func (s *AuthService) LoginOrRegisterOAuthWithTokenPair(ctx context.Context, ema
 						user, err = s.userRepo.GetByEmail(ctx, email)
 						if err != nil {
 							logger.LegacyPrintf("service.auth", "[Auth] Database error getting user after conflict: %v", err)
-							return nil, nil, ErrServiceUnavailable
+							return nil, nil, false, ErrServiceUnavailable
 						}
 					} else {
 						logger.LegacyPrintf("service.auth", "[Auth] Database error creating oauth user: %v", err)
-						return nil, nil, ErrServiceUnavailable
+						return nil, nil, false, ErrServiceUnavailable
 					}
 				} else {
 					if err := s.redeemRepo.Use(txCtx, invitationRedeemCode.ID, newUser.ID); err != nil {
-						return nil, nil, ErrInvitationCodeInvalid
+						return nil, nil, false, ErrInvitationCodeInvalid
 					}
 					if err := tx.Commit(); err != nil {
 						logger.LegacyPrintf("service.auth", "[Auth] Failed to commit oauth registration transaction: %v", err)
-						return nil, nil, ErrServiceUnavailable
+						return nil, nil, false, ErrServiceUnavailable
 					}
 					user = newUser
+					created = true
 					s.assignDefaultSubscriptions(ctx, user.ID)
 				}
 			} else {
@@ -638,30 +649,31 @@ func (s *AuthService) LoginOrRegisterOAuthWithTokenPair(ctx context.Context, ema
 						user, err = s.userRepo.GetByEmail(ctx, email)
 						if err != nil {
 							logger.LegacyPrintf("service.auth", "[Auth] Database error getting user after conflict: %v", err)
-							return nil, nil, ErrServiceUnavailable
+							return nil, nil, false, ErrServiceUnavailable
 						}
 					} else {
 						logger.LegacyPrintf("service.auth", "[Auth] Database error creating oauth user: %v", err)
-						return nil, nil, ErrServiceUnavailable
+						return nil, nil, false, ErrServiceUnavailable
 					}
 				} else {
 					user = newUser
+					created = true
 					s.assignDefaultSubscriptions(ctx, user.ID)
 					if invitationRedeemCode != nil {
 						if err := s.redeemRepo.Use(ctx, invitationRedeemCode.ID, user.ID); err != nil {
-							return nil, nil, ErrInvitationCodeInvalid
+							return nil, nil, false, ErrInvitationCodeInvalid
 						}
 					}
 				}
 			}
 		} else {
 			logger.LegacyPrintf("service.auth", "[Auth] Database error during oauth login: %v", err)
-			return nil, nil, ErrServiceUnavailable
+			return nil, nil, false, ErrServiceUnavailable
 		}
 	}
 
 	if !user.IsActive() {
-		return nil, nil, ErrUserNotActive
+		return nil, nil, false, ErrUserNotActive
 	}
 
 	if user.Username == "" && username != "" {
@@ -673,9 +685,9 @@ func (s *AuthService) LoginOrRegisterOAuthWithTokenPair(ctx context.Context, ema
 
 	tokenPair, err := s.GenerateTokenPair(ctx, user, "")
 	if err != nil {
-		return nil, nil, fmt.Errorf("generate token pair: %w", err)
+		return nil, nil, false, fmt.Errorf("generate token pair: %w", err)
 	}
-	return tokenPair, user, nil
+	return tokenPair, user, created, nil
 }
 
 // pendingOAuthTokenTTL is the validity period for pending OAuth tokens.
@@ -832,9 +844,7 @@ func randomHexString(byteLength int) (string, error) {
 }
 
 func isReservedEmail(email string) bool {
-	normalized := strings.ToLower(strings.TrimSpace(email))
-	return strings.HasSuffix(normalized, LinuxDoConnectSyntheticEmailDomain) ||
-		strings.HasSuffix(normalized, OIDCConnectSyntheticEmailDomain)
+	return isSyntheticOAuthEmail(email)
 }
 
 // GenerateToken 生成JWT access token

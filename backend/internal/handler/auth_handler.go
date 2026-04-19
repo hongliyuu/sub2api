@@ -212,8 +212,9 @@ type TotpLoginResponse struct {
 
 // Login2FARequest represents the 2FA login request
 type Login2FARequest struct {
-	TempToken string `json:"temp_token" binding:"required"`
-	TotpCode  string `json:"totp_code" binding:"required,len=6"`
+	TempToken        string `json:"temp_token" binding:"required"`
+	TotpCode         string `json:"totp_code" binding:"required,len=6"`
+	PendingAuthToken string `json:"pending_auth_token,omitempty"`
 }
 
 // Login2FA completes the login with 2FA verification
@@ -256,6 +257,22 @@ func (h *AuthHandler) Login2FA(c *gin.Context) {
 		return
 	}
 
+	if pendingAuthTokenMatchesSession(session, req.PendingAuthToken) == false {
+		response.BadRequest(c, "Pending auth token does not match 2FA session")
+		return
+	}
+
+	if strings.TrimSpace(req.PendingAuthToken) != "" {
+		if _, err := h.authService.MarkPendingAuthSessionTOTPVerified(c.Request.Context(), req.PendingAuthToken, session.UserID); err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		if _, err := h.authService.CompletePendingAuthSessionBind(c.Request.Context(), req.PendingAuthToken, session.UserID); err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+	}
+
 	// Get the user (before session deletion so we can check backend mode)
 	user, err := h.userService.GetByID(c.Request.Context(), session.UserID)
 	if err != nil {
@@ -273,6 +290,147 @@ func (h *AuthHandler) Login2FA(c *gin.Context) {
 	_ = h.totpService.DeleteLoginSession(c.Request.Context(), req.TempToken)
 
 	h.respondWithTokenPair(c, user)
+}
+
+type ConfirmPendingAuthBindRequest struct {
+	PendingAuthToken string `json:"pending_auth_token" binding:"required"`
+	Password         string `json:"password" binding:"required"`
+}
+
+type ConfirmPendingAuthBind2FARequest struct {
+	PendingAuthToken string `json:"pending_auth_token" binding:"required"`
+	TempToken        string `json:"temp_token" binding:"required"`
+	TotpCode         string `json:"totp_code" binding:"required,len=6"`
+}
+
+type PendingAuth2FAResponse struct {
+	Requires2FA      bool   `json:"requires_2fa"`
+	TempToken        string `json:"temp_token,omitempty"`
+	PendingAuthToken string `json:"pending_auth_token,omitempty"`
+}
+
+// ConfirmPendingAuthBind verifies the target account password for an adopt-existing flow.
+// When the target account has TOTP enabled, it returns a temp token and leaves the pending
+// auth session non-consumed until ConfirmPendingAuthBind2FA succeeds.
+func (h *AuthHandler) ConfirmPendingAuthBind(c *gin.Context) {
+	var req ConfirmPendingAuthBindRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+
+	result, err := h.authService.VerifyPendingAuthBindPassword(c.Request.Context(), req.PendingAuthToken, req.Password)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	if result.TargetUserID == nil {
+		response.ErrorFrom(c, service.ErrPendingAuthVerificationRequired)
+		return
+	}
+
+	if result.Requires2FA {
+		if h.totpService == nil {
+			response.InternalError(c, "TOTP service not configured")
+			return
+		}
+		user, err := h.userService.GetByID(c.Request.Context(), *result.TargetUserID)
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+		tempToken, err := h.totpService.CreateLoginSessionForPendingAuth(c.Request.Context(), user.ID, user.Email, req.PendingAuthToken)
+		if err != nil {
+			response.InternalError(c, "Failed to create 2FA session")
+			return
+		}
+		response.Success(c, PendingAuth2FAResponse{
+			Requires2FA:      true,
+			TempToken:        tempToken,
+			PendingAuthToken: req.PendingAuthToken,
+		})
+		return
+	}
+
+	completion, err := h.authService.CompletePendingAuthSessionBind(c.Request.Context(), req.PendingAuthToken, *result.TargetUserID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	h.finishPendingAuthBind(c, completion)
+}
+
+// ConfirmPendingAuthBind2FA completes the TOTP step for a pending auth bind flow.
+func (h *AuthHandler) ConfirmPendingAuthBind2FA(c *gin.Context) {
+	var req ConfirmPendingAuthBind2FARequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if h.totpService == nil {
+		response.InternalError(c, "TOTP service not configured")
+		return
+	}
+
+	session, err := h.totpService.GetLoginSession(c.Request.Context(), req.TempToken)
+	if err != nil || session == nil {
+		response.BadRequest(c, "Invalid or expired 2FA session")
+		return
+	}
+	if err := h.totpService.VerifyCode(c.Request.Context(), session.UserID, req.TotpCode); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	if !pendingAuthTokenMatchesSession(session, req.PendingAuthToken) {
+		response.BadRequest(c, "Pending auth token does not match 2FA session")
+		return
+	}
+	if _, err := h.authService.MarkPendingAuthSessionTOTPVerified(c.Request.Context(), req.PendingAuthToken, session.UserID); err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	completion, err := h.authService.CompletePendingAuthSessionBind(c.Request.Context(), req.PendingAuthToken, session.UserID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	_ = h.totpService.DeleteLoginSession(c.Request.Context(), req.TempToken)
+	h.finishPendingAuthBind(c, completion)
+}
+
+func (h *AuthHandler) finishPendingAuthBind(c *gin.Context, completion *service.PendingAuthBindCompletion) {
+	if completion == nil {
+		response.InternalError(c, "Pending auth completion missing")
+		return
+	}
+	user, err := h.userService.GetByID(c.Request.Context(), completion.UserID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	switch completion.Intent {
+	case service.PendingAuthIntentLogin, service.PendingAuthIntentAdoptExistingUserByEmail:
+		h.respondWithTokenPair(c, user)
+	default:
+		response.Success(c, gin.H{
+			"completed": true,
+			"intent":    completion.Intent,
+			"user":      dto.UserFromService(user),
+		})
+	}
+}
+
+func pendingAuthTokenMatchesSession(session *service.TotpLoginSession, pendingAuthToken string) bool {
+	sessionToken := ""
+	if session != nil {
+		sessionToken = strings.TrimSpace(session.PendingAuthToken)
+	}
+	requestToken := strings.TrimSpace(pendingAuthToken)
+	if sessionToken == "" && requestToken == "" {
+		return true
+	}
+	return sessionToken != "" && requestToken != "" && sessionToken == requestToken
 }
 
 // GetCurrentUser handles getting current authenticated user

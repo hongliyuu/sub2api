@@ -2,21 +2,26 @@ package handler
 
 import (
 	"context"
+	"database/sql"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
+	"unsafe"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/oauth"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
+	"github.com/Wei-Shaw/sub2api/internal/repository"
+	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -29,9 +34,11 @@ const (
 	linuxDoOAuthStateCookieName   = "linuxdo_oauth_state"
 	linuxDoOAuthVerifierCookie    = "linuxdo_oauth_verifier"
 	linuxDoOAuthRedirectCookie    = "linuxdo_oauth_redirect"
+	linuxDoOAuthIntentCookieName  = "linuxdo_oauth_intent"
 	linuxDoOAuthCookieMaxAgeSec   = 10 * 60 // 10 minutes
 	linuxDoOAuthDefaultRedirectTo = "/dashboard"
 	linuxDoOAuthDefaultFrontendCB = "/auth/linuxdo/callback"
+	linuxDoOAuthProviderKey       = "linuxdo"
 
 	linuxDoOAuthMaxRedirectLen      = 2048
 	linuxDoOAuthMaxFragmentValueLen = 512
@@ -51,6 +58,14 @@ type linuxDoTokenExchangeError struct {
 	ProviderError       string
 	ProviderDescription string
 	Body                string
+}
+
+type linuxDoUserInfoClaims struct {
+	Email       string
+	Username    string
+	Subject     string
+	DisplayName string
+	AvatarURL   string
 }
 
 func (e *linuxDoTokenExchangeError) Error() string {
@@ -86,10 +101,12 @@ func (h *AuthHandler) LinuxDoOAuthStart(c *gin.Context) {
 	if redirectTo == "" {
 		redirectTo = linuxDoOAuthDefaultRedirectTo
 	}
+	intent := normalizeOAuthIntent(c.Query("intent"))
 
 	secureCookie := isRequestHTTPS(c)
 	setCookie(c, linuxDoOAuthStateCookieName, encodeCookieValue(state), linuxDoOAuthCookieMaxAgeSec, secureCookie)
 	setCookie(c, linuxDoOAuthRedirectCookie, encodeCookieValue(redirectTo), linuxDoOAuthCookieMaxAgeSec, secureCookie)
+	setCookie(c, linuxDoOAuthIntentCookieName, encodeCookieValue(intent), linuxDoOAuthCookieMaxAgeSec, secureCookie)
 
 	codeChallenge := ""
 	if cfg.UsePKCE {
@@ -148,6 +165,7 @@ func (h *AuthHandler) LinuxDoOAuthCallback(c *gin.Context) {
 		clearCookie(c, linuxDoOAuthStateCookieName, secureCookie)
 		clearCookie(c, linuxDoOAuthVerifierCookie, secureCookie)
 		clearCookie(c, linuxDoOAuthRedirectCookie, secureCookie)
+		clearCookie(c, linuxDoOAuthIntentCookieName, secureCookie)
 	}()
 
 	expectedState, err := readCookieDecoded(c, linuxDoOAuthStateCookieName)
@@ -161,6 +179,7 @@ func (h *AuthHandler) LinuxDoOAuthCallback(c *gin.Context) {
 	if redirectTo == "" {
 		redirectTo = linuxDoOAuthDefaultRedirectTo
 	}
+	intent := normalizedOAuthIntentFromCookie(c, linuxDoOAuthIntentCookieName)
 
 	codeVerifier := ""
 	if cfg.UsePKCE {
@@ -198,7 +217,7 @@ func (h *AuthHandler) LinuxDoOAuthCallback(c *gin.Context) {
 		return
 	}
 
-	email, username, subject, err := linuxDoFetchUserInfo(c.Request.Context(), cfg, tokenResp)
+	userInfo, err := linuxDoFetchUserInfo(c.Request.Context(), cfg, tokenResp)
 	if err != nil {
 		log.Printf("[LinuxDo OAuth] userinfo fetch failed: %v", err)
 		redirectOAuthError(c, frontendCallback, "userinfo_failed", "failed to fetch user info", "")
@@ -207,38 +226,21 @@ func (h *AuthHandler) LinuxDoOAuthCallback(c *gin.Context) {
 
 	// 安全考虑：不要把第三方返回的 email 直接映射到本地账号（可能与本地邮箱用户冲突导致账号被接管）。
 	// 统一使用基于 subject 的稳定合成邮箱来做账号绑定。
-	if subject != "" {
-		email = linuxDoSyntheticEmail(subject)
+	if userInfo.Subject != "" {
+		userInfo.Email = linuxDoSyntheticEmail(userInfo.Subject)
 	}
 
-	// 传入空邀请码；如果需要邀请码，服务层返回 ErrOAuthInvitationRequired
-	tokenPair, _, err := h.authService.LoginOrRegisterOAuthWithTokenPair(c.Request.Context(), email, username, "")
-	if err != nil {
-		if errors.Is(err, service.ErrOAuthInvitationRequired) {
-			pendingToken, tokenErr := h.authService.CreatePendingOAuthToken(email, username)
-			if tokenErr != nil {
-				redirectOAuthError(c, frontendCallback, "login_failed", "service_error", "")
-				return
-			}
-			fragment := url.Values{}
-			fragment.Set("error", "invitation_required")
-			fragment.Set("pending_oauth_token", pendingToken)
-			fragment.Set("redirect", redirectTo)
-			redirectWithFragment(c, frontendCallback, fragment)
-			return
-		}
-		// 避免把内部细节泄露给客户端；给前端保留结构化原因与提示信息即可。
-		redirectOAuthError(c, frontendCallback, "login_failed", infraerrors.Reason(err), infraerrors.Message(err))
-		return
-	}
-
-	fragment := url.Values{}
-	fragment.Set("access_token", tokenPair.AccessToken)
-	fragment.Set("refresh_token", tokenPair.RefreshToken)
-	fragment.Set("expires_in", fmt.Sprintf("%d", tokenPair.ExpiresIn))
-	fragment.Set("token_type", "Bearer")
-	fragment.Set("redirect", redirectTo)
-	redirectWithFragment(c, frontendCallback, fragment)
+	h.completeOAuthCallback(c, frontendCallback, redirectTo, oauthCallbackIdentity{
+		Provider:             "linuxdo",
+		Intent:               intent,
+		ProviderType:         "linuxdo",
+		ProviderKey:          linuxDoOAuthProviderKey,
+		ProviderSubject:      userInfo.Subject,
+		CompatEmail:          userInfo.Email,
+		CompatUsername:       userInfo.Username,
+		SuggestedDisplayName: userInfo.DisplayName,
+		SuggestedAvatarURL:   userInfo.AvatarURL,
+	})
 }
 
 type completeLinuxDoOAuthRequest struct {
@@ -353,11 +355,11 @@ func linuxDoFetchUserInfo(
 	ctx context.Context,
 	cfg config.LinuxDoConnectConfig,
 	token *linuxDoTokenResponse,
-) (email string, username string, subject string, err error) {
+) (*linuxDoUserInfoClaims, error) {
 	client := req.C().SetTimeout(30 * time.Second)
 	authorization, err := buildBearerAuthorization(token.TokenType, token.AccessToken)
 	if err != nil {
-		return "", "", "", fmt.Errorf("invalid token for userinfo request: %w", err)
+		return nil, fmt.Errorf("invalid token for userinfo request: %w", err)
 	}
 
 	resp, err := client.R().
@@ -366,24 +368,25 @@ func linuxDoFetchUserInfo(
 		SetHeader("Authorization", authorization).
 		Get(cfg.UserInfoURL)
 	if err != nil {
-		return "", "", "", fmt.Errorf("request userinfo: %w", err)
+		return nil, fmt.Errorf("request userinfo: %w", err)
 	}
 	if !resp.IsSuccessState() {
-		return "", "", "", fmt.Errorf("userinfo status=%d", resp.StatusCode)
+		return nil, fmt.Errorf("userinfo status=%d", resp.StatusCode)
 	}
 
 	return linuxDoParseUserInfo(resp.String(), cfg)
 }
 
-func linuxDoParseUserInfo(body string, cfg config.LinuxDoConnectConfig) (email string, username string, subject string, err error) {
-	email = firstNonEmpty(
+func linuxDoParseUserInfo(body string, cfg config.LinuxDoConnectConfig) (*linuxDoUserInfoClaims, error) {
+	claims := &linuxDoUserInfoClaims{}
+	claims.Email = firstNonEmpty(
 		getGJSON(body, cfg.UserInfoEmailPath),
 		getGJSON(body, "email"),
 		getGJSON(body, "user.email"),
 		getGJSON(body, "data.email"),
 		getGJSON(body, "attributes.email"),
 	)
-	username = firstNonEmpty(
+	claims.Username = firstNonEmpty(
 		getGJSON(body, cfg.UserInfoUsernamePath),
 		getGJSON(body, "username"),
 		getGJSON(body, "preferred_username"),
@@ -391,7 +394,7 @@ func linuxDoParseUserInfo(body string, cfg config.LinuxDoConnectConfig) (email s
 		getGJSON(body, "user.username"),
 		getGJSON(body, "user.name"),
 	)
-	subject = firstNonEmpty(
+	claims.Subject = firstNonEmpty(
 		getGJSON(body, cfg.UserInfoIDPath),
 		getGJSON(body, "sub"),
 		getGJSON(body, "id"),
@@ -399,27 +402,54 @@ func linuxDoParseUserInfo(body string, cfg config.LinuxDoConnectConfig) (email s
 		getGJSON(body, "uid"),
 		getGJSON(body, "user.id"),
 	)
+	claims.DisplayName = firstNonEmpty(
+		getGJSON(body, "name"),
+		getGJSON(body, "nickname"),
+		getGJSON(body, "username"),
+		getGJSON(body, "preferred_username"),
+		getGJSON(body, "user.name"),
+		getGJSON(body, "user.username"),
+		getGJSON(body, "data.name"),
+		getGJSON(body, "data.username"),
+	)
+	claims.AvatarURL = firstNonEmpty(
+		getGJSON(body, "avatar"),
+		getGJSON(body, "avatar_url"),
+		getGJSON(body, "picture"),
+		getGJSON(body, "profile_image_url"),
+		getGJSON(body, "user.avatar"),
+		getGJSON(body, "user.avatar_url"),
+		getGJSON(body, "data.avatar"),
+		getGJSON(body, "data.avatar_url"),
+		getGJSON(body, "attributes.avatar"),
+		getGJSON(body, "attributes.avatar_url"),
+	)
 
-	subject = strings.TrimSpace(subject)
-	if subject == "" {
-		return "", "", "", errors.New("userinfo missing id field")
+	claims.Subject = strings.TrimSpace(claims.Subject)
+	if claims.Subject == "" {
+		return nil, errors.New("userinfo missing id field")
 	}
-	if !isSafeLinuxDoSubject(subject) {
-		return "", "", "", errors.New("userinfo returned invalid id field")
+	if !isSafeLinuxDoSubject(claims.Subject) {
+		return nil, errors.New("userinfo returned invalid id field")
 	}
 
-	email = strings.TrimSpace(email)
-	if email == "" {
+	claims.Email = strings.TrimSpace(claims.Email)
+	if claims.Email == "" {
 		// LinuxDo Connect 的 userinfo 可能不提供 email。为兼容现有用户模型（email 必填且唯一），使用稳定的合成邮箱。
-		email = linuxDoSyntheticEmail(subject)
+		claims.Email = linuxDoSyntheticEmail(claims.Subject)
 	}
 
-	username = strings.TrimSpace(username)
-	if username == "" {
-		username = "linuxdo_" + subject
+	claims.Username = strings.TrimSpace(claims.Username)
+	if claims.Username == "" {
+		claims.Username = "linuxdo_" + claims.Subject
 	}
+	claims.DisplayName = strings.TrimSpace(claims.DisplayName)
+	if claims.DisplayName == "" {
+		claims.DisplayName = claims.Username
+	}
+	claims.AvatarURL = strings.TrimSpace(claims.AvatarURL)
 
-	return email, username, subject, nil
+	return claims, nil
 }
 
 func buildLinuxDoAuthorizeURL(cfg config.LinuxDoConnectConfig, state string, codeChallenge string, redirectURI string) (string, error) {
@@ -727,4 +757,273 @@ func linuxDoSyntheticEmail(subject string) string {
 		return ""
 	}
 	return "linuxdo-" + subject + service.LinuxDoConnectSyntheticEmailDomain
+}
+
+type oauthCallbackIdentity struct {
+	Provider             string
+	Intent               string
+	ProviderType         string
+	ProviderKey          string
+	ProviderSubject      string
+	CompatEmail          string
+	CompatUsername       string
+	Metadata             map[string]any
+	SuggestedDisplayName string
+	SuggestedAvatarURL   string
+}
+
+type authIdentityFinder interface {
+	FindAuthIdentity(ctx context.Context, providerType, providerKey, providerSubject string) (*repository.AuthIdentityRecord, error)
+}
+
+type authIdentityChannelFinder interface {
+	FindAuthIdentityChannel(ctx context.Context, providerType, providerKey, channel, channelAppID, channelSubject string) (*repository.AuthIdentityChannelRecord, error)
+}
+
+type authIdentityByIDGetter interface {
+	GetAuthIdentityByID(ctx context.Context, id int64) (*repository.AuthIdentityRecord, error)
+}
+
+func normalizeOAuthIntent(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "", "login", "sign_in", "signin", "register", "signup":
+		return service.PendingAuthIntentLogin
+	case "bind", service.PendingAuthIntentBindCurrentUser:
+		return service.PendingAuthIntentBindCurrentUser
+	default:
+		return service.PendingAuthIntentLogin
+	}
+}
+
+func normalizedOAuthIntentFromCookie(c *gin.Context, cookieName string) string {
+	value, _ := readCookieDecoded(c, cookieName)
+	return normalizeOAuthIntent(value)
+}
+
+func (h *AuthHandler) completeOAuthCallback(c *gin.Context, frontendCallback, redirectTo string, identity oauthCallbackIdentity) {
+	intent := normalizeOAuthIntent(identity.Intent)
+	var bindTargetUserID *int64
+	if intent == service.PendingAuthIntentBindCurrentUser {
+		subject, ok := middleware2.GetAuthSubjectFromContext(c)
+		if !ok || subject.UserID <= 0 {
+			redirectOAuthError(c, frontendCallback, "auth_required", "missing authenticated subject", "")
+			return
+		}
+		bindTargetUserID = &subject.UserID
+	}
+	boundUserID, err := h.lookupBoundOAuthUserID(c.Request.Context(), identity.ProviderType, identity.ProviderKey, identity.ProviderSubject, identity.Metadata)
+	if err != nil {
+		redirectOAuthError(c, frontendCallback, "login_failed", "identity_lookup_failed", "")
+		return
+	}
+
+	if intent == service.PendingAuthIntentLogin && boundUserID != nil {
+		h.redirectOAuthLoginSuccess(c, frontendCallback, redirectTo, identity.Provider, intent, *boundUserID)
+		return
+	}
+
+	pendingInput := service.PendingAuthSessionInput{
+		Intent:          intent,
+		ProviderType:    identity.ProviderType,
+		ProviderKey:     identity.ProviderKey,
+		ProviderSubject: strings.TrimSpace(identity.ProviderSubject),
+		TargetUserID:    bindTargetUserID,
+		RedirectTo:      redirectTo,
+		Metadata:        cloneOAuthMetadataMap(identity.Metadata),
+	}
+	adoptionRequired := false
+	if pendingInput.Metadata == nil {
+		pendingInput.Metadata = make(map[string]any, 2)
+	}
+	if displayName := strings.TrimSpace(identity.SuggestedDisplayName); displayName != "" {
+		pendingInput.Metadata["suggested_display_name"] = displayName
+		adoptionRequired = true
+	}
+	if avatarURL := strings.TrimSpace(identity.SuggestedAvatarURL); avatarURL != "" {
+		pendingInput.Metadata["suggested_avatar_url"] = avatarURL
+		adoptionRequired = true
+	}
+	pendingAuthToken, err := h.authService.CreatePendingAuthSession(c.Request.Context(), pendingInput)
+	if err != nil {
+		redirectOAuthError(c, frontendCallback, "login_failed", "service_error", "")
+		return
+	}
+
+	fragment := url.Values{}
+	fragment.Set("auth_result", "pending_session")
+	fragment.Set("pending_auth_token", pendingAuthToken)
+	fragment.Set("provider", truncateFragmentValue(identity.Provider))
+	fragment.Set("intent", truncateFragmentValue(intent))
+	fragment.Set("redirect", truncateFragmentValue(redirectTo))
+	if adoptionRequired {
+		fragment.Set("adoption_required", "true")
+	}
+
+	if compatEmail := strings.TrimSpace(identity.CompatEmail); compatEmail != "" && strings.TrimSpace(identity.CompatUsername) != "" {
+		if compatToken, compatErr := h.authService.CreatePendingOAuthToken(compatEmail, identity.CompatUsername); compatErr == nil {
+			fragment.Set("pending_oauth_token", compatToken)
+		}
+	}
+	if displayName := strings.TrimSpace(identity.SuggestedDisplayName); displayName != "" {
+		fragment.Set("suggested_display_name", truncateFragmentValue(displayName))
+	}
+	if avatarURL := strings.TrimSpace(identity.SuggestedAvatarURL); avatarURL != "" {
+		fragment.Set("suggested_avatar_url", truncateFragmentValue(avatarURL))
+	}
+	redirectWithFragment(c, frontendCallback, fragment)
+}
+
+func (h *AuthHandler) redirectOAuthLoginSuccess(c *gin.Context, frontendCallback, redirectTo, provider, intent string, userID int64) {
+	user, err := h.userService.GetByID(c.Request.Context(), userID)
+	if err != nil {
+		redirectOAuthError(c, frontendCallback, "login_failed", infraerrors.Reason(err), infraerrors.Message(err))
+		return
+	}
+	if user == nil || !user.IsActive() {
+		redirectOAuthError(c, frontendCallback, "login_failed", "user_not_active", "")
+		return
+	}
+
+	tokenPair, err := h.authService.GenerateTokenPair(c.Request.Context(), user, "")
+	if err != nil {
+		redirectOAuthError(c, frontendCallback, "login_failed", "service_error", "")
+		return
+	}
+
+	fragment := url.Values{}
+	fragment.Set("access_token", tokenPair.AccessToken)
+	fragment.Set("refresh_token", tokenPair.RefreshToken)
+	fragment.Set("expires_in", fmt.Sprintf("%d", tokenPair.ExpiresIn))
+	fragment.Set("token_type", "Bearer")
+	fragment.Set("provider", truncateFragmentValue(provider))
+	fragment.Set("intent", truncateFragmentValue(intent))
+	fragment.Set("redirect", truncateFragmentValue(redirectTo))
+	redirectWithFragment(c, frontendCallback, fragment)
+}
+
+func (h *AuthHandler) lookupBoundOAuthUserID(ctx context.Context, providerType, providerKey, providerSubject string, metadata map[string]any) (*int64, error) {
+	repo := extractAuthServiceUserRepo(h.authService)
+	if repo == nil {
+		return nil, nil
+	}
+
+	if providerType == "wechat" {
+		userID, err := lookupBoundWeChatUserID(ctx, repo, providerKey, metadata)
+		if userID != nil || err != nil {
+			return userID, err
+		}
+	}
+
+	return lookupBoundIdentityUserID(ctx, repo, providerType, providerKey, providerSubject)
+}
+
+func lookupBoundWeChatUserID(ctx context.Context, repo any, providerKey string, metadata map[string]any) (*int64, error) {
+	if unionid := oauthMetadataString(metadata, "unionid"); unionid != "" {
+		return lookupBoundIdentityUserID(ctx, repo, "wechat", providerKey, unionid)
+	}
+
+	openid := oauthMetadataString(metadata, "openid")
+	channel := oauthMetadataString(metadata, "channel")
+	appid := oauthMetadataString(metadata, "appid")
+	if openid == "" || channel == "" || appid == "" {
+		return nil, nil
+	}
+
+	channelFinder, ok := repo.(authIdentityChannelFinder)
+	if !ok {
+		return nil, nil
+	}
+	channelRecord, err := channelFinder.FindAuthIdentityChannel(ctx, "wechat", providerKey, channel, appid, openid)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if channelRecord == nil {
+		return nil, nil
+	}
+	identityGetter, ok := repo.(authIdentityByIDGetter)
+	if !ok {
+		return nil, nil
+	}
+	identity, err := identityGetter.GetAuthIdentityByID(ctx, channelRecord.IdentityID)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if identity == nil {
+		return nil, nil
+	}
+	userID := identity.UserID
+	return &userID, nil
+}
+
+func lookupBoundIdentityUserID(ctx context.Context, repo any, providerType, providerKey, providerSubject string) (*int64, error) {
+	providerSubject = strings.TrimSpace(providerSubject)
+	if providerSubject == "" {
+		return nil, nil
+	}
+
+	finder, ok := repo.(authIdentityFinder)
+	if !ok {
+		return nil, nil
+	}
+	identity, err := finder.FindAuthIdentity(ctx, providerType, providerKey, providerSubject)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if identity == nil {
+		return nil, nil
+	}
+	userID := identity.UserID
+	return &userID, nil
+}
+
+func oauthMetadataString(metadata map[string]any, key string) string {
+	if len(metadata) == 0 {
+		return ""
+	}
+	raw, ok := metadata[key]
+	if !ok || raw == nil {
+		return ""
+	}
+	switch v := raw.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	default:
+		return strings.TrimSpace(fmt.Sprint(v))
+	}
+}
+
+func extractAuthServiceUserRepo(authSvc *service.AuthService) any {
+	if authSvc == nil {
+		return nil
+	}
+	value := reflect.ValueOf(authSvc)
+	if !value.IsValid() || value.IsNil() {
+		return nil
+	}
+	elem := value.Elem()
+	field := elem.FieldByName("userRepo")
+	if !field.IsValid() || !field.CanAddr() {
+		return nil
+	}
+	return reflect.NewAt(field.Type(), unsafe.Pointer(field.UnsafeAddr())).Elem().Interface()
+}
+
+func cloneOAuthMetadataMap(in map[string]any) map[string]any {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]any, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
 }

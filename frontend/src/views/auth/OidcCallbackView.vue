@@ -1,120 +1,122 @@
 <template>
   <AuthLayout>
-    <div class="space-y-6">
-      <div class="text-center">
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
-          {{ t('auth.oidc.callbackTitle', { providerName }) }}
-        </h2>
-        <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
-          {{
-            isProcessing
-              ? t('auth.oidc.callbackProcessing', { providerName })
-              : t('auth.oidc.callbackHint')
-          }}
-        </p>
-      </div>
-
-      <transition name="fade">
-        <div v-if="needsInvitation" class="space-y-4">
-          <p class="text-sm text-gray-700 dark:text-gray-300">
-            {{ t('auth.oidc.invitationRequired', { providerName }) }}
-          </p>
-          <div>
-            <input
-              v-model="invitationCode"
-              type="text"
-              class="input w-full"
-              :placeholder="t('auth.invitationCodePlaceholder')"
-              :disabled="isSubmitting"
-              @keyup.enter="handleSubmitInvitation"
-            />
-          </div>
-          <transition name="fade">
-            <p v-if="invitationError" class="text-sm text-red-600 dark:text-red-400">
-              {{ invitationError }}
-            </p>
-          </transition>
-          <button
-            class="btn btn-primary w-full"
-            :disabled="isSubmitting || !invitationCode.trim()"
-            @click="handleSubmitInvitation"
-          >
-            {{
-              isSubmitting
-                ? t('auth.oidc.completing')
-                : t('auth.oidc.completeRegistration')
-            }}
-          </button>
-        </div>
-      </transition>
-
-      <transition name="fade">
-        <div
-          v-if="errorMessage"
-          class="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-800/50 dark:bg-red-900/20"
-        >
-          <div class="flex items-start gap-3">
-            <div class="flex-shrink-0">
-              <Icon name="exclamationCircle" size="md" class="text-red-500" />
-            </div>
-            <div class="space-y-2">
-              <p class="text-sm text-red-700 dark:text-red-400">
-                {{ errorMessage }}
-              </p>
-              <router-link to="/login" class="btn btn-primary">
-                {{ t('auth.oidc.backToLogin') }}
-              </router-link>
-            </div>
-          </div>
-        </div>
-      </transition>
-    </div>
+    <ThirdPartyAuthCallbackFlow
+      :provider-label="providerLabel"
+      @success="handleSuccess"
+      @error="handleError"
+      @pending-session="handlePendingSession"
+      @create-account="handleCreateAccount"
+      @adopt-existing-user="handleAdoptExistingUser"
+      @bind-current-user="handleBindCurrentUser"
+      @adoption-decision="handleAdoptionDecision"
+    />
   </AuthLayout>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { AuthLayout } from '@/components/layout'
-import Icon from '@/components/icons/Icon.vue'
-import { useAuthStore, useAppStore } from '@/stores'
-import {
-  completeOIDCOAuthRegistration,
-  getPublicSettings
-} from '@/api/auth'
 
-const route = useRoute()
+import ThirdPartyAuthCallbackFlow from '@/components/auth/ThirdPartyAuthCallbackFlow.vue'
+import { AuthLayout } from '@/components/layout'
+import {
+  createOAuthAccount,
+  getPendingAuthSessionAdoptionDecision,
+  getPublicSettings,
+  inheritPendingAuthSessionAdoptionDecision,
+  persistOAuthTokenPair,
+  sanitizeAuthRedirectPath,
+  withPendingAuthSessionAdoptionDecision
+} from '@/api/auth'
+import { userAPI } from '@/api/user'
+import { useAuthStore, useAppStore } from '@/stores'
+import type { OAuthProvider, PendingAuthIntent, PendingAuthSessionSummary } from '@/types'
+
+interface CallbackPendingSession {
+  authResult: 'pending_session'
+  pendingAuthToken: string
+  provider: OAuthProvider
+  intent: PendingAuthIntent
+  redirect: string
+  adoptionRequired: boolean
+  suggestedDisplayName: string | null
+  suggestedAvatarUrl: string | null
+}
+
+interface CallbackSuccessPayload {
+  accessToken: string
+  refreshToken: string | null
+  expiresIn: number | null
+  tokenType: string | null
+  provider: OAuthProvider | null
+  intent: PendingAuthIntent | null
+  redirect: string
+  adoptionRequired: boolean
+  suggestedDisplayName: string | null
+  suggestedAvatarUrl: string | null
+}
+
+interface AdoptionDecisionPayload {
+  adoptDisplayName: boolean
+  adoptAvatar: boolean
+  context: CallbackSuccessPayload | CallbackPendingSession
+}
+
 const router = useRouter()
 const { t } = useI18n()
 
 const authStore = useAuthStore()
 const appStore = useAppStore()
 
-const isProcessing = ref(true)
-const errorMessage = ref('')
-
-const needsInvitation = ref(false)
-const pendingOAuthToken = ref('')
-const invitationCode = ref('')
-const isSubmitting = ref(false)
-const invitationError = ref('')
-const redirectTo = ref('/dashboard')
+const isHandlingAction = ref(false)
+const deferredSuccessPayload = ref<CallbackSuccessPayload | null>(null)
 const providerName = ref('OIDC')
+const providerLabel = computed(() => providerName.value || t('profile.bindings.providers.oidc'))
 
-function parseFragmentParams(): URLSearchParams {
-  const raw = typeof window !== 'undefined' ? window.location.hash : ''
-  const hash = raw.startsWith('#') ? raw.slice(1) : raw
-  return new URLSearchParams(hash)
+function normalizePendingSession(summary: CallbackPendingSession): PendingAuthSessionSummary {
+  return {
+    token: summary.pendingAuthToken,
+    provider: summary.provider,
+    intent: summary.intent,
+    auth_result: 'pending_session',
+    redirect: sanitizeAuthRedirectPath(summary.redirect),
+    adoption_required: summary.adoptionRequired,
+    suggested_display_name: summary.suggestedDisplayName,
+    suggested_avatar_url: summary.suggestedAvatarUrl
+  }
 }
 
-function sanitizeRedirectPath(path: string | null | undefined): string {
-  if (!path) return '/dashboard'
-  if (!path.startsWith('/')) return '/dashboard'
-  if (path.startsWith('//')) return '/dashboard'
-  if (path.includes('://')) return '/dashboard'
-  if (path.includes('\n') || path.includes('\r')) return '/dashboard'
-  return path
+function persistPendingSession(summary: CallbackPendingSession): PendingAuthSessionSummary {
+  const normalized = normalizePendingSession(summary)
+  const existing = authStore.pendingAuthSession
+
+  if (existing && existing.token === normalized.token && existing.provider === normalized.provider) {
+    return inheritPendingAuthSessionAdoptionDecision(normalized, existing)
+  }
+
+  return normalized
+}
+
+function resolveErrorMessage(error: unknown, fallback: string): string {
+  const err = error as {
+    message?: string
+    response?: {
+      data?: {
+        message?: string
+        detail?: string
+        error?: string
+      }
+    }
+  }
+
+  return (
+    err.response?.data?.message ||
+    err.response?.data?.detail ||
+    err.response?.data?.error ||
+    err.message ||
+    fallback
+  )
 }
 
 async function loadProviderName() {
@@ -125,110 +127,179 @@ async function loadProviderName() {
       providerName.value = name
     }
   } catch {
-    // Ignore; fallback remains OIDC
+    // Ignore and keep the default label.
   }
 }
 
-async function handleSubmitInvitation() {
-  invitationError.value = ''
-  if (!invitationCode.value.trim()) return
+async function routeToAuthEntry(name: 'Login' | 'Register', redirect: string) {
+  const sanitized = sanitizeAuthRedirectPath(redirect)
+  if (sanitized === '/dashboard') {
+    await router.replace({ name })
+    return
+  }
 
-  isSubmitting.value = true
+  await router.replace({
+    name,
+    query: { redirect: sanitized }
+  })
+}
+
+async function finalizeSuccess(payload: CallbackSuccessPayload) {
+  if (isHandlingAction.value) return
+
+  isHandlingAction.value = true
+  deferredSuccessPayload.value = null
+
   try {
-    const tokenData = await completeOIDCOAuthRegistration(
-      pendingOAuthToken.value,
-      invitationCode.value.trim()
-    )
-    if (tokenData.refresh_token) {
-      localStorage.setItem('refresh_token', tokenData.refresh_token)
-    }
-    if (tokenData.expires_in) {
-      localStorage.setItem('token_expires_at', String(Date.now() + tokenData.expires_in * 1000))
-    }
-    await authStore.setToken(tokenData.access_token)
+    persistOAuthTokenPair({
+      access_token: payload.accessToken,
+      refresh_token: payload.refreshToken ?? undefined,
+      expires_in: payload.expiresIn ?? undefined,
+      token_type: payload.tokenType ?? 'Bearer'
+    })
+
+    authStore.clearPendingAuthSession()
+    await authStore.setToken(payload.accessToken)
     appStore.showSuccess(t('auth.loginSuccess'))
-    await router.replace(redirectTo.value)
-  } catch (e: unknown) {
-    const err = e as { message?: string; response?: { data?: { message?: string } } }
-    invitationError.value =
-      err.response?.data?.message || err.message || t('auth.oidc.completeRegistrationFailed')
+    await router.replace(sanitizeAuthRedirectPath(payload.redirect))
+  } catch (error: unknown) {
+    appStore.showError(resolveErrorMessage(error, t('auth.loginFailed')))
   } finally {
-    isSubmitting.value = false
+    isHandlingAction.value = false
   }
 }
 
-onMounted(async () => {
-  void loadProviderName()
+function handleError(message: string) {
+  appStore.showError(message)
+}
 
-  const params = parseFragmentParams()
-  const token = params.get('access_token') || ''
-  const refreshToken = params.get('refresh_token') || ''
-  const expiresInStr = params.get('expires_in') || ''
-  const redirect = sanitizeRedirectPath(
-    params.get('redirect') || (route.query.redirect as string | undefined) || '/dashboard'
-  )
-  const error = params.get('error')
-  const errorDesc = params.get('error_description') || params.get('error_message') || ''
+function handlePendingSession(summary: CallbackPendingSession) {
+  authStore.setPendingAuthSession(persistPendingSession(summary))
+}
 
-  if (error) {
-    if (error === 'invitation_required') {
-      pendingOAuthToken.value = params.get('pending_oauth_token') || ''
-      redirectTo.value = sanitizeRedirectPath(params.get('redirect'))
-      if (!pendingOAuthToken.value) {
-        errorMessage.value = t('auth.oidc.invalidPendingToken')
-        appStore.showError(errorMessage.value)
-        isProcessing.value = false
-        return
-      }
-      needsInvitation.value = true
-      isProcessing.value = false
+async function ensurePublicSettingsLoaded() {
+  try {
+    return await appStore.fetchPublicSettings()
+  } catch {
+    return appStore.cachedPublicSettings
+  }
+}
+
+async function handleCreateAccount(summary: CallbackPendingSession) {
+  authStore.setPendingAuthSession(persistPendingSession(summary))
+  const publicSettings = await ensurePublicSettingsLoaded()
+  const requiresEmailBinding = publicSettings?.third_party_first_login_require_email === true
+  const invitationCodeEnabled = publicSettings?.invitation_code_enabled === true
+
+  if (!requiresEmailBinding && !invitationCodeEnabled) {
+    if (isHandlingAction.value) return
+
+    isHandlingAction.value = true
+    try {
+      const pendingSession = authStore.pendingAuthSession
+      const adoptionDecision = getPendingAuthSessionAdoptionDecision(pendingSession)
+      const response = await createOAuthAccount(summary.provider, {
+        pendingAuthToken: summary.pendingAuthToken,
+        adoptDisplayName: adoptionDecision?.adoptDisplayName,
+        adoptAvatar: adoptionDecision?.adoptAvatar
+      })
+      persistOAuthTokenPair(response)
+      authStore.clearPendingAuthSession()
+      await authStore.setToken(response.access_token)
+      appStore.showSuccess(t('auth.accountCreatedSuccess', { siteName: appStore.siteName || 'Sub2API' }))
+      await router.replace(sanitizeAuthRedirectPath(summary.redirect))
+      return
+    } catch (error: unknown) {
+      appStore.showError(resolveErrorMessage(error, t('auth.oidc.completeRegistrationFailed')))
+      return
+    } finally {
+      isHandlingAction.value = false
+    }
+  }
+
+  await routeToAuthEntry('Register', summary.redirect)
+}
+
+async function handleAdoptExistingUser(summary: CallbackPendingSession) {
+  authStore.setPendingAuthSession(persistPendingSession(summary))
+  await routeToAuthEntry('Login', summary.redirect)
+}
+
+async function handleBindCurrentUser(summary: CallbackPendingSession) {
+  if (isHandlingAction.value) return
+
+  authStore.setPendingAuthSession(persistPendingSession(summary))
+
+  if (!authStore.token) {
+    appStore.showError(t('auth.reloginRequired'))
+    await router.replace({
+      name: 'Login',
+      query: { redirect: '/profile' }
+    })
+    return
+  }
+
+  isHandlingAction.value = true
+
+  try {
+    await userAPI.bindAccount(summary.provider, summary.pendingAuthToken)
+    authStore.clearPendingAuthSession()
+    await authStore.refreshUser()
+    appStore.showSuccess(`${providerLabel.value} ${t('profile.bindings.actions.connected')}`)
+
+    const redirect = sanitizeAuthRedirectPath(summary.redirect)
+    await router.replace(redirect.startsWith('/profile') ? '/profile' : redirect)
+  } catch (error: unknown) {
+    appStore.showError(resolveErrorMessage(error, t('auth.oidc.completeRegistrationFailed')))
+  } finally {
+    isHandlingAction.value = false
+  }
+}
+
+async function handleSuccess(payload: CallbackSuccessPayload) {
+  if (payload.adoptionRequired) {
+    deferredSuccessPayload.value = payload
+    return
+  }
+
+  await finalizeSuccess(payload)
+}
+
+async function handleAdoptionDecision({ adoptDisplayName, adoptAvatar, context }: AdoptionDecisionPayload) {
+  if ('accessToken' in context) {
+    await finalizeSuccess(deferredSuccessPayload.value ?? context)
+    return
+  }
+
+  if (context.intent === 'bind_current_user' && authStore.token) {
+    try {
+      await userAPI.setAccountBindingAdoptionDecision(
+        context.provider,
+        context.pendingAuthToken,
+        adoptDisplayName,
+        adoptAvatar
+      )
+    } catch (error: unknown) {
+      appStore.showError(resolveErrorMessage(error, t('auth.oidc.completeRegistrationFailed')))
       return
     }
-    errorMessage.value = errorDesc || error
-    appStore.showError(errorMessage.value)
-    isProcessing.value = false
+
+    await handleBindCurrentUser(context)
     return
   }
 
-  if (!token) {
-    errorMessage.value = t('auth.oidc.callbackMissingToken')
-    appStore.showError(errorMessage.value)
-    isProcessing.value = false
-    return
-  }
-
-  try {
-    if (refreshToken) {
-      localStorage.setItem('refresh_token', refreshToken)
-    }
-    if (expiresInStr) {
-      const expiresIn = parseInt(expiresInStr, 10)
-      if (!isNaN(expiresIn)) {
-        localStorage.setItem('token_expires_at', String(Date.now() + expiresIn * 1000))
+  authStore.setPendingAuthSession(
+    withPendingAuthSessionAdoptionDecision(
+      persistPendingSession(context),
+      {
+        adoptDisplayName,
+        adoptAvatar
       }
-    }
+    )
+  )
+}
 
-    await authStore.setToken(token)
-    appStore.showSuccess(t('auth.loginSuccess'))
-    await router.replace(redirect)
-  } catch (e: unknown) {
-    const err = e as { message?: string; response?: { data?: { detail?: string } } }
-    errorMessage.value = err.response?.data?.detail || err.message || t('auth.loginFailed')
-    appStore.showError(errorMessage.value)
-    isProcessing.value = false
-  }
+onMounted(() => {
+  void loadProviderName()
 })
 </script>
-
-<style scoped>
-.fade-enter-active,
-.fade-leave-active {
-  transition: all 0.3s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-  transform: translateY(-8px);
-}
-</style>

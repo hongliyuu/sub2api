@@ -8,7 +8,13 @@
         <div
           class="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-500 to-primary-600 text-2xl font-bold text-white shadow-lg shadow-primary-500/20"
         >
-          {{ user?.email?.charAt(0).toUpperCase() || 'U' }}
+          <img
+            v-if="avatarUrl"
+            :src="avatarUrl"
+            alt="User avatar"
+            class="h-full w-full rounded-2xl object-cover"
+          />
+          <span v-else>{{ user?.email?.charAt(0).toUpperCase() || 'U' }}</span>
         </div>
         <div class="min-w-0 flex-1">
           <h2 class="truncate text-lg font-semibold text-gray-900 dark:text-white">
@@ -46,13 +52,16 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 import type { User } from '@/types'
+import { resolveUserAvatarUrl } from './profileUser'
 
-defineProps<{
+const props = defineProps<{
   user: User | null
 }>()
 
 const { t } = useI18n()
+const avatarUrl = computed(() => resolveUserAvatarUrl(props.user))
 </script>

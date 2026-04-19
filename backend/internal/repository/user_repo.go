@@ -15,6 +15,7 @@ import (
 	dbuser "github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/oauth"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
@@ -27,17 +28,124 @@ type userRepository struct {
 }
 
 func NewUserRepository(client *dbent.Client, sqlDB *sql.DB) service.UserRepository {
-	return newUserRepositoryWithSQL(client, sqlDB)
+	return &authIdentityUserRepository{userRepository: newUserRepositoryWithSQL(client, sqlDB)}
 }
 
 func newUserRepositoryWithSQL(client *dbent.Client, sqlq sqlExecutor) *userRepository {
 	return &userRepository{client: client, sql: sqlq}
 }
 
+type authIdentityUserRepository struct {
+	*userRepository
+}
+
+func (r *authIdentityUserRepository) CreatePendingAuthSession(ctx context.Context, input service.PendingAuthSessionInput) (*service.PendingAuthSessionRecord, error) {
+	sessionToken, err := oauth.GenerateState()
+	if err != nil {
+		return nil, err
+	}
+
+	record, err := r.userRepository.CreatePendingAuthSession(ctx, CreatePendingAuthSessionInput{
+		SessionToken:     sessionToken,
+		Intent:           strings.TrimSpace(input.Intent),
+		ProviderType:     strings.TrimSpace(input.ProviderType),
+		ProviderKey:      strings.TrimSpace(input.ProviderKey),
+		ProviderSubject:  strings.TrimSpace(input.ProviderSubject),
+		TargetUserID:     input.TargetUserID,
+		RedirectTo:       strings.TrimSpace(input.RedirectTo),
+		Metadata:         cloneServiceMetadata(input.Metadata),
+		UpstreamIdentity: cloneServiceMetadata(input.Metadata),
+		ExpiresAt:        time.Now().Add(10 * time.Minute).UTC(),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return pendingAuthRecordToService(record), nil
+}
+
+func (r *authIdentityUserRepository) GetPendingAuthSessionByID(ctx context.Context, sessionID string) (*service.PendingAuthSessionRecord, error) {
+	record, err := r.userRepository.GetPendingAuthSessionByToken(ctx, strings.TrimSpace(sessionID))
+	if err != nil {
+		return nil, err
+	}
+	return pendingAuthRecordToService(record), nil
+}
+
+func (r *authIdentityUserRepository) UpdatePendingAuthSession(ctx context.Context, session *service.PendingAuthSessionRecord) error {
+	if session == nil {
+		return fmt.Errorf("pending auth session is required")
+	}
+	sessionToken := strings.TrimSpace(session.ID)
+	if sessionToken == "" {
+		sessionToken = strings.TrimSpace(session.Token)
+	}
+	if sessionToken == "" {
+		return fmt.Errorf("pending auth session id is required")
+	}
+
+	return r.userRepository.UpdatePendingAuthSessionByToken(ctx, &PendingAuthSessionRecord{
+		SessionToken:        sessionToken,
+		Intent:              strings.TrimSpace(session.Intent),
+		ProviderType:        strings.TrimSpace(session.ProviderType),
+		ProviderKey:         strings.TrimSpace(session.ProviderKey),
+		ProviderSubject:     strings.TrimSpace(session.ProviderSubject),
+		TargetUserID:        session.TargetUserID,
+		RedirectTo:          strings.TrimSpace(session.RedirectTo),
+		Metadata:            cloneServiceMetadata(session.Metadata),
+		ResolvedEmail:       strings.TrimSpace(session.ResolvedEmail),
+		PendingPasswordHash: strings.TrimSpace(session.PendingPasswordHash),
+		UpstreamIdentity:    cloneServiceMetadata(session.Metadata),
+		EmailVerifiedAt:     session.EmailVerifiedAt,
+		PasswordVerifiedAt:  session.PasswordVerifiedAt,
+		TOTPVerifiedAt:      session.TOTPVerifiedAt,
+		ExpiresAt:           session.ExpiresAt,
+		ConsumedAt:          session.ConsumedAt,
+	})
+}
+
+func pendingAuthRecordToService(record *PendingAuthSessionRecord) *service.PendingAuthSessionRecord {
+	if record == nil {
+		return nil
+	}
+
+	return &service.PendingAuthSessionRecord{
+		ID:                  strings.TrimSpace(record.SessionToken),
+		Token:               strings.TrimSpace(record.SessionToken),
+		Intent:              strings.TrimSpace(record.Intent),
+		ProviderType:        strings.TrimSpace(record.ProviderType),
+		ProviderKey:         strings.TrimSpace(record.ProviderKey),
+		ProviderSubject:     strings.TrimSpace(record.ProviderSubject),
+		TargetUserID:        record.TargetUserID,
+		ResolvedEmail:       strings.TrimSpace(record.ResolvedEmail),
+		PendingPasswordHash: strings.TrimSpace(record.PendingPasswordHash),
+		Metadata:            cloneServiceMetadata(record.Metadata),
+		EmailVerifiedAt:     record.EmailVerifiedAt,
+		PasswordVerifiedAt:  record.PasswordVerifiedAt,
+		TOTPVerifiedAt:      record.TOTPVerifiedAt,
+		ExpiresAt:           record.ExpiresAt,
+		ConsumedAt:          record.ConsumedAt,
+		RedirectTo:          strings.TrimSpace(record.RedirectTo),
+		CreatedAt:           record.CreatedAt,
+		UpdatedAt:           record.UpdatedAt,
+	}
+}
+
+func cloneServiceMetadata(in map[string]any) map[string]any {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]any, len(in))
+	for key, value := range in {
+		out[key] = value
+	}
+	return out
+}
+
 func (r *userRepository) Create(ctx context.Context, userIn *service.User) error {
 	if userIn == nil {
 		return nil
 	}
+	userIn.SignupSource = service.NormalizeSignupSource(userIn.SignupSource)
 
 	// 统一使用 ent 的事务：保证用户与允许分组的更新原子化，
 	// 并避免基于 *sql.Tx 手动构造 ent client 导致的 ExecQuerier 断言错误。
@@ -97,6 +205,7 @@ func (r *userRepository) GetByID(ctx context.Context, id int64) (*service.User, 
 	if v, ok := groups[id]; ok {
 		out.AllowedGroups = v
 	}
+	r.attachAvatar(ctx, out)
 	return out, nil
 }
 
@@ -114,13 +223,31 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*service
 	if v, ok := groups[m.ID]; ok {
 		out.AllowedGroups = v
 	}
+	r.attachAvatar(ctx, out)
 	return out, nil
+}
+
+func (r *userRepository) attachAvatar(ctx context.Context, user *service.User) {
+	if user == nil || user.ID == 0 {
+		return
+	}
+	avatar, err := r.GetAvatar(ctx, user.ID)
+	if err != nil {
+		return
+	}
+	user.Avatar = avatar
+	user.AvatarURL = service.ResolvePreferredUserAvatarURL(avatar)
+	user.HasCustomAvatar = user.AvatarURL != ""
+	if avatar != nil {
+		user.AvatarUpdatedAt = &avatar.UpdatedAt
+	}
 }
 
 func (r *userRepository) Update(ctx context.Context, userIn *service.User) error {
 	if userIn == nil {
 		return nil
 	}
+	userIn.SignupSource = service.NormalizeSignupSource(userIn.SignupSource)
 
 	// 使用 ent 事务包裹用户更新与 allowed_groups 同步，避免跨层事务不一致。
 	tx, err := r.client.Tx(ctx)
@@ -392,7 +519,7 @@ func (r *userRepository) UpdateBalance(ctx context.Context, id int64, amount flo
 	client := clientFromContext(ctx, r.client)
 	update := client.User.Update().Where(dbuser.IDEQ(id)).AddBalance(amount)
 	// Track cumulative recharge amount for percentage-based notifications
-	if amount > 0 {
+	if amount > 0 && service.ShouldTrackTotalRecharged(ctx) {
 		update = update.AddTotalRecharged(amount)
 	}
 	n, err := update.Save(ctx)
@@ -565,6 +692,22 @@ func applyUserEntityToService(dst *service.User, src *dbent.User) {
 // marshalExtraEmails serializes notify email entries to JSON for storage.
 func marshalExtraEmails(entries []service.NotifyEmailEntry) string {
 	return service.MarshalNotifyEmails(entries)
+}
+
+// UpdateSignupSource is a compatibility hook for the auth identity migration.
+// The concrete users.signup_source column is added by a separate schema/migration
+// worker; until that lands in this worktree, we only validate the target user
+// exists and normalize the requested value so auth flow changes can compile
+// against a stable repository contract.
+func (r *userRepository) UpdateSignupSource(ctx context.Context, userID int64, signupSource string) error {
+	if userID <= 0 {
+		return service.ErrUserNotFound
+	}
+	if _, err := r.client.User.Query().Where(dbuser.IDEQ(userID)).Only(ctx); err != nil {
+		return translatePersistenceError(err, service.ErrUserNotFound, nil)
+	}
+	_ = service.NormalizeSignupSource(signupSource)
+	return nil
 }
 
 // UpdateTotpSecret 更新用户的 TOTP 加密密钥

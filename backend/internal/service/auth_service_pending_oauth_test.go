@@ -3,6 +3,7 @@
 package service
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -142,5 +143,20 @@ func TestVerifyPendingOAuthToken_TooLong(t *testing.T) {
 		giant[i] = 'a'
 	}
 	_, _, err := svc.VerifyPendingOAuthToken(string(giant))
+	require.ErrorIs(t, err, ErrInvalidToken)
+}
+
+func TestVerifyPendingOAuthToken_RejectsPendingAuthSessionToken(t *testing.T) {
+	svc, _ := newAuthServiceForPendingSessionTest(t)
+
+	token, err := svc.CreatePendingAuthSession(context.Background(), PendingAuthSessionInput{
+		Intent:          PendingAuthIntentLogin,
+		ProviderType:    "linuxdo",
+		ProviderKey:     "linuxdo",
+		ProviderSubject: "linuxdo-user-1",
+	})
+	require.NoError(t, err)
+
+	_, _, err = newAuthServiceForPendingOAuthTest().VerifyPendingOAuthToken(token)
 	require.ErrorIs(t, err, ErrInvalidToken)
 }

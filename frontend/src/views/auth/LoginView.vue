@@ -11,7 +11,17 @@
         </p>
       </div>
 
-  <div v-if="!backendModeEnabled && (linuxdoOAuthEnabled || oidcOAuthEnabled)" class="space-y-4">
+      <div
+        v-if="!backendModeEnabled && (linuxdoOAuthEnabled || oidcOAuthEnabled || wechatOAuthVisible)"
+        class="space-y-4"
+      >
+        <WechatOAuthSection
+          v-if="wechatOAuthVisible"
+          :disabled="isLoading"
+          :open-enabled="wechatOpenEnabled"
+          :mp-enabled="wechatMpEnabled"
+          :show-divider="false"
+        />
         <LinuxDoOAuthSection
           v-if="linuxdoOAuthEnabled"
           :disabled="isLoading"
@@ -30,6 +40,18 @@
           </span>
           <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
         </div>
+      </div>
+
+      <div
+        v-if="pendingAuthSession"
+        class="rounded-xl border border-brand-200 bg-brand-50/80 p-4 dark:border-brand-500/30 dark:bg-brand-500/10"
+      >
+        <p class="text-sm font-medium text-brand-900 dark:text-brand-100">
+          {{ t('auth.pendingAuth.login.title') }}
+        </p>
+        <p class="mt-1 text-sm text-brand-700 dark:text-brand-200">
+          {{ pendingAuthNotice }}
+        </p>
       </div>
 
       <!-- Login Form -->
@@ -97,7 +119,7 @@
             <span v-else></span>
             <router-link
               v-if="passwordResetEnabled && !backendModeEnabled"
-              to="/forgot-password"
+              :to="forgotPasswordRoute"
               class="text-sm font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
             >
               {{ t('auth.forgotPassword') }}
@@ -173,7 +195,7 @@
       <p class="text-gray-500 dark:text-dark-400">
         {{ t('auth.dontHaveAccount') }}
         <router-link
-          to="/register"
+          :to="registerRoute"
           class="font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
         >
           {{ t('auth.signUp') }}
@@ -194,17 +216,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, ref, reactive, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { AuthLayout } from '@/components/layout'
 import LinuxDoOAuthSection from '@/components/auth/LinuxDoOAuthSection.vue'
 import OidcOAuthSection from '@/components/auth/OidcOAuthSection.vue'
+import WechatOAuthSection from '@/components/auth/WechatOAuthSection.vue'
 import TotpLoginModal from '@/components/auth/TotpLoginModal.vue'
 import Icon from '@/components/icons/Icon.vue'
 import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import { useAuthStore, useAppStore } from '@/stores'
-import { getPublicSettings, isTotp2FARequired } from '@/api/auth'
+import {
+  bindOAuthLogin,
+  getPendingAuthSessionAdoptionDecision,
+  getPublicSettings,
+  isTotp2FARequired,
+  persistOAuthTokenPair,
+  sanitizeAuthRedirectPath
+} from '@/api/auth'
 import type { TotpLoginResponse } from '@/types'
 
 const { t } = useI18n()
@@ -212,6 +242,7 @@ const { t } = useI18n()
 // ==================== Router & Stores ====================
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 const appStore = useAppStore()
 
@@ -228,6 +259,8 @@ const linuxdoOAuthEnabled = ref<boolean>(false)
 const backendModeEnabled = ref<boolean>(false)
 const oidcOAuthEnabled = ref<boolean>(false)
 const oidcOAuthProviderName = ref<string>('OIDC')
+const wechatOpenEnabled = ref<boolean>(false)
+const wechatMpEnabled = ref<boolean>(false)
 const passwordResetEnabled = ref<boolean>(false)
 
 // Turnstile
@@ -238,6 +271,7 @@ const turnstileToken = ref<string>('')
 const show2FAModal = ref<boolean>(false)
 const totpTempToken = ref<string>('')
 const totpUserEmailMasked = ref<string>('')
+const pendingAuthTokenFor2FA = ref<string>('')
 const totpModalRef = ref<InstanceType<typeof TotpLoginModal> | null>(null)
 
 const formData = reactive({
@@ -249,6 +283,39 @@ const errors = reactive({
   email: '',
   password: '',
   turnstile: ''
+})
+
+const wechatOAuthVisible = computed<boolean>(() => wechatOpenEnabled.value || wechatMpEnabled.value)
+const pendingAuthSession = computed(() => authStore.pendingAuthSession)
+const activeRedirectPath = computed(() =>
+  sanitizeAuthRedirectPath(
+    pendingAuthSession.value?.redirect || (route.query.redirect as string | undefined)
+  )
+)
+const forgotPasswordRoute = computed(() =>
+  activeRedirectPath.value === '/dashboard'
+    ? '/forgot-password'
+    : {
+        path: '/forgot-password',
+        query: { redirect: activeRedirectPath.value }
+      }
+)
+const registerRoute = computed(() =>
+  activeRedirectPath.value === '/dashboard'
+    ? '/register'
+    : {
+        path: '/register',
+        query: { redirect: activeRedirectPath.value }
+      }
+)
+const pendingAuthNotice = computed(() => {
+  if (pendingAuthSession.value?.intent === 'bind_current_user') {
+    return t('auth.pendingAuth.login.bindCurrentDescription')
+  }
+  if (pendingAuthSession.value?.intent === 'adopt_existing_user_by_email') {
+    return t('auth.pendingAuth.login.adoptExistingDescription')
+  }
+  return t('auth.pendingAuth.login.defaultDescription')
 })
 
 // ==================== Lifecycle ====================
@@ -264,12 +331,15 @@ onMounted(async () => {
 
   try {
     const settings = await getPublicSettings()
+    const settingsRecord = settings as unknown as Record<string, unknown>
     turnstileEnabled.value = settings.turnstile_enabled
     turnstileSiteKey.value = settings.turnstile_site_key || ''
     linuxdoOAuthEnabled.value = settings.linuxdo_oauth_enabled
     backendModeEnabled.value = settings.backend_mode_enabled
     oidcOAuthEnabled.value = settings.oidc_oauth_enabled
     oidcOAuthProviderName.value = settings.oidc_oauth_provider_name || 'OIDC'
+    wechatOpenEnabled.value = settingsRecord.wechat_login_open_enabled === true
+    wechatMpEnabled.value = settingsRecord.wechat_login_mp_enabled === true
     backendModeEnabled.value = settings.backend_mode_enabled
     passwordResetEnabled.value = settings.password_reset_enabled
   } catch (error) {
@@ -345,28 +415,47 @@ async function handleLogin(): Promise<void> {
   isLoading.value = true
 
   try {
-    // Call auth store login
-    const response = await authStore.login({
-      email: formData.email,
-      password: formData.password,
-      turnstile_token: turnstileEnabled.value ? turnstileToken.value : undefined
-    })
+    const activePendingSession = pendingAuthSession.value
+    const adoptionDecision = getPendingAuthSessionAdoptionDecision(activePendingSession)
+    const response = activePendingSession
+      ? await bindOAuthLogin(activePendingSession.provider, {
+          pendingAuthToken: activePendingSession.token,
+          email: formData.email,
+          password: formData.password,
+          turnstileToken: turnstileEnabled.value ? turnstileToken.value : undefined,
+          adoptDisplayName: adoptionDecision?.adoptDisplayName,
+          adoptAvatar: adoptionDecision?.adoptAvatar
+        })
+      : await authStore.login({
+          email: formData.email,
+          password: formData.password,
+          turnstile_token: turnstileEnabled.value ? turnstileToken.value : undefined
+        })
 
     // Check if 2FA is required
     if (isTotp2FARequired(response)) {
       const totpResponse = response as TotpLoginResponse
       totpTempToken.value = totpResponse.temp_token || ''
       totpUserEmailMasked.value = totpResponse.user_email_masked || ''
+      pendingAuthTokenFor2FA.value = activePendingSession?.token || ''
       show2FAModal.value = true
       isLoading.value = false
       return
+    }
+
+    if (activePendingSession) {
+      persistOAuthTokenPair(response)
+      authStore.clearPendingAuthSession()
+      await authStore.setToken(response.access_token)
     }
 
     // Show success toast
     appStore.showSuccess(t('auth.loginSuccess'))
 
     // Redirect to dashboard or intended route
-    const redirectTo = (router.currentRoute.value.query.redirect as string) || '/dashboard'
+    const redirectTo = sanitizeAuthRedirectPath(
+      activePendingSession?.redirect || (route.query.redirect as string | undefined)
+    )
     await router.push(redirectTo)
   } catch (error: unknown) {
     // Reset Turnstile on error
@@ -401,14 +490,16 @@ async function handle2FAVerify(code: string): Promise<void> {
   }
 
   try {
-    await authStore.login2FA(totpTempToken.value, code)
+    await authStore.login2FA(totpTempToken.value, code, pendingAuthTokenFor2FA.value || undefined)
 
     // Close modal and show success
     show2FAModal.value = false
     appStore.showSuccess(t('auth.loginSuccess'))
 
     // Redirect to dashboard or intended route
-    const redirectTo = (router.currentRoute.value.query.redirect as string) || '/dashboard'
+    const redirectTo = sanitizeAuthRedirectPath(
+      pendingAuthSession.value?.redirect || (route.query.redirect as string | undefined)
+    )
     await router.push(redirectTo)
   } catch (error: unknown) {
     const err = error as { message?: string; response?: { data?: { message?: string } } }
@@ -425,6 +516,7 @@ function handle2FACancel(): void {
   show2FAModal.value = false
   totpTempToken.value = ''
   totpUserEmailMasked.value = ''
+  pendingAuthTokenFor2FA.value = ''
 }
 </script>
 

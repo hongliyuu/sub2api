@@ -77,3 +77,35 @@ func TestSettingService_GetPublicSettings_ExposesTablePreferences(t *testing.T) 
 	require.Equal(t, 50, settings.TableDefaultPageSize)
 	require.Equal(t, []int{20, 50, 100}, settings.TablePageSizeOptions)
 }
+
+func TestSettingService_GetPublicSettings_ExposesThirdPartyAndWeChatAuthFlags(t *testing.T) {
+	repo := &settingPublicRepoStub{
+		values: map[string]string{
+			SettingKeyThirdPartyFirstLoginRequireEmail: "true",
+			SettingKeyWeChatLoginOpenEnabled:           "true",
+			SettingKeyWeChatLoginOpenAppID:             "wx-open-app",
+			SettingKeyWeChatLoginOpenAppSecret:         "open-secret",
+		},
+	}
+	svc := NewSettingService(repo, &config.Config{})
+
+	settings, err := svc.GetPublicSettings(context.Background())
+	require.NoError(t, err)
+	require.True(t, settings.ThirdPartyFirstLoginRequireEmail)
+	require.True(t, settings.WeChatLoginOpenEnabled)
+	require.False(t, settings.WeChatLoginMPEnabled)
+	require.Equal(t, WeChatLoginUnionIDHealthStatusWarning, settings.WeChatLoginUnionIDHealthStatus)
+}
+
+func TestSettingService_GetPublicSettings_FallsBackToLegacyThirdPartyEmailSetting(t *testing.T) {
+	repo := &settingPublicRepoStub{
+		values: map[string]string{
+			SettingKeyAuthForceEmailOnThirdPartySignup: "true",
+		},
+	}
+	svc := NewSettingService(repo, &config.Config{})
+
+	settings, err := svc.GetPublicSettings(context.Background())
+	require.NoError(t, err)
+	require.True(t, settings.ThirdPartyFirstLoginRequireEmail)
+}

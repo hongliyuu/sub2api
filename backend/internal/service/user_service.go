@@ -67,6 +67,12 @@ type UserRepository interface {
 	DisableTotp(ctx context.Context, userID int64) error
 }
 
+// UserSignupSourceRepository is an optional compatibility extension while the
+// auth identity migration bridges signup_source into persistence.
+type UserSignupSourceRepository interface {
+	UpdateSignupSource(ctx context.Context, userID int64, signupSource string) error
+}
+
 // UpdateProfileRequest 更新用户资料请求
 type UpdateProfileRequest struct {
 	Email                  *string  `json:"email"`
@@ -276,6 +282,17 @@ func (s *UserService) Delete(ctx context.Context, userID int64) error {
 	}
 	if err := s.userRepo.Delete(ctx, userID); err != nil {
 		return fmt.Errorf("delete user: %w", err)
+	}
+	return nil
+}
+
+func (s *UserService) UpdateSignupSource(ctx context.Context, userID int64, signupSource string) error {
+	writer, ok := s.userRepo.(UserSignupSourceRepository)
+	if !ok {
+		return nil
+	}
+	if err := writer.UpdateSignupSource(ctx, userID, NormalizeSignupSource(signupSource)); err != nil {
+		return fmt.Errorf("update signup source: %w", err)
 	}
 	return nil
 }
