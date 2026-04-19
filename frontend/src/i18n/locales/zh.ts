@@ -5042,13 +5042,21 @@ export default {
         description: '当上游返回特定错误时，自动修正请求参数并重试，提高请求成功率',
         enabled: '启用请求整流器',
         enabledHint: '总开关，关闭后所有整流功能均不生效',
+        poolSize: '签名池大小',
+        poolSizeHint:
+          '0 = 关闭池化（使用剥除 thinking block 重试策略）；大于 0 = 从正常响应中采集签名，遇到签名错误时使用池中签名替换后重试',
+        poolSizeUnit: '条',
         thinkingSignature: 'Thinking 签名整流',
         thinkingSignatureHint: '当上游返回 thinking block 签名校验错误时，自动去除签名并重试',
+        thinkingSignatureHintPool:
+          '启用签名池后，遇到签名错误时优先使用池中签名替换重试，而非剥除 thinking block',
         thinkingBudget: 'Thinking Budget 整流',
         thinkingBudgetHint: '当上游返回 budget_tokens 约束错误（≥1024）时，自动将 budget 设为 32000 并重试',
         apikeySignature: 'API Key 签名整流',
         apikeySignatureHint:
           '当 API Key 账号的上游返回签名相关错误时，自动去除签名并重试（内置规则始终生效）',
+        apikeySignatureHintPool:
+          '启用签名池后，API Key 账号遇到签名错误时优先使用池中签名替换重试',
         apikeyPatterns: '自定义匹配关键词',
         apikeyPatternsHint:
           '额外的关键词，匹配响应体中的内容（不区分大小写）。内置规则始终生效，此处用于补充额外匹配。',

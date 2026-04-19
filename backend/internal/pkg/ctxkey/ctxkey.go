@@ -56,3 +56,11 @@ const (
 	// ClaudeCodeVersion stores the extracted Claude Code version from User-Agent (e.g. "2.1.22")
 	ClaudeCodeVersion Key = "ctx_claude_code_version"
 )
+
+// IsSignatureRectifyRetry is set to true on contexts used for signature
+// rectifier retry requests. The harvester checks this to skip ingestion
+// during retries (we don't want to harvest from a request that was itself
+// built from pool signatures).
+type isSignatureRectifyRetryKey struct{}
+
+var IsSignatureRectifyRetry = isSignatureRectifyRetryKey{}

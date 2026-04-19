@@ -8,6 +8,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/Wei-Shaw/sub2api/internal/service/signature"
 	"github.com/google/wire"
 	"github.com/redis/go-redis/v9"
 )
@@ -114,6 +115,7 @@ var ProviderSet = wire.NewSet(
 	NewRefreshTokenCache,
 	NewErrorPassthroughCache,
 	NewTLSFingerprintProfileCache,
+	ProvideSignaturePoolCache,
 
 	// Encryptors
 	NewAESEncryptor,
@@ -139,6 +141,11 @@ var ProviderSet = wire.NewSet(
 	ProvideSQLDB,
 	ProvideRedis,
 )
+
+// ProvideSignaturePoolCache creates a Redis-backed SignaturePool with the default TTL.
+func ProvideSignaturePoolCache(rdb *redis.Client) signature.SignaturePool {
+	return NewSignaturePoolCache(rdb, signature.DefaultSignatureTTL)
+}
 
 // ProvideEnt 为依赖注入提供 Ent 客户端。
 //

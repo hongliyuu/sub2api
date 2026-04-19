@@ -4879,13 +4879,21 @@ export default {
         description: 'Automatically fix request parameters and retry when upstream returns specific errors',
         enabled: 'Enable Request Rectifier',
         enabledHint: 'Master switch - disabling turns off all rectification features',
+        poolSize: 'Signature Pool Size',
+        poolSizeHint:
+          '0 = disabled (uses strip-thinking-blocks retry strategy); > 0 = harvest signatures from successful responses and replace invalid signatures on retry',
+        poolSizeUnit: 'entries',
         thinkingSignature: 'Thinking Signature Rectifier',
         thinkingSignatureHint: 'Automatically strip signatures and retry when upstream returns thinking block signature validation errors',
+        thinkingSignatureHintPool:
+          'With signature pool enabled, invalid signatures are replaced with pool entries instead of stripping thinking blocks',
         thinkingBudget: 'Thinking Budget Rectifier',
         thinkingBudgetHint: 'Automatically set budget to 32000 and retry when upstream returns budget_tokens constraint error (≥1024)',
         apikeySignature: 'API Key Signature Rectifier',
         apikeySignatureHint:
           'Automatically strip signatures and retry when API Key accounts receive signature-related errors (built-in patterns always apply)',
+        apikeySignatureHintPool:
+          'With signature pool enabled, API Key accounts replace invalid signatures with pool entries on retry',
         apikeyPatterns: 'Custom Match Patterns',
         apikeyPatternsHint:
           'Additional keywords matched against the response body (case-insensitive). Built-in patterns always apply; use these for supplementary matching.',

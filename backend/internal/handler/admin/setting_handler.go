@@ -1765,6 +1765,7 @@ func (h *SettingHandler) GetRectifierSettings(c *gin.Context) {
 		ThinkingBudgetEnabled:    settings.ThinkingBudgetEnabled,
 		APIKeySignatureEnabled:   settings.APIKeySignatureEnabled,
 		APIKeySignaturePatterns:  patterns,
+		SignaturePoolSize:        settings.SignaturePoolSize,
 	})
 }
 
@@ -1775,6 +1776,7 @@ type UpdateRectifierSettingsRequest struct {
 	ThinkingBudgetEnabled    bool     `json:"thinking_budget_enabled"`
 	APIKeySignatureEnabled   bool     `json:"apikey_signature_enabled"`
 	APIKeySignaturePatterns  []string `json:"apikey_signature_patterns"`
+	SignaturePoolSize        int      `json:"signature_pool_size"`
 }
 
 // UpdateRectifierSettings 更新请求整流器配置
@@ -1812,6 +1814,7 @@ func (h *SettingHandler) UpdateRectifierSettings(c *gin.Context) {
 		ThinkingBudgetEnabled:    req.ThinkingBudgetEnabled,
 		APIKeySignatureEnabled:   req.APIKeySignatureEnabled,
 		APIKeySignaturePatterns:  cleanedPatterns,
+		SignaturePoolSize:        req.SignaturePoolSize,
 	}
 
 	if err := h.settingService.SetRectifierSettings(c.Request.Context(), settings); err != nil {
@@ -1836,6 +1839,7 @@ func (h *SettingHandler) UpdateRectifierSettings(c *gin.Context) {
 		ThinkingBudgetEnabled:    updatedSettings.ThinkingBudgetEnabled,
 		APIKeySignatureEnabled:   updatedSettings.APIKeySignatureEnabled,
 		APIKeySignaturePatterns:  updatedPatterns,
+		SignaturePoolSize:        updatedSettings.SignaturePoolSize,
 	})
 }
 
