@@ -112,6 +112,11 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 		} else if promptCacheKey != "" {
 			reqBody["prompt_cache_key"] = promptCacheKey
 		}
+		if serviceTier := extractOpenAIServiceTier(reqBody); serviceTier != nil {
+			responsesReq.ServiceTier = *serviceTier
+		} else {
+			responsesReq.ServiceTier = ""
+		}
 		// OAuth codex transform forces stream=true upstream, so always use
 		// the streaming response handler regardless of what the client asked.
 		isStream = true

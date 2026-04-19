@@ -4883,6 +4883,15 @@ func normalizeOpenAIPassthroughOAuthBody(body []byte, compact bool) ([]byte, boo
 		}
 	}
 
+	if serviceTier := normalizeOpenAIServiceTier(gjson.GetBytes(normalized, "service_tier").String()); serviceTier != nil && *serviceTier == "flex" {
+		next, err := sjson.DeleteBytes(normalized, "service_tier")
+		if err != nil {
+			return body, false, fmt.Errorf("normalize passthrough body delete service_tier: %w", err)
+		}
+		normalized = next
+		changed = true
+	}
+
 	return normalized, changed, nil
 }
 
@@ -4934,6 +4943,15 @@ func extractOpenAIServiceTier(reqBody map[string]any) *string {
 		return nil
 	}
 	return normalizeOpenAIServiceTier(raw)
+}
+
+func stripUnsupportedOpenAIOAuthServiceTier(reqBody map[string]any) bool {
+	serviceTier := extractOpenAIServiceTier(reqBody)
+	if serviceTier == nil || *serviceTier != "flex" {
+		return false
+	}
+	delete(reqBody, "service_tier")
+	return true
 }
 
 func extractOpenAIServiceTierFromBody(body []byte) *string {
