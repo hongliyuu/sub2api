@@ -2,9 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { defineComponent } from 'vue'
 import { mount } from '@vue/test-utils'
 
-const { updateAccountMock, checkMixedChannelRiskMock } = vi.hoisted(() => ({
+const { updateAccountMock, checkMixedChannelRiskMock, tlsFingerprintProfilesListMock } = vi.hoisted(() => ({
   updateAccountMock: vi.fn(),
-  checkMixedChannelRiskMock: vi.fn()
+  checkMixedChannelRiskMock: vi.fn(),
+  tlsFingerprintProfilesListMock: vi.fn()
 }))
 
 vi.mock('@/stores/app', () => ({
@@ -26,6 +27,9 @@ vi.mock('@/api/admin', () => ({
     accounts: {
       update: updateAccountMock,
       checkMixedChannelRisk: checkMixedChannelRiskMock
+    },
+    tlsFingerprintProfiles: {
+      list: tlsFingerprintProfilesListMock
     }
   }
 }))
@@ -134,8 +138,10 @@ describe('EditAccountModal', () => {
     const account = buildAccount()
     updateAccountMock.mockReset()
     checkMixedChannelRiskMock.mockReset()
+    tlsFingerprintProfilesListMock.mockReset()
     checkMixedChannelRiskMock.mockResolvedValue({ has_risk: false })
     updateAccountMock.mockResolvedValue(account)
+    tlsFingerprintProfilesListMock.mockResolvedValue([])
 
     const wrapper = mountModal(account)
 

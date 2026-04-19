@@ -98,6 +98,75 @@ func TestGetModelPricing_Gpt54UsesStaticFallbackWhenRemoteMissing(t *testing.T) 
 	require.InDelta(t, 1.5, got.LongContextOutputCostMultiplier, 1e-12)
 }
 
+func TestGetModelPricing_Gpt54ProUsesDedicatedStaticFallbackWhenRemoteMissing(t *testing.T) {
+	svc := &PricingService{
+		pricingData: map[string]*LiteLLMModelPricing{},
+	}
+
+	got := svc.GetModelPricing("gpt-5.4-pro")
+	require.NotNil(t, got)
+	require.Same(t, openAIGPT54ProFallbackPricing, got)
+	require.InDelta(t, 30e-6, got.InputCostPerToken, 1e-12)
+	require.InDelta(t, 60e-6, got.InputCostPerTokenPriority, 1e-12)
+	require.InDelta(t, 180e-6, got.OutputCostPerToken, 1e-12)
+	require.InDelta(t, 360e-6, got.OutputCostPerTokenPriority, 1e-12)
+	require.Zero(t, got.CacheCreationInputTokenCost)
+	require.Zero(t, got.CacheReadInputTokenCost)
+	require.Equal(t, 272000, got.LongContextInputTokenThreshold)
+	require.InDelta(t, 2.0, got.LongContextInputCostMultiplier, 1e-12)
+	require.InDelta(t, 1.5, got.LongContextOutputCostMultiplier, 1e-12)
+	require.True(t, got.SupportsServiceTier)
+	require.Equal(t, "openai", got.LiteLLMProvider)
+	require.Equal(t, "chat", got.Mode)
+	require.False(t, got.SupportsPromptCaching)
+}
+
+func TestGetModelPricing_Gpt54ProDoesNotFallThroughToBaseStaticFallback(t *testing.T) {
+	svc := &PricingService{
+		pricingData: map[string]*LiteLLMModelPricing{},
+	}
+
+	got := svc.GetModelPricing("gpt-5.4-pro")
+	require.NotNil(t, got)
+	require.Same(t, openAIGPT54ProFallbackPricing, got)
+	require.NotSame(t, openAIGPT54FallbackPricing, got)
+	require.True(t, openAIGPT54FallbackPricing.SupportsPromptCaching)
+	require.False(t, got.SupportsPromptCaching)
+	require.InDelta(t, 2.5e-7, openAIGPT54FallbackPricing.CacheReadInputTokenCost, 1e-12)
+	require.Zero(t, got.CacheReadInputTokenCost)
+}
+
+func TestGetModelPricing_Gpt54ProDoesNotFallThroughToBaseDynamicPricing(t *testing.T) {
+	gpt54DynamicPricing := &LiteLLMModelPricing{
+		InputCostPerToken:               2.5e-6,
+		InputCostPerTokenPriority:       5e-6,
+		OutputCostPerToken:              15e-6,
+		OutputCostPerTokenPriority:      30e-6,
+		CacheCreationInputTokenCost:     2.5e-6,
+		CacheReadInputTokenCost:         2.5e-7,
+		CacheReadInputTokenCostPriority: 5e-7,
+		SupportsServiceTier:             true,
+		LiteLLMProvider:                 "openai",
+		Mode:                            "chat",
+		SupportsPromptCaching:           true,
+	}
+
+	svc := &PricingService{
+		pricingData: map[string]*LiteLLMModelPricing{
+			"gpt-5.4": gpt54DynamicPricing,
+		},
+	}
+
+	got := svc.GetModelPricing("gpt-5.4-pro")
+	require.NotNil(t, got)
+	require.Same(t, openAIGPT54ProFallbackPricing, got)
+	require.NotSame(t, gpt54DynamicPricing, got)
+	require.InDelta(t, 30e-6, got.InputCostPerToken, 1e-12)
+	require.InDelta(t, 180e-6, got.OutputCostPerToken, 1e-12)
+	require.False(t, got.SupportsPromptCaching)
+	require.Zero(t, got.CacheReadInputTokenCost)
+}
+
 func TestGetModelPricing_Gpt54MiniUsesDedicatedStaticFallbackWhenRemoteMissing(t *testing.T) {
 	svc := &PricingService{
 		pricingData: map[string]*LiteLLMModelPricing{

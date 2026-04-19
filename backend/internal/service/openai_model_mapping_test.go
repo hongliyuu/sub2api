@@ -33,6 +33,19 @@ func TestResolveOpenAIForwardModel(t *testing.T) {
 			expectedModel:      "gpt-5.4",
 		},
 		{
+			name: "preserves exact gpt-5.4-pro passthrough mapping",
+			account: &Account{
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{
+						"gpt-5.4-pro": "gpt-5.4-pro",
+					},
+				},
+			},
+			requestedModel:     "gpt-5.4-pro",
+			defaultMappedModel: "gpt-4o-mini",
+			expectedModel:      "gpt-5.4-pro",
+		},
+		{
 			name: "preserves wildcard passthrough mapping instead of group default",
 			account: &Account{
 				Credentials: map[string]any{
