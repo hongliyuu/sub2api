@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -111,6 +112,33 @@ func TestUserHandlerEndpoints(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/api/v1/admin/users/1/usage?period=today", nil)
 	router.ServeHTTP(rec, req)
 	require.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestUserHandlerGetByID_IncludesActivityTimestamps(t *testing.T) {
+	router, adminSvc := setupAdminRouter()
+	lastLoginAt := time.Date(2026, 4, 19, 1, 2, 3, 0, time.UTC)
+	lastUsedAt := time.Date(2026, 4, 19, 4, 5, 6, 0, time.UTC)
+	adminSvc.users[0].LastLoginAt = &lastLoginAt
+	adminSvc.users[0].LastUsedAt = &lastUsedAt
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/admin/users/1", nil)
+	router.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	var resp struct {
+		Code int `json:"code"`
+		Data struct {
+			LastLoginAt *time.Time `json:"last_login_at"`
+			LastUsedAt  *time.Time `json:"last_used_at"`
+		} `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	require.Equal(t, 0, resp.Code)
+	require.NotNil(t, resp.Data.LastLoginAt)
+	require.NotNil(t, resp.Data.LastUsedAt)
+	require.True(t, resp.Data.LastLoginAt.Equal(lastLoginAt))
+	require.True(t, resp.Data.LastUsedAt.Equal(lastUsedAt))
 }
 
 func TestGroupHandlerEndpoints(t *testing.T) {

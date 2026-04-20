@@ -68,7 +68,9 @@ type UserAccountBinding struct {
 type AdminUser struct {
 	User
 
-	Notes string `json:"notes"`
+	Notes       string     `json:"notes"`
+	LastLoginAt *time.Time `json:"last_login_at,omitempty"`
+	LastUsedAt  *time.Time `json:"last_used_at,omitempty"`
 	// GroupRates 用户专属分组倍率配置
 	// map[groupID]rateMultiplier
 	GroupRates map[int64]float64 `json:"group_rates,omitempty"`

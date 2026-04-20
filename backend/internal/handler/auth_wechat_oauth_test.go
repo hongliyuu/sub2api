@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -81,6 +82,7 @@ func TestWeChatOAuthStart_OpenModeRedirectsToQRConnectAndPersistsIntent(t *testi
 	require.Equal(t, "https://api.example.com/api/v1/auth/oauth/wechat/callback", parsed.Query().Get("redirect_uri"))
 	require.Equal(t, "snsapi_login", parsed.Query().Get("scope"))
 	require.Equal(t, "wechat_redirect", parsed.Fragment)
+	require.Equal(t, wechatOAuthCookiePath, cookieByName(t, rec, wechatOAuthStateCookieName).Path)
 
 	intentCookie, err := decodeCookieValue(cookieValueByName(t, rec, wechatOAuthIntentCookieName))
 	require.NoError(t, err)
@@ -118,6 +120,79 @@ func TestWeChatOAuthStart_MPModeRedirectsToOAuth2Authorize(t *testing.T) {
 	require.Equal(t, "snsapi_userinfo", parsed.Query().Get("scope"))
 }
 
+func TestWeChatOAuthStart_UsesAPIBaseURLForCallbackHost(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler, _, _ := newOAuthCallbackHandlerForTest(t)
+	handler.settingSvc = service.NewSettingService(&wechatOAuthSettingRepoStub{values: map[string]string{
+		service.SettingKeyAPIBaseURL:               "https://gateway.example.com/api/v1",
+		service.SettingKeyWeChatLoginOpenEnabled:   "true",
+		service.SettingKeyWeChatLoginOpenAppID:     "wx-open-app",
+		service.SettingKeyWeChatLoginOpenAppSecret: "open-secret",
+	}}, &config.Config{})
+
+	rec := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(rec)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/oauth/wechat/start?mode=open&redirect=/dashboard", nil)
+	req.Host = "internal.example.local"
+	ctx.Request = req
+
+	handler.WeChatOAuthStart(ctx)
+
+	require.Equal(t, http.StatusFound, rec.Code)
+	location := rec.Header().Get("Location")
+	parsed, err := url.Parse(location)
+	require.NoError(t, err)
+	require.Equal(t, "https://gateway.example.com/api/v1/auth/oauth/wechat/callback", parsed.Query().Get("redirect_uri"))
+	require.Empty(t, cookieByName(t, rec, wechatOAuthStateCookieName).Domain)
+}
+
+func TestWeChatOAuthStart_SharesCookieAcrossSiblingSubdomains(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler, _, _ := newOAuthCallbackHandlerForTest(t)
+	handler.settingSvc = service.NewSettingService(&wechatOAuthSettingRepoStub{values: map[string]string{
+		service.SettingKeyAPIBaseURL:               "https://gateway.example.com/api/v1",
+		service.SettingKeyWeChatLoginOpenEnabled:   "true",
+		service.SettingKeyWeChatLoginOpenAppID:     "wx-open-app",
+		service.SettingKeyWeChatLoginOpenAppSecret: "open-secret",
+	}}, &config.Config{})
+
+	rec := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(rec)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/oauth/wechat/start?mode=open&redirect=/dashboard", nil)
+	req.Host = "api.example.com"
+	ctx.Request = req
+
+	handler.WeChatOAuthStart(ctx)
+
+	require.Equal(t, http.StatusFound, rec.Code)
+	require.Equal(t, "example.com", cookieByName(t, rec, wechatOAuthStateCookieName).Domain)
+}
+
+func TestWeChatOAuthStart_PreservesAPIBaseURLPathPrefix(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler, _, _ := newOAuthCallbackHandlerForTest(t)
+	handler.settingSvc = service.NewSettingService(&wechatOAuthSettingRepoStub{values: map[string]string{
+		service.SettingKeyAPIBaseURL:               "https://gateway.example.com/gateway",
+		service.SettingKeyWeChatLoginOpenEnabled:   "true",
+		service.SettingKeyWeChatLoginOpenAppID:     "wx-open-app",
+		service.SettingKeyWeChatLoginOpenAppSecret: "open-secret",
+	}}, &config.Config{})
+
+	rec := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(rec)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/oauth/wechat/start?mode=open&redirect=/dashboard", nil)
+	req.Host = "gateway.example.com"
+	ctx.Request = req
+
+	handler.WeChatOAuthStart(ctx)
+
+	require.Equal(t, http.StatusFound, rec.Code)
+	location := rec.Header().Get("Location")
+	parsed, err := url.Parse(location)
+	require.NoError(t, err)
+	require.Equal(t, "https://gateway.example.com/gateway/api/v1/auth/oauth/wechat/callback", parsed.Query().Get("redirect_uri"))
+}
+
 func TestWeChatOAuthStart_DefaultsToOpenOutsideWeChatWhenModeMissing(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	handler, _, _ := newOAuthCallbackHandlerForTest(t)
@@ -149,6 +224,18 @@ func TestWeChatOAuthStart_DefaultsToOpenOutsideWeChatWhenModeMissing(t *testing.
 	modeCookie, err := decodeCookieValue(cookieValueByName(t, rec, wechatOAuthModeCookieName))
 	require.NoError(t, err)
 	require.Equal(t, "open", modeCookie)
+}
+
+func cookieByName(t *testing.T, rec *httptest.ResponseRecorder, name string) *http.Cookie {
+	t.Helper()
+	for _, cookie := range rec.Result().Cookies() {
+		if cookie.Name == name {
+			return cookie
+		}
+	}
+	rawHeaders := rec.Result().Header.Values("Set-Cookie")
+	t.Fatalf("cookie %q not found in headers: %s", name, strings.Join(rawHeaders, " | "))
+	return nil
 }
 
 func TestWeChatOAuthStart_DefaultsToMPInsideWeChatWhenModeMissing(t *testing.T) {
