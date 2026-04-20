@@ -156,7 +156,7 @@ func (h *AuthHandler) WeChatOAuthCallback(c *gin.Context) {
 	if redirectTo == "" {
 		redirectTo = wechatOAuthDefaultRedirectTo
 	}
-	intent := normalizedOAuthIntentFromCookie(c, wechatOAuthIntentCookieName)
+	intent := normalizedOAuthIntentFromCookie(c, wechatOAuthIntentCookieName, redirectTo)
 	mode, err := readCookieDecoded(c, wechatOAuthModeCookieName)
 	if err != nil || strings.TrimSpace(mode) == "" {
 		redirectOAuthError(c, frontendCallback, "invalid_state", "missing oauth mode", "")

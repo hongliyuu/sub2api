@@ -741,8 +741,7 @@ export function getOAuthStartUrl(
   intent: OAuthBindingStartIntent | 'login' = 'login',
   options?: OAuthStartUrlOptions
 ): string | null {
-  const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined) || '/api/v1'
-  const normalized = apiBase.replace(/\/$/, '')
+  const normalized = getNormalizedApiBaseUrl()
   const searchParams = new URLSearchParams({
     redirect: sanitizeAuthRedirectPath(redirectTo),
     intent
@@ -774,10 +773,26 @@ export function prepareOAuthBindAccessTokenCookie(): void {
   }
 
   const secure = window.location.protocol === 'https:' ? '; Secure' : ''
-  const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined) || '/api/v1'
-  const normalized = apiBase.replace(/\/$/, '')
+  const normalized = resolveOAuthBindCookiePath()
   document.cookie =
     `oauth_bind_access_token=${encodeURIComponent(token)}; Path=${normalized}/auth/oauth; Max-Age=600; SameSite=Lax${secure}`
+}
+
+function getNormalizedApiBaseUrl(): string {
+  const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined) || '/api/v1'
+  return apiBase.replace(/\/$/, '')
+}
+
+function resolveOAuthBindCookiePath(): string {
+  const apiBase = getNormalizedApiBaseUrl()
+  try {
+    return new URL(apiBase, window.location.origin).pathname.replace(/\/$/, '') || '/api/v1'
+  } catch {
+    if (apiBase.startsWith('/')) {
+      return apiBase
+    }
+    return '/api/v1'
+  }
 }
 
 export async function completePendingAuthSession(

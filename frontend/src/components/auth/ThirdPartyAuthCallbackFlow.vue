@@ -455,7 +455,9 @@ function parseCallbackHash(
     };
   }
 
-  const intent = parseIntent(params.get("intent"));
+  const intent =
+    parseIntent(params.get("intent")) ||
+    (hasLegacyBindingIntent(redirect) ? "bind_current_user" : null);
   const adoptionRequired = parseBooleanFlag(params.get("adoption_required"));
   const suggestedDisplayName = params.get("suggested_display_name");
   const suggestedAvatarUrl = params.get("suggested_avatar_url");

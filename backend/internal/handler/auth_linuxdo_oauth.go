@@ -181,7 +181,7 @@ func (h *AuthHandler) LinuxDoOAuthCallback(c *gin.Context) {
 	if redirectTo == "" {
 		redirectTo = linuxDoOAuthDefaultRedirectTo
 	}
-	intent := normalizedOAuthIntentFromCookie(c, linuxDoOAuthIntentCookieName)
+	intent := normalizedOAuthIntentFromCookie(c, linuxDoOAuthIntentCookieName, redirectTo)
 
 	codeVerifier := ""
 	if cfg.UsePKCE {
@@ -908,9 +908,26 @@ func normalizeOAuthIntent(raw string) string {
 	}
 }
 
-func normalizedOAuthIntentFromCookie(c *gin.Context, cookieName string) string {
-	value, _ := readCookieDecoded(c, cookieName)
-	return normalizeOAuthIntent(value)
+func normalizedOAuthIntentFromCookie(c *gin.Context, cookieName string, redirectTo string) string {
+	value, err := readCookieDecoded(c, cookieName)
+	if err == nil && strings.TrimSpace(value) != "" {
+		return normalizeOAuthIntent(value)
+	}
+	if hasOAuthBindIntent(redirectTo) {
+		return service.PendingAuthIntentBindCurrentUser
+	}
+	return service.PendingAuthIntentLogin
+}
+
+func hasOAuthBindIntent(path string) bool {
+	if strings.TrimSpace(path) == "" {
+		return false
+	}
+	parsed, err := url.Parse(path)
+	if err == nil {
+		return strings.EqualFold(strings.TrimSpace(parsed.Query().Get("oauth_intent")), "bind")
+	}
+	return strings.Contains(strings.ToLower(path), "oauth_intent=bind")
 }
 
 func (h *AuthHandler) completeOAuthCallback(c *gin.Context, frontendCallback, redirectTo string, identity oauthCallbackIdentity) {

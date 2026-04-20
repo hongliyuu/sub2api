@@ -219,7 +219,7 @@ func (h *AuthHandler) OIDCOAuthCallback(c *gin.Context) {
 	if redirectTo == "" {
 		redirectTo = oidcOAuthDefaultRedirectTo
 	}
-	intent := normalizedOAuthIntentFromCookie(c, oidcOAuthIntentCookieName)
+	intent := normalizedOAuthIntentFromCookie(c, oidcOAuthIntentCookieName, redirectTo)
 
 	codeVerifier := ""
 	if cfg.UsePKCE {
