@@ -2,9 +2,7 @@ package handler
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -241,50 +239,12 @@ func (h *AuthHandler) resolveBoundWeChatUserIDForCallback(
 	if repo == nil {
 		return nil, nil
 	}
-
-	if unionid != "" {
-		userID, err := lookupBoundIdentityUserID(ctx, repo, "wechat", providerKey, unionid)
-		if userID != nil || err != nil {
-			return userID, err
-		}
-	}
-
-	if openid == "" || channel == "" || appid == "" {
-		return nil, nil
-	}
-
-	channelFinder, ok := repo.(authIdentityChannelFinder)
-	if !ok {
-		return nil, nil
-	}
-	channelRecord, err := channelFinder.FindAuthIdentityChannel(ctx, "wechat", providerKey, channel, appid, openid)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	if channelRecord == nil {
-		return nil, nil
-	}
-
-	identityGetter, ok := repo.(authIdentityByIDGetter)
-	if !ok {
-		return nil, nil
-	}
-	identity, err := identityGetter.GetAuthIdentityByID(ctx, channelRecord.IdentityID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	if identity == nil {
-		return nil, nil
-	}
-
-	userID := identity.UserID
-	return &userID, nil
+	return lookupBoundWeChatUserID(ctx, repo, providerKey, map[string]any{
+		"unionid": unionid,
+		"openid":  openid,
+		"channel": channel,
+		"appid":   appid,
+	})
 }
 
 func wechatSyntheticEmail(subject string) string {

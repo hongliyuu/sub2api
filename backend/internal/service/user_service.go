@@ -83,6 +83,7 @@ type UpdateProfileRequest struct {
 	Concurrency            *int     `json:"concurrency"`
 	BalanceNotifyEnabled   *bool    `json:"balance_notify_enabled"`
 	BalanceNotifyThreshold *float64 `json:"balance_notify_threshold"`
+	AvatarDataURL          *string  `json:"avatar_data_url"`
 }
 
 // ChangePasswordRequest 修改密码请求
@@ -102,6 +103,11 @@ type UserService struct {
 type userExternalIdentityStore interface {
 	ListUserExternalIdentities(ctx context.Context, userID int64) ([]UserExternalIdentity, error)
 	DeleteUserExternalIdentity(ctx context.Context, userID int64, provider ExternalIdentityProvider) (bool, error)
+}
+
+type userAvatarStore interface {
+	UpsertAvatar(ctx context.Context, userID int64, input UpsertUserAvatarInput) (*UserAvatar, error)
+	DeleteAvatar(ctx context.Context, userID int64) error
 }
 
 // NewUserService 创建用户服务实例
@@ -165,6 +171,37 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID int64, req Updat
 			user.BalanceNotifyThreshold = nil // clear to system default
 		} else {
 			user.BalanceNotifyThreshold = req.BalanceNotifyThreshold
+		}
+	}
+
+	if req.AvatarDataURL != nil {
+		avatarStore, ok := s.userRepo.(userAvatarStore)
+		if !ok {
+			return nil, fmt.Errorf("user avatar store is not configured")
+		}
+		if strings.TrimSpace(*req.AvatarDataURL) == "" {
+			if err := avatarStore.DeleteAvatar(ctx, userID); err != nil {
+				return nil, fmt.Errorf("delete avatar: %w", err)
+			}
+			user.Avatar = nil
+			user.AvatarURL = ""
+			user.AvatarUpdatedAt = nil
+			user.HasCustomAvatar = false
+		} else {
+			avatarInput, err := ParseInlineUserAvatarDataURL(*req.AvatarDataURL)
+			if err != nil {
+				return nil, err
+			}
+			avatar, err := avatarStore.UpsertAvatar(ctx, userID, avatarInput)
+			if err != nil {
+				return nil, fmt.Errorf("upsert avatar: %w", err)
+			}
+			user.Avatar = avatar
+			user.AvatarURL = ResolvePreferredUserAvatarURL(avatar)
+			user.HasCustomAvatar = user.AvatarURL != ""
+			if avatar != nil {
+				user.AvatarUpdatedAt = &avatar.UpdatedAt
+			}
 		}
 	}
 

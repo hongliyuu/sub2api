@@ -352,17 +352,28 @@ RETURNING
 	}, nil
 }
 
+func (r *userRepository) DeleteAvatar(ctx context.Context, userID int64) error {
+	if r == nil || r.sql == nil {
+		return fmt.Errorf("nil sql executor")
+	}
+	_, err := r.sql.ExecContext(ctx, `DELETE FROM user_avatars WHERE user_id = $1`, userID)
+	return err
+}
+
 func (r *userRepository) FindAuthIdentity(ctx context.Context, providerType, providerKey, providerSubject string) (*AuthIdentityRecord, error) {
 	if r == nil || r.sql == nil {
 		return nil, fmt.Errorf("nil sql executor")
 	}
 
-	record, err := r.findStoredAuthIdentity(ctx, providerType, providerKey, providerSubject)
-	if err == nil {
-		return record, nil
-	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return nil, err
+	keys := candidateProviderKeys(providerType, providerKey)
+	for _, candidate := range keys {
+		record, err := r.findStoredAuthIdentity(ctx, providerType, candidate, providerSubject)
+		if err == nil {
+			return record, nil
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
 	}
 
 	legacy, err := r.findLegacyExternalIdentity(ctx, providerType, providerSubject)
@@ -373,7 +384,7 @@ func (r *userRepository) FindAuthIdentity(ctx context.Context, providerType, pro
 		return nil, err
 	}
 
-	return r.materializeLegacyAuthIdentity(ctx, strings.TrimSpace(providerType), strings.TrimSpace(providerKey), legacy)
+	return r.materializeLegacyAuthIdentity(ctx, strings.TrimSpace(providerType), primaryProviderKey(providerType, providerKey), legacy)
 }
 
 func (r *userRepository) findStoredAuthIdentity(ctx context.Context, providerType, providerKey, providerSubject string) (*AuthIdentityRecord, error) {
@@ -718,6 +729,19 @@ INSERT INTO auth_identity_channels (
 }
 
 func (r *userRepository) FindAuthIdentityChannel(ctx context.Context, providerType, providerKey, channel, channelAppID, channelSubject string) (*AuthIdentityChannelRecord, error) {
+	for _, candidate := range candidateProviderKeys(providerType, providerKey) {
+		record, err := r.findStoredAuthIdentityChannel(ctx, providerType, candidate, channel, channelAppID, channelSubject)
+		if err == nil {
+			return record, nil
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+	}
+	return nil, sql.ErrNoRows
+}
+
+func (r *userRepository) findStoredAuthIdentityChannel(ctx context.Context, providerType, providerKey, channel, channelAppID, channelSubject string) (*AuthIdentityChannelRecord, error) {
 	row := authIdentityChannelRow{}
 	if err := scanSingleRow(ctx, r.sql, `
 SELECT
@@ -1090,6 +1114,14 @@ func (r *userRepository) bindPendingWeChatIdentity(
 		return errAuthIdentityOwnershipConflict
 	}
 
+	openIDIdentity, err := r.findOptionalAuthIdentity(ctx, "wechat", providerKey, openid)
+	if err != nil {
+		return err
+	}
+	if openIDIdentity != nil && openIDIdentity.UserID != userID {
+		return errAuthIdentityOwnershipConflict
+	}
+
 	targetIdentity := primaryIdentity
 	switch {
 	case targetIdentity != nil && channelIdentity != nil && channelIdentity.ID != targetIdentity.ID:
@@ -1101,6 +1133,8 @@ func (r *userRepository) bindPendingWeChatIdentity(
 		}
 	case targetIdentity == nil && channelIdentity != nil:
 		targetIdentity = channelIdentity
+	case targetIdentity == nil && openIDIdentity != nil:
+		targetIdentity = openIDIdentity
 	case targetIdentity == nil:
 		targetIdentity, err = r.UpsertAuthIdentity(ctx, userID, UpsertAuthIdentityInput{
 			ProviderType:    "wechat",
@@ -1147,6 +1181,12 @@ func (r *userRepository) bindPendingWeChatIdentity(
 			ChannelSubject: openid,
 			Metadata:       mergedMetadata,
 		}); err != nil {
+			return err
+		}
+	}
+
+	if unionid != "" && openid != "" {
+		if err := r.backfillLegacyWeChatUnionID(ctx, userID, openid, unionid); err != nil {
 			return err
 		}
 	}
@@ -1565,6 +1605,31 @@ WHERE user_id = $1 AND provider = $2`, userID, string(provider))
 	return affected > 0, nil
 }
 
+func (r *userRepository) backfillLegacyWeChatUnionID(ctx context.Context, userID int64, openid string, unionid string) error {
+	openid = strings.TrimSpace(openid)
+	unionid = strings.TrimSpace(unionid)
+	if openid == "" || unionid == "" {
+		return nil
+	}
+
+	_, err := r.sql.ExecContext(ctx, `
+UPDATE user_external_identities
+SET provider_union_id = $3,
+	updated_at = CURRENT_TIMESTAMP
+WHERE user_id = $1
+  AND provider = 'wechat'
+  AND provider_user_id = $2
+  AND COALESCE(provider_union_id, '') IN ('', $3)`,
+		userID,
+		openid,
+		unionid,
+	)
+	if err != nil && isMissingLegacyExternalIdentityTableErr(err) {
+		return nil
+	}
+	return err
+}
+
 func (r legacyExternalIdentityRow) canonicalProviderSubject() string {
 	if strings.TrimSpace(r.Provider) == string(service.ExternalIdentityProviderWeChat) {
 		if unionid := strings.TrimSpace(r.ProviderUnionID.String); unionid != "" {
@@ -1767,11 +1832,39 @@ func (r pendingAuthSessionRow) toRecord() (*PendingAuthSessionRecord, error) {
 }
 
 func normalizedProviderKey(ref service.IdentityAdoptionDecisionRef) string {
-	providerKey := strings.TrimSpace(ref.ProviderKey)
+	return primaryProviderKey(ref.ProviderType, ref.ProviderKey)
+}
+
+func primaryProviderKey(providerType, providerKey string) string {
+	providerKey = strings.TrimSpace(providerKey)
 	if providerKey != "" {
 		return providerKey
 	}
-	return strings.TrimSpace(ref.ProviderType)
+	return strings.TrimSpace(providerType)
+}
+
+func candidateProviderKeys(providerType, providerKey string) []string {
+	keys := make([]string, 0, 3)
+	add := func(value string) {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return
+		}
+		for _, existing := range keys {
+			if existing == value {
+				return
+			}
+		}
+		keys = append(keys, value)
+	}
+
+	primary := primaryProviderKey(providerType, providerKey)
+	add(primary)
+	if strings.TrimSpace(providerType) == string(service.ExternalIdentityProviderWeChat) {
+		add(string(service.ExternalIdentityProviderWeChat))
+		add("wechat-main")
+	}
+	return keys
 }
 
 func nullableBool(v *bool) any {

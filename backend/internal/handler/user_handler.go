@@ -45,6 +45,7 @@ type UpdateProfileRequest struct {
 	Username               *string  `json:"username"`
 	BalanceNotifyEnabled   *bool    `json:"balance_notify_enabled"`
 	BalanceNotifyThreshold *float64 `json:"balance_notify_threshold"`
+	AvatarDataURL          *string  `json:"avatar_data_url"`
 }
 
 type ConfirmAccountBindingRequest struct {
@@ -131,6 +132,7 @@ func (h *UserHandler) UpdateProfile(c *gin.Context) {
 		Username:               req.Username,
 		BalanceNotifyEnabled:   req.BalanceNotifyEnabled,
 		BalanceNotifyThreshold: req.BalanceNotifyThreshold,
+		AvatarDataURL:          req.AvatarDataURL,
 	}
 	updatedUser, err := h.userService.UpdateProfile(c.Request.Context(), subject.UserID, svcReq)
 	if err != nil {

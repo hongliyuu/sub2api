@@ -1013,10 +1013,20 @@ func (h *AuthHandler) lookupBoundOAuthUserID(ctx context.Context, providerType, 
 
 func lookupBoundWeChatUserID(ctx context.Context, repo any, providerKey string, metadata map[string]any) (*int64, error) {
 	if unionid := oauthMetadataString(metadata, "unionid"); unionid != "" {
-		return lookupBoundIdentityUserID(ctx, repo, "wechat", providerKey, unionid)
+		userID, err := lookupBoundIdentityUserID(ctx, repo, "wechat", providerKey, unionid)
+		if userID != nil || err != nil {
+			return userID, err
+		}
 	}
 
 	openid := oauthMetadataString(metadata, "openid")
+	if openid != "" {
+		userID, err := lookupBoundIdentityUserID(ctx, repo, "wechat", providerKey, openid)
+		if userID != nil || err != nil {
+			return userID, err
+		}
+	}
+
 	channel := oauthMetadataString(metadata, "channel")
 	appid := oauthMetadataString(metadata, "appid")
 	if openid == "" || channel == "" || appid == "" {

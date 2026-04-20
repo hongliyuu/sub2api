@@ -28,6 +28,9 @@ var (
 	ErrUserAvatarStorageKeyEmpty      = infraerrors.BadRequest("USER_AVATAR_STORAGE_KEY_REQUIRED", "avatar storage key is required")
 	ErrUserAvatarContentTypeEmpty     = infraerrors.BadRequest("USER_AVATAR_CONTENT_TYPE_REQUIRED", "avatar content type is required")
 	ErrUserAvatarTooLarge             = infraerrors.BadRequest("USER_AVATAR_TOO_LARGE", "avatar exceeds 100KB limit")
+	ErrUserAvatarInvalidDataURL       = infraerrors.BadRequest("USER_AVATAR_INVALID_DATA_URL", "avatar must be provided as a base64 data url")
+	ErrUserAvatarUnsupportedType      = infraerrors.BadRequest("USER_AVATAR_UNSUPPORTED_TYPE", "avatar must be an image")
+	ErrUserAvatarInvalidEncoding      = infraerrors.BadRequest("USER_AVATAR_INVALID_ENCODING", "avatar data url payload is not valid base64")
 )
 
 // WeChatConnectSyntheticEmailDomain keeps migration compatibility with synthetic
@@ -235,4 +238,30 @@ func BuildInlineUserAvatarInput(payload []byte, contentType string) UpsertUserAv
 		ByteSize:        int64(len(payload)),
 		SHA256:          shaHex,
 	}
+}
+
+func ParseInlineUserAvatarDataURL(dataURL string) (UpsertUserAvatarInput, error) {
+	trimmed := strings.TrimSpace(dataURL)
+	if trimmed == "" {
+		return UpsertUserAvatarInput{}, ErrUserAvatarInvalidDataURL
+	}
+
+	header, payload, ok := strings.Cut(trimmed, ",")
+	if !ok {
+		return UpsertUserAvatarInput{}, ErrUserAvatarInvalidDataURL
+	}
+	if !strings.HasPrefix(strings.ToLower(header), "data:") || !strings.HasSuffix(strings.ToLower(header), ";base64") {
+		return UpsertUserAvatarInput{}, ErrUserAvatarInvalidDataURL
+	}
+
+	contentType := strings.TrimSpace(header[len("data:") : len(header)-len(";base64")])
+	if !strings.HasPrefix(strings.ToLower(contentType), "image/") {
+		return UpsertUserAvatarInput{}, ErrUserAvatarUnsupportedType
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(strings.TrimSpace(payload))
+	if err != nil {
+		return UpsertUserAvatarInput{}, ErrUserAvatarInvalidEncoding
+	}
+	return BuildInlineUserAvatarInput(decoded, contentType), nil
 }
