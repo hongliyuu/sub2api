@@ -497,6 +497,17 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  function setCurrentUser(userData: User | null): void {
+    user.value = userData
+
+    if (userData) {
+      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(userData))
+      return
+    }
+
+    localStorage.removeItem(AUTH_USER_KEY)
+  }
+
   /**
    * Clear all authentication state
    * Internal helper function
@@ -549,6 +560,7 @@ export const useAuthStore = defineStore('auth', () => {
     logout,
     checkAuth,
     refreshUser,
+    setCurrentUser,
     setPendingAuthSession,
     clearPendingAuthSession,
     consumePendingAuthSession,

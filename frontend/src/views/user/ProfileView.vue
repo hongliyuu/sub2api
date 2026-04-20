@@ -45,7 +45,7 @@
       </div>
       <ProfileEditForm
         :initial-username="user?.username || ''"
-        :initial-avatar-url="user?.avatar_url || ''"
+        :initial-avatar-url="avatarUrl"
       />
       <ProfileAccountBindingsCard :user="user" />
       <ProfileBalanceNotifyCard
@@ -76,11 +76,13 @@ import ProfileAccountBindingsCard from "@/components/user/profile/ProfileAccount
 import ProfileBalanceNotifyCard from "@/components/user/profile/ProfileBalanceNotifyCard.vue";
 import ProfilePasswordForm from "@/components/user/profile/ProfilePasswordForm.vue";
 import ProfileTotpCard from "@/components/user/profile/ProfileTotpCard.vue";
+import { resolveUserAvatarUrl } from "@/components/user/profile/profileUser";
 import { Icon } from "@/components/icons";
 
 const { t } = useI18n();
 const authStore = useAuthStore();
 const user = computed(() => authStore.user);
+const avatarUrl = computed(() => resolveUserAvatarUrl(user.value) || "");
 const contactInfo = ref("");
 const balanceLowNotifyEnabled = ref(false);
 const systemDefaultThreshold = ref(0);

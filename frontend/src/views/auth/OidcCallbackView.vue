@@ -301,9 +301,9 @@ async function handleBindCurrentUser(summary: CallbackPendingSession) {
   isHandlingAction.value = true;
 
   try {
-    await userAPI.bindAccount(summary.provider, summary.pendingAuthToken);
+    const updatedUser = await userAPI.bindAccount(summary.provider, summary.pendingAuthToken);
+    authStore.setCurrentUser(updatedUser);
     authStore.clearPendingAuthSession();
-    await authStore.refreshUser();
     appStore.showSuccess(
       `${providerLabel.value} ${t("profile.bindings.actions.connected")}`,
     );

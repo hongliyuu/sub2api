@@ -447,7 +447,11 @@ function parseCallbackHash(
 
     return {
       kind: "error",
-      message: explicitErrorDescription || explicitError,
+      message: resolveCallbackErrorMessage(
+        explicitError,
+        explicitErrorDescription,
+        provider,
+      ),
     };
   }
 
@@ -578,6 +582,99 @@ function parseCallbackParams(rawHash: string, rawSearch: string): URLSearchParam
   }
 
   return params;
+}
+
+function resolveCallbackErrorMessage(
+  explicitError: string,
+  explicitErrorDescription: string | null,
+  provider: ThirdPartyAuthProvider | null,
+): string {
+  const providerName = resolveProviderHeading(
+    provider ?? "third_party",
+    props.provider ?? null,
+    props.providerLabel,
+  );
+  const normalizedError = normalizeCallbackErrorToken(explicitError);
+  const normalizedDescription = normalizeCallbackErrorToken(
+    explicitErrorDescription,
+  );
+
+  if (
+    normalizedError === "external_identity_already_bound" ||
+    normalizedDescription === "external_identity_already_bound"
+  ) {
+    return t("auth.thirdParty.callback.error.externalIdentityAlreadyBound", {
+      providerName,
+    });
+  }
+
+  if (
+    normalizedError === "already_bound_current_user" ||
+    normalizedError === "external_identity_already_bound_current_user" ||
+    normalizedDescription === "already_bound_current_user" ||
+    normalizedDescription === "external_identity_already_bound_current_user"
+  ) {
+    return t("auth.thirdParty.callback.error.alreadyBoundCurrentUser", {
+      providerName,
+    });
+  }
+
+  if (normalizedError === "service_error") {
+    return t("auth.thirdParty.callback.error.serviceError");
+  }
+
+  if (
+    normalizedError === "auth_required" ||
+    normalizedDescription === "auth_required" ||
+    normalizedError === "missing_authenticated_subject" ||
+    normalizedDescription === "missing_authenticated_subject"
+  ) {
+    return t("auth.thirdParty.callback.error.authRequired");
+  }
+
+  const decodedDescription = decodeCallbackErrorText(explicitErrorDescription);
+  if (decodedDescription) {
+    return decodedDescription;
+  }
+
+  const decodedError = decodeCallbackErrorText(explicitError);
+  if (decodedError) {
+    return decodedError;
+  }
+
+  return t("auth.thirdParty.callback.error.unknown");
+}
+
+function normalizeCallbackErrorToken(value: string | null): string {
+  const decoded = decodeCallbackErrorText(value)
+    .toLowerCase()
+    .trim()
+    .replace(/^error:\s*/, "");
+
+  return decoded.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+}
+
+function decodeCallbackErrorText(value: string | null): string {
+  if (!value) return "";
+
+  let decoded = value.trim();
+  for (let i = 0; i < 3; i += 1) {
+    if (!/%[0-9a-f]{2}/i.test(decoded) && !decoded.includes("+")) {
+      break;
+    }
+
+    try {
+      const next = decodeURIComponent(decoded.replace(/\+/g, "%20"));
+      if (next === decoded) {
+        break;
+      }
+      decoded = next;
+    } catch {
+      break;
+    }
+  }
+
+  return decoded;
 }
 
 function hasAnyCallbackParam(params: URLSearchParams): boolean {

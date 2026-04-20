@@ -929,6 +929,11 @@ func (h *AuthHandler) completeOAuthCallback(c *gin.Context, frontendCallback, re
 		redirectOAuthError(c, frontendCallback, "login_failed", "identity_lookup_failed", "")
 		return
 	}
+	boundUserID, err = h.filterDeletedOAuthBoundUserID(c.Request.Context(), boundUserID)
+	if err != nil {
+		redirectOAuthError(c, frontendCallback, "login_failed", "identity_lookup_failed", "")
+		return
+	}
 
 	if intent == service.PendingAuthIntentBindCurrentUser && boundUserID != nil {
 		if bindTargetUserID != nil && *boundUserID == *bindTargetUserID {
@@ -1126,6 +1131,27 @@ func (h *AuthHandler) lookupBoundOAuthUserID(ctx context.Context, providerType, 
 	}
 
 	return lookupBoundIdentityUserID(ctx, repo, providerType, providerKey, providerSubject)
+}
+
+func (h *AuthHandler) filterDeletedOAuthBoundUserID(ctx context.Context, userID *int64) (*int64, error) {
+	if userID == nil || *userID <= 0 {
+		return nil, nil
+	}
+	if h == nil || h.userService == nil {
+		return userID, nil
+	}
+
+	user, err := h.userService.GetByID(ctx, *userID)
+	if err != nil {
+		if errors.Is(err, service.ErrUserNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if user == nil {
+		return nil, nil
+	}
+	return userID, nil
 }
 
 func lookupBoundWeChatUserID(ctx context.Context, repo any, providerKey string, metadata map[string]any) (*int64, error) {

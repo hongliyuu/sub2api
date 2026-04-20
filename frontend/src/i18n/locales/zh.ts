@@ -503,6 +503,12 @@ export default {
         error: {
           title: "无法完成认证",
           description: "回调参数缺失，或第三方返回了错误信息。",
+          unknown: "认证流程未完成，请稍后重试。",
+          serviceError: "认证服务暂时不可用，请稍后重试。",
+          authRequired: "当前登录状态已失效，请重新登录后再试。",
+          externalIdentityAlreadyBound:
+            "该 {providerName} 已绑定到其他账号。请先在原账号中解绑，或联系管理员清理残留绑定后再重试。",
+          alreadyBoundCurrentUser: "该 {providerName} 已绑定到当前账号。",
           invalidPendingPayload: "待处理认证会话参数无效。",
           missingResult: "缺少回调结果。",
         },
@@ -1064,7 +1070,7 @@ export default {
       providerDescriptions: {
         email: "当前账户的主邮箱与密码登录方式。",
         linuxdo: "绑定 Linux.do 账号后可直接使用第三方登录。",
-        wechat: "微信绑定会统一归并支持的 open 与 mp 登录渠道。",
+        wechat: "绑定微信账号后可直接使用微信登录。",
         oidc: "将组织或身份提供方账户作为正式的登录绑定方式。",
       },
       providerHints: {

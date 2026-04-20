@@ -74,11 +74,7 @@
             class="flex items-center gap-2 rounded-xl p-1.5 transition-colors hover:bg-gray-100 dark:hover:bg-dark-800"
             aria-label="User Menu"
           >
-            <div
-              class="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 text-sm font-medium text-white shadow-sm"
-            >
-              {{ userInitials }}
-            </div>
+            <UserAvatar :user="user" size="sm" shape="square" />
             <div class="hidden text-left md:block">
               <div class="text-sm font-medium text-gray-900 dark:text-white">
                 {{ displayName }}
@@ -209,15 +205,22 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { defineAsyncComponent, ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore, useAuthStore, useOnboardingStore } from '@/stores'
 import { useAdminSettingsStore } from '@/stores/adminSettings'
+import UserAvatar from '@/components/common/UserAvatar.vue'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
-import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMini.vue'
-import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
 import Icon from '@/components/icons/Icon.vue'
+import { getUserDisplayName } from '@/components/user/profile/profileUser'
+
+const SubscriptionProgressMini = defineAsyncComponent(
+  () => import('@/components/common/SubscriptionProgressMini.vue')
+)
+const AnnouncementBell = defineAsyncComponent(
+  () => import('@/components/common/AnnouncementBell.vue')
+)
 
 const router = useRouter()
 const route = useRoute()
@@ -238,23 +241,8 @@ const showOnboardingButton = computed(() => {
   return !authStore.isSimpleMode && user.value?.role === 'admin'
 })
 
-const userInitials = computed(() => {
-  if (!user.value) return ''
-  // Prefer username, fallback to email
-  if (user.value.username) {
-    return user.value.username.substring(0, 2).toUpperCase()
-  }
-  if (user.value.email) {
-    // Get the part before @ and take first 2 chars
-    const localPart = user.value.email.split('@')[0]
-    return localPart.substring(0, 2).toUpperCase()
-  }
-  return ''
-})
-
 const displayName = computed(() => {
-  if (!user.value) return ''
-  return user.value.username || user.value.email?.split('@')[0] || ''
+  return getUserDisplayName(user.value)
 })
 
 const pageTitle = computed(() => {

@@ -1062,6 +1062,10 @@ func (r *userRepository) BindPendingAuthIdentity(ctx context.Context, session *s
 	if err != nil {
 		return err
 	}
+	existing, err = r.pruneStaleAuthIdentityOwner(ctx, existing)
+	if err != nil {
+		return err
+	}
 	if existing != nil && existing.UserID != userID {
 		return errAuthIdentityOwnershipConflict
 	}
@@ -1102,6 +1106,10 @@ func (r *userRepository) bindPendingWeChatIdentity(
 	if err != nil {
 		return err
 	}
+	primaryIdentity, err = r.pruneStaleAuthIdentityOwner(ctx, primaryIdentity)
+	if err != nil {
+		return err
+	}
 	if primaryIdentity != nil && primaryIdentity.UserID != userID {
 		return errAuthIdentityOwnershipConflict
 	}
@@ -1110,11 +1118,19 @@ func (r *userRepository) bindPendingWeChatIdentity(
 	if err != nil {
 		return err
 	}
+	channelIdentity, err = r.pruneStaleAuthIdentityOwner(ctx, channelIdentity)
+	if err != nil {
+		return err
+	}
 	if channelIdentity != nil && channelIdentity.UserID != userID {
 		return errAuthIdentityOwnershipConflict
 	}
 
 	openIDIdentity, err := r.findOptionalAuthIdentity(ctx, "wechat", providerKey, openid)
+	if err != nil {
+		return err
+	}
+	openIDIdentity, err = r.pruneStaleAuthIdentityOwner(ctx, openIDIdentity)
 	if err != nil {
 		return err
 	}
@@ -1279,6 +1295,40 @@ func (r *userRepository) findOptionalAuthIdentity(ctx context.Context, providerT
 		return nil, err
 	}
 	return record, nil
+}
+
+func (r *userRepository) pruneStaleAuthIdentityOwner(ctx context.Context, identity *AuthIdentityRecord) (*AuthIdentityRecord, error) {
+	if identity == nil || identity.ID == 0 || identity.UserID == 0 {
+		return identity, nil
+	}
+
+	exists, err := r.authIdentityOwnerExists(ctx, identity.UserID)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		return identity, nil
+	}
+
+	if err := r.deleteAuthIdentityByID(ctx, identity.ID); err != nil {
+		return nil, err
+	}
+	return nil, nil
+}
+
+func (r *userRepository) authIdentityOwnerExists(ctx context.Context, userID int64) (bool, error) {
+	if r == nil || r.sql == nil || userID == 0 {
+		return false, nil
+	}
+
+	var marker int
+	if err := scanSingleRow(ctx, r.sql, `SELECT 1 FROM users WHERE id = $1`, []any{userID}, &marker); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 func (r *userRepository) findOptionalAuthIdentityChannel(

@@ -521,6 +521,15 @@ export default {
           title: "Authentication could not be completed",
           description:
             "The callback payload is missing required fields or returned an explicit error.",
+          unknown: "The authentication flow did not complete. Please try again.",
+          serviceError:
+            "The authentication service is temporarily unavailable. Please try again.",
+          authRequired:
+            "Your current sign-in session has expired. Sign in again and retry.",
+          externalIdentityAlreadyBound:
+            "This {providerName} account is already bound to another user. Unbind it there first, or ask an administrator to clear the stale binding before retrying.",
+          alreadyBoundCurrentUser:
+            "This {providerName} account is already bound to your current user.",
           invalidPendingPayload:
             "Invalid pending auth session callback payload.",
           missingResult: "Missing callback result.",
@@ -1112,8 +1121,7 @@ export default {
       providerDescriptions: {
         email: "Primary email and password sign-in for this account.",
         linuxdo: "Bind your Linux.do identity to sign in without a password.",
-        wechat:
-          "A single WeChat binding works across supported open and mp login channels.",
+        wechat: "Bind your WeChat account to use WeChat sign-in.",
         oidc: "Bind your organization or identity-provider account as a first-class login method.",
       },
       providerHints: {
