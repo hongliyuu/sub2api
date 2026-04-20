@@ -246,7 +246,7 @@
           :sort-storage-key="USER_SORT_STORAGE_KEY"
           @sort="handleSort"
         >
-          <template #cell-email="{ value }">
+          <template #cell-email="{ value, row }">
             <div class="flex items-center gap-2">
               <div
                 class="flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-900/30"
@@ -255,7 +255,13 @@
                   {{ value.charAt(0).toUpperCase() }}
                 </span>
               </div>
-              <span class="font-medium text-gray-900 dark:text-white">{{ value }}</span>
+              <button
+                type="button"
+                class="font-medium text-primary-600 underline decoration-dashed underline-offset-2 transition-colors hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+                @click="openUserUsage(row)"
+              >
+                {{ value }}
+              </button>
             </div>
           </template>
 
@@ -455,6 +461,18 @@
             <span class="text-sm text-gray-500 dark:text-dark-400">{{ formatDateTime(value) }}</span>
           </template>
 
+          <template #cell-last_login_at="{ value }">
+            <span class="text-sm text-gray-500 dark:text-dark-400">
+              {{ value ? formatDateTime(value) : '-' }}
+            </span>
+          </template>
+
+          <template #cell-last_used_at="{ value }">
+            <span class="text-sm text-gray-500 dark:text-dark-400">
+              {{ value ? formatDateTime(value) : '-' }}
+            </span>
+          </template>
+
           <template #cell-actions="{ row }">
             <div class="flex items-center gap-1">
               <!-- Edit Button -->
@@ -608,13 +626,16 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { formatDateTime } from '@/utils/format'
+import { buildAdminUserUsageRoute } from './utils/userUsageRoute'
 import Icon from '@/components/icons/Icon.vue'
 
 const { t } = useI18n()
+const router = useRouter()
 import { adminAPI } from '@/api/admin'
 import type { AdminUser, AdminGroup, UserAttributeDefinition } from '@/types'
 import type { BatchUserUsageStats } from '@/api/admin/dashboard'
@@ -700,6 +721,8 @@ const allColumns = computed<Column[]>(() => [
   { key: 'usage', label: t('admin.users.columns.usage'), sortable: false },
   { key: 'concurrency', label: t('admin.users.columns.concurrency'), sortable: true },
   { key: 'status', label: t('admin.users.columns.status'), sortable: true },
+  { key: 'last_login_at', label: t('admin.users.columns.lastLogin'), sortable: false },
+  { key: 'last_used_at', label: t('admin.users.columns.lastUsed'), sortable: false },
   { key: 'created_at', label: t('admin.users.columns.created'), sortable: true },
   { key: 'actions', label: t('admin.users.columns.actions'), sortable: false }
 ])
@@ -1365,6 +1388,10 @@ const closeBalanceModal = () => {
 const handleBalanceHistory = (user: AdminUser) => {
   balanceHistoryUser.value = user
   showBalanceHistoryModal.value = true
+}
+
+const openUserUsage = (user: AdminUser) => {
+  void router.push(buildAdminUserUsageRoute(user.id))
 }
 
 const closeBalanceHistoryModal = () => {

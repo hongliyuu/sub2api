@@ -1248,6 +1248,32 @@
             </div>
           </div>
 
+          <div class="card">
+            <div
+              class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
+            >
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                首次第三方登录强制补齐邮箱
+              </h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                统一控制 LinuxDo、微信、OIDC 首次接入时是否必须补齐邮箱。
+              </p>
+            </div>
+            <div class="space-y-5 p-6">
+              <div class="flex items-center justify-between">
+                <div>
+                  <label class="font-medium text-gray-900 dark:text-white"
+                    >启用</label
+                  >
+                  <p class="text-sm text-gray-500 dark:text-gray-400">
+                    开启后，首次第三方登录需要完成邮箱验证码校验并设置密码。
+                  </p>
+                </div>
+                <Toggle v-model="form.third_party_first_login_require_email" />
+              </div>
+            </div>
+          </div>
+
           <!-- LinuxDo Connect OAuth 登录 -->
           <div class="card">
             <div
@@ -1371,257 +1397,140 @@
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
               <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
-                第三方登录补全与微信登录
+                微信登录
               </h2>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                统一控制第三方首次接入的邮箱补全策略，并拆分微信开放平台与公众号网页登录配置。
+                分别配置开放平台网站应用和公众号网页授权。
               </p>
             </div>
-            <div class="space-y-6 p-6">
-              <div class="flex items-center justify-between">
-                <div>
-                  <label class="font-medium text-gray-900 dark:text-white"
-                    >首次第三方登录强制补齐邮箱</label
-                  >
-                  <p class="text-sm text-gray-500 dark:text-gray-400">
-                    开启后，LinuxDo、微信、OIDC
-                    首次接入都必须完成邮箱验证码校验并设置密码。
-                  </p>
+            <div class="space-y-5 p-6">
+              <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-700">
+                <div class="flex items-center justify-between gap-4">
+                  <div>
+                    <h3 class="font-medium text-gray-900 dark:text-white">
+                      开放平台网站应用
+                    </h3>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                      站外浏览器使用的网站应用登录。
+                    </p>
+                  </div>
+                  <Toggle v-model="form.wechat_login_open_enabled" />
                 </div>
-                <Toggle v-model="form.third_party_first_login_require_email" />
+
+                <div
+                  v-if="form.wechat_login_open_enabled"
+                  class="mt-4 space-y-4 border-t border-gray-100 pt-4 dark:border-dark-700"
+                >
+                  <div>
+                    <label
+                      class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                    >
+                      AppID
+                    </label>
+                    <input
+                      v-model="form.wechat_login_open_app_id"
+                      type="text"
+                      class="input font-mono text-sm"
+                      placeholder="wx1234567890abcdef"
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                    >
+                      AppSecret
+                    </label>
+                    <input
+                      v-model="form.wechat_login_open_app_secret"
+                      type="password"
+                      class="input font-mono text-sm"
+                      :placeholder="
+                        form.wechat_login_open_app_secret_configured
+                          ? '已配置，留空则保持不变'
+                          : '输入开放平台网站应用密钥'
+                      "
+                    />
+                    <p
+                      class="mt-1.5 text-xs text-gray-500 dark:text-gray-400"
+                    >
+                      {{
+                        form.wechat_login_open_app_secret_configured
+                          ? "当前已保存密钥；留空提交不会覆盖。"
+                          : "仅用于开放平台网站应用登录。"
+                      }}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="rounded-lg border border-gray-200 p-4 dark:border-dark-700">
+                <div class="flex items-center justify-between gap-4">
+                  <div>
+                    <h3 class="font-medium text-gray-900 dark:text-white">
+                      公众号网页授权
+                    </h3>
+                    <p class="text-sm text-gray-500 dark:text-gray-400">
+                      微信内浏览器使用的公众号网页授权登录。
+                    </p>
+                  </div>
+                  <Toggle v-model="form.wechat_login_mp_enabled" />
+                </div>
+
+                <div
+                  v-if="form.wechat_login_mp_enabled"
+                  class="mt-4 space-y-4 border-t border-gray-100 pt-4 dark:border-dark-700"
+                >
+                  <div>
+                    <label
+                      class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                    >
+                      AppID
+                    </label>
+                    <input
+                      v-model="form.wechat_login_mp_app_id"
+                      type="text"
+                      class="input font-mono text-sm"
+                      placeholder="wx1234567890abcdef"
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                    >
+                      AppSecret
+                    </label>
+                    <input
+                      v-model="form.wechat_login_mp_app_secret"
+                      type="password"
+                      class="input font-mono text-sm"
+                      :placeholder="
+                        form.wechat_login_mp_app_secret_configured
+                          ? '已配置，留空则保持不变'
+                          : '输入公众号网页授权密钥'
+                      "
+                    />
+                    <p
+                      class="mt-1.5 text-xs text-gray-500 dark:text-gray-400"
+                    >
+                      {{
+                        form.wechat_login_mp_app_secret_configured
+                          ? "当前已保存密钥；留空提交不会覆盖。"
+                          : "仅用于公众号网页授权登录。"
+                      }}
+                    </p>
+                  </div>
+                </div>
               </div>
 
               <div
-                class="rounded-lg border border-gray-200 p-4 dark:border-dark-700"
+                v-if="
+                  form.wechat_login_open_enabled && form.wechat_login_mp_enabled
+                "
+                class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
               >
-                <div
-                  class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div>
-                    <h3 class="font-medium text-gray-900 dark:text-white">
-                      微信 UnionID 健康状态
-                    </h3>
-                    <p class="text-sm text-gray-500 dark:text-gray-400">
-                      这是只读健康状态，用于提示 open/mp 配置是否满足同一
-                      UnionID 归并前提。
-                    </p>
-                  </div>
-                  <span
-                    :class="[
-                      'inline-flex w-fit items-center rounded-full px-3 py-1 text-xs font-medium',
-                      wechatUnionidHealthBadgeClass,
-                    ]"
-                  >
-                    {{ wechatUnionidHealthLabel }}
-                  </span>
-                </div>
-              </div>
-
-              <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                <div
-                  class="rounded-lg border border-gray-200 p-4 dark:border-dark-700"
-                >
-                  <div class="flex items-center justify-between">
-                    <div>
-                      <h3 class="font-medium text-gray-900 dark:text-white">
-                        开放平台网站应用
-                      </h3>
-                      <p class="text-sm text-gray-500 dark:text-gray-400">
-                        非微信环境优先走 open 登录。只配 open
-                        时，微信内仍无法完成自动路由。
-                      </p>
-                    </div>
-                    <Toggle v-model="form.wechat_login_open_enabled" />
-                  </div>
-
-                  <div
-                    v-if="form.wechat_login_open_enabled"
-                    class="mt-4 space-y-4 border-t border-gray-100 pt-4 dark:border-dark-700"
-                  >
-                    <div>
-                      <label
-                        class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
-                      >
-                        Open AppID
-                      </label>
-                      <input
-                        v-model="form.wechat_login_open_app_id"
-                        type="text"
-                        class="input font-mono text-sm"
-                        placeholder="wx1234567890abcdef"
-                      />
-                      <p
-                        class="mt-1.5 text-xs text-gray-500 dark:text-gray-400"
-                      >
-                        该应用需要和公众号处于同一可稳定返回 UnionID
-                        的开发者主体关系。
-                      </p>
-                      <div class="mt-2 flex flex-wrap gap-2 text-xs">
-                        <a
-                          href="https://open.weixin.qq.com/"
-                          target="_blank"
-                          rel="noreferrer"
-                          class="text-primary-600 hover:text-primary-500 dark:text-primary-400"
-                        >
-                          微信开放平台
-                        </a>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label
-                        class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
-                      >
-                        Open AppSecret
-                      </label>
-                      <input
-                        v-model="form.wechat_login_open_app_secret"
-                        type="password"
-                        class="input font-mono text-sm"
-                        :placeholder="
-                          form.wechat_login_open_app_secret_configured
-                            ? '已配置，留空则保持不变'
-                            : '输入开放平台网站应用密钥'
-                        "
-                      />
-                      <p
-                        class="mt-1.5 text-xs text-gray-500 dark:text-gray-400"
-                      >
-                        {{
-                          form.wechat_login_open_app_secret_configured
-                            ? "只在站外网页登录使用，当前已保存密钥；留空提交不会覆盖。"
-                            : "只在站外网页登录使用，不会替代公众号网页登录能力。"
-                        }}
-                      </p>
-                    </div>
-
-                    <div>
-                      <label
-                        class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
-                      >
-                        Open 回调地址（平台填写项）
-                      </label>
-                      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
-                        <button
-                          type="button"
-                          class="btn btn-secondary btn-sm w-fit"
-                          @click="setAndCopyWechatRedirectUrl"
-                        >
-                          使用当前站点生成并复制
-                        </button>
-                        <code
-                          v-if="wechatRedirectUrlSuggestion"
-                          class="select-all break-all rounded bg-gray-50 px-2 py-1 font-mono text-xs text-gray-600 dark:bg-dark-800 dark:text-gray-300"
-                        >
-                          {{ wechatRedirectUrlSuggestion }}
-                        </code>
-                      </div>
-                      <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                        开放平台网站应用的授权回调域必须与此地址域名一致，通常填写到网站应用的授权回调域/回调 URL。
-                      </p>
-                      <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                        前端完成页固定为 <code class="font-mono">/auth/wechat/callback</code>，后端回调成功后会重定向到此前端路径。
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div
-                  class="rounded-lg border border-gray-200 p-4 dark:border-dark-700"
-                >
-                  <div class="flex items-center justify-between">
-                    <div>
-                      <h3 class="font-medium text-gray-900 dark:text-white">
-                        公众号网页授权
-                      </h3>
-                      <p class="text-sm text-gray-500 dark:text-gray-400">
-                        微信内优先走 mp 登录。只配 mp
-                        时，站外入口应保持禁用并提示需在微信内打开。
-                      </p>
-                    </div>
-                    <Toggle v-model="form.wechat_login_mp_enabled" />
-                  </div>
-
-                  <div
-                    v-if="form.wechat_login_mp_enabled"
-                    class="mt-4 space-y-4 border-t border-gray-100 pt-4 dark:border-dark-700"
-                  >
-                    <div>
-                      <label
-                        class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
-                      >
-                        MP AppID
-                      </label>
-                      <input
-                        v-model="form.wechat_login_mp_app_id"
-                        type="text"
-                        class="input font-mono text-sm"
-                        placeholder="wx1234567890abcdef"
-                      />
-                      <p
-                        class="mt-1.5 text-xs text-gray-500 dark:text-gray-400"
-                      >
-                        该公众号需要和开放平台网站应用保持同一 UnionID
-                        体系，否则无法归并为同一站内微信身份。
-                      </p>
-                      <div class="mt-2 flex flex-wrap gap-2 text-xs">
-                        <a
-                          href="https://mp.weixin.qq.com/"
-                          target="_blank"
-                          rel="noreferrer"
-                          class="text-primary-600 hover:text-primary-500 dark:text-primary-400"
-                        >
-                          微信公众平台
-                        </a>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label
-                        class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
-                      >
-                        MP AppSecret
-                      </label>
-                      <input
-                        v-model="form.wechat_login_mp_app_secret"
-                        type="password"
-                        class="input font-mono text-sm"
-                        :placeholder="
-                          form.wechat_login_mp_app_secret_configured
-                            ? '已配置，留空则保持不变'
-                            : '输入公众号网页授权密钥'
-                        "
-                      />
-                      <p
-                        class="mt-1.5 text-xs text-gray-500 dark:text-gray-400"
-                      >
-                        {{
-                          form.wechat_login_mp_app_secret_configured
-                            ? "只在微信内网页登录使用，当前已保存密钥；留空提交不会覆盖。"
-                            : "只在微信内网页登录使用，不会让站外浏览器自动获得可用微信入口。"
-                        }}
-                      </p>
-                    </div>
-
-                    <div
-                      class="rounded-lg border border-gray-100 bg-gray-50 px-3 py-3 text-xs text-gray-600 dark:border-dark-700 dark:bg-dark-800/60 dark:text-gray-300"
-                    >
-                      <p>
-                        公众号网页授权需要在公众号后台把“网页授权域名”配置为当前站点域名；这里与开放平台网站应用的主体应保持同一开发者账号，才能稳定获得同一 UnionID。
-                      </p>
-                      <p class="mt-2">
-                        公众号如还涉及业务域名 / JS 接口安全域名校验，需要同步完成域名校验并上传
-                        <code class="font-mono">MP_verify_xxx.txt</code>，否则回调链路可能在微信内失败。
-                      </p>
-                      <p class="mt-2">
-                        后端登录回调仍使用
-                        <code class="font-mono">{{ wechatRedirectUrlSuggestion }}</code>
-                        ，微信内完成授权后前端落地页固定为
-                        <code class="font-mono">/auth/wechat/callback</code>。
-                      </p>
-                    </div>
-                  </div>
-                </div>
+                若同时启用 open/mp，需满足两个应用在同一个开发者名下，否则会冲突。
               </div>
             </div>
           </div>
@@ -2071,6 +1980,7 @@
                   class="rounded-lg border border-gray-200 p-4 dark:border-dark-700"
                 >
                   <div
+                    v-if="section.key === 'email'"
                     class="border-b border-gray-100 pb-4 dark:border-dark-700"
                   >
                     <h3 class="font-medium text-gray-900 dark:text-white">
@@ -2082,18 +1992,18 @@
                   </div>
 
                   <div
-                    v-if="section.key !== 'email'"
-                    class="mt-4 flex items-start justify-between gap-4 rounded-lg border border-gray-200 px-4 py-3 dark:border-dark-700"
+                    v-else
+                    class="flex items-start justify-between gap-4"
                   >
                     <div>
-                      <p class="font-medium text-gray-900 dark:text-white">
-                        单独覆盖邮箱注册默认值
-                      </p>
+                      <h3 class="font-medium text-gray-900 dark:text-white">
+                        {{ section.title }}
+                      </h3>
                       <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
                         {{
                           defaultSettingsOverrideBySource[section.key]
-                            ? "已启用独立默认值；保存后将按该凭证单独发放。"
-                            : "当前沿用邮箱注册默认值；开启后可单独配置该凭证的建号和首次绑定默认值。"
+                            ? section.description
+                            : "默认沿用邮箱注册默认值。开启后可单独配置该渠道首次建号和首次绑定时发放的默认值。"
                         }}
                       </p>
                     </div>
@@ -2106,256 +2016,236 @@
                   </div>
 
                   <div
-                    v-if="section.supportsBindGrant"
-                    class="mt-4 flex items-start justify-between gap-4 rounded-lg border border-gray-200 px-4 py-3 dark:border-dark-700"
+                    v-if="isDefaultSettingsEditorVisible(section.key)"
+                    class="space-y-4"
                     :class="
-                      section.key !== 'email' &&
-                      !defaultSettingsOverrideBySource[section.key]
-                        ? 'pointer-events-none opacity-60'
-                        : ''
+                      section.key === 'email'
+                        ? 'mt-4'
+                        : 'mt-4 border-t border-gray-100 pt-4 dark:border-dark-700'
                     "
                   >
-                    <div>
-                      <p class="font-medium text-gray-900 dark:text-white">
-                        首次绑定该渠道时发放默认值
-                      </p>
-                      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        仅在同一用户首次绑定该渠道时生效一次；解绑后重新绑定不会重复发放。
-                      </p>
-                    </div>
-                    <Toggle
-                      v-model="
-                        defaultSettingsBySource[section.key].apply_on_bind
-                      "
-                    />
-                  </div>
-
-                  <div class="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2">
-                    <div>
-                      <label
-                        class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
-                      >
-                        {{ t("admin.settings.defaults.defaultBalance") }}
-                      </label>
-                      <input
-                        v-model.number="
-                          defaultSettingsBySource[section.key].balance
-                        "
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        class="input"
-                        placeholder="0.00"
-                        :disabled="
-                          section.key !== 'email' &&
-                          !defaultSettingsOverrideBySource[section.key]
-                        "
-                      />
-                      <p
-                        class="mt-1.5 text-xs text-gray-500 dark:text-gray-400"
-                      >
-                        {{
-                          section.key === "email"
-                            ? "邮箱注册的新账号使用该余额；第三方补齐邮箱后建号仍按对应凭证区块生效。"
-                            : `${section.title}新账号创建完成后立即写入该余额。`
-                        }}
-                      </p>
-                    </div>
-                    <div>
-                      <label
-                        class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
-                      >
-                        {{ t("admin.settings.defaults.defaultConcurrency") }}
-                      </label>
-                      <input
-                        v-model.number="
-                          defaultSettingsBySource[section.key].concurrency
-                        "
-                        type="number"
-                        min="1"
-                        class="input"
-                        placeholder="1"
-                        :disabled="
-                          section.key !== 'email' &&
-                          !defaultSettingsOverrideBySource[section.key]
-                        "
-                      />
-                      <p
-                        class="mt-1.5 text-xs text-gray-500 dark:text-gray-400"
-                      >
-                        {{ section.title }}新账号初始并发限制。
-                      </p>
-                    </div>
-                  </div>
-
-                  <div
-                    class="mt-4 border-t border-gray-100 pt-4 dark:border-dark-700"
-                  >
-                    <div class="mb-3 flex items-center justify-between">
+                    <div
+                      v-if="section.supportsBindGrant"
+                      class="flex items-start justify-between gap-4 rounded-lg border border-gray-200 px-4 py-3 dark:border-dark-700"
+                    >
                       <div>
-                        <label
-                          class="font-medium text-gray-900 dark:text-white"
-                        >
-                          {{
-                            t("admin.settings.defaults.defaultSubscriptions")
-                          }}
-                        </label>
-                        <p class="text-sm text-gray-500 dark:text-gray-400">
-                          为 {{ section.title }} 新账号自动分配订阅组。
+                        <p class="font-medium text-gray-900 dark:text-white">
+                          首次绑定该渠道时发放默认值
+                        </p>
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                          仅在同一用户首次绑定该渠道时生效一次；解绑后重新绑定不会重复发放。
                         </p>
                       </div>
-                      <button
-                        type="button"
-                        class="btn btn-secondary btn-sm"
-                        @click="addDefaultSubscription(section.key)"
-                        :disabled="
-                          subscriptionGroups.length === 0 ||
-                          (section.key !== 'email' &&
-                            !defaultSettingsOverrideBySource[section.key])
+                      <Toggle
+                        v-model="
+                          defaultSettingsBySource[section.key].apply_on_bind
                         "
-                      >
-                        {{
-                          t("admin.settings.defaults.addDefaultSubscription")
-                        }}
-                      </button>
+                      />
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+                      <div>
+                        <label
+                          class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                        >
+                          {{ t("admin.settings.defaults.defaultBalance") }}
+                        </label>
+                        <input
+                          v-model.number="
+                            defaultSettingsBySource[section.key].balance
+                          "
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          class="input"
+                          placeholder="0.00"
+                        />
+                        <p
+                          class="mt-1.5 text-xs text-gray-500 dark:text-gray-400"
+                        >
+                          {{
+                            section.key === "email"
+                              ? "邮箱注册的新账号使用该余额。"
+                              : `${section.title}新账号创建完成后立即写入该余额。`
+                          }}
+                        </p>
+                      </div>
+                      <div>
+                        <label
+                          class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                        >
+                          {{ t("admin.settings.defaults.defaultConcurrency") }}
+                        </label>
+                        <input
+                          v-model.number="
+                            defaultSettingsBySource[section.key].concurrency
+                          "
+                          type="number"
+                          min="1"
+                          class="input"
+                          placeholder="1"
+                        />
+                        <p
+                          class="mt-1.5 text-xs text-gray-500 dark:text-gray-400"
+                        >
+                          {{ section.title }}新账号初始并发限制。
+                        </p>
+                      </div>
                     </div>
 
                     <div
-                      v-if="
-                        defaultSettingsBySource[section.key].subscriptions
-                          .length === 0
-                      "
-                      class="rounded border border-dashed border-gray-300 px-4 py-3 text-sm text-gray-500 dark:border-dark-600 dark:text-gray-400"
+                      class="border-t border-gray-100 pt-4 dark:border-dark-700"
                     >
-                      {{
-                        t("admin.settings.defaults.defaultSubscriptionsEmpty")
-                      }}
-                    </div>
-
-                    <div v-else class="space-y-3">
-                      <div
-                        v-for="(item, index) in defaultSettingsBySource[
-                          section.key
-                        ].subscriptions"
-                        :key="`${section.key}-default-sub-${index}`"
-                        class="grid grid-cols-1 gap-3 rounded border border-gray-200 p-3 md:grid-cols-[1fr_160px_auto] dark:border-dark-600"
-                      >
+                      <div class="mb-3 flex items-center justify-between">
                         <div>
                           <label
-                            class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
-                          >
-                            {{ t("admin.settings.defaults.subscriptionGroup") }}
-                          </label>
-                          <Select
-                            v-model="item.group_id"
-                            class="default-sub-group-select"
-                            :options="defaultSubscriptionGroupOptions"
-                            :placeholder="
-                              t('admin.settings.defaults.subscriptionGroup')
-                            "
-                            :disabled="
-                              section.key !== 'email' &&
-                              !defaultSettingsOverrideBySource[section.key]
-                            "
-                          >
-                            <template #selected="{ option }">
-                              <GroupBadge
-                                v-if="option"
-                                :name="
-                                  (
-                                    option as unknown as DefaultSubscriptionGroupOption
-                                  ).label
-                                "
-                                :platform="
-                                  (
-                                    option as unknown as DefaultSubscriptionGroupOption
-                                  ).platform
-                                "
-                                :subscription-type="
-                                  (
-                                    option as unknown as DefaultSubscriptionGroupOption
-                                  ).subscriptionType
-                                "
-                                :rate-multiplier="
-                                  (
-                                    option as unknown as DefaultSubscriptionGroupOption
-                                  ).rate
-                                "
-                              />
-                              <span v-else class="text-gray-400">
-                                {{
-                                  t("admin.settings.defaults.subscriptionGroup")
-                                }}
-                              </span>
-                            </template>
-                            <template #option="{ option, selected }">
-                              <GroupOptionItem
-                                :name="
-                                  (
-                                    option as unknown as DefaultSubscriptionGroupOption
-                                  ).label
-                                "
-                                :platform="
-                                  (
-                                    option as unknown as DefaultSubscriptionGroupOption
-                                  ).platform
-                                "
-                                :subscription-type="
-                                  (
-                                    option as unknown as DefaultSubscriptionGroupOption
-                                  ).subscriptionType
-                                "
-                                :rate-multiplier="
-                                  (
-                                    option as unknown as DefaultSubscriptionGroupOption
-                                  ).rate
-                                "
-                                :description="
-                                  (
-                                    option as unknown as DefaultSubscriptionGroupOption
-                                  ).description
-                                "
-                                :selected="selected"
-                              />
-                            </template>
-                          </Select>
-                        </div>
-                        <div>
-                          <label
-                            class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
+                            class="font-medium text-gray-900 dark:text-white"
                           >
                             {{
-                              t(
-                                "admin.settings.defaults.subscriptionValidityDays",
-                              )
+                              t("admin.settings.defaults.defaultSubscriptions")
                             }}
                           </label>
-                          <input
-                            v-model.number="item.validity_days"
-                            type="number"
-                            min="1"
-                            max="36500"
-                            class="input h-[42px]"
-                            :disabled="
-                              section.key !== 'email' &&
-                              !defaultSettingsOverrideBySource[section.key]
-                            "
-                          />
+                          <p class="text-sm text-gray-500 dark:text-gray-400">
+                            为 {{ section.title }} 新账号自动分配订阅组。
+                          </p>
                         </div>
-                        <div class="flex items-end">
-                          <button
-                            type="button"
-                            class="btn btn-secondary default-sub-delete-btn w-full text-red-600 hover:text-red-700 dark:text-red-400"
-                            @click="
-                              removeDefaultSubscription(section.key, index)
-                            "
-                            :disabled="
-                              section.key !== 'email' &&
-                              !defaultSettingsOverrideBySource[section.key]
-                            "
-                          >
-                            {{ t("common.delete") }}
-                          </button>
+                        <button
+                          type="button"
+                          class="btn btn-secondary btn-sm"
+                          @click="addDefaultSubscription(section.key)"
+                          :disabled="subscriptionGroups.length === 0"
+                        >
+                          {{
+                            t("admin.settings.defaults.addDefaultSubscription")
+                          }}
+                        </button>
+                      </div>
+
+                      <div
+                        v-if="
+                          defaultSettingsBySource[section.key].subscriptions
+                            .length === 0
+                        "
+                        class="rounded border border-dashed border-gray-300 px-4 py-3 text-sm text-gray-500 dark:border-dark-600 dark:text-gray-400"
+                      >
+                        {{
+                          t("admin.settings.defaults.defaultSubscriptionsEmpty")
+                        }}
+                      </div>
+
+                      <div v-else class="space-y-3">
+                        <div
+                          v-for="(item, index) in defaultSettingsBySource[
+                            section.key
+                          ].subscriptions"
+                          :key="`${section.key}-default-sub-${index}`"
+                          class="grid grid-cols-1 gap-3 rounded border border-gray-200 p-3 md:grid-cols-[1fr_160px_auto] dark:border-dark-600"
+                        >
+                          <div>
+                            <label
+                              class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
+                            >
+                              {{ t("admin.settings.defaults.subscriptionGroup") }}
+                            </label>
+                            <Select
+                              v-model="item.group_id"
+                              class="default-sub-group-select"
+                              :options="defaultSubscriptionGroupOptions"
+                              :placeholder="
+                                t('admin.settings.defaults.subscriptionGroup')
+                              "
+                            >
+                              <template #selected="{ option }">
+                                <GroupBadge
+                                  v-if="option"
+                                  :name="
+                                    (
+                                      option as unknown as DefaultSubscriptionGroupOption
+                                    ).label
+                                  "
+                                  :platform="
+                                    (
+                                      option as unknown as DefaultSubscriptionGroupOption
+                                    ).platform
+                                  "
+                                  :subscription-type="
+                                    (
+                                      option as unknown as DefaultSubscriptionGroupOption
+                                    ).subscriptionType
+                                  "
+                                  :rate-multiplier="
+                                    (
+                                      option as unknown as DefaultSubscriptionGroupOption
+                                    ).rate
+                                  "
+                                />
+                                <span v-else class="text-gray-400">
+                                  {{
+                                    t("admin.settings.defaults.subscriptionGroup")
+                                  }}
+                                </span>
+                              </template>
+                              <template #option="{ option, selected }">
+                                <GroupOptionItem
+                                  :name="
+                                    (
+                                      option as unknown as DefaultSubscriptionGroupOption
+                                    ).label
+                                  "
+                                  :platform="
+                                    (
+                                      option as unknown as DefaultSubscriptionGroupOption
+                                    ).platform
+                                  "
+                                  :subscription-type="
+                                    (
+                                      option as unknown as DefaultSubscriptionGroupOption
+                                    ).subscriptionType
+                                  "
+                                  :rate-multiplier="
+                                    (
+                                      option as unknown as DefaultSubscriptionGroupOption
+                                    ).rate
+                                  "
+                                  :description="
+                                    (
+                                      option as unknown as DefaultSubscriptionGroupOption
+                                    ).description
+                                  "
+                                  :selected="selected"
+                                />
+                              </template>
+                            </Select>
+                          </div>
+                          <div>
+                            <label
+                              class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400"
+                            >
+                              {{
+                                t(
+                                  "admin.settings.defaults.subscriptionValidityDays",
+                                )
+                              }}
+                            </label>
+                            <input
+                              v-model.number="item.validity_days"
+                              type="number"
+                              min="1"
+                              max="36500"
+                              class="input h-[42px]"
+                            />
+                          </div>
+                          <div class="flex items-end">
+                            <button
+                              type="button"
+                              class="btn btn-secondary default-sub-delete-btn w-full text-red-600 hover:text-red-700 dark:text-red-400"
+                              @click="
+                                removeDefaultSubscription(section.key, index)
+                              "
+                            >
+                              {{ t("common.delete") }}
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -2448,6 +2338,25 @@
                 <label class="toggle">
                   <input
                     v-model="form.allow_ungrouped_key_scheduling"
+                    type="checkbox"
+                  />
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              <div class="mt-5 flex items-center justify-between">
+                <div>
+                  <label
+                    class="text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {{ t("admin.settings.scheduling.openaiAdvancedScheduler") }}
+                  </label>
+                  <p class="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                    {{ t("admin.settings.scheduling.openaiAdvancedSchedulerHint") }}
+                  </p>
+                </div>
+                <label class="toggle">
+                  <input
+                    v-model="form.openai_advanced_scheduler_enabled"
                     type="checkbox"
                   />
                   <span class="toggle-slider"></span>
@@ -3890,18 +3799,18 @@
                   }}</label>
                   <div class="mt-1.5 flex flex-wrap gap-2">
                     <button
-                      v-for="pt in allPaymentTypes"
-                      :key="pt.value"
+                      v-for="provider in paymentProviderToggleOptions"
+                      :key="provider.value"
                       type="button"
-                      @click="togglePaymentType(pt.value)"
+                      @click="togglePaymentProvider(provider.value)"
                       :class="[
                         'rounded-lg border px-3 py-1.5 text-sm font-medium transition-all',
-                        isPaymentTypeEnabled(pt.value)
+                        isPaymentProviderEnabled(provider.value)
                           ? 'border-primary-500 bg-primary-500 text-white shadow-sm'
                           : 'border-gray-300 bg-white text-gray-600 hover:border-gray-400 hover:bg-gray-50 dark:border-dark-600 dark:bg-dark-800 dark:text-gray-300 dark:hover:border-dark-500',
                       ]"
                     >
-                      {{ pt.label }}
+                      {{ provider.label }}
                     </button>
                   </div>
                   <p class="mt-2 text-xs text-gray-400 dark:text-gray-500">
@@ -3941,9 +3850,8 @@
                     }}</label>
                     <ImageUpload
                       v-model="form.payment_help_image_url"
-                      :placeholder="
-                        t('admin.settings.payment.helpImagePlaceholder')
-                      "
+                      :upload-label="t('admin.settings.site.uploadImage')"
+                      :remove-label="t('admin.settings.site.remove')"
                     />
                   </div>
                   <div>
@@ -4468,8 +4376,7 @@ import ConfirmDialog from "@/components/common/ConfirmDialog.vue";
 import PaymentProviderList from "@/components/payment/PaymentProviderList.vue";
 import PaymentProviderDialog from "@/components/payment/PaymentProviderDialog.vue";
 import {
-  getEnabledProviderKeysForPaymentTypes,
-  shouldDisableProviderAfterPaymentTypeRemoved,
+  normalizeVisiblePaymentType,
 } from "@/components/payment/providerConfig";
 import GroupBadge from "@/components/common/GroupBadge.vue";
 import GroupOptionItem from "@/components/common/GroupOptionItem.vue";
@@ -4634,8 +4541,7 @@ const defaultSettingSectionMap: Record<
 > = {
   email: {
     title: "邮箱注册",
-    description:
-      "仅本地邮箱注册使用这组默认值；第三方登录即使需要补齐邮箱，建号仍按对应凭证区块处理。",
+    description: "本地邮箱注册新账号使用这组默认值。",
     supportsBindGrant: false,
   },
   linuxdo: {
@@ -4645,8 +4551,7 @@ const defaultSettingSectionMap: Record<
   },
   wechat: {
     title: "微信凭证",
-    description:
-      "微信开放平台网站应用与公众号网页授权首次建号统一使用这组默认值。",
+    description: "微信首次登录直接建号时使用这组默认值。",
     supportsBindGrant: true,
   },
   oidc: {
@@ -4813,6 +4718,7 @@ const form = reactive<SettingsForm>({
   max_claude_code_version: "",
   // 分组隔离
   allow_ungrouped_key_scheduling: false,
+  openai_advanced_scheduler_enabled: false,
   // Gateway forwarding behavior
   enable_fingerprint_unification: true,
   enable_metadata_passthrough: false,
@@ -5130,21 +5036,6 @@ async function setAndCopyLinuxdoRedirectUrl() {
   );
 }
 
-const wechatRedirectUrlSuggestion = computed(() => {
-  if (typeof window === "undefined") return "";
-  const origin =
-    window.location.origin ||
-    `${window.location.protocol}//${window.location.host}`;
-  return `${origin}/api/v1/auth/oauth/wechat/callback`;
-});
-
-async function setAndCopyWechatRedirectUrl() {
-  const url = wechatRedirectUrlSuggestion.value;
-  if (!url) return;
-
-  await copyToClipboard(url, "已使用当前站点生成微信回调地址并复制到剪贴板");
-}
-
 const oidcRedirectUrlSuggestion = computed(() => {
   if (typeof window === "undefined") return "";
   const origin =
@@ -5160,30 +5051,6 @@ async function setAndCopyOIDCRedirectUrl() {
   form.oidc_connect_redirect_url = url;
   await copyToClipboard(url, t("admin.settings.oidc.redirectUrlSetAndCopied"));
 }
-
-const wechatUnionidHealthLabel = computed(() => {
-  switch (form.wechat_login_unionid_health_status) {
-    case "ok":
-      return "正常";
-    case "warning":
-      return "待确认";
-    case "error":
-    default:
-      return "异常";
-  }
-});
-
-const wechatUnionidHealthBadgeClass = computed(() => {
-  switch (form.wechat_login_unionid_health_status) {
-    case "ok":
-      return "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300";
-    case "warning":
-      return "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300";
-    case "error":
-    default:
-      return "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300";
-  }
-});
 
 // Custom menu item management
 function addMenuItem() {
@@ -5291,6 +5158,13 @@ function setProviderDefaultSettings(
   );
 }
 
+function isDefaultSettingsEditorVisible(source: DefaultSettingsSource): boolean {
+  return (
+    source === "email" ||
+    defaultSettingsOverrideBySource[source as ProviderDefaultSettingsSource]
+  );
+}
+
 function parseTablePageSizeOptionsInput(raw: string): number[] | null {
   const tokens = raw
     .split(",")
@@ -5368,6 +5242,10 @@ async function loadSettings() {
     form.wechat_login_open_app_secret = "";
     form.wechat_login_mp_app_secret = "";
     form.oidc_connect_client_secret = "";
+    enabledPaymentProviderKeys.value = inferEnabledProviderKeysFromPaymentTypes(
+      form.payment_enabled_types,
+    );
+    syncEnabledPaymentTypesFromProviderKeys();
 
     // Load web search emulation config separately
     await loadWebSearchConfig();
@@ -5551,6 +5429,7 @@ async function saveSettings() {
     // Optional URL fields: auto-clear invalid values so they don't cause backend 400 errors
     if (!isValidHttpUrl(form.frontend_url)) form.frontend_url = "";
     if (!isValidHttpUrl(form.doc_url)) form.doc_url = "";
+    syncEnabledPaymentTypesFromProviderKeys();
 
     const payload: UpdateSettingsRequest = {
       registration_enabled: form.registration_enabled,
@@ -5654,6 +5533,8 @@ async function saveSettings() {
       min_claude_code_version: form.min_claude_code_version,
       max_claude_code_version: form.max_claude_code_version,
       allow_ungrouped_key_scheduling: form.allow_ungrouped_key_scheduling,
+      openai_advanced_scheduler_enabled:
+        form.openai_advanced_scheduler_enabled,
       enable_fingerprint_unification: form.enable_fingerprint_unification,
       enable_metadata_passthrough: form.enable_metadata_passthrough,
       enable_cch_signing: form.enable_cch_signing,
@@ -6095,42 +5976,132 @@ async function saveBetaPolicySettings() {
 
 // ==================== Provider Management ====================
 
+const PROVIDER_VISIBLE_PAYMENT_TYPE_MAP: Record<PaymentProviderKey, string[]> = {
+  easypay: ["alipay", "wxpay"],
+  alipay: ["alipay"],
+  wxpay: ["wxpay"],
+  stripe: ["stripe"],
+};
+
+const VISIBLE_PAYMENT_TYPE_ORDER = ["alipay", "wxpay", "stripe"];
+const enabledPaymentProviderKeys = ref<PaymentProviderKey[]>([]);
+
 const allPaymentTypes = computed(() => [
   { value: "alipay", label: t("payment.methods.alipay") },
   { value: "wxpay", label: t("payment.methods.wxpay") },
   { value: "stripe", label: t("payment.methods.stripe") },
 ]);
 
-function isPaymentTypeEnabled(type: string): boolean {
-  return form.payment_enabled_types.includes(type);
+const paymentProviderToggleOptions = computed(() => [
+  {
+    value: "easypay" as PaymentProviderKey,
+    label: t("admin.settings.payment.providerEasypay"),
+  },
+  {
+    value: "alipay" as PaymentProviderKey,
+    label: t("admin.settings.payment.providerAlipay"),
+  },
+  {
+    value: "wxpay" as PaymentProviderKey,
+    label: t("admin.settings.payment.providerWxpay"),
+  },
+  {
+    value: "stripe" as PaymentProviderKey,
+    label: t("admin.settings.payment.providerStripe"),
+  },
+]);
+
+function buildEnabledPaymentTypesFromProviderKeys(
+  providerKeys: PaymentProviderKey[],
+): string[] {
+  const enabledSet = new Set<string>();
+  providerKeys.forEach((providerKey) => {
+    (PROVIDER_VISIBLE_PAYMENT_TYPE_MAP[providerKey] || []).forEach((type) => {
+      enabledSet.add(type);
+    });
+  });
+  return VISIBLE_PAYMENT_TYPE_ORDER.filter((type) => enabledSet.has(type));
+}
+
+function inferEnabledProviderKeysFromPaymentTypes(
+  paymentTypes: string[],
+  providerList: ProviderInstance[] = providers.value,
+): PaymentProviderKey[] {
+  const normalizedTypes = Array.from(
+    new Set(paymentTypes.map((type) => normalizeVisiblePaymentType(type))),
+  );
+  if (!normalizedTypes.length) {
+    return [];
+  }
+
+  const matchedProviderKeys = Array.from(
+    new Set(
+      providerList
+        .filter((provider) =>
+          (PROVIDER_VISIBLE_PAYMENT_TYPE_MAP[provider.provider_key] || []).some(
+            (type) => normalizedTypes.includes(type),
+          ),
+        )
+        .map((provider) => provider.provider_key),
+    ),
+  ) as PaymentProviderKey[];
+  if (matchedProviderKeys.length > 0) {
+    return matchedProviderKeys;
+  }
+
+  const fallback: PaymentProviderKey[] = [];
+  if (
+    normalizedTypes.includes("alipay") &&
+    normalizedTypes.includes("wxpay")
+  ) {
+    fallback.push("easypay");
+  } else {
+    if (normalizedTypes.includes("alipay")) {
+      fallback.push("alipay");
+    }
+    if (normalizedTypes.includes("wxpay")) {
+      fallback.push("wxpay");
+    }
+  }
+  if (normalizedTypes.includes("stripe")) {
+    fallback.push("stripe");
+  }
+  return fallback;
+}
+
+function syncEnabledPaymentTypesFromProviderKeys() {
+  form.payment_enabled_types = buildEnabledPaymentTypesFromProviderKeys(
+    enabledPaymentProviderKeys.value,
+  );
+}
+
+function isPaymentProviderEnabled(providerKey: PaymentProviderKey): boolean {
+  return enabledPaymentProviderKeys.value.includes(providerKey);
 }
 
 const hasAnyPaymentTypeEnabled = computed(
-  () => form.payment_enabled_types.length > 0,
+  () => enabledPaymentProviderKeys.value.length > 0,
 );
 
-function togglePaymentType(type: string) {
-  if (form.payment_enabled_types.includes(type)) {
-    form.payment_enabled_types = form.payment_enabled_types.filter(
-      (t) => t !== type,
+function togglePaymentProvider(providerKey: PaymentProviderKey) {
+  if (enabledPaymentProviderKeys.value.includes(providerKey)) {
+    enabledPaymentProviderKeys.value = enabledPaymentProviderKeys.value.filter(
+      (key) => key !== providerKey,
     );
-    // Disable all provider instances matching this type
-    disableProvidersByType(type);
+    syncEnabledPaymentTypesFromProviderKeys();
+    void disableProvidersByKey(providerKey);
   } else {
-    form.payment_enabled_types = [...form.payment_enabled_types, type];
+    enabledPaymentProviderKeys.value = [
+      ...enabledPaymentProviderKeys.value,
+      providerKey,
+    ];
+    syncEnabledPaymentTypesFromProviderKeys();
   }
 }
 
-async function disableProvidersByType(type: string) {
-  const remainingEnabledTypes = form.payment_enabled_types;
+async function disableProvidersByKey(providerKey: PaymentProviderKey) {
   const matching = providers.value.filter(
-    (p) =>
-      p.enabled &&
-      shouldDisableProviderAfterPaymentTypeRemoved(
-        p,
-        type,
-        remainingEnabledTypes,
-      ),
+    (provider) => provider.enabled && provider.provider_key === providerKey,
   );
   for (const p of matching) {
     try {
@@ -6164,9 +6135,7 @@ const providerKeyOptions = computed(() => [
   { value: "stripe", label: t("admin.settings.payment.providerStripe") },
 ]);
 
-const enabledProviderKeys = computed(() =>
-  getEnabledProviderKeysForPaymentTypes(form.payment_enabled_types),
-);
+const enabledProviderKeys = computed(() => enabledPaymentProviderKeys.value);
 
 const enabledProviderKeyOptions = computed(() => {
   return providerKeyOptions.value.filter((opt) =>
@@ -6214,6 +6183,11 @@ async function loadProviders() {
   try {
     const res = await adminAPI.payment.getProviders();
     providers.value = res.data || [];
+    enabledPaymentProviderKeys.value = inferEnabledProviderKeysFromPaymentTypes(
+      form.payment_enabled_types,
+      providers.value,
+    );
+    syncEnabledPaymentTypesFromProviderKeys();
   } catch (err: unknown) {
     appStore.showError(extractApiErrorMessage(err, t("common.error")));
   } finally {

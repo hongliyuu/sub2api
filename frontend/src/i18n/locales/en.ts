@@ -1591,6 +1591,8 @@ export default {
         usage: "Usage",
         concurrency: "Concurrency",
         status: "Status",
+        lastLogin: "Last Login",
+        lastUsed: "Last Used",
         created: "Created",
         actions: "Actions",
       },
@@ -4883,6 +4885,9 @@ export default {
         allowUngroupedKey: "Allow Ungrouped Key Scheduling",
         allowUngroupedKeyHint:
           "When disabled, API Keys not assigned to any group cannot make requests (403 Forbidden). Keep disabled to ensure all Keys belong to a specific group.",
+        openaiAdvancedScheduler: "Enable OpenAI Advanced Scheduler",
+        openaiAdvancedSchedulerHint:
+          "Disabled by default. When off, OpenAI uses the same simple scheduling strategy as other platforms; when on, the existing advanced scheduler is used.",
       },
       gatewayForwarding: {
         title: "Request Forwarding",
@@ -5057,7 +5062,7 @@ export default {
         enabledHint: "Enable or disable the payment system",
         enabledPaymentTypes: "Enabled Providers",
         enabledPaymentTypesHint:
-          "Disabling a provider will also disable its instances.",
+          "This controls which payment providers are allowed in admin config. The user recharge page still normalizes them to Alipay, WeChat Pay, and Stripe; disabling a provider also disables its instances.",
         findProvider: "Looking for a suitable EasyPay provider?",
         minAmount: "Minimum Amount",
         maxAmount: "Maximum Amount",
@@ -5106,9 +5111,9 @@ export default {
         providerIntro_easypay:
           "The frontend still shows “Alipay / WeChat Pay”. This form configures the EasyPay aggregator and its channel mapping.",
         providerIntro_alipay:
-          "The frontend still shows “Alipay”. This form configures the credentials for the official Alipay channel.",
+          "The frontend still shows “Alipay”. This form only configures the official Alipay channel, while the buttons above are platform and documentation links.",
         providerIntro_wxpay:
-          "The frontend still shows “WeChat Pay”. This form configures official WeChat Pay merchant credentials plus optional MP web auth fields.",
+          "The frontend still shows “WeChat Pay”. This form only configures official WeChat Pay merchant credentials, while the buttons above are platform and documentation links. In-WeChat JSAPI authorization still depends on separate WeChat login MP settings.",
         providerIntro_stripe:
           "The frontend still shows “Stripe”. Inside Stripe Payment Element you can still carry sub-methods such as cards, Alipay, WeChat Pay, and Link.",
         linkWechatPublicPlatform: "Official Account Platform",
@@ -5188,7 +5193,7 @@ export default {
           "Stripe Webhook Secret used to verify webhook signatures.",
         wxpayMerchantSectionTitle: "WeChat Pay Merchant Credentials",
         wxpayMerchantSectionDesc:
-          "These fields belong only to the WeChat Pay merchant config and should never be overwritten by login config.",
+          "These fields belong only to the WeChat Pay merchant config and should never be overwritten by login config. If in-WeChat JSAPI needs an OpenID first, that still depends on separate WeChat login MP settings.",
         wxpayMpSectionTitle: "MP Web Auth Supplement",
         wxpayMpSectionDesc:
           "Fill these only when you need in-WeChat web auth / JSAPI supplemental info. Do not confuse them with merchant ID, certificates, platform keys, or other payment merchant config.",

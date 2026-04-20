@@ -1546,6 +1546,8 @@ export default {
         usage: "用量",
         concurrency: "并发数",
         status: "状态",
+        lastLogin: "最后登录",
+        lastUsed: "最后使用",
         created: "创建时间",
         actions: "操作",
       },
@@ -4821,6 +4823,9 @@ export default {
         allowUngroupedKey: "允许未分组 Key 调度",
         allowUngroupedKeyHint:
           "关闭后，未分配到任何分组的 API Key 将无法发起请求（返回 403）。建议保持关闭以确保所有 Key 都归属明确的分组。",
+        openaiAdvancedScheduler: "启用 OpenAI 高级调度",
+        openaiAdvancedSchedulerHint:
+          "默认关闭。关闭时 OpenAI 走与其他平台一致的简单调度；开启后才会使用现有复杂调度算法。",
       },
       gatewayForwarding: {
         title: "请求转发行为",
@@ -4984,7 +4989,8 @@ export default {
         enabled: "启用支付",
         enabledHint: "启用或禁用支付系统",
         enabledPaymentTypes: "启用的服务商",
-        enabledPaymentTypesHint: "禁用服务商将同时禁用对应的实例。",
+        enabledPaymentTypesHint:
+          "这里控制后台允许使用哪些支付服务商。用户充值页仍统一展示支付宝、微信和 Stripe；禁用服务商将同时禁用对应实例。",
         findProvider: "正在寻找合适的易支付服务商？",
         minAmount: "最低金额",
         maxAmount: "最高金额",
@@ -5032,9 +5038,9 @@ export default {
         providerIntro_easypay:
           "前台仍显示“支付宝 / 微信”，这里配置的是易支付聚合通道及其映射能力。",
         providerIntro_alipay:
-          "前台仍显示“支付宝”，这里配置的是官方支付宝渠道所需凭证。",
+          "前台仍显示“支付宝”，这里仅配置官方支付宝渠道参数；上方按钮仅提供平台与文档入口。",
         providerIntro_wxpay:
-          "前台仍显示“微信支付”，这里配置的是官方微信支付商户参数，以及可选的公众号网页授权补充字段。",
+          "前台仍显示“微信支付”，这里仅配置官方微信支付商户参数；上方按钮仅提供平台与文档入口。微信内 JSAPI 如需授权，依赖单独的微信登录 mp 配置。",
         providerIntro_stripe:
           "前台仍显示“Stripe”。Stripe Payment Element 内部可继续承载银行卡、Alipay、WeChat Pay、Link 等子方式。",
         linkWechatPublicPlatform: "微信公众平台",
@@ -5095,9 +5101,9 @@ export default {
         fieldHint_wxpay_publicKeyId: "平台公钥 ID，可按当前接入方式选填。",
         fieldHint_wxpay_certSerial: "商户 API 证书序列号，可选。",
         fieldHint_wxpay_mpAppId:
-          "公众号网页授权 AppID。只用于微信内网页授权 / JSAPI 相关能力，可从微信登录 mp 配置复制。",
+          "公众号 AppID，可选。仅在你确实需要微信内 JSAPI 等补充能力时填写，可从微信登录 mp 配置复制。",
         fieldHint_wxpay_mpAppSecret:
-          "公众号网页授权 AppSecret。仅补充公众号登录 / JSAPI 相关能力，不会替代商户号、证书或密钥。",
+          "公众号 AppSecret，可选。仅补充微信内 JSAPI 相关能力，不会替代商户号、证书或密钥。",
         fieldHint_stripe_secretKey:
           "Stripe Secret Key，用于服务端创建支付意图。",
         fieldHint_stripe_publishableKey:
@@ -5106,13 +5112,13 @@ export default {
           "Stripe Webhook Secret，用于校验 webhook 签名。",
         wxpayMerchantSectionTitle: "微信支付商户参数",
         wxpayMerchantSectionDesc:
-          "这些字段只属于微信支付商户配置，不与微信登录配置互相覆盖。",
-        wxpayMpSectionTitle: "公众号网页授权补充",
+          "这些字段只属于微信支付商户配置，不与微信登录配置互相覆盖。微信内 JSAPI 如需先拿 openid，仍依赖单独的微信登录 mp 配置。",
+        wxpayMpSectionTitle: "公众号 AppID / AppSecret（可选）",
         wxpayMpSectionDesc:
-          "仅在你需要微信内网页授权 / JSAPI 补充信息时填写。不要把它与商户号、证书、公钥等支付商户配置混淆。",
+          "仅在你需要补充公众号 AppID / AppSecret 时填写。它不属于商户支付主体参数，也不会覆盖商户号、证书、公钥等微信支付配置。",
         wxpayMpSyncAction: "从微信登录 mp 配置一键同步 appid/appsecret",
         wxpayMpSyncHint:
-          "可一键同步微信登录里的公众号 AppID / AppSecret，仅补充网页授权能力；不会读取或覆盖商户号、API v3 密钥、证书、公钥等微信支付商户配置。",
+          "可一键同步微信登录里的公众号 AppID / AppSecret，仅作可选补充；不会读取或覆盖商户号、API v3 密钥、证书、公钥等微信支付商户配置。",
         wxpayMpSyncPlaceholderToast:
           "同步只会读取微信登录里的公众号 AppID / AppSecret，不会改动商户号、API v3 密钥、证书、公钥等微信支付商户配置。",
         stripeWebhookHint:
