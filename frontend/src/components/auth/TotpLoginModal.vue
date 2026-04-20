@@ -1,5 +1,5 @@
 <template>
-  <div class="fixed inset-0 z-50 overflow-y-auto">
+  <div v-if="isVisible" class="fixed inset-0 z-50 overflow-y-auto">
     <div class="flex min-h-full items-center justify-center p-4">
       <div class="fixed inset-0 bg-black/50 transition-opacity"></div>
 
@@ -57,7 +57,7 @@
           type="button"
           class="btn btn-secondary w-full"
           :disabled="verifying"
-          @click="$emit('cancel')"
+          @click="handleCancel"
         >
           {{ t('common.cancel') }}
         </button>
@@ -67,10 +67,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick, onMounted } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-defineProps<{
+const props = defineProps<{
+  show?: boolean
   tempToken: string
   userEmailMasked?: string
 }>()
@@ -78,6 +79,7 @@ defineProps<{
 const emit = defineEmits<{
   verify: [code: string]
   cancel: []
+  close: []
 }>()
 
 const { t } = useI18n()
@@ -86,6 +88,7 @@ const verifying = ref(false)
 const error = ref('')
 const code = ref<string[]>(['', '', '', '', '', ''])
 const inputRefs = ref<(HTMLInputElement | null)[]>([])
+const isVisible = computed(() => props.show !== false)
 
 // Watch for code changes and auto-submit when 6 digits are entered
 watch(
@@ -95,6 +98,19 @@ watch(
       emit('verify', newCode)
     }
   }
+)
+
+watch(
+  isVisible,
+  (visible) => {
+    if (!visible) {
+      return
+    }
+    nextTick(() => {
+      inputRefs.value[0]?.focus()
+    })
+  },
+  { immediate: true }
 )
 
 defineExpose({
@@ -168,9 +184,8 @@ const handlePaste = (event: ClipboardEvent) => {
   })
 }
 
-onMounted(() => {
-  nextTick(() => {
-    inputRefs.value[0]?.focus()
-  })
-})
+function handleCancel() {
+  emit('cancel')
+  emit('close')
+}
 </script>

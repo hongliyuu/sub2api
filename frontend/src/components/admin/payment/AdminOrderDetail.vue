@@ -46,8 +46,10 @@
           </p>
         </div>
         <div>
-          <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('payment.orders.userId') }}</p>
-          <p class="text-sm text-gray-700 dark:text-gray-300">#{{ order.user_id }}</p>
+          <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('payment.admin.colUser') }}</p>
+          <p class="text-sm text-gray-700 dark:text-gray-300">
+            {{ order.user_email || order.user_name || `#${order.user_id}` }}
+          </p>
         </div>
         <div>
           <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('payment.orders.createdAt') }}</p>

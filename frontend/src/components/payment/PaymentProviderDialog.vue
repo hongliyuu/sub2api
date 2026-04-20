@@ -152,29 +152,16 @@
               v-if="group.title"
               class="rounded-lg border border-gray-200 bg-gray-50/80 p-3 dark:border-dark-700 dark:bg-dark-800/50"
             >
-              <div
-                class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"
-              >
-                <div>
-                  <p class="text-sm font-medium text-gray-900 dark:text-white">
-                    {{ group.title }}
-                  </p>
-                  <p
-                    v-if="group.description"
-                    class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400"
-                  >
-                    {{ group.description }}
-                  </p>
-                </div>
-                <button
-                  v-if="group.key === 'wechatMp'"
-                  type="button"
-                  class="btn btn-secondary btn-sm whitespace-nowrap"
-                  :disabled="syncingWechatMp"
-                  @click="handleWechatMpSync"
+              <div>
+                <p class="text-sm font-medium text-gray-900 dark:text-white">
+                  {{ group.title }}
+                </p>
+                <p
+                  v-if="group.description"
+                  class="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400"
                 >
-                  {{ t("admin.settings.payment.wxpayMpSyncAction") }}
-                </button>
+                  {{ group.description }}
+                </p>
               </div>
             </div>
             <div v-for="field in group.fields" :key="field.key">
@@ -449,7 +436,6 @@
 <script setup lang="ts">
 import { reactive, computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { getSettings } from "@/api/admin/settings";
 import BaseDialog from "@/components/common/BaseDialog.vue";
 import Select from "@/components/common/Select.vue";
 import type { SelectOption } from "@/components/common/Select.vue";
@@ -466,7 +452,6 @@ import {
   PAYMENT_MODE_QRCODE,
   PAYMENT_MODE_POPUP,
   buildProviderGuideLinks,
-  buildWechatPaymentMpSyncConfig,
   getAvailableTypes,
   extractBaseUrl,
 } from "./providerConfig";
@@ -516,7 +501,6 @@ const limits = reactive<Record<string, Record<string, number>>>({});
 const notifyBaseUrl = ref("");
 const returnBaseUrl = ref("");
 const limitsExpanded = ref(false);
-const syncingWechatMp = ref(false);
 const visibleFields = reactive<Record<string, boolean>>({});
 
 // --- Computed ---
@@ -595,25 +579,12 @@ const resolvedFieldGroups = computed(() => {
     ];
   }
 
-  const merchantFields = resolvedFields.value.filter(
-    (field) => (field.section || "default") !== "wechatMp",
-  );
-  const wechatMpFields = resolvedFields.value.filter(
-    (field) => field.section === "wechatMp",
-  );
-
   return [
     {
       key: "merchant",
       title: t("admin.settings.payment.wxpayMerchantSectionTitle"),
       description: t("admin.settings.payment.wxpayMerchantSectionDesc"),
-      fields: merchantFields,
-    },
-    {
-      key: "wechatMp",
-      title: t("admin.settings.payment.wxpayMpSectionTitle"),
-      description: t("admin.settings.payment.wxpayMpSectionDesc"),
-      fields: wechatMpFields,
+      fields: resolvedFields.value,
     },
   ];
 });
@@ -769,32 +740,6 @@ function handleSave() {
 
 function emitValidationError(msg: string) {
   appStore.showError(msg);
-}
-
-async function handleWechatMpSync() {
-  if (syncingWechatMp.value) return;
-
-  syncingWechatMp.value = true;
-  try {
-    const settings = await getSettings();
-    const syncedConfig = buildWechatPaymentMpSyncConfig(settings);
-    if (!syncedConfig.mpAppId || !syncedConfig.mpAppSecret) {
-      emitValidationError(
-        t("admin.settings.payment.validationFieldRequired", {
-          field: `${t("admin.settings.payment.field_mpAppId")} / ${t("admin.settings.payment.field_mpAppSecret")}`,
-        }),
-      );
-      return;
-    }
-
-    config.mpAppId = syncedConfig.mpAppId;
-    config.mpAppSecret = syncedConfig.mpAppSecret;
-    appStore.showSuccess(t("admin.settings.payment.wxpayMpSyncAction"));
-  } catch {
-    emitValidationError(t("common.error"));
-  } finally {
-    syncingWechatMp.value = false;
-  }
 }
 
 // --- Public API for parent to call ---

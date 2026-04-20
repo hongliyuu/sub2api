@@ -11,7 +11,7 @@ export interface ConfigFieldDef {
   label?: string;
   labelKey?: string;
   hintKey?: string;
-  section?: "default" | "merchant" | "wechatMp";
+  section?: "default" | "merchant";
   sensitive: boolean;
   optional?: boolean;
   defaultValue?: string;
@@ -32,11 +32,6 @@ type ProviderSourceInstance = Pick<
   ProviderInstance,
   "provider_key" | "supported_types"
 >;
-
-export interface WechatLoginMpSettings {
-  wechat_login_mp_app_id?: string;
-  wechat_login_mp_app_secret?: string;
-}
 
 export interface ProviderGuideLink {
   label: string;
@@ -218,22 +213,6 @@ export const PROVIDER_CONFIG_FIELDS: Record<string, ConfigFieldDef[]> = {
       section: "merchant",
       sensitive: false,
     },
-    {
-      key: "mpAppId",
-      labelKey: "admin.settings.payment.field_mpAppId",
-      hintKey: "admin.settings.payment.fieldHint_wxpay_mpAppId",
-      section: "wechatMp",
-      sensitive: false,
-      optional: true,
-    },
-    {
-      key: "mpAppSecret",
-      labelKey: "admin.settings.payment.field_mpAppSecret",
-      hintKey: "admin.settings.payment.fieldHint_wxpay_mpAppSecret",
-      section: "wechatMp",
-      sensitive: true,
-      optional: true,
-    },
   ],
   stripe: [
     {
@@ -386,15 +365,6 @@ export function extractBaseUrl(fullUrl: string, path: string): string {
   } catch {
     return fullUrl;
   }
-}
-
-export function buildWechatPaymentMpSyncConfig(
-  settings: WechatLoginMpSettings,
-): Record<string, string> {
-  return {
-    mpAppId: (settings.wechat_login_mp_app_id || "").trim(),
-    mpAppSecret: (settings.wechat_login_mp_app_secret || "").trim(),
-  };
 }
 
 export function buildProviderGuideLinks(

@@ -47,8 +47,18 @@
         <span class="font-mono text-sm">#{{ value }}</span>
       </template>
 
-      <template #cell-user_id="{ value }">
-        <span class="text-sm text-gray-600 dark:text-gray-400">#{{ value }}</span>
+      <template #cell-user_email="{ value, row }">
+        <div class="text-sm">
+          <span class="text-gray-900 dark:text-white">{{
+            value || row.user_name || '#' + row.user_id
+          }}</span>
+          <span
+            v-if="value && row.user_name && row.user_name !== value"
+            class="ml-1 text-xs text-gray-400"
+          >
+            ({{ row.user_name }})
+          </span>
+        </div>
       </template>
 
       <template #cell-pay_amount="{ value, row }">
@@ -206,7 +216,7 @@ function emitFiltersChanged() {
 
 const columns = computed<Column[]>(() => [
   { key: 'id', label: t('payment.orders.orderId') },
-  { key: 'user_id', label: t('payment.orders.userId') },
+  { key: 'user_email', label: t('payment.admin.colUser') },
   { key: 'pay_amount', label: t('payment.orders.payAmount') },
   { key: 'payment_type', label: t('payment.orders.paymentMethod') },
   { key: 'status', label: t('payment.orders.status') },
