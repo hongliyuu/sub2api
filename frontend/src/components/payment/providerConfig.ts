@@ -72,13 +72,21 @@ export const METHOD_ORDER = [
 export const PAYMENT_MODE_QRCODE = "qrcode";
 export const PAYMENT_MODE_POPUP = "popup";
 
-/** Window features for payment popup windows */
-export const POPUP_WINDOW_FEATURES =
-  "width=1000,height=750,left=100,top=80,scrollbars=yes,resizable=yes";
+/** Preferred popup size for payment gateways. */
+const PAYMENT_POPUP_PREFERRED_WIDTH = 1250;
+const PAYMENT_POPUP_PREFERRED_HEIGHT = 900;
 
-/** Wider popup for Stripe redirect methods (Alipay checkout page needs ~1200px) */
-export const STRIPE_POPUP_WINDOW_FEATURES =
-  "width=1250,height=780,left=80,top=60,scrollbars=yes,resizable=yes";
+/** Build a centered window.open features string that fits smaller screens. */
+export function getPaymentPopupFeatures(): string {
+  const screen = typeof window !== "undefined" ? window.screen : null;
+  const availW = screen?.availWidth ?? PAYMENT_POPUP_PREFERRED_WIDTH;
+  const availH = screen?.availHeight ?? PAYMENT_POPUP_PREFERRED_HEIGHT;
+  const width = Math.min(PAYMENT_POPUP_PREFERRED_WIDTH, availW - 40);
+  const height = Math.min(PAYMENT_POPUP_PREFERRED_HEIGHT, availH - 40);
+  const left = Math.max(0, Math.floor((availW - width) / 2));
+  const top = Math.max(0, Math.floor((availH - height) / 2));
+  return `width=${width},height=${height},left=${left},top=${top},scrollbars=yes,resizable=yes`;
+}
 
 /** Webhook paths for each provider (relative to origin). */
 export const WEBHOOK_PATHS: Record<string, string> = {

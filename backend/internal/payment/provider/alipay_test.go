@@ -153,20 +153,20 @@ func TestAlipayCreatePaymentBranches(t *testing.T) {
 	}
 
 	origWap := alipayTradeWapPay
-	origPreCreate := alipayTradePreCreate
+	origPage := alipayTradePagePay
 	t.Cleanup(func() {
 		alipayTradeWapPay = origWap
-		alipayTradePreCreate = origPreCreate
+		alipayTradePagePay = origPage
 	})
 
 	tests := []struct {
-		name         string
-		req          payment.CreatePaymentRequest
-		wantTradeNo  string
-		wantPayURL   string
-		wantQRCode   string
-		wantWapCalls int
-		wantPreCalls int
+		name          string
+		req           payment.CreatePaymentRequest
+		wantTradeNo   string
+		wantPayURL    string
+		wantQRCode    string
+		wantWapCalls  int
+		wantPageCalls int
 	}{
 		{
 			name: "mobile uses wap pay flow",
@@ -175,20 +175,20 @@ func TestAlipayCreatePaymentBranches(t *testing.T) {
 				mobileReq.IsMobile = true
 				return mobileReq
 			}(),
-			wantTradeNo:  req.OrderID,
-			wantPayURL:   "https://pay.example/wap",
-			wantQRCode:   "",
-			wantWapCalls: 1,
-			wantPreCalls: 0,
+			wantTradeNo:   req.OrderID,
+			wantPayURL:    "https://pay.example/wap",
+			wantQRCode:    "",
+			wantWapCalls:  1,
+			wantPageCalls: 0,
 		},
 		{
-			name:         "desktop uses precreate flow",
-			req:          req,
-			wantTradeNo:  req.OrderID,
-			wantPayURL:   "",
-			wantQRCode:   "qr-code-value",
-			wantWapCalls: 0,
-			wantPreCalls: 1,
+			name:          "desktop uses page pay flow",
+			req:           req,
+			wantTradeNo:   req.OrderID,
+			wantPayURL:    "https://pay.example/page",
+			wantQRCode:    "",
+			wantWapCalls:  0,
+			wantPageCalls: 1,
 		},
 	}
 
@@ -196,7 +196,7 @@ func TestAlipayCreatePaymentBranches(t *testing.T) {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			wapCalls := 0
-			preCalls := 0
+			pageCalls := 0
 
 			alipayTradeWapPay = func(client *alipay.Client, param alipay.TradeWapPay) (*url.URL, error) {
 				wapCalls++
@@ -224,37 +224,30 @@ func TestAlipayCreatePaymentBranches(t *testing.T) {
 				return url.Parse("https://pay.example/wap")
 			}
 
-			alipayTradePreCreate = func(ctx context.Context, client *alipay.Client, param alipay.TradePreCreate) (*alipay.TradePreCreateRsp, error) {
-				preCalls++
-				if ctx != context.Background() {
-					t.Fatalf("precreate ctx mismatch")
-				}
+			alipayTradePagePay = func(client *alipay.Client, param alipay.TradePagePay) (*url.URL, error) {
+				pageCalls++
 				if client != provider.client {
-					t.Fatalf("precreate client mismatch")
+					t.Fatalf("pagepay client mismatch")
 				}
 				if param.OutTradeNo != tt.req.OrderID {
-					t.Fatalf("precreate OutTradeNo = %q, want %q", param.OutTradeNo, tt.req.OrderID)
+					t.Fatalf("pagepay OutTradeNo = %q, want %q", param.OutTradeNo, tt.req.OrderID)
 				}
 				if param.TotalAmount != tt.req.Amount {
-					t.Fatalf("precreate TotalAmount = %q, want %q", param.TotalAmount, tt.req.Amount)
+					t.Fatalf("pagepay TotalAmount = %q, want %q", param.TotalAmount, tt.req.Amount)
 				}
 				if param.Subject != tt.req.Subject {
-					t.Fatalf("precreate Subject = %q, want %q", param.Subject, tt.req.Subject)
+					t.Fatalf("pagepay Subject = %q, want %q", param.Subject, tt.req.Subject)
 				}
-				if param.ProductCode != alipayProductCodePreCreate {
-					t.Fatalf("precreate ProductCode = %q, want %q", param.ProductCode, alipayProductCodePreCreate)
+				if param.ProductCode != alipayProductCodePagePay {
+					t.Fatalf("pagepay ProductCode = %q, want %q", param.ProductCode, alipayProductCodePagePay)
 				}
 				if param.NotifyURL != tt.req.NotifyURL {
-					t.Fatalf("precreate NotifyURL = %q, want %q", param.NotifyURL, tt.req.NotifyURL)
+					t.Fatalf("pagepay NotifyURL = %q, want %q", param.NotifyURL, tt.req.NotifyURL)
 				}
-				if param.ReturnURL != "" {
-					t.Fatalf("precreate ReturnURL = %q, want empty", param.ReturnURL)
+				if param.ReturnURL != tt.req.ReturnURL {
+					t.Fatalf("pagepay ReturnURL = %q, want %q", param.ReturnURL, tt.req.ReturnURL)
 				}
-				return &alipay.TradePreCreateRsp{
-					Error:      alipay.Error{Code: alipay.CodeSuccess},
-					OutTradeNo: tt.req.OrderID,
-					QRCode:     "qr-code-value",
-				}, nil
+				return url.Parse("https://pay.example/page")
 			}
 
 			resp, err := provider.CreatePayment(context.Background(), tt.req)
@@ -276,8 +269,8 @@ func TestAlipayCreatePaymentBranches(t *testing.T) {
 			if wapCalls != tt.wantWapCalls {
 				t.Fatalf("wap calls = %d, want %d", wapCalls, tt.wantWapCalls)
 			}
-			if preCalls != tt.wantPreCalls {
-				t.Fatalf("precreate calls = %d, want %d", preCalls, tt.wantPreCalls)
+			if pageCalls != tt.wantPageCalls {
+				t.Fatalf("pagepay calls = %d, want %d", pageCalls, tt.wantPageCalls)
 			}
 		})
 	}
@@ -304,23 +297,22 @@ func TestParseAlipayAmount_RejectsMissingAmounts(t *testing.T) {
 	}
 }
 
-func TestAlipayCreatePaymentDesktopPrecreateRequiresQRCode(t *testing.T) {
+func TestAlipayCreatePaymentDesktopPagePayError(t *testing.T) {
 	provider := &Alipay{
 		config: map[string]string{
 			"notifyUrl": "https://config.example/notify",
+			"returnUrl": "https://config.example/return",
 		},
 		client: &alipay.Client{},
 	}
 
-	origPreCreate := alipayTradePreCreate
+	origPage := alipayTradePagePay
 	t.Cleanup(func() {
-		alipayTradePreCreate = origPreCreate
+		alipayTradePagePay = origPage
 	})
 
-	alipayTradePreCreate = func(ctx context.Context, client *alipay.Client, param alipay.TradePreCreate) (*alipay.TradePreCreateRsp, error) {
-		return &alipay.TradePreCreateRsp{
-			Error: alipay.Error{Code: alipay.CodeSuccess},
-		}, nil
+	alipayTradePagePay = func(client *alipay.Client, param alipay.TradePagePay) (*url.URL, error) {
+		return nil, errors.New("page pay failed")
 	}
 
 	_, err := provider.CreatePayment(context.Background(), payment.CreatePaymentRequest{
@@ -331,7 +323,7 @@ func TestAlipayCreatePaymentDesktopPrecreateRequiresQRCode(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
-	if !strings.Contains(err.Error(), "empty qr_code") {
-		t.Fatalf("error = %q, want to contain %q", err.Error(), "empty qr_code")
+	if !strings.Contains(err.Error(), "TradePagePay") {
+		t.Fatalf("error = %q, want to contain %q", err.Error(), "TradePagePay")
 	}
 }

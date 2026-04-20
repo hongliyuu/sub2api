@@ -159,6 +159,7 @@ export interface CreateOrderRequest {
   openid?: string
   order_type: string
   plan_id?: number
+  is_mobile?: boolean
 }
 
 export type PaymentResultType = 'order_created' | 'oauth_required' | 'jsapi_ready'

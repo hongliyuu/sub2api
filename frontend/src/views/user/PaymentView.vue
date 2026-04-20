@@ -697,7 +697,7 @@ import PaymentMethodSelector from "@/components/payment/PaymentMethodSelector.vu
 import {
   METHOD_ORDER,
   PAYMENT_MODE_QRCODE,
-  POPUP_WINDOW_FEATURES,
+  getPaymentPopupFeatures,
   normalizeVisiblePaymentType,
 } from "@/components/payment/providerConfig";
 import {
@@ -1924,7 +1924,7 @@ async function consumeOrderCreatedResult(
       firstString(result.payment_type, requestType, selectedMethod.value),
     );
   const openWindow = (url: string) => {
-    const popup = window.open(url, "paymentPopup", POPUP_WINDOW_FEATURES);
+    const popup = window.open(url, "paymentPopup", getPaymentPopupFeatures());
     if (!popup || popup.closed) {
       window.location.href = url;
     }
@@ -2158,8 +2158,8 @@ async function createOrder(
       openid: options.openid,
       order_type: orderType,
       plan_id: planId,
+      is_mobile: isMobileDevice(),
     });
-
     const resultType = result.result_type || "order_created";
     if (resultType === "oauth_required") {
       await handleWechatOAuthRequired(
