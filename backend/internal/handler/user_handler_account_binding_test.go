@@ -398,3 +398,48 @@ func TestUserHandler_GetProfile_ReportsExplicitThirdPartyBindingsAlongsideEmail(
 	require.True(t, resp.Data.AccountBindings["oidc"].Bound)
 	require.Equal(t, "subject-oidc-1", resp.Data.AccountBindings["oidc"].ProviderSubject)
 }
+
+func TestUserHandler_UpdateProfile_UpdatesAvatar(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler, _, repo, _ := newUserBindingHandlerForTest(t)
+
+	body := bytes.NewBufferString(`{"username":"updated-user","avatar_data_url":"data:image/png;base64,YWJj"}`)
+	rec := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(rec)
+	ctx.Set(string(middleware2.ContextKeyUser), middleware2.AuthSubject{UserID: 7})
+	ctx.Request = httptest.NewRequest(http.MethodPut, "/api/v1/user", body)
+	ctx.Request.Header.Set("Content-Type", "application/json")
+
+	handler.UpdateProfile(ctx)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	updatedUser, err := repo.GetByID(context.Background(), 7)
+	require.NoError(t, err)
+	require.Equal(t, "updated-user", updatedUser.Username)
+	require.NotNil(t, updatedUser.Avatar)
+	require.Equal(t, "image/png", updatedUser.Avatar.ContentType)
+	require.Contains(t, updatedUser.AvatarURL, "data:image/png;base64,")
+}
+
+func TestUserHandler_UpdateProfile_RemovesAvatarWhenAvatarDataURLIsEmpty(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	handler, _, repo, _ := newUserBindingHandlerForTest(t)
+	_, err := repo.UpsertAvatar(context.Background(), 7, service.BuildInlineUserAvatarInput([]byte("abc"), "image/png"))
+	require.NoError(t, err)
+
+	body := bytes.NewBufferString(`{"username":"owner","avatar_data_url":""}`)
+	rec := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(rec)
+	ctx.Set(string(middleware2.ContextKeyUser), middleware2.AuthSubject{UserID: 7})
+	ctx.Request = httptest.NewRequest(http.MethodPut, "/api/v1/user", body)
+	ctx.Request.Header.Set("Content-Type", "application/json")
+
+	handler.UpdateProfile(ctx)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	updatedUser, err := repo.GetByID(context.Background(), 7)
+	require.NoError(t, err)
+	require.Nil(t, updatedUser.Avatar)
+	require.Empty(t, updatedUser.AvatarURL)
+	require.False(t, updatedUser.HasCustomAvatar)
+}

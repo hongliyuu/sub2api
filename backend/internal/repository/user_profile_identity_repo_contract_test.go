@@ -481,6 +481,60 @@ func TestBindPendingAuthIdentity_WechatUnionIDUpgradesExistingOpenIDIdentity(t *
 	require.Equal(t, upgraded.ID, channel.IdentityID)
 }
 
+func TestBindPendingAuthIdentity_WechatUnionIDUpgradesLegacyOpenIDIdentity(t *testing.T) {
+	repo := newUserProfileIdentityTestRepo(t)
+	ctx := context.Background()
+
+	_, err := repo.sql.ExecContext(ctx, `
+INSERT INTO user_external_identities (
+	user_id,
+	provider,
+	provider_user_id,
+	display_name,
+	metadata
+) VALUES ($1, $2, $3, $4, $5)`,
+		7, "wechat", "openid-legacy-bridge-1", "legacy-wechat", `{"legacy":"openid-only"}`,
+	)
+	require.NoError(t, err)
+
+	err = repo.BindPendingAuthIdentity(ctx, &service.PendingAuthSessionRecord{
+		ProviderType:    "wechat",
+		ProviderKey:     "wechat-main",
+		ProviderSubject: "union-legacy-bridge-1",
+		Metadata: map[string]any{
+			"unionid": "union-legacy-bridge-1",
+			"openid":  "openid-legacy-bridge-1",
+			"channel": "open",
+			"appid":   "wx-open-app",
+		},
+	}, 7)
+	require.NoError(t, err)
+
+	identity, err := repo.FindAuthIdentity(ctx, "wechat", "wechat-main", "union-legacy-bridge-1")
+	require.NoError(t, err)
+	require.Equal(t, int64(7), identity.UserID)
+	require.Equal(t, "union-legacy-bridge-1", identity.ProviderSubject)
+	require.Equal(t, "openid-legacy-bridge-1", identity.Metadata["openid"])
+	require.Equal(t, "union-legacy-bridge-1", identity.Metadata["unionid"])
+
+	bridgedByOpenID, err := repo.FindAuthIdentity(ctx, "wechat", "wechat-main", "openid-legacy-bridge-1")
+	require.NoError(t, err)
+	require.Equal(t, identity.ID, bridgedByOpenID.ID)
+	require.Equal(t, "union-legacy-bridge-1", bridgedByOpenID.ProviderSubject)
+
+	channel, err := repo.FindAuthIdentityChannel(ctx, "wechat", "wechat-main", "open", "wx-open-app", "openid-legacy-bridge-1")
+	require.NoError(t, err)
+	require.Equal(t, identity.ID, channel.IdentityID)
+
+	var identityCount int
+	rows, err := repo.sql.QueryContext(ctx, `SELECT COUNT(*) FROM auth_identities WHERE provider_type = 'wechat'`)
+	require.NoError(t, err)
+	defer func() { _ = rows.Close() }()
+	require.True(t, rows.Next())
+	require.NoError(t, rows.Scan(&identityCount))
+	require.Equal(t, 1, identityCount)
+}
+
 func TestLoadLatestAuthIdentityMigrationReport_ReturnsNewestSnapshot(t *testing.T) {
 	repo := newUserProfileIdentityTestRepo(t)
 	ctx := context.Background()
@@ -713,6 +767,60 @@ INSERT INTO user_external_identities (
 	stored, err := repo.findStoredAuthIdentity(ctx, "wechat", "wechat", "union-legacy-1")
 	require.NoError(t, err)
 	require.Equal(t, identity.ID, stored.ID)
+}
+
+func TestFindAuthIdentity_WechatMainFallsBackToLegacyProviderKey(t *testing.T) {
+	repo := newUserProfileIdentityTestRepo(t)
+	ctx := context.Background()
+
+	stored, err := repo.UpsertAuthIdentity(ctx, 9, UpsertAuthIdentityInput{
+		ProviderType:    "wechat",
+		ProviderKey:     "wechat",
+		ProviderSubject: "union-legacy-provider-key-1",
+		Metadata: map[string]any{
+			"unionid": "union-legacy-provider-key-1",
+			"openid":  "openid-legacy-provider-key-1",
+		},
+	})
+	require.NoError(t, err)
+
+	identity, err := repo.FindAuthIdentity(ctx, "wechat", "wechat-main", "union-legacy-provider-key-1")
+	require.NoError(t, err)
+	require.Equal(t, stored.ID, identity.ID)
+	require.Equal(t, "wechat", identity.ProviderKey)
+}
+
+func TestFindAuthIdentityChannel_WechatMainFallsBackToLegacyProviderKey(t *testing.T) {
+	repo := newUserProfileIdentityTestRepo(t)
+	ctx := context.Background()
+
+	identity, err := repo.UpsertAuthIdentity(ctx, 9, UpsertAuthIdentityInput{
+		ProviderType:    "wechat",
+		ProviderKey:     "wechat",
+		ProviderSubject: "union-channel-legacy-key-1",
+		Metadata: map[string]any{
+			"unionid": "union-channel-legacy-key-1",
+			"openid":  "openid-channel-legacy-key-1",
+		},
+	})
+	require.NoError(t, err)
+
+	channel, err := repo.UpsertAuthIdentityChannel(ctx, identity.ID, UpsertAuthIdentityChannelInput{
+		ProviderType:   "wechat",
+		ProviderKey:    "wechat",
+		Channel:        "open",
+		ChannelAppID:   "wx-open-app",
+		ChannelSubject: "openid-channel-legacy-key-1",
+		Metadata: map[string]any{
+			"openid": "openid-channel-legacy-key-1",
+		},
+	})
+	require.NoError(t, err)
+
+	loaded, err := repo.FindAuthIdentityChannel(ctx, "wechat", "wechat-main", "open", "wx-open-app", "openid-channel-legacy-key-1")
+	require.NoError(t, err)
+	require.Equal(t, channel.ID, loaded.ID)
+	require.Equal(t, "wechat", loaded.ProviderKey)
 }
 
 func TestListUserExternalIdentities_IncludesLegacyRows(t *testing.T) {

@@ -424,6 +424,43 @@ func TestWeChatOAuthCallback_BoundLoginFallsBackToChannelWhenUnionIDIsNew(t *tes
 	require.Empty(t, repo.sessions)
 }
 
+func TestWeChatOAuthCallback_BoundLoginFallsBackToOpenIDIdentityWhenLegacyBindingHasNoChannel(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	handler, _, repo := newOAuthCallbackHandlerForTest(t)
+	handler.settingSvc = service.NewSettingService(&wechatOAuthSettingRepoStub{values: map[string]string{
+		service.SettingKeyWeChatLoginOpenEnabled:   "true",
+		service.SettingKeyWeChatLoginOpenAppID:     "wx-open-app",
+		service.SettingKeyWeChatLoginOpenAppSecret: "open-secret",
+	}}, &config.Config{})
+	repo.bindIdentity(7, "wechat", wechatOAuthProviderKey, "open-legacy-user-1")
+	stubWeChatOAuthProvider(t,
+		wechatOAuthTokenResponse{AccessToken: "wx-token", OpenID: "open-legacy-user-1"},
+		wechatOAuthUserInfoResponse{OpenID: "open-legacy-user-1", UnionID: "union-late-1", Nickname: "wx-user"},
+	)
+
+	rec := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(rec)
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/auth/oauth/wechat/callback?state=state-openid-bridge&code=code-openid-bridge", nil)
+	req.AddCookie(&http.Cookie{Name: wechatOAuthStateCookieName, Value: encodeCookieValue("state-openid-bridge")})
+	req.AddCookie(&http.Cookie{Name: wechatOAuthRedirectCookieName, Value: encodeCookieValue("/profile")})
+	req.AddCookie(&http.Cookie{Name: wechatOAuthIntentCookieName, Value: encodeCookieValue(service.PendingAuthIntentLogin)})
+	req.AddCookie(&http.Cookie{Name: wechatOAuthModeCookieName, Value: encodeCookieValue("open")})
+	ctx.Request = req
+
+	handler.WeChatOAuthCallback(ctx)
+
+	require.Equal(t, http.StatusFound, rec.Code)
+	fragment := parseRedirectFragment(t, rec.Header().Get("Location"))
+	require.NotEmpty(t, fragment.Get("access_token"))
+	require.NotEmpty(t, fragment.Get("refresh_token"))
+	require.Equal(t, "wechat", fragment.Get("provider"))
+	require.Equal(t, service.PendingAuthIntentLogin, fragment.Get("intent"))
+	require.Equal(t, "/profile", fragment.Get("redirect"))
+	require.Empty(t, fragment.Get("pending_auth_token"))
+	require.Empty(t, repo.sessions)
+}
+
 func TestWeChatOAuthCallback_UnboundRedirectsWithPendingSessionMetadata(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

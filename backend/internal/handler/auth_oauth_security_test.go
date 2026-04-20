@@ -51,6 +51,7 @@ type pendingAuthHandlerUserRepoStub struct {
 	sessions    map[string]*service.PendingAuthSessionRecord
 	users       map[int64]*service.User
 	usersByMail map[string]*service.User
+	avatars     map[int64]*service.UserAvatar
 	nextSession int
 	nextUserID  int64
 }
@@ -60,6 +61,7 @@ func newPendingAuthHandlerUserRepoStub() *pendingAuthHandlerUserRepoStub {
 		sessions:    make(map[string]*service.PendingAuthSessionRecord),
 		users:       make(map[int64]*service.User),
 		usersByMail: make(map[string]*service.User),
+		avatars:     make(map[int64]*service.UserAvatar),
 		nextUserID:  100,
 	}
 }
@@ -80,6 +82,13 @@ func (s *pendingAuthHandlerUserRepoStub) GetByID(_ context.Context, id int64) (*
 		return nil, service.ErrUserNotFound
 	}
 	copied := *user
+	if avatar, exists := s.avatars[id]; exists {
+		avatarCopy := *avatar
+		copied.Avatar = &avatarCopy
+		copied.AvatarURL = avatarCopy.URL
+		copied.HasCustomAvatar = avatarCopy.URL != ""
+		copied.AvatarUpdatedAt = &avatarCopy.UpdatedAt
+	}
 	return &copied, nil
 }
 func (s *pendingAuthHandlerUserRepoStub) GetByEmail(_ context.Context, email string) (*service.User, error) {
@@ -88,6 +97,13 @@ func (s *pendingAuthHandlerUserRepoStub) GetByEmail(_ context.Context, email str
 		return nil, service.ErrUserNotFound
 	}
 	copied := *user
+	if avatar, exists := s.avatars[user.ID]; exists {
+		avatarCopy := *avatar
+		copied.Avatar = &avatarCopy
+		copied.AvatarURL = avatarCopy.URL
+		copied.HasCustomAvatar = avatarCopy.URL != ""
+		copied.AvatarUpdatedAt = &avatarCopy.UpdatedAt
+	}
 	return &copied, nil
 }
 func (s *pendingAuthHandlerUserRepoStub) GetFirstAdmin(context.Context) (*service.User, error) {
@@ -138,6 +154,28 @@ func (s *pendingAuthHandlerUserRepoStub) EnableTotp(context.Context, int64) erro
 }
 func (s *pendingAuthHandlerUserRepoStub) DisableTotp(context.Context, int64) error {
 	panic("unexpected DisableTotp call")
+}
+
+func (s *pendingAuthHandlerUserRepoStub) UpsertAvatar(_ context.Context, userID int64, input service.UpsertUserAvatarInput) (*service.UserAvatar, error) {
+	avatar := &service.UserAvatar{
+		ID:              int64(len(s.avatars) + 1),
+		UserID:          userID,
+		StorageProvider: input.StorageProvider,
+		StorageKey:      input.StorageKey,
+		URL:             input.URL,
+		ContentType:     input.ContentType,
+		ByteSize:        input.ByteSize,
+		SHA256:          input.SHA256,
+		CreatedAt:       time.Now().UTC(),
+		UpdatedAt:       time.Now().UTC(),
+	}
+	s.avatars[userID] = avatar
+	return avatar, nil
+}
+
+func (s *pendingAuthHandlerUserRepoStub) DeleteAvatar(_ context.Context, userID int64) error {
+	delete(s.avatars, userID)
+	return nil
 }
 
 func (s *pendingAuthHandlerUserRepoStub) CreatePendingAuthSession(_ context.Context, input service.PendingAuthSessionInput) (*service.PendingAuthSessionRecord, error) {
