@@ -357,6 +357,26 @@ func (r *userRepository) FindAuthIdentity(ctx context.Context, providerType, pro
 		return nil, fmt.Errorf("nil sql executor")
 	}
 
+	record, err := r.findStoredAuthIdentity(ctx, providerType, providerKey, providerSubject)
+	if err == nil {
+		return record, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+
+	legacy, err := r.findLegacyExternalIdentity(ctx, providerType, providerSubject)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+		return nil, err
+	}
+
+	return r.materializeLegacyAuthIdentity(ctx, strings.TrimSpace(providerType), strings.TrimSpace(providerKey), legacy)
+}
+
+func (r *userRepository) findStoredAuthIdentity(ctx context.Context, providerType, providerKey, providerSubject string) (*AuthIdentityRecord, error) {
 	row := authIdentityRow{}
 	if err := scanSingleRow(ctx, r.sql, `
 SELECT
@@ -433,6 +453,17 @@ func (r *userRepository) ListUserExternalIdentities(ctx context.Context, userID 
 		return nil, fmt.Errorf("nil sql executor")
 	}
 
+	legacyRows, err := r.listLegacyExternalIdentitiesByUser(ctx, userID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+	for _, legacy := range legacyRows {
+		legacy := legacy
+		if _, err := r.materializeLegacyAuthIdentity(ctx, legacy.Provider, legacy.Provider, &legacy); err != nil {
+			return nil, err
+		}
+	}
+
 	rows, err := r.sql.QueryContext(ctx, `
 SELECT provider_type, provider_subject
 FROM auth_identities
@@ -444,15 +475,26 @@ ORDER BY provider_type ASC, created_at ASC, id ASC`, userID)
 	defer func() { _ = rows.Close() }()
 
 	identities := make([]service.UserExternalIdentity, 0)
+	seen := make(map[string]struct{})
 	for rows.Next() {
 		var providerType string
 		var providerSubject string
 		if err := rows.Scan(&providerType, &providerSubject); err != nil {
 			return nil, err
 		}
+		normalizedProvider := service.NormalizeExternalIdentityProvider(service.ExternalIdentityProvider(providerType))
+		normalizedSubject := strings.TrimSpace(providerSubject)
+		if normalizedProvider == "" || normalizedSubject == "" {
+			continue
+		}
+		key := string(normalizedProvider) + "\x1f" + normalizedSubject
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
 		identities = append(identities, service.UserExternalIdentity{
-			Provider:       service.NormalizeExternalIdentityProvider(service.ExternalIdentityProvider(providerType)),
-			ProviderUserID: strings.TrimSpace(providerSubject),
+			Provider:       normalizedProvider,
+			ProviderUserID: normalizedSubject,
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -466,11 +508,12 @@ func (r *userRepository) DeleteUserExternalIdentity(ctx context.Context, userID 
 		return false, fmt.Errorf("nil sql executor")
 	}
 
+	normalizedProvider := service.NormalizeExternalIdentityProvider(provider)
 	rows, err := r.sql.QueryContext(ctx, `
 SELECT id
 FROM auth_identities
 WHERE user_id = $1 AND provider_type = $2
-ORDER BY id ASC`, userID, string(service.NormalizeExternalIdentityProvider(provider)))
+ORDER BY id ASC`, userID, string(normalizedProvider))
 	if err != nil {
 		return false, err
 	}
@@ -487,16 +530,23 @@ ORDER BY id ASC`, userID, string(service.NormalizeExternalIdentityProvider(provi
 	if err := rows.Err(); err != nil {
 		return false, err
 	}
-	if len(ids) == 0 {
-		return false, nil
-	}
 
+	deleted := false
 	for _, id := range ids {
 		if err := r.deleteAuthIdentityByID(ctx, id); err != nil {
 			return false, err
 		}
+		deleted = true
 	}
-	return true, nil
+
+	legacyDeleted, err := r.deleteLegacyExternalIdentity(ctx, userID, normalizedProvider)
+	if err != nil {
+		return false, err
+	}
+	if legacyDeleted {
+		deleted = true
+	}
+	return deleted, nil
 }
 
 func (r *userRepository) GetIdentityAdoptionDecision(
@@ -1068,6 +1118,10 @@ func (r *userRepository) bindPendingWeChatIdentity(
 		return fmt.Errorf("wechat identity resolution failed")
 	}
 
+	if existingUnionID := authIdentityMetadataString(targetIdentity.Metadata, "unionid"); existingUnionID != "" && targetIdentity.ProviderSubject != "" {
+		primarySubject = targetIdentity.ProviderSubject
+	}
+
 	mergedMetadata := mergeAuthIdentityMetadata(targetIdentity.Metadata, metadata)
 	if targetIdentity.ProviderSubject != primarySubject {
 		if err := r.rekeyAuthIdentity(ctx, targetIdentity.ID, UpsertAuthIdentityInput{
@@ -1285,6 +1339,299 @@ func nullableString(v *string) any {
 		return nil
 	}
 	return trimmed
+}
+
+type legacyExternalIdentityRow struct {
+	ID              int64
+	UserID          int64
+	Provider        string
+	ProviderUserID  string
+	ProviderUnionID sql.NullString
+	ProviderName    string
+	DisplayName     string
+	ProfileURL      string
+	AvatarURL       string
+	Metadata        []byte
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+func (r *userRepository) findLegacyExternalIdentity(ctx context.Context, providerType, providerSubject string) (*legacyExternalIdentityRow, error) {
+	providerType = strings.TrimSpace(providerType)
+	providerSubject = strings.TrimSpace(providerSubject)
+	if providerType == "" || providerSubject == "" {
+		return nil, sql.ErrNoRows
+	}
+
+	row := legacyExternalIdentityRow{}
+	query := `
+SELECT
+	id,
+	user_id,
+	provider,
+	provider_user_id,
+	provider_union_id,
+	provider_username,
+	display_name,
+	profile_url,
+	avatar_url,
+	metadata,
+	created_at,
+	updated_at
+FROM user_external_identities
+WHERE provider = $1 AND provider_user_id = $2
+LIMIT 1`
+	args := []any{providerType, providerSubject}
+	if providerType == string(service.ExternalIdentityProviderWeChat) {
+		query = `
+SELECT
+	id,
+	user_id,
+	provider,
+	provider_user_id,
+	provider_union_id,
+	provider_username,
+	display_name,
+	profile_url,
+	avatar_url,
+	metadata,
+	created_at,
+	updated_at
+FROM user_external_identities
+WHERE provider = $1
+  AND (
+	provider_user_id = $2
+	OR (provider_union_id = $2 AND provider_union_id <> '')
+  )
+ORDER BY
+	CASE
+		WHEN provider_union_id = $2 AND provider_union_id <> '' THEN 0
+		ELSE 1
+	END ASC,
+	id ASC
+LIMIT 1`
+	}
+	if err := scanSingleRow(ctx, r.sql, query, args,
+		&row.ID,
+		&row.UserID,
+		&row.Provider,
+		&row.ProviderUserID,
+		&row.ProviderUnionID,
+		&row.ProviderName,
+		&row.DisplayName,
+		&row.ProfileURL,
+		&row.AvatarURL,
+		&row.Metadata,
+		&row.CreatedAt,
+		&row.UpdatedAt,
+	); err != nil {
+		if isMissingLegacyExternalIdentityTableErr(err) {
+			return nil, sql.ErrNoRows
+		}
+		return nil, err
+	}
+	return &row, nil
+}
+
+func (r *userRepository) listLegacyExternalIdentitiesByUser(ctx context.Context, userID int64) ([]legacyExternalIdentityRow, error) {
+	rows, err := r.sql.QueryContext(ctx, `
+SELECT
+	id,
+	user_id,
+	provider,
+	provider_user_id,
+	provider_union_id,
+	provider_username,
+	display_name,
+	profile_url,
+	avatar_url,
+	metadata,
+	created_at,
+	updated_at
+FROM user_external_identities
+WHERE user_id = $1
+ORDER BY provider ASC, id ASC`, userID)
+	if err != nil {
+		if isMissingLegacyExternalIdentityTableErr(err) {
+			return nil, sql.ErrNoRows
+		}
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	legacyRows := make([]legacyExternalIdentityRow, 0)
+	for rows.Next() {
+		var row legacyExternalIdentityRow
+		if err := rows.Scan(
+			&row.ID,
+			&row.UserID,
+			&row.Provider,
+			&row.ProviderUserID,
+			&row.ProviderUnionID,
+			&row.ProviderName,
+			&row.DisplayName,
+			&row.ProfileURL,
+			&row.AvatarURL,
+			&row.Metadata,
+			&row.CreatedAt,
+			&row.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		legacyRows = append(legacyRows, row)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(legacyRows) == 0 {
+		return nil, sql.ErrNoRows
+	}
+	return legacyRows, nil
+}
+
+func (r *userRepository) materializeLegacyAuthIdentity(ctx context.Context, providerType, providerKey string, legacy *legacyExternalIdentityRow) (*AuthIdentityRecord, error) {
+	if legacy == nil {
+		return nil, sql.ErrNoRows
+	}
+
+	providerType = strings.TrimSpace(providerType)
+	providerKey = strings.TrimSpace(providerKey)
+	if providerType == "" {
+		providerType = strings.TrimSpace(legacy.Provider)
+	}
+	if providerKey == "" {
+		providerKey = providerType
+	}
+
+	canonicalSubject := legacy.canonicalProviderSubject()
+	if canonicalSubject == "" {
+		return nil, sql.ErrNoRows
+	}
+
+	record, err := r.findStoredAuthIdentity(ctx, providerType, providerKey, canonicalSubject)
+	if err == nil {
+		return record, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+
+	metadata := legacy.authIdentityMetadata()
+	verifiedAt := legacy.UpdatedAt.UTC()
+	if _, err := r.sql.ExecContext(ctx, `
+INSERT INTO auth_identities (
+	user_id,
+	provider_type,
+	provider_key,
+	provider_subject,
+	verified_at,
+	metadata,
+	created_at,
+	updated_at
+) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+ON CONFLICT (provider_type, provider_key, provider_subject) DO NOTHING`,
+		legacy.UserID,
+		providerType,
+		providerKey,
+		canonicalSubject,
+		verifiedAt,
+		mustMarshalAuthIdentityMetadata(metadata),
+	); err != nil {
+		return nil, err
+	}
+
+	return r.findStoredAuthIdentity(ctx, providerType, providerKey, canonicalSubject)
+}
+
+func (r *userRepository) deleteLegacyExternalIdentity(ctx context.Context, userID int64, provider service.ExternalIdentityProvider) (bool, error) {
+	provider = service.NormalizeExternalIdentityProvider(provider)
+	if provider == "" {
+		return false, nil
+	}
+
+	result, err := r.sql.ExecContext(ctx, `
+DELETE FROM user_external_identities
+WHERE user_id = $1 AND provider = $2`, userID, string(provider))
+	if err != nil {
+		if isMissingLegacyExternalIdentityTableErr(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return affected > 0, nil
+}
+
+func (r legacyExternalIdentityRow) canonicalProviderSubject() string {
+	if strings.TrimSpace(r.Provider) == string(service.ExternalIdentityProviderWeChat) {
+		if unionid := strings.TrimSpace(r.ProviderUnionID.String); unionid != "" {
+			return unionid
+		}
+	}
+	return strings.TrimSpace(r.ProviderUserID)
+}
+
+func (r legacyExternalIdentityRow) authIdentityMetadata() map[string]any {
+	metadata, err := unmarshalAuthIdentityMetadata(r.Metadata)
+	if err != nil || metadata == nil {
+		metadata = make(map[string]any)
+	}
+	metadata["legacy_identity_id"] = r.ID
+	if providerUserID := strings.TrimSpace(r.ProviderUserID); providerUserID != "" {
+		metadata["provider_user_id"] = providerUserID
+	}
+	if providerUnionID := strings.TrimSpace(r.ProviderUnionID.String); providerUnionID != "" {
+		metadata["provider_union_id"] = providerUnionID
+	}
+	if providerName := strings.TrimSpace(r.ProviderName); providerName != "" {
+		metadata["provider_username"] = providerName
+	}
+	if displayName := strings.TrimSpace(r.DisplayName); displayName != "" {
+		metadata["display_name"] = displayName
+	}
+	if profileURL := strings.TrimSpace(r.ProfileURL); profileURL != "" {
+		metadata["profile_url"] = profileURL
+	}
+	if avatarURL := strings.TrimSpace(r.AvatarURL); avatarURL != "" {
+		metadata["avatar_url"] = avatarURL
+	}
+	switch strings.TrimSpace(r.Provider) {
+	case string(service.ExternalIdentityProviderLinuxDo):
+		if providerUserID := strings.TrimSpace(r.ProviderUserID); providerUserID != "" {
+			metadata["id"] = providerUserID
+		}
+		if providerName := strings.TrimSpace(r.ProviderName); providerName != "" {
+			metadata["username"] = providerName
+		}
+	case string(service.ExternalIdentityProviderWeChat):
+		if openid := strings.TrimSpace(r.ProviderUserID); openid != "" {
+			metadata["openid"] = openid
+		}
+		if unionid := strings.TrimSpace(r.ProviderUnionID.String); unionid != "" {
+			metadata["unionid"] = unionid
+		}
+	}
+	return metadata
+}
+
+func isMissingLegacyExternalIdentityTableErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "user_external_identities") &&
+		(strings.Contains(message, "does not exist") || strings.Contains(message, "no such table"))
+}
+
+func mustMarshalAuthIdentityMetadata(metadata map[string]any) []byte {
+	payload, err := marshalAuthIdentityMetadata(metadata)
+	if err != nil {
+		return []byte(`{}`)
+	}
+	return payload
 }
 
 func nullableInt64(v *int64) any {

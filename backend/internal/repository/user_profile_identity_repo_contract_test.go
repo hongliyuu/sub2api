@@ -106,6 +106,22 @@ CREATE TABLE user_avatars (
 	created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE user_external_identities (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	user_id INTEGER NOT NULL,
+	provider TEXT NOT NULL,
+	provider_user_id TEXT NOT NULL,
+	provider_union_id TEXT NULL,
+	provider_username TEXT NOT NULL DEFAULT '',
+	display_name TEXT NOT NULL DEFAULT '',
+	profile_url TEXT NOT NULL DEFAULT '',
+	avatar_url TEXT NOT NULL DEFAULT '',
+	metadata TEXT NOT NULL DEFAULT '{}',
+	created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	UNIQUE(provider, provider_user_id),
+	UNIQUE(user_id, provider)
+);
 `)
 	require.NoError(t, err)
 
@@ -639,4 +655,117 @@ func mustUnmarshalPendingAuthJSONMap(t *testing.T, raw []byte) map[string]any {
 		return nil
 	}
 	return out
+}
+
+func TestFindAuthIdentity_LegacyLinuxDoRowIsMaterialized(t *testing.T) {
+	repo := newUserProfileIdentityTestRepo(t)
+	ctx := context.Background()
+
+	_, err := repo.sql.ExecContext(ctx, `
+INSERT INTO user_external_identities (
+	user_id,
+	provider,
+	provider_user_id,
+	provider_username,
+	display_name,
+	avatar_url,
+	metadata
+) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		7, "linuxdo", "363223", "EnjoyLeisure", "EnjoyLeisure", "https://example.com/avatar.png", `{"legacy":"linuxdo"}`,
+	)
+	require.NoError(t, err)
+
+	identity, err := repo.FindAuthIdentity(ctx, "linuxdo", "linuxdo", "363223")
+	require.NoError(t, err)
+	require.Equal(t, int64(7), identity.UserID)
+	require.Equal(t, "363223", identity.ProviderSubject)
+	require.Equal(t, "EnjoyLeisure", identity.Metadata["username"])
+
+	stored, err := repo.findStoredAuthIdentity(ctx, "linuxdo", "linuxdo", "363223")
+	require.NoError(t, err)
+	require.Equal(t, identity.ID, stored.ID)
+}
+
+func TestFindAuthIdentity_LegacyWeChatOpenIDMaterializesUnionIDIdentity(t *testing.T) {
+	repo := newUserProfileIdentityTestRepo(t)
+	ctx := context.Background()
+
+	_, err := repo.sql.ExecContext(ctx, `
+INSERT INTO user_external_identities (
+	user_id,
+	provider,
+	provider_user_id,
+	provider_union_id,
+	display_name,
+	metadata
+) VALUES ($1, $2, $3, $4, $5, $6)`,
+		9, "wechat", "openid-legacy-1", "union-legacy-1", "wechat-user", `{"legacy":"wechat"}`,
+	)
+	require.NoError(t, err)
+
+	identity, err := repo.FindAuthIdentity(ctx, "wechat", "wechat", "openid-legacy-1")
+	require.NoError(t, err)
+	require.Equal(t, int64(9), identity.UserID)
+	require.Equal(t, "union-legacy-1", identity.ProviderSubject)
+	require.Equal(t, "openid-legacy-1", identity.Metadata["openid"])
+	require.Equal(t, "union-legacy-1", identity.Metadata["unionid"])
+
+	stored, err := repo.findStoredAuthIdentity(ctx, "wechat", "wechat", "union-legacy-1")
+	require.NoError(t, err)
+	require.Equal(t, identity.ID, stored.ID)
+}
+
+func TestListUserExternalIdentities_IncludesLegacyRows(t *testing.T) {
+	repo := newUserProfileIdentityTestRepo(t)
+	ctx := context.Background()
+
+	_, err := repo.sql.ExecContext(ctx, `
+INSERT INTO user_external_identities (
+	user_id,
+	provider,
+	provider_user_id,
+	provider_union_id,
+	provider_username
+) VALUES
+	($1, $2, $3, NULL, $4),
+	($1, $5, $6, $7, '')`,
+		11, "linuxdo", "linuxdo-11", "legacy-linuxdo", "wechat", "openid-11", "union-11",
+	)
+	require.NoError(t, err)
+
+	identities, err := repo.ListUserExternalIdentities(ctx, 11)
+	require.NoError(t, err)
+	require.Len(t, identities, 2)
+	require.Equal(t, service.ExternalIdentityProviderLinuxDo, identities[0].Provider)
+	require.Equal(t, "linuxdo-11", identities[0].ProviderUserID)
+	require.Equal(t, service.ExternalIdentityProviderWeChat, identities[1].Provider)
+	require.Equal(t, "union-11", identities[1].ProviderUserID)
+}
+
+func TestDeleteUserExternalIdentity_RemovesLegacyRows(t *testing.T) {
+	repo := newUserProfileIdentityTestRepo(t)
+	ctx := context.Background()
+
+	_, err := repo.sql.ExecContext(ctx, `
+INSERT INTO user_external_identities (
+	user_id,
+	provider,
+	provider_user_id
+) VALUES ($1, $2, $3)`,
+		21, "linuxdo", "legacy-delete-1",
+	)
+	require.NoError(t, err)
+
+	deleted, err := repo.DeleteUserExternalIdentity(ctx, 21, service.ExternalIdentityProviderLinuxDo)
+	require.NoError(t, err)
+	require.True(t, deleted)
+
+	err = scanSingleRow(ctx, repo.sql, `
+SELECT id
+FROM user_external_identities
+WHERE user_id = $1 AND provider = $2`,
+		[]any{21, "linuxdo"},
+		new(int64),
+	)
+	require.ErrorIs(t, err, sql.ErrNoRows)
 }

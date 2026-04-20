@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"fmt"
 	"sort"
@@ -12,6 +13,7 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	dbgroup "github.com/Wei-Shaw/sub2api/ent/group"
+	"github.com/Wei-Shaw/sub2api/ent/usagelog"
 	dbuser "github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
@@ -206,6 +208,22 @@ func (r *userRepository) GetByID(ctx context.Context, id int64) (*service.User, 
 		out.AllowedGroups = v
 	}
 	r.attachAvatar(ctx, out)
+	return out, nil
+}
+
+func (r *userRepository) GetByIDWithActivity(ctx context.Context, id int64) (*service.User, error) {
+	out, err := r.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	timestamps, err := r.loadUserActivityTimestamps(ctx, []int64{id})
+	if err != nil {
+		return nil, err
+	}
+	if activity, ok := timestamps[id]; ok {
+		out.LastLoginAt = activity.LastLoginAt
+		out.LastUsedAt = activity.LastUsedAt
+	}
 	return out, nil
 }
 
@@ -418,7 +436,100 @@ func (r *userRepository) ListWithFilters(ctx context.Context, params pagination.
 		}
 	}
 
+	activityByUser, err := r.loadUserActivityTimestamps(ctx, userIDs)
+	if err != nil {
+		return nil, nil, err
+	}
+	for id, u := range userMap {
+		if activity, ok := activityByUser[id]; ok {
+			u.LastLoginAt = activity.LastLoginAt
+			u.LastUsedAt = activity.LastUsedAt
+		}
+	}
+
 	return outUsers, paginationResultFromTotal(int64(total), params), nil
+}
+
+type userActivityTimestamps struct {
+	LastLoginAt *time.Time
+	LastUsedAt  *time.Time
+}
+
+func (r *userRepository) loadUserActivityTimestamps(ctx context.Context, userIDs []int64) (map[int64]userActivityTimestamps, error) {
+	result := make(map[int64]userActivityTimestamps, len(userIDs))
+	if len(userIDs) == 0 || r == nil || r.client == nil || r.sql == nil {
+		return result, nil
+	}
+
+	idArgs := make([]driver.Value, 0, len(userIDs))
+	for _, id := range userIDs {
+		idArgs = append(idArgs, id)
+	}
+	dialect := r.client.Driver().Dialect()
+	builder := entsql.Dialect(dialect)
+
+	loginQuery, loginArgs := builder.
+		Select("id", "last_login_at").
+		From(builder.Table("users")).
+		Where(entsql.InValues("id", idArgs...)).
+		Query()
+	rows, err := r.sql.QueryContext(ctx, loginQuery, loginArgs...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var (
+			userID      int64
+			lastLoginAt sql.NullTime
+		)
+		if err := rows.Scan(&userID, &lastLoginAt); err != nil {
+			return nil, err
+		}
+		activity := result[userID]
+		if lastLoginAt.Valid {
+			ts := lastLoginAt.Time
+			activity.LastLoginAt = &ts
+		}
+		result[userID] = activity
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	usageQuery, usageArgs := builder.
+		Select(usagelog.FieldUserID, "MAX("+usagelog.FieldCreatedAt+") AS last_used_at").
+		From(builder.Table(usagelog.Table)).
+		Where(entsql.InValues(usagelog.FieldUserID, idArgs...)).
+		GroupBy(usagelog.FieldUserID).
+		Query()
+	usageRows, err := r.sql.QueryContext(ctx, usageQuery, usageArgs...)
+	if err != nil {
+		return nil, err
+	}
+	defer usageRows.Close()
+
+	for usageRows.Next() {
+		var (
+			userID     int64
+			lastUsedAt sql.NullTime
+		)
+		if err := usageRows.Scan(&userID, &lastUsedAt); err != nil {
+			return nil, err
+		}
+		if !lastUsedAt.Valid {
+			continue
+		}
+		activity := result[userID]
+		ts := lastUsedAt.Time
+		activity.LastUsedAt = &ts
+		result[userID] = activity
+	}
+	if err := usageRows.Err(); err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
 func userListOrder(params pagination.PaginationParams) []func(*entsql.Selector) {
