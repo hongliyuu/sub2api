@@ -252,4 +252,32 @@ describe('LinuxDoCallbackView pending auth flow', () => {
     expect(bindAccountMock).toHaveBeenCalledWith('linuxdo', 'pending-bind-token')
     expect(clearPendingAuthSessionMock).toHaveBeenCalled()
   })
+
+  it('auto-completes bind_current_user callbacks for an authenticated user', async () => {
+    authStore.token = 'active-token'
+    bindAccountMock.mockResolvedValue(undefined)
+    refreshUserMock.mockResolvedValue(undefined)
+
+    const wrapper = mountView()
+    const flow = wrapper.findComponent(ThirdPartyAuthCallbackFlow)
+
+    const summary = {
+      authResult: 'pending_session' as const,
+      pendingAuthToken: 'pending-auto-bind-token',
+      provider: 'linuxdo' as const,
+      intent: 'bind_current_user' as const,
+      redirect: '/profile',
+      adoptionRequired: false,
+      suggestedDisplayName: null,
+      suggestedAvatarUrl: null
+    }
+
+    flow.vm.$emit('pending-session', summary)
+    await flushPromises()
+
+    expect(bindAccountMock).toHaveBeenCalledWith('linuxdo', 'pending-auto-bind-token')
+    expect(refreshUserMock).toHaveBeenCalled()
+    expect(clearPendingAuthSessionMock).toHaveBeenCalled()
+    expect(replaceMock).toHaveBeenCalledWith('/profile')
+  })
 })
