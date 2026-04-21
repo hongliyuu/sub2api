@@ -118,6 +118,10 @@ type SystemSettings struct {
 	// Account quota notification
 	AccountQuotaNotifyEnabled bool
 	AccountQuotaNotifyEmails  []NotifyEmailEntry
+
+	// 邀请返利设置
+	ReferralEnabled    bool
+	ReferralRebateRate float64
 }
 
 type DefaultSubscriptionSetting struct {
@@ -162,6 +166,7 @@ type PublicSettings struct {
 	AccountQuotaNotifyEnabled   bool
 	BalanceLowNotifyThreshold   float64
 	BalanceLowNotifyRechargeURL string
+	ReferralEnabled             bool
 }
 
 // StreamTimeoutSettings 流超时处理配置（仅控制超时后的处理方式，超时判定由网关配置控制）

@@ -281,6 +281,62 @@ func (_c *UserCreate) SetNillableTotalRecharged(v *float64) *UserCreate {
 	return _c
 }
 
+// SetAffCode sets the "aff_code" field.
+func (_c *UserCreate) SetAffCode(v string) *UserCreate {
+	_c.mutation.SetAffCode(v)
+	return _c
+}
+
+// SetNillableAffCode sets the "aff_code" field if the given value is not nil.
+func (_c *UserCreate) SetNillableAffCode(v *string) *UserCreate {
+	if v != nil {
+		_c.SetAffCode(*v)
+	}
+	return _c
+}
+
+// SetAffCount sets the "aff_count" field.
+func (_c *UserCreate) SetAffCount(v int) *UserCreate {
+	_c.mutation.SetAffCount(v)
+	return _c
+}
+
+// SetNillableAffCount sets the "aff_count" field if the given value is not nil.
+func (_c *UserCreate) SetNillableAffCount(v *int) *UserCreate {
+	if v != nil {
+		_c.SetAffCount(*v)
+	}
+	return _c
+}
+
+// SetAffHistoryBalance sets the "aff_history_balance" field.
+func (_c *UserCreate) SetAffHistoryBalance(v float64) *UserCreate {
+	_c.mutation.SetAffHistoryBalance(v)
+	return _c
+}
+
+// SetNillableAffHistoryBalance sets the "aff_history_balance" field if the given value is not nil.
+func (_c *UserCreate) SetNillableAffHistoryBalance(v *float64) *UserCreate {
+	if v != nil {
+		_c.SetAffHistoryBalance(*v)
+	}
+	return _c
+}
+
+// SetInviterID sets the "inviter_id" field.
+func (_c *UserCreate) SetInviterID(v int64) *UserCreate {
+	_c.mutation.SetInviterID(v)
+	return _c
+}
+
+// SetNillableInviterID sets the "inviter_id" field if the given value is not nil.
+func (_c *UserCreate) SetNillableInviterID(v *int64) *UserCreate {
+	if v != nil {
+		_c.SetInviterID(*v)
+	}
+	return _c
+}
+
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
 func (_c *UserCreate) AddAPIKeyIDs(ids ...int64) *UserCreate {
 	_c.mutation.AddAPIKeyIDs(ids...)
@@ -526,6 +582,18 @@ func (_c *UserCreate) defaults() error {
 		v := user.DefaultTotalRecharged
 		_c.mutation.SetTotalRecharged(v)
 	}
+	if _, ok := _c.mutation.AffCode(); !ok {
+		v := user.DefaultAffCode
+		_c.mutation.SetAffCode(v)
+	}
+	if _, ok := _c.mutation.AffCount(); !ok {
+		v := user.DefaultAffCount
+		_c.mutation.SetAffCount(v)
+	}
+	if _, ok := _c.mutation.AffHistoryBalance(); !ok {
+		v := user.DefaultAffHistoryBalance
+		_c.mutation.SetAffHistoryBalance(v)
+	}
 	return nil
 }
 
@@ -600,6 +668,20 @@ func (_c *UserCreate) check() error {
 	}
 	if _, ok := _c.mutation.TotalRecharged(); !ok {
 		return &ValidationError{Name: "total_recharged", err: errors.New(`ent: missing required field "User.total_recharged"`)}
+	}
+	if _, ok := _c.mutation.AffCode(); !ok {
+		return &ValidationError{Name: "aff_code", err: errors.New(`ent: missing required field "User.aff_code"`)}
+	}
+	if v, ok := _c.mutation.AffCode(); ok {
+		if err := user.AffCodeValidator(v); err != nil {
+			return &ValidationError{Name: "aff_code", err: fmt.Errorf(`ent: validator failed for field "User.aff_code": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.AffCount(); !ok {
+		return &ValidationError{Name: "aff_count", err: errors.New(`ent: missing required field "User.aff_count"`)}
+	}
+	if _, ok := _c.mutation.AffHistoryBalance(); !ok {
+		return &ValidationError{Name: "aff_history_balance", err: errors.New(`ent: missing required field "User.aff_history_balance"`)}
 	}
 	return nil
 }
@@ -703,6 +785,22 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.TotalRecharged(); ok {
 		_spec.SetField(user.FieldTotalRecharged, field.TypeFloat64, value)
 		_node.TotalRecharged = value
+	}
+	if value, ok := _c.mutation.AffCode(); ok {
+		_spec.SetField(user.FieldAffCode, field.TypeString, value)
+		_node.AffCode = value
+	}
+	if value, ok := _c.mutation.AffCount(); ok {
+		_spec.SetField(user.FieldAffCount, field.TypeInt, value)
+		_node.AffCount = value
+	}
+	if value, ok := _c.mutation.AffHistoryBalance(); ok {
+		_spec.SetField(user.FieldAffHistoryBalance, field.TypeFloat64, value)
+		_node.AffHistoryBalance = value
+	}
+	if value, ok := _c.mutation.InviterID(); ok {
+		_spec.SetField(user.FieldInviterID, field.TypeInt64, value)
+		_node.InviterID = &value
 	}
 	if nodes := _c.mutation.APIKeysIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -1184,6 +1282,78 @@ func (u *UserUpsert) AddTotalRecharged(v float64) *UserUpsert {
 	return u
 }
 
+// SetAffCode sets the "aff_code" field.
+func (u *UserUpsert) SetAffCode(v string) *UserUpsert {
+	u.Set(user.FieldAffCode, v)
+	return u
+}
+
+// UpdateAffCode sets the "aff_code" field to the value that was provided on create.
+func (u *UserUpsert) UpdateAffCode() *UserUpsert {
+	u.SetExcluded(user.FieldAffCode)
+	return u
+}
+
+// SetAffCount sets the "aff_count" field.
+func (u *UserUpsert) SetAffCount(v int) *UserUpsert {
+	u.Set(user.FieldAffCount, v)
+	return u
+}
+
+// UpdateAffCount sets the "aff_count" field to the value that was provided on create.
+func (u *UserUpsert) UpdateAffCount() *UserUpsert {
+	u.SetExcluded(user.FieldAffCount)
+	return u
+}
+
+// AddAffCount adds v to the "aff_count" field.
+func (u *UserUpsert) AddAffCount(v int) *UserUpsert {
+	u.Add(user.FieldAffCount, v)
+	return u
+}
+
+// SetAffHistoryBalance sets the "aff_history_balance" field.
+func (u *UserUpsert) SetAffHistoryBalance(v float64) *UserUpsert {
+	u.Set(user.FieldAffHistoryBalance, v)
+	return u
+}
+
+// UpdateAffHistoryBalance sets the "aff_history_balance" field to the value that was provided on create.
+func (u *UserUpsert) UpdateAffHistoryBalance() *UserUpsert {
+	u.SetExcluded(user.FieldAffHistoryBalance)
+	return u
+}
+
+// AddAffHistoryBalance adds v to the "aff_history_balance" field.
+func (u *UserUpsert) AddAffHistoryBalance(v float64) *UserUpsert {
+	u.Add(user.FieldAffHistoryBalance, v)
+	return u
+}
+
+// SetInviterID sets the "inviter_id" field.
+func (u *UserUpsert) SetInviterID(v int64) *UserUpsert {
+	u.Set(user.FieldInviterID, v)
+	return u
+}
+
+// UpdateInviterID sets the "inviter_id" field to the value that was provided on create.
+func (u *UserUpsert) UpdateInviterID() *UserUpsert {
+	u.SetExcluded(user.FieldInviterID)
+	return u
+}
+
+// AddInviterID adds v to the "inviter_id" field.
+func (u *UserUpsert) AddInviterID(v int64) *UserUpsert {
+	u.Add(user.FieldInviterID, v)
+	return u
+}
+
+// ClearInviterID clears the value of the "inviter_id" field.
+func (u *UserUpsert) ClearInviterID() *UserUpsert {
+	u.SetNull(user.FieldInviterID)
+	return u
+}
+
 // UpdateNewValues updates the mutable fields using the new values that were set on create.
 // Using this option is equivalent to using:
 //
@@ -1534,6 +1704,90 @@ func (u *UserUpsertOne) AddTotalRecharged(v float64) *UserUpsertOne {
 func (u *UserUpsertOne) UpdateTotalRecharged() *UserUpsertOne {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateTotalRecharged()
+	})
+}
+
+// SetAffCode sets the "aff_code" field.
+func (u *UserUpsertOne) SetAffCode(v string) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetAffCode(v)
+	})
+}
+
+// UpdateAffCode sets the "aff_code" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateAffCode() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateAffCode()
+	})
+}
+
+// SetAffCount sets the "aff_count" field.
+func (u *UserUpsertOne) SetAffCount(v int) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetAffCount(v)
+	})
+}
+
+// AddAffCount adds v to the "aff_count" field.
+func (u *UserUpsertOne) AddAffCount(v int) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.AddAffCount(v)
+	})
+}
+
+// UpdateAffCount sets the "aff_count" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateAffCount() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateAffCount()
+	})
+}
+
+// SetAffHistoryBalance sets the "aff_history_balance" field.
+func (u *UserUpsertOne) SetAffHistoryBalance(v float64) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetAffHistoryBalance(v)
+	})
+}
+
+// AddAffHistoryBalance adds v to the "aff_history_balance" field.
+func (u *UserUpsertOne) AddAffHistoryBalance(v float64) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.AddAffHistoryBalance(v)
+	})
+}
+
+// UpdateAffHistoryBalance sets the "aff_history_balance" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateAffHistoryBalance() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateAffHistoryBalance()
+	})
+}
+
+// SetInviterID sets the "inviter_id" field.
+func (u *UserUpsertOne) SetInviterID(v int64) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetInviterID(v)
+	})
+}
+
+// AddInviterID adds v to the "inviter_id" field.
+func (u *UserUpsertOne) AddInviterID(v int64) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.AddInviterID(v)
+	})
+}
+
+// UpdateInviterID sets the "inviter_id" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateInviterID() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateInviterID()
+	})
+}
+
+// ClearInviterID clears the value of the "inviter_id" field.
+func (u *UserUpsertOne) ClearInviterID() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.ClearInviterID()
 	})
 }
 
@@ -2053,6 +2307,90 @@ func (u *UserUpsertBulk) AddTotalRecharged(v float64) *UserUpsertBulk {
 func (u *UserUpsertBulk) UpdateTotalRecharged() *UserUpsertBulk {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateTotalRecharged()
+	})
+}
+
+// SetAffCode sets the "aff_code" field.
+func (u *UserUpsertBulk) SetAffCode(v string) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetAffCode(v)
+	})
+}
+
+// UpdateAffCode sets the "aff_code" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateAffCode() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateAffCode()
+	})
+}
+
+// SetAffCount sets the "aff_count" field.
+func (u *UserUpsertBulk) SetAffCount(v int) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetAffCount(v)
+	})
+}
+
+// AddAffCount adds v to the "aff_count" field.
+func (u *UserUpsertBulk) AddAffCount(v int) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.AddAffCount(v)
+	})
+}
+
+// UpdateAffCount sets the "aff_count" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateAffCount() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateAffCount()
+	})
+}
+
+// SetAffHistoryBalance sets the "aff_history_balance" field.
+func (u *UserUpsertBulk) SetAffHistoryBalance(v float64) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetAffHistoryBalance(v)
+	})
+}
+
+// AddAffHistoryBalance adds v to the "aff_history_balance" field.
+func (u *UserUpsertBulk) AddAffHistoryBalance(v float64) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.AddAffHistoryBalance(v)
+	})
+}
+
+// UpdateAffHistoryBalance sets the "aff_history_balance" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateAffHistoryBalance() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateAffHistoryBalance()
+	})
+}
+
+// SetInviterID sets the "inviter_id" field.
+func (u *UserUpsertBulk) SetInviterID(v int64) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetInviterID(v)
+	})
+}
+
+// AddInviterID adds v to the "inviter_id" field.
+func (u *UserUpsertBulk) AddInviterID(v int64) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.AddInviterID(v)
+	})
+}
+
+// UpdateInviterID sets the "inviter_id" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateInviterID() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateInviterID()
+	})
+}
+
+// ClearInviterID clears the value of the "inviter_id" field.
+func (u *UserUpsertBulk) ClearInviterID() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.ClearInviterID()
 	})
 }
 

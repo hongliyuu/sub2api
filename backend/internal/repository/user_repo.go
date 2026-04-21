@@ -609,3 +609,50 @@ func (r *userRepository) DisableTotp(ctx context.Context, userID int64) error {
 	}
 	return nil
 }
+
+// GetByAffCode 通过推荐码查找用户
+func (r *userRepository) GetByAffCode(ctx context.Context, affCode string) (*service.User, error) {
+	m, err := r.client.User.Query().Where(dbuser.AffCodeEQ(affCode)).Only(ctx)
+	if err != nil {
+		return nil, translatePersistenceError(err, service.ErrUserNotFound, nil)
+	}
+	return userEntityToService(m), nil
+}
+
+// SetAffCode 设置用户的推荐码
+func (r *userRepository) SetAffCode(ctx context.Context, userID int64, affCode string) error {
+	client := clientFromContext(ctx, r.client)
+	_, err := client.User.UpdateOneID(userID).SetAffCode(affCode).Save(ctx)
+	if err != nil {
+		return translatePersistenceError(err, service.ErrUserNotFound, service.ErrAffCodeExists)
+	}
+	return nil
+}
+
+// SetInviterID 设置用户的邀请人ID
+func (r *userRepository) SetInviterID(ctx context.Context, userID int64, inviterID int64) error {
+	client := clientFromContext(ctx, r.client)
+	_, err := client.User.UpdateOneID(userID).SetInviterID(inviterID).Save(ctx)
+	if err != nil {
+		return translatePersistenceError(err, service.ErrUserNotFound, nil)
+	}
+	return nil
+}
+
+// IncrementAffStats 原子增加邀请人的邀请统计和余额（数据库级原子操作）
+func (r *userRepository) IncrementAffStats(ctx context.Context, userID int64, bonusAmount float64) error {
+	client := clientFromContext(ctx, r.client)
+	n, err := client.User.Update().
+		Where(dbuser.IDEQ(userID)).
+		AddAffCount(1).
+		AddAffHistoryBalance(bonusAmount).
+		AddBalance(bonusAmount).
+		Save(ctx)
+	if err != nil {
+		return translatePersistenceError(err, service.ErrUserNotFound, nil)
+	}
+	if n == 0 {
+		return service.ErrUserNotFound
+	}
+	return nil
+}

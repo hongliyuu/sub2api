@@ -53,6 +53,14 @@ const (
 	FieldBalanceNotifyExtraEmails = "balance_notify_extra_emails"
 	// FieldTotalRecharged holds the string denoting the total_recharged field in the database.
 	FieldTotalRecharged = "total_recharged"
+	// FieldAffCode holds the string denoting the aff_code field in the database.
+	FieldAffCode = "aff_code"
+	// FieldAffCount holds the string denoting the aff_count field in the database.
+	FieldAffCount = "aff_count"
+	// FieldAffHistoryBalance holds the string denoting the aff_history_balance field in the database.
+	FieldAffHistoryBalance = "aff_history_balance"
+	// FieldInviterID holds the string denoting the inviter_id field in the database.
+	FieldInviterID = "inviter_id"
 	// EdgeAPIKeys holds the string denoting the api_keys edge name in mutations.
 	EdgeAPIKeys = "api_keys"
 	// EdgeRedeemCodes holds the string denoting the redeem_codes edge name in mutations.
@@ -176,6 +184,10 @@ var Columns = []string{
 	FieldBalanceNotifyThreshold,
 	FieldBalanceNotifyExtraEmails,
 	FieldTotalRecharged,
+	FieldAffCode,
+	FieldAffCount,
+	FieldAffHistoryBalance,
+	FieldInviterID,
 }
 
 var (
@@ -240,6 +252,14 @@ var (
 	DefaultBalanceNotifyExtraEmails string
 	// DefaultTotalRecharged holds the default value on creation for the "total_recharged" field.
 	DefaultTotalRecharged float64
+	// DefaultAffCode holds the default value on creation for the "aff_code" field.
+	DefaultAffCode string
+	// AffCodeValidator is a validator for the "aff_code" field. It is called by the builders before save.
+	AffCodeValidator func(string) error
+	// DefaultAffCount holds the default value on creation for the "aff_count" field.
+	DefaultAffCount int
+	// DefaultAffHistoryBalance holds the default value on creation for the "aff_history_balance" field.
+	DefaultAffHistoryBalance float64
 )
 
 // OrderOption defines the ordering options for the User queries.
@@ -343,6 +363,26 @@ func ByBalanceNotifyExtraEmails(opts ...sql.OrderTermOption) OrderOption {
 // ByTotalRecharged orders the results by the total_recharged field.
 func ByTotalRecharged(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTotalRecharged, opts...).ToFunc()
+}
+
+// ByAffCode orders the results by the aff_code field.
+func ByAffCode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAffCode, opts...).ToFunc()
+}
+
+// ByAffCount orders the results by the aff_count field.
+func ByAffCount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAffCount, opts...).ToFunc()
+}
+
+// ByAffHistoryBalance orders the results by the aff_history_balance field.
+func ByAffHistoryBalance(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAffHistoryBalance, opts...).ToFunc()
+}
+
+// ByInviterID orders the results by the inviter_id field.
+func ByInviterID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInviterID, opts...).ToFunc()
 }
 
 // ByAPIKeysCount orders the results by api_keys count.

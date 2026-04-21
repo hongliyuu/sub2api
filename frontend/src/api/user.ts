@@ -83,6 +83,11 @@ export async function toggleNotifyEmail(email: string, disabled: boolean): Promi
   return data
 }
 
+export async function getAffCode(): Promise<{ aff_code: string }> {
+  const { data } = await apiClient.get<{ aff_code: string }>('/user/aff')
+  return data
+}
+
 export const userAPI = {
   getProfile,
   updateProfile,
@@ -90,7 +95,8 @@ export const userAPI = {
   sendNotifyEmailCode,
   verifyNotifyEmail,
   removeNotifyEmail,
-  toggleNotifyEmail
+  toggleNotifyEmail,
+  getAffCode
 }
 
 export default userAPI

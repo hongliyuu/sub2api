@@ -25,6 +25,11 @@ type User struct {
 	BalanceNotifyExtraEmails   []NotifyEmailEntry `json:"balance_notify_extra_emails"`
 	TotalRecharged             float64            `json:"total_recharged"`
 
+	// 邀请返利
+	AffCode           string  `json:"aff_code"`
+	AffCount          int     `json:"aff_count"`
+	AffHistoryBalance float64 `json:"aff_history_balance"`
+
 	APIKeys       []APIKey           `json:"api_keys,omitempty"`
 	Subscriptions []UserSubscription `json:"subscriptions,omitempty"`
 }

@@ -290,6 +290,7 @@ export default {
     balance: '余额',
     available: '可用',
     copiedToClipboard: '已复制到剪贴板',
+    copy: '复制',
     copied: '已复制',
     copyFailed: '复制失败',
     verifying: '验证中...',
@@ -944,7 +945,13 @@ export default {
       maxEmailsReached: '已达到通知邮箱数量上限',
       unverified: '未验证',
       verified: '已验证',
-    }
+    },
+    referralTitle: '邀请返利计划',
+    referralDesc: '邀请好友注册，双方均可获得奖励余额',
+    referralCount: '已邀请好友',
+    referralEarned: '累计获得返利',
+    referralLink: '您的推荐链接',
+    referralLinkLoading: '正在生成推荐链接...',
   },
 
   // Empty States
@@ -4843,6 +4850,14 @@ export default {
         emailsHint: '留空则不发送通知',
         addEmail: '添加邮箱',
         emailPlaceholder: '输入邮箱地址',
+      },
+      referral: {
+        title: '邀请返利计划',
+        description: '用户邀请好友注册后，双方均可获得余额奖励',
+        enabled: '启用邀请返利',
+        enabledHint: '用户将拥有唯一推荐链接，新用户通过推荐链接注册时双方均可获得奖励',
+        rebateRate: '充值返利比例（0~1）',
+        rebateRateHint: '被邀请人每次充值后，按该比例给邀请人返利（如 0.10 表示 10%）',
       },
       smtp: {
         title: 'SMTP 设置',

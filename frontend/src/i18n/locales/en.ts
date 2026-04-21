@@ -290,6 +290,7 @@ export default {
     balance: 'Balance',
     available: 'Available',
     copiedToClipboard: 'Copied to clipboard',
+    copy: 'Copy',
     copied: 'Copied',
     copyFailed: 'Failed to copy',
     verifying: 'Verifying...',
@@ -940,7 +941,13 @@ export default {
       maxEmailsReached: 'Maximum number of notification emails reached',
       unverified: 'Unverified',
       verified: 'Verified',
-    }
+    },
+    referralTitle: 'Referral Program',
+    referralDesc: 'Invite friends and earn rewards when they register',
+    referralCount: 'Friends Invited',
+    referralEarned: 'Total Earned',
+    referralLink: 'Your Referral Link',
+    referralLinkLoading: 'Generating referral link...',
   },
 
   // Empty States
@@ -4679,6 +4686,14 @@ export default {
         emailsHint: 'Leave empty to disable notifications',
         addEmail: 'Add Email',
         emailPlaceholder: 'Enter email address',
+      },
+      referral: {
+        title: 'Referral Program',
+        description: 'Award balance bonuses when users invite friends to register',
+        enabled: 'Enable Referral Program',
+        enabledHint: 'Users get a unique referral link; both parties earn a bonus on first registration',
+        rebateRate: 'Rebate Rate (0~1)',
+        rebateRateHint: 'Percentage of the recharge amount credited to the referrer (e.g. 0.10 = 10%)',
       },
       smtp: {
         title: 'SMTP Settings',

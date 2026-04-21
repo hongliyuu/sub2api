@@ -1313,6 +1313,20 @@ func init() {
 	userDescTotalRecharged := userFields[15].Descriptor()
 	// user.DefaultTotalRecharged holds the default value on creation for the total_recharged field.
 	user.DefaultTotalRecharged = userDescTotalRecharged.Default.(float64)
+	// userDescAffCode is the schema descriptor for aff_code field.
+	userDescAffCode := userFields[16].Descriptor()
+	// user.DefaultAffCode holds the default value on creation for the aff_code field.
+	user.DefaultAffCode = userDescAffCode.Default.(string)
+	// user.AffCodeValidator is a validator for the "aff_code" field. It is called by the builders before save.
+	user.AffCodeValidator = userDescAffCode.Validators[0].(func(string) error)
+	// userDescAffCount is the schema descriptor for aff_count field.
+	userDescAffCount := userFields[17].Descriptor()
+	// user.DefaultAffCount holds the default value on creation for the aff_count field.
+	user.DefaultAffCount = userDescAffCount.Default.(int)
+	// userDescAffHistoryBalance is the schema descriptor for aff_history_balance field.
+	userDescAffHistoryBalance := userFields[18].Descriptor()
+	// user.DefaultAffHistoryBalance holds the default value on creation for the aff_history_balance field.
+	user.DefaultAffHistoryBalance = userDescAffHistoryBalance.Default.(float64)
 	userallowedgroupFields := schema.UserAllowedGroup{}.Fields()
 	_ = userallowedgroupFields
 	// userallowedgroupDescCreatedAt is the schema descriptor for created_at field.

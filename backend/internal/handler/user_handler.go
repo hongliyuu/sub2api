@@ -11,17 +11,19 @@ import (
 
 // UserHandler handles user-related requests
 type UserHandler struct {
-	userService  *service.UserService
-	emailService *service.EmailService
-	emailCache   service.EmailCache
+	userService     *service.UserService
+	emailService    *service.EmailService
+	emailCache      service.EmailCache
+	referralService *service.ReferralService
 }
 
 // NewUserHandler creates a new UserHandler
-func NewUserHandler(userService *service.UserService, emailService *service.EmailService, emailCache service.EmailCache) *UserHandler {
+func NewUserHandler(userService *service.UserService, emailService *service.EmailService, emailCache service.EmailCache, referralService *service.ReferralService) *UserHandler {
 	return &UserHandler{
-		userService:  userService,
-		emailService: emailService,
-		emailCache:   emailCache,
+		userService:     userService,
+		emailService:    emailService,
+		emailCache:      emailCache,
+		referralService: referralService,
 	}
 }
 
@@ -249,4 +251,24 @@ func (h *UserHandler) ToggleNotifyEmail(c *gin.Context) {
 	}
 
 	response.Success(c, dto.UserFromService(updatedUser))
+}
+
+// GetAffCode returns the current user's referral code (lazy-generated on first call).
+// GET /api/v1/user/aff
+func (h *UserHandler) GetAffCode(c *gin.Context) {
+	subject, ok := middleware2.GetAuthSubjectFromContext(c)
+	if !ok {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	if h.referralService == nil {
+		response.InternalError(c, "Referral service not available")
+		return
+	}
+	affCode, err := h.referralService.GetAffCodeByUserID(c.Request.Context(), subject.UserID)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, gin.H{"aff_code": affCode})
 }

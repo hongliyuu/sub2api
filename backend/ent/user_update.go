@@ -333,6 +333,89 @@ func (_u *UserUpdate) AddTotalRecharged(v float64) *UserUpdate {
 	return _u
 }
 
+// SetAffCode sets the "aff_code" field.
+func (_u *UserUpdate) SetAffCode(v string) *UserUpdate {
+	_u.mutation.SetAffCode(v)
+	return _u
+}
+
+// SetNillableAffCode sets the "aff_code" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableAffCode(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetAffCode(*v)
+	}
+	return _u
+}
+
+// SetAffCount sets the "aff_count" field.
+func (_u *UserUpdate) SetAffCount(v int) *UserUpdate {
+	_u.mutation.ResetAffCount()
+	_u.mutation.SetAffCount(v)
+	return _u
+}
+
+// SetNillableAffCount sets the "aff_count" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableAffCount(v *int) *UserUpdate {
+	if v != nil {
+		_u.SetAffCount(*v)
+	}
+	return _u
+}
+
+// AddAffCount adds value to the "aff_count" field.
+func (_u *UserUpdate) AddAffCount(v int) *UserUpdate {
+	_u.mutation.AddAffCount(v)
+	return _u
+}
+
+// SetAffHistoryBalance sets the "aff_history_balance" field.
+func (_u *UserUpdate) SetAffHistoryBalance(v float64) *UserUpdate {
+	_u.mutation.ResetAffHistoryBalance()
+	_u.mutation.SetAffHistoryBalance(v)
+	return _u
+}
+
+// SetNillableAffHistoryBalance sets the "aff_history_balance" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableAffHistoryBalance(v *float64) *UserUpdate {
+	if v != nil {
+		_u.SetAffHistoryBalance(*v)
+	}
+	return _u
+}
+
+// AddAffHistoryBalance adds value to the "aff_history_balance" field.
+func (_u *UserUpdate) AddAffHistoryBalance(v float64) *UserUpdate {
+	_u.mutation.AddAffHistoryBalance(v)
+	return _u
+}
+
+// SetInviterID sets the "inviter_id" field.
+func (_u *UserUpdate) SetInviterID(v int64) *UserUpdate {
+	_u.mutation.ResetInviterID()
+	_u.mutation.SetInviterID(v)
+	return _u
+}
+
+// SetNillableInviterID sets the "inviter_id" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableInviterID(v *int64) *UserUpdate {
+	if v != nil {
+		_u.SetInviterID(*v)
+	}
+	return _u
+}
+
+// AddInviterID adds value to the "inviter_id" field.
+func (_u *UserUpdate) AddInviterID(v int64) *UserUpdate {
+	_u.mutation.AddInviterID(v)
+	return _u
+}
+
+// ClearInviterID clears the value of the "inviter_id" field.
+func (_u *UserUpdate) ClearInviterID() *UserUpdate {
+	_u.mutation.ClearInviterID()
+	return _u
+}
+
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
 func (_u *UserUpdate) AddAPIKeyIDs(ids ...int64) *UserUpdate {
 	_u.mutation.AddAPIKeyIDs(ids...)
@@ -767,6 +850,11 @@ func (_u *UserUpdate) check() error {
 			return &ValidationError{Name: "username", err: fmt.Errorf(`ent: validator failed for field "User.username": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.AffCode(); ok {
+		if err := user.AffCodeValidator(v); err != nil {
+			return &ValidationError{Name: "aff_code", err: fmt.Errorf(`ent: validator failed for field "User.aff_code": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -859,6 +947,30 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedTotalRecharged(); ok {
 		_spec.AddField(user.FieldTotalRecharged, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AffCode(); ok {
+		_spec.SetField(user.FieldAffCode, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.AffCount(); ok {
+		_spec.SetField(user.FieldAffCount, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedAffCount(); ok {
+		_spec.AddField(user.FieldAffCount, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AffHistoryBalance(); ok {
+		_spec.SetField(user.FieldAffHistoryBalance, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedAffHistoryBalance(); ok {
+		_spec.AddField(user.FieldAffHistoryBalance, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.InviterID(); ok {
+		_spec.SetField(user.FieldInviterID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedInviterID(); ok {
+		_spec.AddField(user.FieldInviterID, field.TypeInt64, value)
+	}
+	if _u.mutation.InviterIDCleared() {
+		_spec.ClearField(user.FieldInviterID, field.TypeInt64)
 	}
 	if _u.mutation.APIKeysCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1638,6 +1750,89 @@ func (_u *UserUpdateOne) AddTotalRecharged(v float64) *UserUpdateOne {
 	return _u
 }
 
+// SetAffCode sets the "aff_code" field.
+func (_u *UserUpdateOne) SetAffCode(v string) *UserUpdateOne {
+	_u.mutation.SetAffCode(v)
+	return _u
+}
+
+// SetNillableAffCode sets the "aff_code" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableAffCode(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetAffCode(*v)
+	}
+	return _u
+}
+
+// SetAffCount sets the "aff_count" field.
+func (_u *UserUpdateOne) SetAffCount(v int) *UserUpdateOne {
+	_u.mutation.ResetAffCount()
+	_u.mutation.SetAffCount(v)
+	return _u
+}
+
+// SetNillableAffCount sets the "aff_count" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableAffCount(v *int) *UserUpdateOne {
+	if v != nil {
+		_u.SetAffCount(*v)
+	}
+	return _u
+}
+
+// AddAffCount adds value to the "aff_count" field.
+func (_u *UserUpdateOne) AddAffCount(v int) *UserUpdateOne {
+	_u.mutation.AddAffCount(v)
+	return _u
+}
+
+// SetAffHistoryBalance sets the "aff_history_balance" field.
+func (_u *UserUpdateOne) SetAffHistoryBalance(v float64) *UserUpdateOne {
+	_u.mutation.ResetAffHistoryBalance()
+	_u.mutation.SetAffHistoryBalance(v)
+	return _u
+}
+
+// SetNillableAffHistoryBalance sets the "aff_history_balance" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableAffHistoryBalance(v *float64) *UserUpdateOne {
+	if v != nil {
+		_u.SetAffHistoryBalance(*v)
+	}
+	return _u
+}
+
+// AddAffHistoryBalance adds value to the "aff_history_balance" field.
+func (_u *UserUpdateOne) AddAffHistoryBalance(v float64) *UserUpdateOne {
+	_u.mutation.AddAffHistoryBalance(v)
+	return _u
+}
+
+// SetInviterID sets the "inviter_id" field.
+func (_u *UserUpdateOne) SetInviterID(v int64) *UserUpdateOne {
+	_u.mutation.ResetInviterID()
+	_u.mutation.SetInviterID(v)
+	return _u
+}
+
+// SetNillableInviterID sets the "inviter_id" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableInviterID(v *int64) *UserUpdateOne {
+	if v != nil {
+		_u.SetInviterID(*v)
+	}
+	return _u
+}
+
+// AddInviterID adds value to the "inviter_id" field.
+func (_u *UserUpdateOne) AddInviterID(v int64) *UserUpdateOne {
+	_u.mutation.AddInviterID(v)
+	return _u
+}
+
+// ClearInviterID clears the value of the "inviter_id" field.
+func (_u *UserUpdateOne) ClearInviterID() *UserUpdateOne {
+	_u.mutation.ClearInviterID()
+	return _u
+}
+
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
 func (_u *UserUpdateOne) AddAPIKeyIDs(ids ...int64) *UserUpdateOne {
 	_u.mutation.AddAPIKeyIDs(ids...)
@@ -2085,6 +2280,11 @@ func (_u *UserUpdateOne) check() error {
 			return &ValidationError{Name: "username", err: fmt.Errorf(`ent: validator failed for field "User.username": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.AffCode(); ok {
+		if err := user.AffCodeValidator(v); err != nil {
+			return &ValidationError{Name: "aff_code", err: fmt.Errorf(`ent: validator failed for field "User.aff_code": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -2194,6 +2394,30 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if value, ok := _u.mutation.AddedTotalRecharged(); ok {
 		_spec.AddField(user.FieldTotalRecharged, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AffCode(); ok {
+		_spec.SetField(user.FieldAffCode, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.AffCount(); ok {
+		_spec.SetField(user.FieldAffCount, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedAffCount(); ok {
+		_spec.AddField(user.FieldAffCount, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AffHistoryBalance(); ok {
+		_spec.SetField(user.FieldAffHistoryBalance, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedAffHistoryBalance(); ok {
+		_spec.AddField(user.FieldAffHistoryBalance, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.InviterID(); ok {
+		_spec.SetField(user.FieldInviterID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedInviterID(); ok {
+		_spec.AddField(user.FieldInviterID, field.TypeInt64, value)
+	}
+	if _u.mutation.InviterIDCleared() {
+		_spec.ClearField(user.FieldInviterID, field.TypeInt64)
 	}
 	if _u.mutation.APIKeysCleared() {
 		edge := &sqlgraph.EdgeSpec{
