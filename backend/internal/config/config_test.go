@@ -20,6 +20,7 @@ func resetViperWithJWTSecret(t *testing.T) {
 func TestLoadForBootstrapAllowsMissingJWTSecret(t *testing.T) {
 	viper.Reset()
 	t.Setenv("JWT_SECRET", "")
+	t.Chdir(t.TempDir())
 
 	cfg, err := LoadForBootstrap()
 	if err != nil {
@@ -310,6 +311,7 @@ func TestLoadJWTAccessTokenExpireMinutesFromEnv(t *testing.T) {
 
 func TestLoadDefaultDatabaseSSLMode(t *testing.T) {
 	resetViperWithJWTSecret(t)
+	t.Chdir(t.TempDir())
 
 	cfg, err := Load()
 	if err != nil {

@@ -891,6 +891,59 @@
               </div>
               <Toggle v-model="form.invitation_code_enabled" />
             </div>
+            <!-- Invitation Rebate -->
+            <div
+              class="border-t border-gray-100 pt-4 dark:border-dark-700"
+            >
+              <div class="flex items-center justify-between">
+                <div>
+                  <label class="font-medium text-gray-900 dark:text-white">{{
+                    t('admin.settings.registration.invitationRebate')
+                  }}</label>
+                  <p class="text-sm text-gray-500 dark:text-gray-400">
+                    {{ t('admin.settings.registration.invitationRebateHint') }}
+                  </p>
+                </div>
+                <Toggle v-model="form.invitation_rebate_enabled" />
+              </div>
+              <div v-if="form.invitation_rebate_enabled" class="mt-4 space-y-4 rounded-lg border border-gray-100 bg-gray-50 p-4 dark:border-dark-700 dark:bg-dark-800">
+                <div class="grid grid-cols-2 gap-4">
+                  <div>
+                    <label class="input-label">{{ t('admin.settings.registration.rebateMode') }}</label>
+                    <select v-model="form.invitation_rebate_mode" class="input">
+                      <option value="percentage">{{ t('admin.settings.registration.rebateModePercentage') }}</option>
+                      <option value="fixed">{{ t('admin.settings.registration.rebateModeFixed') }}</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="input-label">{{ t('admin.settings.registration.rebateAmount') }}</label>
+                    <div class="relative">
+                      <input v-model.number="form.invitation_rebate_amount" type="number" min="0" step="0.01" class="input" />
+                      <span class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-gray-400">
+                        {{ form.invitation_rebate_mode === 'percentage' ? '%' : '$' }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                  <div>
+                    <label class="input-label">{{ t('admin.settings.registration.rebateTrigger') }}</label>
+                    <select v-model="form.invitation_rebate_trigger" class="input">
+                      <option value="first">{{ t('admin.settings.registration.rebateTriggerFirst') }}</option>
+                      <option value="every">{{ t('admin.settings.registration.rebateTriggerEvery') }}</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="input-label">{{ t('admin.settings.registration.rebateMinRecharge') }}</label>
+                    <div class="relative">
+                      <input v-model.number="form.invitation_rebate_min_recharge" type="number" min="0" step="0.01" class="input" />
+                      <span class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-sm text-gray-400">$</span>
+                    </div>
+                    <p class="mt-1 text-xs text-gray-400">{{ t('admin.settings.registration.rebateMinRechargeHint') }}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
             <!-- Password Reset - Only show when email verification is enabled -->
             <div
               v-if="form.email_verify_enabled"
@@ -2984,6 +3037,7 @@ const form = reactive<SettingsForm>({
   backend_mode_enabled: false,
   hide_ccs_import_button: false,
   payment_enabled: false,  payment_min_amount: 1,  payment_max_amount: 10000,  payment_daily_limit: 50000,  payment_max_pending_orders: 3,  payment_order_timeout_minutes: 30,  payment_balance_disabled: false,  payment_balance_recharge_multiplier: 1,  payment_recharge_fee_rate: 0,  payment_enabled_types: [],  payment_help_image_url: '',  payment_help_text: '',  payment_product_name_prefix: '',  payment_product_name_suffix: '',  payment_load_balance_strategy: 'round-robin',  payment_cancel_rate_limit_enabled: false,  payment_cancel_rate_limit_max: 10,  payment_cancel_rate_limit_window: 1,  payment_cancel_rate_limit_unit: 'day',  payment_cancel_rate_limit_window_mode: 'rolling',
+  invitation_rebate_enabled: false,  invitation_rebate_mode: 'percentage',  invitation_rebate_amount: 10,  invitation_rebate_trigger: 'first',  invitation_rebate_min_recharge: 0,
   table_default_page_size: tablePageSizeDefault,
   table_page_size_options: [10, 20, 50, 100],
   custom_menu_items: [] as Array<{id: string; label: string; icon_svg: string; url: string; visibility: 'user' | 'admin'; sort_order: number}>,
@@ -3661,6 +3715,12 @@ async function saveSettings() {
       balance_low_notify_recharge_url: (form.balance_low_notify_recharge_url = form.balance_low_notify_recharge_url || currentOrigin),
       account_quota_notify_enabled: form.account_quota_notify_enabled,
       account_quota_notify_emails: (form.account_quota_notify_emails || []).filter((e) => e.email.trim() !== ''),
+      // Invitation rebate
+      invitation_rebate_enabled: form.invitation_rebate_enabled,
+      invitation_rebate_mode: form.invitation_rebate_mode,
+      invitation_rebate_amount: Number(form.invitation_rebate_amount) || 0,
+      invitation_rebate_trigger: form.invitation_rebate_trigger,
+      invitation_rebate_min_recharge: Number(form.invitation_rebate_min_recharge) || 0,
     }
 
     const updated = await adminAPI.settings.updateSettings(payload)

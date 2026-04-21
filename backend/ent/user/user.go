@@ -53,6 +53,14 @@ const (
 	FieldBalanceNotifyExtraEmails = "balance_notify_extra_emails"
 	// FieldTotalRecharged holds the string denoting the total_recharged field in the database.
 	FieldTotalRecharged = "total_recharged"
+	// FieldInviteCode holds the string denoting the invite_code field in the database.
+	FieldInviteCode = "invite_code"
+	// FieldInvitedBy holds the string denoting the invited_by field in the database.
+	FieldInvitedBy = "invited_by"
+	// FieldInviteCount holds the string denoting the invite_count field in the database.
+	FieldInviteCount = "invite_count"
+	// FieldInviteEarnings holds the string denoting the invite_earnings field in the database.
+	FieldInviteEarnings = "invite_earnings"
 	// EdgeAPIKeys holds the string denoting the api_keys edge name in mutations.
 	EdgeAPIKeys = "api_keys"
 	// EdgeRedeemCodes holds the string denoting the redeem_codes edge name in mutations.
@@ -176,6 +184,10 @@ var Columns = []string{
 	FieldBalanceNotifyThreshold,
 	FieldBalanceNotifyExtraEmails,
 	FieldTotalRecharged,
+	FieldInviteCode,
+	FieldInvitedBy,
+	FieldInviteCount,
+	FieldInviteEarnings,
 }
 
 var (
@@ -240,6 +252,14 @@ var (
 	DefaultBalanceNotifyExtraEmails string
 	// DefaultTotalRecharged holds the default value on creation for the "total_recharged" field.
 	DefaultTotalRecharged float64
+	// DefaultInviteCode holds the default value on creation for the "invite_code" field.
+	DefaultInviteCode string
+	// InviteCodeValidator is a validator for the "invite_code" field. It is called by the builders before save.
+	InviteCodeValidator func(string) error
+	// DefaultInviteCount holds the default value on creation for the "invite_count" field.
+	DefaultInviteCount int
+	// DefaultInviteEarnings holds the default value on creation for the "invite_earnings" field.
+	DefaultInviteEarnings float64
 )
 
 // OrderOption defines the ordering options for the User queries.
@@ -343,6 +363,26 @@ func ByBalanceNotifyExtraEmails(opts ...sql.OrderTermOption) OrderOption {
 // ByTotalRecharged orders the results by the total_recharged field.
 func ByTotalRecharged(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldTotalRecharged, opts...).ToFunc()
+}
+
+// ByInviteCode orders the results by the invite_code field.
+func ByInviteCode(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInviteCode, opts...).ToFunc()
+}
+
+// ByInvitedBy orders the results by the invited_by field.
+func ByInvitedBy(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInvitedBy, opts...).ToFunc()
+}
+
+// ByInviteCount orders the results by the invite_count field.
+func ByInviteCount(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInviteCount, opts...).ToFunc()
+}
+
+// ByInviteEarnings orders the results by the invite_earnings field.
+func ByInviteEarnings(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldInviteEarnings, opts...).ToFunc()
 }
 
 // ByAPIKeysCount orders the results by api_keys count.

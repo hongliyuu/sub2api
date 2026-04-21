@@ -52,6 +52,11 @@ func (m *mockUserRepo) DisableTotp(context.Context, int64) error                
 func (m *mockUserRepo) RemoveGroupFromUserAllowedGroups(context.Context, int64, int64) error {
 	return nil
 }
+func (m *mockUserRepo) GetByInviteCode(context.Context, string) (*User, error) {
+	return nil, ErrUserNotFound
+}
+func (m *mockUserRepo) IncrementInviteCount(context.Context, int64) error  { return nil }
+func (m *mockUserRepo) AddInviteEarnings(context.Context, int64, float64) error { return nil }
 
 // --- mock: APIKeyAuthCacheInvalidator ---
 

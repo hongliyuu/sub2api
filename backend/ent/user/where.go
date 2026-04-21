@@ -150,6 +150,26 @@ func TotalRecharged(v float64) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldTotalRecharged, v))
 }
 
+// InviteCode applies equality check predicate on the "invite_code" field. It's identical to InviteCodeEQ.
+func InviteCode(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldInviteCode, v))
+}
+
+// InvitedBy applies equality check predicate on the "invited_by" field. It's identical to InvitedByEQ.
+func InvitedBy(v int64) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldInvitedBy, v))
+}
+
+// InviteCount applies equality check predicate on the "invite_count" field. It's identical to InviteCountEQ.
+func InviteCount(v int) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldInviteCount, v))
+}
+
+// InviteEarnings applies equality check predicate on the "invite_earnings" field. It's identical to InviteEarningsEQ.
+func InviteEarnings(v float64) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldInviteEarnings, v))
+}
+
 // CreatedAtEQ applies the EQ predicate on the "created_at" field.
 func CreatedAtEQ(v time.Time) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldCreatedAt, v))
@@ -1113,6 +1133,211 @@ func TotalRechargedLT(v float64) predicate.User {
 // TotalRechargedLTE applies the LTE predicate on the "total_recharged" field.
 func TotalRechargedLTE(v float64) predicate.User {
 	return predicate.User(sql.FieldLTE(FieldTotalRecharged, v))
+}
+
+// InviteCodeEQ applies the EQ predicate on the "invite_code" field.
+func InviteCodeEQ(v string) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldInviteCode, v))
+}
+
+// InviteCodeNEQ applies the NEQ predicate on the "invite_code" field.
+func InviteCodeNEQ(v string) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldInviteCode, v))
+}
+
+// InviteCodeIn applies the In predicate on the "invite_code" field.
+func InviteCodeIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldIn(FieldInviteCode, vs...))
+}
+
+// InviteCodeNotIn applies the NotIn predicate on the "invite_code" field.
+func InviteCodeNotIn(vs ...string) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldInviteCode, vs...))
+}
+
+// InviteCodeGT applies the GT predicate on the "invite_code" field.
+func InviteCodeGT(v string) predicate.User {
+	return predicate.User(sql.FieldGT(FieldInviteCode, v))
+}
+
+// InviteCodeGTE applies the GTE predicate on the "invite_code" field.
+func InviteCodeGTE(v string) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldInviteCode, v))
+}
+
+// InviteCodeLT applies the LT predicate on the "invite_code" field.
+func InviteCodeLT(v string) predicate.User {
+	return predicate.User(sql.FieldLT(FieldInviteCode, v))
+}
+
+// InviteCodeLTE applies the LTE predicate on the "invite_code" field.
+func InviteCodeLTE(v string) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldInviteCode, v))
+}
+
+// InviteCodeContains applies the Contains predicate on the "invite_code" field.
+func InviteCodeContains(v string) predicate.User {
+	return predicate.User(sql.FieldContains(FieldInviteCode, v))
+}
+
+// InviteCodeHasPrefix applies the HasPrefix predicate on the "invite_code" field.
+func InviteCodeHasPrefix(v string) predicate.User {
+	return predicate.User(sql.FieldHasPrefix(FieldInviteCode, v))
+}
+
+// InviteCodeHasSuffix applies the HasSuffix predicate on the "invite_code" field.
+func InviteCodeHasSuffix(v string) predicate.User {
+	return predicate.User(sql.FieldHasSuffix(FieldInviteCode, v))
+}
+
+// InviteCodeIsNil applies the IsNil predicate on the "invite_code" field.
+func InviteCodeIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldInviteCode))
+}
+
+// InviteCodeNotNil applies the NotNil predicate on the "invite_code" field.
+func InviteCodeNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldInviteCode))
+}
+
+// InviteCodeEqualFold applies the EqualFold predicate on the "invite_code" field.
+func InviteCodeEqualFold(v string) predicate.User {
+	return predicate.User(sql.FieldEqualFold(FieldInviteCode, v))
+}
+
+// InviteCodeContainsFold applies the ContainsFold predicate on the "invite_code" field.
+func InviteCodeContainsFold(v string) predicate.User {
+	return predicate.User(sql.FieldContainsFold(FieldInviteCode, v))
+}
+
+// InvitedByEQ applies the EQ predicate on the "invited_by" field.
+func InvitedByEQ(v int64) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldInvitedBy, v))
+}
+
+// InvitedByNEQ applies the NEQ predicate on the "invited_by" field.
+func InvitedByNEQ(v int64) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldInvitedBy, v))
+}
+
+// InvitedByIn applies the In predicate on the "invited_by" field.
+func InvitedByIn(vs ...int64) predicate.User {
+	return predicate.User(sql.FieldIn(FieldInvitedBy, vs...))
+}
+
+// InvitedByNotIn applies the NotIn predicate on the "invited_by" field.
+func InvitedByNotIn(vs ...int64) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldInvitedBy, vs...))
+}
+
+// InvitedByGT applies the GT predicate on the "invited_by" field.
+func InvitedByGT(v int64) predicate.User {
+	return predicate.User(sql.FieldGT(FieldInvitedBy, v))
+}
+
+// InvitedByGTE applies the GTE predicate on the "invited_by" field.
+func InvitedByGTE(v int64) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldInvitedBy, v))
+}
+
+// InvitedByLT applies the LT predicate on the "invited_by" field.
+func InvitedByLT(v int64) predicate.User {
+	return predicate.User(sql.FieldLT(FieldInvitedBy, v))
+}
+
+// InvitedByLTE applies the LTE predicate on the "invited_by" field.
+func InvitedByLTE(v int64) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldInvitedBy, v))
+}
+
+// InvitedByIsNil applies the IsNil predicate on the "invited_by" field.
+func InvitedByIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldInvitedBy))
+}
+
+// InvitedByNotNil applies the NotNil predicate on the "invited_by" field.
+func InvitedByNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldInvitedBy))
+}
+
+// InviteCountEQ applies the EQ predicate on the "invite_count" field.
+func InviteCountEQ(v int) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldInviteCount, v))
+}
+
+// InviteCountNEQ applies the NEQ predicate on the "invite_count" field.
+func InviteCountNEQ(v int) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldInviteCount, v))
+}
+
+// InviteCountIn applies the In predicate on the "invite_count" field.
+func InviteCountIn(vs ...int) predicate.User {
+	return predicate.User(sql.FieldIn(FieldInviteCount, vs...))
+}
+
+// InviteCountNotIn applies the NotIn predicate on the "invite_count" field.
+func InviteCountNotIn(vs ...int) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldInviteCount, vs...))
+}
+
+// InviteCountGT applies the GT predicate on the "invite_count" field.
+func InviteCountGT(v int) predicate.User {
+	return predicate.User(sql.FieldGT(FieldInviteCount, v))
+}
+
+// InviteCountGTE applies the GTE predicate on the "invite_count" field.
+func InviteCountGTE(v int) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldInviteCount, v))
+}
+
+// InviteCountLT applies the LT predicate on the "invite_count" field.
+func InviteCountLT(v int) predicate.User {
+	return predicate.User(sql.FieldLT(FieldInviteCount, v))
+}
+
+// InviteCountLTE applies the LTE predicate on the "invite_count" field.
+func InviteCountLTE(v int) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldInviteCount, v))
+}
+
+// InviteEarningsEQ applies the EQ predicate on the "invite_earnings" field.
+func InviteEarningsEQ(v float64) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldInviteEarnings, v))
+}
+
+// InviteEarningsNEQ applies the NEQ predicate on the "invite_earnings" field.
+func InviteEarningsNEQ(v float64) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldInviteEarnings, v))
+}
+
+// InviteEarningsIn applies the In predicate on the "invite_earnings" field.
+func InviteEarningsIn(vs ...float64) predicate.User {
+	return predicate.User(sql.FieldIn(FieldInviteEarnings, vs...))
+}
+
+// InviteEarningsNotIn applies the NotIn predicate on the "invite_earnings" field.
+func InviteEarningsNotIn(vs ...float64) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldInviteEarnings, vs...))
+}
+
+// InviteEarningsGT applies the GT predicate on the "invite_earnings" field.
+func InviteEarningsGT(v float64) predicate.User {
+	return predicate.User(sql.FieldGT(FieldInviteEarnings, v))
+}
+
+// InviteEarningsGTE applies the GTE predicate on the "invite_earnings" field.
+func InviteEarningsGTE(v float64) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldInviteEarnings, v))
+}
+
+// InviteEarningsLT applies the LT predicate on the "invite_earnings" field.
+func InviteEarningsLT(v float64) predicate.User {
+	return predicate.User(sql.FieldLT(FieldInviteEarnings, v))
+}
+
+// InviteEarningsLTE applies the LTE predicate on the "invite_earnings" field.
+func InviteEarningsLTE(v float64) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldInviteEarnings, v))
 }
 
 // HasAPIKeys applies the HasEdge predicate on the "api_keys" edge.

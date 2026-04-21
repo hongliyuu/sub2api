@@ -157,6 +157,13 @@ type SystemSettings struct {
 	BalanceLowNotifyRechargeURL string             `json:"balance_low_notify_recharge_url"`
 	AccountQuotaNotifyEnabled   bool               `json:"account_quota_notify_enabled"`
 	AccountQuotaNotifyEmails    []NotifyEmailEntry `json:"account_quota_notify_emails"`
+
+	// Invitation rebate
+	InvitationRebateEnabled     bool    `json:"invitation_rebate_enabled"`
+	InvitationRebateMode        string  `json:"invitation_rebate_mode"`
+	InvitationRebateAmount      float64 `json:"invitation_rebate_amount"`
+	InvitationRebateTrigger     string  `json:"invitation_rebate_trigger"`
+	InvitationRebateMinRecharge float64 `json:"invitation_rebate_min_recharge"`
 }
 
 type DefaultSubscriptionSetting struct {
@@ -199,6 +206,7 @@ type PublicSettings struct {
 	AccountQuotaNotifyEnabled        bool             `json:"account_quota_notify_enabled"`
 	BalanceLowNotifyThreshold        float64          `json:"balance_low_notify_threshold"`
 	BalanceLowNotifyRechargeURL      string           `json:"balance_low_notify_recharge_url"`
+	InvitationRebateEnabled          bool             `json:"invitation_rebate_enabled"`
 }
 
 // OverloadCooldownSettings 529过载冷却配置 DTO

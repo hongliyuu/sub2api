@@ -180,6 +180,11 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		BalanceLowNotifyRechargeURL:          settings.BalanceLowNotifyRechargeURL,
 		AccountQuotaNotifyEnabled:            settings.AccountQuotaNotifyEnabled,
 		AccountQuotaNotifyEmails:             dto.NotifyEmailEntriesFromService(settings.AccountQuotaNotifyEmails),
+		InvitationRebateEnabled:              settings.InvitationRebateEnabled,
+		InvitationRebateMode:                 settings.InvitationRebateMode,
+		InvitationRebateAmount:               settings.InvitationRebateAmount,
+		InvitationRebateTrigger:              settings.InvitationRebateTrigger,
+		InvitationRebateMinRecharge:          settings.InvitationRebateMinRecharge,
 		PaymentEnabled:                       paymentCfg.Enabled,
 		PaymentMinAmount:                     paymentCfg.MinAmount,
 		PaymentMaxAmount:                     paymentCfg.MaxAmount,
@@ -317,6 +322,13 @@ type UpdateSettingsRequest struct {
 	BalanceLowNotifyRechargeURL *string                 `json:"balance_low_notify_recharge_url"`
 	AccountQuotaNotifyEnabled   *bool                   `json:"account_quota_notify_enabled"`
 	AccountQuotaNotifyEmails    *[]dto.NotifyEmailEntry `json:"account_quota_notify_emails"`
+
+	// Invitation rebate
+	InvitationRebateEnabled     *bool    `json:"invitation_rebate_enabled"`
+	InvitationRebateMode        *string  `json:"invitation_rebate_mode"`
+	InvitationRebateAmount      *float64 `json:"invitation_rebate_amount"`
+	InvitationRebateTrigger     *string  `json:"invitation_rebate_trigger"`
+	InvitationRebateMinRecharge *float64 `json:"invitation_rebate_min_recharge"`
 
 	// Payment configuration (integrated into settings, full replace)
 	PaymentEnabled                   *bool    `json:"payment_enabled"`
@@ -927,6 +939,36 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			return previousSettings.AccountQuotaNotifyEmails
 		}(),
+		InvitationRebateEnabled: func() bool {
+			if req.InvitationRebateEnabled != nil {
+				return *req.InvitationRebateEnabled
+			}
+			return previousSettings.InvitationRebateEnabled
+		}(),
+		InvitationRebateMode: func() string {
+			if req.InvitationRebateMode != nil {
+				return *req.InvitationRebateMode
+			}
+			return previousSettings.InvitationRebateMode
+		}(),
+		InvitationRebateAmount: func() float64 {
+			if req.InvitationRebateAmount != nil {
+				return *req.InvitationRebateAmount
+			}
+			return previousSettings.InvitationRebateAmount
+		}(),
+		InvitationRebateTrigger: func() string {
+			if req.InvitationRebateTrigger != nil {
+				return *req.InvitationRebateTrigger
+			}
+			return previousSettings.InvitationRebateTrigger
+		}(),
+		InvitationRebateMinRecharge: func() float64 {
+			if req.InvitationRebateMinRecharge != nil {
+				return *req.InvitationRebateMinRecharge
+			}
+			return previousSettings.InvitationRebateMinRecharge
+		}(),
 	}
 
 	if err := h.settingService.UpdateSettings(c.Request.Context(), settings); err != nil {
@@ -1080,6 +1122,11 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		BalanceLowNotifyRechargeURL:          updatedSettings.BalanceLowNotifyRechargeURL,
 		AccountQuotaNotifyEnabled:            updatedSettings.AccountQuotaNotifyEnabled,
 		AccountQuotaNotifyEmails:             dto.NotifyEmailEntriesFromService(updatedSettings.AccountQuotaNotifyEmails),
+		InvitationRebateEnabled:              updatedSettings.InvitationRebateEnabled,
+		InvitationRebateMode:                 updatedSettings.InvitationRebateMode,
+		InvitationRebateAmount:               updatedSettings.InvitationRebateAmount,
+		InvitationRebateTrigger:              updatedSettings.InvitationRebateTrigger,
+		InvitationRebateMinRecharge:          updatedSettings.InvitationRebateMinRecharge,
 		PaymentEnabled:                       updatedPaymentCfg.Enabled,
 		PaymentMinAmount:                     updatedPaymentCfg.MinAmount,
 		PaymentMaxAmount:                     updatedPaymentCfg.MaxAmount,
@@ -1391,6 +1438,21 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if !equalNotifyEmailEntries(before.AccountQuotaNotifyEmails, after.AccountQuotaNotifyEmails) {
 		changed = append(changed, "account_quota_notify_emails")
+	}
+	if before.InvitationRebateEnabled != after.InvitationRebateEnabled {
+		changed = append(changed, "invitation_rebate_enabled")
+	}
+	if before.InvitationRebateMode != after.InvitationRebateMode {
+		changed = append(changed, "invitation_rebate_mode")
+	}
+	if before.InvitationRebateAmount != after.InvitationRebateAmount {
+		changed = append(changed, "invitation_rebate_amount")
+	}
+	if before.InvitationRebateTrigger != after.InvitationRebateTrigger {
+		changed = append(changed, "invitation_rebate_trigger")
+	}
+	if before.InvitationRebateMinRecharge != after.InvitationRebateMinRecharge {
+		changed = append(changed, "invitation_rebate_min_recharge")
 	}
 	return changed
 }

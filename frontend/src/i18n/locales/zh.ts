@@ -436,6 +436,9 @@ export default {
     invitationCodeInvalid: '邀请码无效或已被使用',
     invitationCodeValidating: '正在验证邀请码...',
     invitationCodeInvalidCannotRegister: '邀请码无效，请检查后重试',
+    referralCodeLabel: '推荐码',
+    referralCodePlaceholder: '输入推荐人的邀请码',
+    referralCodeHint: '填写推荐人的邀请码，推荐人可获得返利奖励',
     oauthOrContinue: '或使用邮箱密码继续',
     linuxdo: {
       signIn: '使用 Linux.do 登录',
@@ -874,6 +877,15 @@ export default {
     passwordTooShort: '密码至少需要 8 个字符',
     passwordChangeSuccess: '密码修改成功',
     passwordChangeFailed: '密码修改失败',
+    // Invitation referral
+    invitation: {
+      title: '邀请推荐',
+      inviteCode: '我的邀请码',
+      inviteCount: '已邀请人数',
+      inviteEarnings: '累计返利',
+      inviteLink: '邀请链接',
+      copyLink: '复制链接',
+    },
     // TOTP 2FA
     totp: {
       title: '双因素认证 (2FA)',
@@ -4455,6 +4467,17 @@ export default {
         promoCodeHint: '允许用户在注册时使用优惠码',
         invitationCode: '邀请码注册',
         invitationCodeHint: '开启后，用户注册时需要填写有效的邀请码',
+        invitationRebate: '邀请返利',
+        invitationRebateHint: '被邀请人充值后，邀请人可获得返利奖励',
+        rebateMode: '返利模式',
+        rebateModePercentage: '按充值比例',
+        rebateModeFixed: '固定金额',
+        rebateAmount: '返利数值',
+        rebateTrigger: '触发条件',
+        rebateTriggerFirst: '仅首次充值',
+        rebateTriggerEvery: '每次充值',
+        rebateMinRecharge: '最低充值金额',
+        rebateMinRechargeHint: '充值金额低于此值时不触发返利，设为 0 表示不限制',
         passwordReset: '忘记密码',
         passwordResetHint: '允许用户通过邮箱重置密码',
         frontendUrl: '前端地址',

@@ -437,6 +437,9 @@ export default {
     invitationCodeInvalid: 'Invalid or used invitation code',
     invitationCodeValidating: 'Validating invitation code...',
     invitationCodeInvalidCannotRegister: 'Invalid invitation code. Please check and try again',
+    referralCodeLabel: 'Referral Code',
+    referralCodePlaceholder: 'Enter referrer\'s invite code',
+    referralCodeHint: 'Enter a referral code so the referrer can earn a rebate reward',
     oauthOrContinue: 'or continue with email',
     linuxdo: {
       signIn: 'Continue with Linux.do',
@@ -870,6 +873,15 @@ export default {
     passwordTooShort: 'Password must be at least 8 characters long',
     passwordChangeSuccess: 'Password changed successfully',
     passwordChangeFailed: 'Failed to change password',
+    // Invitation referral
+    invitation: {
+      title: 'Invitation Referral',
+      inviteCode: 'My Invite Code',
+      inviteCount: 'Invited Users',
+      inviteEarnings: 'Total Earnings',
+      inviteLink: 'Invite Link',
+      copyLink: 'Copy Link',
+    },
     // TOTP 2FA
     totp: {
       title: 'Two-Factor Authentication (2FA)',
@@ -4290,6 +4302,17 @@ export default {
         promoCodeHint: 'Allow users to use promo codes during registration',
         invitationCode: 'Invitation Code Registration',
         invitationCodeHint: 'When enabled, users must enter a valid invitation code to register',
+        invitationRebate: 'Invitation Rebate',
+        invitationRebateHint: 'Award rebate to the inviter when the invited user recharges',
+        rebateMode: 'Rebate Mode',
+        rebateModePercentage: 'Percentage of recharge',
+        rebateModeFixed: 'Fixed amount',
+        rebateAmount: 'Rebate Amount',
+        rebateTrigger: 'Trigger Condition',
+        rebateTriggerFirst: 'First recharge only',
+        rebateTriggerEvery: 'Every recharge',
+        rebateMinRecharge: 'Minimum Recharge Amount',
+        rebateMinRechargeHint: 'Rebate not triggered if recharge is below this amount. Set to 0 for no limit',
         passwordReset: 'Password Reset',
         passwordResetHint: 'Allow users to reset their password via email',
         frontendUrl: 'Frontend URL',

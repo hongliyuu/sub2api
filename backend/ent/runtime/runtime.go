@@ -1313,6 +1313,20 @@ func init() {
 	userDescTotalRecharged := userFields[15].Descriptor()
 	// user.DefaultTotalRecharged holds the default value on creation for the total_recharged field.
 	user.DefaultTotalRecharged = userDescTotalRecharged.Default.(float64)
+	// userDescInviteCode is the schema descriptor for invite_code field.
+	userDescInviteCode := userFields[16].Descriptor()
+	// user.DefaultInviteCode holds the default value on creation for the invite_code field.
+	user.DefaultInviteCode = userDescInviteCode.Default.(string)
+	// user.InviteCodeValidator is a validator for the "invite_code" field. It is called by the builders before save.
+	user.InviteCodeValidator = userDescInviteCode.Validators[0].(func(string) error)
+	// userDescInviteCount is the schema descriptor for invite_count field.
+	userDescInviteCount := userFields[18].Descriptor()
+	// user.DefaultInviteCount holds the default value on creation for the invite_count field.
+	user.DefaultInviteCount = userDescInviteCount.Default.(int)
+	// userDescInviteEarnings is the schema descriptor for invite_earnings field.
+	userDescInviteEarnings := userFields[19].Descriptor()
+	// user.DefaultInviteEarnings holds the default value on creation for the invite_earnings field.
+	user.DefaultInviteEarnings = userDescInviteEarnings.Default.(float64)
 	userallowedgroupFields := schema.UserAllowedGroup{}.Fields()
 	_ = userallowedgroupFields
 	// userallowedgroupDescCreatedAt is the schema descriptor for created_at field.

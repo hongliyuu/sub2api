@@ -118,6 +118,13 @@ type SystemSettings struct {
 	// Account quota notification
 	AccountQuotaNotifyEnabled bool
 	AccountQuotaNotifyEmails  []NotifyEmailEntry
+
+	// 邀请返利
+	InvitationRebateEnabled  bool
+	InvitationRebateMode     string  // "fixed" | "percentage"
+	InvitationRebateAmount   float64 // 固定金额或百分比值
+	InvitationRebateTrigger  string  // "first" | "every"
+	InvitationRebateMinRecharge float64 // 最低充值金额触发门槛
 }
 
 type DefaultSubscriptionSetting struct {
@@ -162,6 +169,9 @@ type PublicSettings struct {
 	AccountQuotaNotifyEnabled   bool
 	BalanceLowNotifyThreshold   float64
 	BalanceLowNotifyRechargeURL string
+
+	// 邀请返利（公开部分，用于前端展示）
+	InvitationRebateEnabled bool
 }
 
 // StreamTimeoutSettings 流超时处理配置（仅控制超时后的处理方式，超时判定由网关配置控制）

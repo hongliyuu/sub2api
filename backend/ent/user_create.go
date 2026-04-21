@@ -281,6 +281,62 @@ func (_c *UserCreate) SetNillableTotalRecharged(v *float64) *UserCreate {
 	return _c
 }
 
+// SetInviteCode sets the "invite_code" field.
+func (_c *UserCreate) SetInviteCode(v string) *UserCreate {
+	_c.mutation.SetInviteCode(v)
+	return _c
+}
+
+// SetNillableInviteCode sets the "invite_code" field if the given value is not nil.
+func (_c *UserCreate) SetNillableInviteCode(v *string) *UserCreate {
+	if v != nil {
+		_c.SetInviteCode(*v)
+	}
+	return _c
+}
+
+// SetInvitedBy sets the "invited_by" field.
+func (_c *UserCreate) SetInvitedBy(v int64) *UserCreate {
+	_c.mutation.SetInvitedBy(v)
+	return _c
+}
+
+// SetNillableInvitedBy sets the "invited_by" field if the given value is not nil.
+func (_c *UserCreate) SetNillableInvitedBy(v *int64) *UserCreate {
+	if v != nil {
+		_c.SetInvitedBy(*v)
+	}
+	return _c
+}
+
+// SetInviteCount sets the "invite_count" field.
+func (_c *UserCreate) SetInviteCount(v int) *UserCreate {
+	_c.mutation.SetInviteCount(v)
+	return _c
+}
+
+// SetNillableInviteCount sets the "invite_count" field if the given value is not nil.
+func (_c *UserCreate) SetNillableInviteCount(v *int) *UserCreate {
+	if v != nil {
+		_c.SetInviteCount(*v)
+	}
+	return _c
+}
+
+// SetInviteEarnings sets the "invite_earnings" field.
+func (_c *UserCreate) SetInviteEarnings(v float64) *UserCreate {
+	_c.mutation.SetInviteEarnings(v)
+	return _c
+}
+
+// SetNillableInviteEarnings sets the "invite_earnings" field if the given value is not nil.
+func (_c *UserCreate) SetNillableInviteEarnings(v *float64) *UserCreate {
+	if v != nil {
+		_c.SetInviteEarnings(*v)
+	}
+	return _c
+}
+
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
 func (_c *UserCreate) AddAPIKeyIDs(ids ...int64) *UserCreate {
 	_c.mutation.AddAPIKeyIDs(ids...)
@@ -526,6 +582,18 @@ func (_c *UserCreate) defaults() error {
 		v := user.DefaultTotalRecharged
 		_c.mutation.SetTotalRecharged(v)
 	}
+	if _, ok := _c.mutation.InviteCode(); !ok {
+		v := user.DefaultInviteCode
+		_c.mutation.SetInviteCode(v)
+	}
+	if _, ok := _c.mutation.InviteCount(); !ok {
+		v := user.DefaultInviteCount
+		_c.mutation.SetInviteCount(v)
+	}
+	if _, ok := _c.mutation.InviteEarnings(); !ok {
+		v := user.DefaultInviteEarnings
+		_c.mutation.SetInviteEarnings(v)
+	}
 	return nil
 }
 
@@ -600,6 +668,17 @@ func (_c *UserCreate) check() error {
 	}
 	if _, ok := _c.mutation.TotalRecharged(); !ok {
 		return &ValidationError{Name: "total_recharged", err: errors.New(`ent: missing required field "User.total_recharged"`)}
+	}
+	if v, ok := _c.mutation.InviteCode(); ok {
+		if err := user.InviteCodeValidator(v); err != nil {
+			return &ValidationError{Name: "invite_code", err: fmt.Errorf(`ent: validator failed for field "User.invite_code": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.InviteCount(); !ok {
+		return &ValidationError{Name: "invite_count", err: errors.New(`ent: missing required field "User.invite_count"`)}
+	}
+	if _, ok := _c.mutation.InviteEarnings(); !ok {
+		return &ValidationError{Name: "invite_earnings", err: errors.New(`ent: missing required field "User.invite_earnings"`)}
 	}
 	return nil
 }
@@ -703,6 +782,22 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.TotalRecharged(); ok {
 		_spec.SetField(user.FieldTotalRecharged, field.TypeFloat64, value)
 		_node.TotalRecharged = value
+	}
+	if value, ok := _c.mutation.InviteCode(); ok {
+		_spec.SetField(user.FieldInviteCode, field.TypeString, value)
+		_node.InviteCode = value
+	}
+	if value, ok := _c.mutation.InvitedBy(); ok {
+		_spec.SetField(user.FieldInvitedBy, field.TypeInt64, value)
+		_node.InvitedBy = &value
+	}
+	if value, ok := _c.mutation.InviteCount(); ok {
+		_spec.SetField(user.FieldInviteCount, field.TypeInt, value)
+		_node.InviteCount = value
+	}
+	if value, ok := _c.mutation.InviteEarnings(); ok {
+		_spec.SetField(user.FieldInviteEarnings, field.TypeFloat64, value)
+		_node.InviteEarnings = value
 	}
 	if nodes := _c.mutation.APIKeysIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
@@ -1184,6 +1279,84 @@ func (u *UserUpsert) AddTotalRecharged(v float64) *UserUpsert {
 	return u
 }
 
+// SetInviteCode sets the "invite_code" field.
+func (u *UserUpsert) SetInviteCode(v string) *UserUpsert {
+	u.Set(user.FieldInviteCode, v)
+	return u
+}
+
+// UpdateInviteCode sets the "invite_code" field to the value that was provided on create.
+func (u *UserUpsert) UpdateInviteCode() *UserUpsert {
+	u.SetExcluded(user.FieldInviteCode)
+	return u
+}
+
+// ClearInviteCode clears the value of the "invite_code" field.
+func (u *UserUpsert) ClearInviteCode() *UserUpsert {
+	u.SetNull(user.FieldInviteCode)
+	return u
+}
+
+// SetInvitedBy sets the "invited_by" field.
+func (u *UserUpsert) SetInvitedBy(v int64) *UserUpsert {
+	u.Set(user.FieldInvitedBy, v)
+	return u
+}
+
+// UpdateInvitedBy sets the "invited_by" field to the value that was provided on create.
+func (u *UserUpsert) UpdateInvitedBy() *UserUpsert {
+	u.SetExcluded(user.FieldInvitedBy)
+	return u
+}
+
+// AddInvitedBy adds v to the "invited_by" field.
+func (u *UserUpsert) AddInvitedBy(v int64) *UserUpsert {
+	u.Add(user.FieldInvitedBy, v)
+	return u
+}
+
+// ClearInvitedBy clears the value of the "invited_by" field.
+func (u *UserUpsert) ClearInvitedBy() *UserUpsert {
+	u.SetNull(user.FieldInvitedBy)
+	return u
+}
+
+// SetInviteCount sets the "invite_count" field.
+func (u *UserUpsert) SetInviteCount(v int) *UserUpsert {
+	u.Set(user.FieldInviteCount, v)
+	return u
+}
+
+// UpdateInviteCount sets the "invite_count" field to the value that was provided on create.
+func (u *UserUpsert) UpdateInviteCount() *UserUpsert {
+	u.SetExcluded(user.FieldInviteCount)
+	return u
+}
+
+// AddInviteCount adds v to the "invite_count" field.
+func (u *UserUpsert) AddInviteCount(v int) *UserUpsert {
+	u.Add(user.FieldInviteCount, v)
+	return u
+}
+
+// SetInviteEarnings sets the "invite_earnings" field.
+func (u *UserUpsert) SetInviteEarnings(v float64) *UserUpsert {
+	u.Set(user.FieldInviteEarnings, v)
+	return u
+}
+
+// UpdateInviteEarnings sets the "invite_earnings" field to the value that was provided on create.
+func (u *UserUpsert) UpdateInviteEarnings() *UserUpsert {
+	u.SetExcluded(user.FieldInviteEarnings)
+	return u
+}
+
+// AddInviteEarnings adds v to the "invite_earnings" field.
+func (u *UserUpsert) AddInviteEarnings(v float64) *UserUpsert {
+	u.Add(user.FieldInviteEarnings, v)
+	return u
+}
+
 // UpdateNewValues updates the mutable fields using the new values that were set on create.
 // Using this option is equivalent to using:
 //
@@ -1534,6 +1707,97 @@ func (u *UserUpsertOne) AddTotalRecharged(v float64) *UserUpsertOne {
 func (u *UserUpsertOne) UpdateTotalRecharged() *UserUpsertOne {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateTotalRecharged()
+	})
+}
+
+// SetInviteCode sets the "invite_code" field.
+func (u *UserUpsertOne) SetInviteCode(v string) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetInviteCode(v)
+	})
+}
+
+// UpdateInviteCode sets the "invite_code" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateInviteCode() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateInviteCode()
+	})
+}
+
+// ClearInviteCode clears the value of the "invite_code" field.
+func (u *UserUpsertOne) ClearInviteCode() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.ClearInviteCode()
+	})
+}
+
+// SetInvitedBy sets the "invited_by" field.
+func (u *UserUpsertOne) SetInvitedBy(v int64) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetInvitedBy(v)
+	})
+}
+
+// AddInvitedBy adds v to the "invited_by" field.
+func (u *UserUpsertOne) AddInvitedBy(v int64) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.AddInvitedBy(v)
+	})
+}
+
+// UpdateInvitedBy sets the "invited_by" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateInvitedBy() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateInvitedBy()
+	})
+}
+
+// ClearInvitedBy clears the value of the "invited_by" field.
+func (u *UserUpsertOne) ClearInvitedBy() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.ClearInvitedBy()
+	})
+}
+
+// SetInviteCount sets the "invite_count" field.
+func (u *UserUpsertOne) SetInviteCount(v int) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetInviteCount(v)
+	})
+}
+
+// AddInviteCount adds v to the "invite_count" field.
+func (u *UserUpsertOne) AddInviteCount(v int) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.AddInviteCount(v)
+	})
+}
+
+// UpdateInviteCount sets the "invite_count" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateInviteCount() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateInviteCount()
+	})
+}
+
+// SetInviteEarnings sets the "invite_earnings" field.
+func (u *UserUpsertOne) SetInviteEarnings(v float64) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetInviteEarnings(v)
+	})
+}
+
+// AddInviteEarnings adds v to the "invite_earnings" field.
+func (u *UserUpsertOne) AddInviteEarnings(v float64) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.AddInviteEarnings(v)
+	})
+}
+
+// UpdateInviteEarnings sets the "invite_earnings" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateInviteEarnings() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateInviteEarnings()
 	})
 }
 
@@ -2053,6 +2317,97 @@ func (u *UserUpsertBulk) AddTotalRecharged(v float64) *UserUpsertBulk {
 func (u *UserUpsertBulk) UpdateTotalRecharged() *UserUpsertBulk {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateTotalRecharged()
+	})
+}
+
+// SetInviteCode sets the "invite_code" field.
+func (u *UserUpsertBulk) SetInviteCode(v string) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetInviteCode(v)
+	})
+}
+
+// UpdateInviteCode sets the "invite_code" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateInviteCode() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateInviteCode()
+	})
+}
+
+// ClearInviteCode clears the value of the "invite_code" field.
+func (u *UserUpsertBulk) ClearInviteCode() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.ClearInviteCode()
+	})
+}
+
+// SetInvitedBy sets the "invited_by" field.
+func (u *UserUpsertBulk) SetInvitedBy(v int64) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetInvitedBy(v)
+	})
+}
+
+// AddInvitedBy adds v to the "invited_by" field.
+func (u *UserUpsertBulk) AddInvitedBy(v int64) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.AddInvitedBy(v)
+	})
+}
+
+// UpdateInvitedBy sets the "invited_by" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateInvitedBy() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateInvitedBy()
+	})
+}
+
+// ClearInvitedBy clears the value of the "invited_by" field.
+func (u *UserUpsertBulk) ClearInvitedBy() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.ClearInvitedBy()
+	})
+}
+
+// SetInviteCount sets the "invite_count" field.
+func (u *UserUpsertBulk) SetInviteCount(v int) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetInviteCount(v)
+	})
+}
+
+// AddInviteCount adds v to the "invite_count" field.
+func (u *UserUpsertBulk) AddInviteCount(v int) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.AddInviteCount(v)
+	})
+}
+
+// UpdateInviteCount sets the "invite_count" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateInviteCount() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateInviteCount()
+	})
+}
+
+// SetInviteEarnings sets the "invite_earnings" field.
+func (u *UserUpsertBulk) SetInviteEarnings(v float64) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetInviteEarnings(v)
+	})
+}
+
+// AddInviteEarnings adds v to the "invite_earnings" field.
+func (u *UserUpsertBulk) AddInviteEarnings(v float64) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.AddInviteEarnings(v)
+	})
+}
+
+// UpdateInviteEarnings sets the "invite_earnings" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateInviteEarnings() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateInviteEarnings()
 	})
 }
 

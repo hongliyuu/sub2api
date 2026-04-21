@@ -113,6 +113,18 @@ func (s *userRepoStub) DisableTotp(ctx context.Context, userID int64) error {
 	panic("unexpected DisableTotp call")
 }
 
+func (s *userRepoStub) GetByInviteCode(ctx context.Context, inviteCode string) (*User, error) {
+	panic("unexpected GetByInviteCode call")
+}
+
+func (s *userRepoStub) IncrementInviteCount(ctx context.Context, userID int64) error {
+	panic("unexpected IncrementInviteCount call")
+}
+
+func (s *userRepoStub) AddInviteEarnings(ctx context.Context, userID int64, amount float64) error {
+	panic("unexpected AddInviteEarnings call")
+}
+
 type groupRepoStub struct {
 	affectedUserIDs []int64
 	deleteErr       error

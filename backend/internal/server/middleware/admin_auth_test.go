@@ -200,3 +200,15 @@ func (s *stubUserRepo) EnableTotp(ctx context.Context, userID int64) error {
 func (s *stubUserRepo) DisableTotp(ctx context.Context, userID int64) error {
 	panic("unexpected DisableTotp call")
 }
+
+func (s *stubUserRepo) GetByInviteCode(ctx context.Context, inviteCode string) (*service.User, error) {
+	panic("unexpected GetByInviteCode call")
+}
+
+func (s *stubUserRepo) IncrementInviteCount(ctx context.Context, userID int64) error {
+	panic("unexpected IncrementInviteCount call")
+}
+
+func (s *stubUserRepo) AddInviteEarnings(ctx context.Context, userID int64, amount float64) error {
+	panic("unexpected AddInviteEarnings call")
+}

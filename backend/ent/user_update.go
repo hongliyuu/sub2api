@@ -333,6 +333,95 @@ func (_u *UserUpdate) AddTotalRecharged(v float64) *UserUpdate {
 	return _u
 }
 
+// SetInviteCode sets the "invite_code" field.
+func (_u *UserUpdate) SetInviteCode(v string) *UserUpdate {
+	_u.mutation.SetInviteCode(v)
+	return _u
+}
+
+// SetNillableInviteCode sets the "invite_code" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableInviteCode(v *string) *UserUpdate {
+	if v != nil {
+		_u.SetInviteCode(*v)
+	}
+	return _u
+}
+
+// ClearInviteCode clears the value of the "invite_code" field.
+func (_u *UserUpdate) ClearInviteCode() *UserUpdate {
+	_u.mutation.ClearInviteCode()
+	return _u
+}
+
+// SetInvitedBy sets the "invited_by" field.
+func (_u *UserUpdate) SetInvitedBy(v int64) *UserUpdate {
+	_u.mutation.ResetInvitedBy()
+	_u.mutation.SetInvitedBy(v)
+	return _u
+}
+
+// SetNillableInvitedBy sets the "invited_by" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableInvitedBy(v *int64) *UserUpdate {
+	if v != nil {
+		_u.SetInvitedBy(*v)
+	}
+	return _u
+}
+
+// AddInvitedBy adds value to the "invited_by" field.
+func (_u *UserUpdate) AddInvitedBy(v int64) *UserUpdate {
+	_u.mutation.AddInvitedBy(v)
+	return _u
+}
+
+// ClearInvitedBy clears the value of the "invited_by" field.
+func (_u *UserUpdate) ClearInvitedBy() *UserUpdate {
+	_u.mutation.ClearInvitedBy()
+	return _u
+}
+
+// SetInviteCount sets the "invite_count" field.
+func (_u *UserUpdate) SetInviteCount(v int) *UserUpdate {
+	_u.mutation.ResetInviteCount()
+	_u.mutation.SetInviteCount(v)
+	return _u
+}
+
+// SetNillableInviteCount sets the "invite_count" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableInviteCount(v *int) *UserUpdate {
+	if v != nil {
+		_u.SetInviteCount(*v)
+	}
+	return _u
+}
+
+// AddInviteCount adds value to the "invite_count" field.
+func (_u *UserUpdate) AddInviteCount(v int) *UserUpdate {
+	_u.mutation.AddInviteCount(v)
+	return _u
+}
+
+// SetInviteEarnings sets the "invite_earnings" field.
+func (_u *UserUpdate) SetInviteEarnings(v float64) *UserUpdate {
+	_u.mutation.ResetInviteEarnings()
+	_u.mutation.SetInviteEarnings(v)
+	return _u
+}
+
+// SetNillableInviteEarnings sets the "invite_earnings" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableInviteEarnings(v *float64) *UserUpdate {
+	if v != nil {
+		_u.SetInviteEarnings(*v)
+	}
+	return _u
+}
+
+// AddInviteEarnings adds value to the "invite_earnings" field.
+func (_u *UserUpdate) AddInviteEarnings(v float64) *UserUpdate {
+	_u.mutation.AddInviteEarnings(v)
+	return _u
+}
+
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
 func (_u *UserUpdate) AddAPIKeyIDs(ids ...int64) *UserUpdate {
 	_u.mutation.AddAPIKeyIDs(ids...)
@@ -767,6 +856,11 @@ func (_u *UserUpdate) check() error {
 			return &ValidationError{Name: "username", err: fmt.Errorf(`ent: validator failed for field "User.username": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.InviteCode(); ok {
+		if err := user.InviteCodeValidator(v); err != nil {
+			return &ValidationError{Name: "invite_code", err: fmt.Errorf(`ent: validator failed for field "User.invite_code": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -859,6 +953,33 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedTotalRecharged(); ok {
 		_spec.AddField(user.FieldTotalRecharged, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.InviteCode(); ok {
+		_spec.SetField(user.FieldInviteCode, field.TypeString, value)
+	}
+	if _u.mutation.InviteCodeCleared() {
+		_spec.ClearField(user.FieldInviteCode, field.TypeString)
+	}
+	if value, ok := _u.mutation.InvitedBy(); ok {
+		_spec.SetField(user.FieldInvitedBy, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedInvitedBy(); ok {
+		_spec.AddField(user.FieldInvitedBy, field.TypeInt64, value)
+	}
+	if _u.mutation.InvitedByCleared() {
+		_spec.ClearField(user.FieldInvitedBy, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.InviteCount(); ok {
+		_spec.SetField(user.FieldInviteCount, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedInviteCount(); ok {
+		_spec.AddField(user.FieldInviteCount, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.InviteEarnings(); ok {
+		_spec.SetField(user.FieldInviteEarnings, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedInviteEarnings(); ok {
+		_spec.AddField(user.FieldInviteEarnings, field.TypeFloat64, value)
 	}
 	if _u.mutation.APIKeysCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1638,6 +1759,95 @@ func (_u *UserUpdateOne) AddTotalRecharged(v float64) *UserUpdateOne {
 	return _u
 }
 
+// SetInviteCode sets the "invite_code" field.
+func (_u *UserUpdateOne) SetInviteCode(v string) *UserUpdateOne {
+	_u.mutation.SetInviteCode(v)
+	return _u
+}
+
+// SetNillableInviteCode sets the "invite_code" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableInviteCode(v *string) *UserUpdateOne {
+	if v != nil {
+		_u.SetInviteCode(*v)
+	}
+	return _u
+}
+
+// ClearInviteCode clears the value of the "invite_code" field.
+func (_u *UserUpdateOne) ClearInviteCode() *UserUpdateOne {
+	_u.mutation.ClearInviteCode()
+	return _u
+}
+
+// SetInvitedBy sets the "invited_by" field.
+func (_u *UserUpdateOne) SetInvitedBy(v int64) *UserUpdateOne {
+	_u.mutation.ResetInvitedBy()
+	_u.mutation.SetInvitedBy(v)
+	return _u
+}
+
+// SetNillableInvitedBy sets the "invited_by" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableInvitedBy(v *int64) *UserUpdateOne {
+	if v != nil {
+		_u.SetInvitedBy(*v)
+	}
+	return _u
+}
+
+// AddInvitedBy adds value to the "invited_by" field.
+func (_u *UserUpdateOne) AddInvitedBy(v int64) *UserUpdateOne {
+	_u.mutation.AddInvitedBy(v)
+	return _u
+}
+
+// ClearInvitedBy clears the value of the "invited_by" field.
+func (_u *UserUpdateOne) ClearInvitedBy() *UserUpdateOne {
+	_u.mutation.ClearInvitedBy()
+	return _u
+}
+
+// SetInviteCount sets the "invite_count" field.
+func (_u *UserUpdateOne) SetInviteCount(v int) *UserUpdateOne {
+	_u.mutation.ResetInviteCount()
+	_u.mutation.SetInviteCount(v)
+	return _u
+}
+
+// SetNillableInviteCount sets the "invite_count" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableInviteCount(v *int) *UserUpdateOne {
+	if v != nil {
+		_u.SetInviteCount(*v)
+	}
+	return _u
+}
+
+// AddInviteCount adds value to the "invite_count" field.
+func (_u *UserUpdateOne) AddInviteCount(v int) *UserUpdateOne {
+	_u.mutation.AddInviteCount(v)
+	return _u
+}
+
+// SetInviteEarnings sets the "invite_earnings" field.
+func (_u *UserUpdateOne) SetInviteEarnings(v float64) *UserUpdateOne {
+	_u.mutation.ResetInviteEarnings()
+	_u.mutation.SetInviteEarnings(v)
+	return _u
+}
+
+// SetNillableInviteEarnings sets the "invite_earnings" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableInviteEarnings(v *float64) *UserUpdateOne {
+	if v != nil {
+		_u.SetInviteEarnings(*v)
+	}
+	return _u
+}
+
+// AddInviteEarnings adds value to the "invite_earnings" field.
+func (_u *UserUpdateOne) AddInviteEarnings(v float64) *UserUpdateOne {
+	_u.mutation.AddInviteEarnings(v)
+	return _u
+}
+
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
 func (_u *UserUpdateOne) AddAPIKeyIDs(ids ...int64) *UserUpdateOne {
 	_u.mutation.AddAPIKeyIDs(ids...)
@@ -2085,6 +2295,11 @@ func (_u *UserUpdateOne) check() error {
 			return &ValidationError{Name: "username", err: fmt.Errorf(`ent: validator failed for field "User.username": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.InviteCode(); ok {
+		if err := user.InviteCodeValidator(v); err != nil {
+			return &ValidationError{Name: "invite_code", err: fmt.Errorf(`ent: validator failed for field "User.invite_code": %w`, err)}
+		}
+	}
 	return nil
 }
 
@@ -2194,6 +2409,33 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if value, ok := _u.mutation.AddedTotalRecharged(); ok {
 		_spec.AddField(user.FieldTotalRecharged, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.InviteCode(); ok {
+		_spec.SetField(user.FieldInviteCode, field.TypeString, value)
+	}
+	if _u.mutation.InviteCodeCleared() {
+		_spec.ClearField(user.FieldInviteCode, field.TypeString)
+	}
+	if value, ok := _u.mutation.InvitedBy(); ok {
+		_spec.SetField(user.FieldInvitedBy, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedInvitedBy(); ok {
+		_spec.AddField(user.FieldInvitedBy, field.TypeInt64, value)
+	}
+	if _u.mutation.InvitedByCleared() {
+		_spec.ClearField(user.FieldInvitedBy, field.TypeInt64)
+	}
+	if value, ok := _u.mutation.InviteCount(); ok {
+		_spec.SetField(user.FieldInviteCount, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.AddedInviteCount(); ok {
+		_spec.AddField(user.FieldInviteCount, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.InviteEarnings(); ok {
+		_spec.SetField(user.FieldInviteEarnings, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedInviteEarnings(); ok {
+		_spec.AddField(user.FieldInviteEarnings, field.TypeFloat64, value)
 	}
 	if _u.mutation.APIKeysCleared() {
 		edge := &sqlgraph.EdgeSpec{

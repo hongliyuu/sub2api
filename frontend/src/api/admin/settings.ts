@@ -144,6 +144,13 @@ export interface SystemSettings {
   balance_low_notify_recharge_url: string
   account_quota_notify_enabled: boolean
   account_quota_notify_emails: NotifyEmailEntry[]
+
+  // Invitation rebate
+  invitation_rebate_enabled: boolean
+  invitation_rebate_mode: string
+  invitation_rebate_amount: number
+  invitation_rebate_trigger: string
+  invitation_rebate_min_recharge: number
 }
 
 export interface UpdateSettingsRequest {
@@ -251,6 +258,13 @@ export interface UpdateSettingsRequest {
   balance_low_notify_recharge_url?: string
   account_quota_notify_enabled?: boolean
   account_quota_notify_emails?: NotifyEmailEntry[]
+
+  // Invitation rebate
+  invitation_rebate_enabled?: boolean
+  invitation_rebate_mode?: string
+  invitation_rebate_amount?: number
+  invitation_rebate_trigger?: string
+  invitation_rebate_min_recharge?: number
 }
 
 /**

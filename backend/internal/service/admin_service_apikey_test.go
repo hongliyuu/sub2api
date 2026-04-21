@@ -74,6 +74,18 @@ func (s *userRepoStubForGroupUpdate) RemoveGroupFromUserAllowedGroups(context.Co
 	panic("unexpected")
 }
 
+func (s *userRepoStubForGroupUpdate) GetByInviteCode(context.Context, string) (*User, error) {
+	panic("unexpected")
+}
+
+func (s *userRepoStubForGroupUpdate) IncrementInviteCount(context.Context, int64) error {
+	panic("unexpected")
+}
+
+func (s *userRepoStubForGroupUpdate) AddInviteEarnings(context.Context, int64, float64) error {
+	panic("unexpected")
+}
+
 // apiKeyRepoStubForGroupUpdate implements APIKeyRepository for AdminUpdateAPIKeyGroupID tests.
 type apiKeyRepoStubForGroupUpdate struct {
 	key       *APIKey

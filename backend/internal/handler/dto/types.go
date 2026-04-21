@@ -25,6 +25,11 @@ type User struct {
 	BalanceNotifyExtraEmails   []NotifyEmailEntry `json:"balance_notify_extra_emails"`
 	TotalRecharged             float64            `json:"total_recharged"`
 
+	// 邀请返利
+	InviteCode     string `json:"invite_code"`
+	InviteCount    int    `json:"invite_count"`
+	InviteEarnings float64 `json:"invite_earnings"`
+
 	APIKeys       []APIKey           `json:"api_keys,omitempty"`
 	Subscriptions []UserSubscription `json:"subscriptions,omitempty"`
 }

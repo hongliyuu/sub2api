@@ -186,6 +186,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyBalanceLowNotifyThreshold,
 		SettingKeyBalanceLowNotifyRechargeURL,
 		SettingKeyAccountQuotaNotifyEnabled,
+		SettingKeyInvitationRebateEnabled,
 	}
 
 	settings, err := s.settingRepo.GetMultiple(ctx, keys)
@@ -262,6 +263,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		AccountQuotaNotifyEnabled:        settings[SettingKeyAccountQuotaNotifyEnabled] == "true",
 		BalanceLowNotifyThreshold:        balanceLowNotifyThreshold,
 		BalanceLowNotifyRechargeURL:      settings[SettingKeyBalanceLowNotifyRechargeURL],
+		InvitationRebateEnabled:          settings[SettingKeyInvitationRebateEnabled] == "true",
 	}, nil
 }
 
@@ -319,6 +321,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		AccountQuotaNotifyEnabled        bool            `json:"account_quota_notify_enabled"`
 		BalanceLowNotifyThreshold        float64         `json:"balance_low_notify_threshold"`
 		BalanceLowNotifyRechargeURL      string          `json:"balance_low_notify_recharge_url"`
+		InvitationRebateEnabled          bool            `json:"invitation_rebate_enabled"`
 	}{
 		RegistrationEnabled:              settings.RegistrationEnabled,
 		EmailVerifyEnabled:               settings.EmailVerifyEnabled,
@@ -353,6 +356,7 @@ func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any
 		AccountQuotaNotifyEnabled:        settings.AccountQuotaNotifyEnabled,
 		BalanceLowNotifyThreshold:        settings.BalanceLowNotifyThreshold,
 		BalanceLowNotifyRechargeURL:      settings.BalanceLowNotifyRechargeURL,
+		InvitationRebateEnabled:          settings.InvitationRebateEnabled,
 	}, nil
 }
 
@@ -633,6 +637,13 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	updates[SettingKeyBalanceLowNotifyRechargeURL] = settings.BalanceLowNotifyRechargeURL
 	updates[SettingKeyAccountQuotaNotifyEnabled] = strconv.FormatBool(settings.AccountQuotaNotifyEnabled)
 	updates[SettingKeyAccountQuotaNotifyEmails] = MarshalNotifyEmails(settings.AccountQuotaNotifyEmails)
+
+	// 邀请返利
+	updates[SettingKeyInvitationRebateEnabled] = strconv.FormatBool(settings.InvitationRebateEnabled)
+	updates[SettingKeyInvitationRebateMode] = settings.InvitationRebateMode
+	updates[SettingKeyInvitationRebateAmount] = strconv.FormatFloat(settings.InvitationRebateAmount, 'f', -1, 64)
+	updates[SettingKeyInvitationRebateTrigger] = settings.InvitationRebateTrigger
+	updates[SettingKeyInvitationRebateMinRecharge] = strconv.FormatFloat(settings.InvitationRebateMinRecharge, 'f', -1, 64)
 
 	err = s.settingRepo.SetMultiple(ctx, updates)
 	if err == nil {
@@ -1278,6 +1289,23 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	}
 	if result.AccountQuotaNotifyEmails == nil {
 		result.AccountQuotaNotifyEmails = []NotifyEmailEntry{}
+	}
+
+	// Invitation rebate
+	result.InvitationRebateEnabled = settings[SettingKeyInvitationRebateEnabled] == "true"
+	result.InvitationRebateMode = settings[SettingKeyInvitationRebateMode]
+	if result.InvitationRebateMode == "" {
+		result.InvitationRebateMode = "fixed"
+	}
+	if v, err := strconv.ParseFloat(settings[SettingKeyInvitationRebateAmount], 64); err == nil && v >= 0 {
+		result.InvitationRebateAmount = v
+	}
+	result.InvitationRebateTrigger = settings[SettingKeyInvitationRebateTrigger]
+	if result.InvitationRebateTrigger == "" {
+		result.InvitationRebateTrigger = "first"
+	}
+	if v, err := strconv.ParseFloat(settings[SettingKeyInvitationRebateMinRecharge], 64); err == nil && v >= 0 {
+		result.InvitationRebateMinRecharge = v
 	}
 
 	return result

@@ -65,6 +65,11 @@ type UserRepository interface {
 	UpdateTotpSecret(ctx context.Context, userID int64, encryptedSecret *string) error
 	EnableTotp(ctx context.Context, userID int64) error
 	DisableTotp(ctx context.Context, userID int64) error
+
+	// 邀请返利
+	GetByInviteCode(ctx context.Context, inviteCode string) (*User, error)
+	IncrementInviteCount(ctx context.Context, userID int64) error
+	AddInviteEarnings(ctx context.Context, userID int64, amount float64) error
 }
 
 // UpdateProfileRequest 更新用户资料请求
@@ -114,6 +119,13 @@ func (s *UserService) GetProfile(ctx context.Context, userID int64) (*User, erro
 	user, err := s.userRepo.GetByID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("get user: %w", err)
+	}
+	if user.InviteCode == "" {
+		code, err := generateInviteCode()
+		if err == nil {
+			user.InviteCode = code
+			_ = s.userRepo.Update(ctx, user)
+		}
 	}
 	return user, nil
 }

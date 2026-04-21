@@ -14,6 +14,38 @@
         </div>
       </div>
       <ProfileEditForm :initial-username="user?.username || ''" />
+      <!-- Invitation Referral Card -->
+      <div v-if="invitationRebateEnabled && user?.invite_code" class="card p-6">
+        <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{{ t('profile.invitation.title') }}</h3>
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div class="rounded-lg border border-gray-100 bg-gray-50 p-4 dark:border-dark-700 dark:bg-dark-800">
+            <p class="text-sm text-gray-500 dark:text-gray-400">{{ t('profile.invitation.inviteCode') }}</p>
+            <div class="mt-1 flex items-center gap-2">
+              <code class="text-lg font-mono font-semibold text-primary-600 dark:text-primary-400">{{ user.invite_code }}</code>
+              <button @click="copyInviteCode" type="button" class="text-gray-400 hover:text-primary-500 transition-colors">
+                <Icon name="clipboard" size="sm" />
+              </button>
+            </div>
+          </div>
+          <div class="rounded-lg border border-gray-100 bg-gray-50 p-4 dark:border-dark-700 dark:bg-dark-800">
+            <p class="text-sm text-gray-500 dark:text-gray-400">{{ t('profile.invitation.inviteCount') }}</p>
+            <p class="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{{ user.invite_count || 0 }}</p>
+          </div>
+          <div class="rounded-lg border border-gray-100 bg-gray-50 p-4 dark:border-dark-700 dark:bg-dark-800">
+            <p class="text-sm text-gray-500 dark:text-gray-400">{{ t('profile.invitation.inviteEarnings') }}</p>
+            <p class="mt-1 text-lg font-semibold text-green-600 dark:text-green-400">${{ (user.invite_earnings || 0).toFixed(2) }}</p>
+          </div>
+        </div>
+        <div class="mt-4">
+          <label class="text-sm text-gray-500 dark:text-gray-400">{{ t('profile.invitation.inviteLink') }}</label>
+          <div class="mt-1 flex items-center gap-2">
+            <input :value="inviteLink" readonly class="input flex-1 text-sm" />
+            <button @click="copyInviteLink" type="button" class="btn btn-secondary text-sm">
+              {{ t('profile.invitation.copyLink') }}
+            </button>
+          </div>
+        </div>
+      </div>
       <ProfileBalanceNotifyCard
         v-if="user && balanceLowNotifyEnabled"
         :enabled="user.balance_notify_enabled ?? true"
@@ -44,11 +76,26 @@ const { t } = useI18n(); const authStore = useAuthStore(); const user = computed
 const contactInfo = ref('')
 const balanceLowNotifyEnabled = ref(false)
 const systemDefaultThreshold = ref(0)
+const invitationRebateEnabled = ref(false)
 
 const WalletIcon = { render: () => h('svg', { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' }, [h('path', { d: 'M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12' })]) }
 const BoltIcon = { render: () => h('svg', { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' }, [h('path', { d: 'm3.75 13.5 10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z' })]) }
 const CalendarIcon = { render: () => h('svg', { fill: 'none', viewBox: '0 0 24 24', stroke: 'currentColor', 'stroke-width': '1.5' }, [h('path', { d: 'M6.75 3v2.25M17.25 3v2.25' })]) }
 
-onMounted(async () => { try { const s = await authAPI.getPublicSettings(); contactInfo.value = s.contact_info || ''; balanceLowNotifyEnabled.value = s.balance_low_notify_enabled ?? false; systemDefaultThreshold.value = s.balance_low_notify_threshold ?? 0 } catch (error) { console.error('Failed to load settings:', error) } })
+onMounted(async () => { try { const s = await authAPI.getPublicSettings(); contactInfo.value = s.contact_info || ''; balanceLowNotifyEnabled.value = s.balance_low_notify_enabled ?? false; systemDefaultThreshold.value = s.balance_low_notify_threshold ?? 0; invitationRebateEnabled.value = s.invitation_rebate_enabled ?? false } catch (error) { console.error('Failed to load settings:', error) } })
 const formatCurrency = (v: number) => `$${v.toFixed(2)}`
+const inviteLink = computed(() => {
+  if (!user.value?.invite_code) return ''
+  return `${window.location.origin}/register?ref=${user.value.invite_code}`
+})
+function copyInviteCode() {
+  if (user.value?.invite_code) {
+    navigator.clipboard.writeText(user.value.invite_code)
+  }
+}
+function copyInviteLink() {
+  if (inviteLink.value) {
+    navigator.clipboard.writeText(inviteLink.value)
+  }
+}
 </script>

@@ -207,6 +207,7 @@ func (s *PaymentService) doBalance(ctx context.Context, o *dbent.PaymentOrder) e
 	if _, err := s.redeemService.Redeem(ctx, o.UserID, o.RechargeCode); err != nil {
 		return fmt.Errorf("redeem balance: %w", err)
 	}
+	s.processInvitationRebate(ctx, o.UserID, o.Amount)
 	return s.markCompleted(ctx, o, "RECHARGE_SUCCESS")
 }
 
@@ -273,6 +274,7 @@ func (s *PaymentService) doSub(ctx context.Context, o *dbent.PaymentOrder) error
 	if err != nil {
 		return fmt.Errorf("assign subscription: %w", err)
 	}
+	s.processInvitationRebate(ctx, o.UserID, o.Amount)
 	return s.markCompleted(ctx, o, "SUBSCRIPTION_SUCCESS")
 }
 
@@ -326,4 +328,53 @@ func (s *PaymentService) RetryFulfillment(ctx context.Context, oid int64) error 
 	}
 	s.writeAuditLog(ctx, oid, "RECHARGE_RETRY", "admin", map[string]any{"detail": "admin manual retry"})
 	return s.executeFulfillment(ctx, oid)
+}
+
+// processInvitationRebate checks if the paying user was invited by someone and
+// awards a rebate to the inviter based on admin-configured rules.
+// Failures are logged but never block the payment flow.
+func (s *PaymentService) processInvitationRebate(ctx context.Context, userID int64, rechargeAmount float64) {
+	if s.settingService == nil || s.userRepo == nil {
+		return
+	}
+	settings, err := s.settingService.GetAllSettings(ctx)
+	if err != nil {
+		slog.Error("invitation rebate: failed to get settings", "error", err)
+		return
+	}
+	if !settings.InvitationRebateEnabled {
+		return
+	}
+
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil || user.InvitedBy == nil {
+		return
+	}
+
+	if rechargeAmount < settings.InvitationRebateMinRecharge {
+		return
+	}
+
+	// "first" trigger: only rebate on the user's first recharge (TotalRecharged == this recharge)
+	if settings.InvitationRebateTrigger == "first" && user.TotalRecharged > rechargeAmount {
+		return
+	}
+
+	var rebateAmount float64
+	switch settings.InvitationRebateMode {
+	case "percentage":
+		rebateAmount = rechargeAmount * settings.InvitationRebateAmount / 100
+	default:
+		rebateAmount = settings.InvitationRebateAmount
+	}
+	if rebateAmount <= 0 {
+		return
+	}
+
+	inviterID := *user.InvitedBy
+	if err := s.userRepo.AddInviteEarnings(ctx, inviterID, rebateAmount); err != nil {
+		slog.Error("invitation rebate failed", "inviter_id", inviterID, "user_id", userID, "amount", rebateAmount, "error", err)
+		return
+	}
+	slog.Info("invitation rebate awarded", "inviter_id", inviterID, "user_id", userID, "recharge", rechargeAmount, "rebate", rebateAmount, "mode", settings.InvitationRebateMode)
 }

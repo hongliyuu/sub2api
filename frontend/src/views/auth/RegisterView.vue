@@ -166,6 +166,28 @@
           </transition>
         </div>
 
+        <!-- Referral Code Input (Optional) -->
+        <div v-if="invitationRebateEnabled">
+          <label for="referral_code" class="input-label">
+            {{ t('auth.referralCodeLabel') }}
+            <span class="ml-1 text-xs font-normal text-gray-400 dark:text-dark-500">({{ t('common.optional') }})</span>
+          </label>
+          <div class="relative">
+            <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
+              <Icon name="users" size="md" class="text-gray-400 dark:text-dark-500" />
+            </div>
+            <input
+              id="referral_code"
+              v-model="formData.referral_code"
+              type="text"
+              :disabled="isLoading"
+              class="input pl-11"
+              :placeholder="t('auth.referralCodePlaceholder')"
+            />
+          </div>
+          <p class="input-hint">{{ t('auth.referralCodeHint') }}</p>
+        </div>
+
         <!-- Promo Code Input (Optional) -->
         <div v-if="promoCodeEnabled">
           <label for="promo_code" class="input-label">
@@ -347,6 +369,8 @@ const oidcOAuthEnabled = ref<boolean>(false)
 const oidcOAuthProviderName = ref<string>('OIDC')
 const registrationEmailSuffixWhitelist = ref<string[]>([])
 
+const invitationRebateEnabled = ref<boolean>(false)
+
 // Turnstile
 const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
 const turnstileToken = ref<string>('')
@@ -374,7 +398,8 @@ const formData = reactive({
   email: '',
   password: '',
   promo_code: '',
-  invitation_code: ''
+  invitation_code: '',
+  referral_code: ''
 })
 
 const errors = reactive({
@@ -402,6 +427,7 @@ onMounted(async () => {
     registrationEmailSuffixWhitelist.value = normalizeRegistrationEmailSuffixWhitelist(
       settings.registration_email_suffix_whitelist || []
     )
+    invitationRebateEnabled.value = settings.invitation_rebate_enabled ?? false
 
     // Read promo code from URL parameter only if promo code is enabled
     if (promoCodeEnabled.value) {
@@ -411,6 +437,12 @@ onMounted(async () => {
         // Validate the promo code from URL
         await validatePromoCodeDebounced(promoParam)
       }
+    }
+
+    // Read referral code from URL parameter
+    const refParam = (route.query.ref || route.query.referral) as string
+    if (refParam) {
+      formData.referral_code = refParam
     }
   } catch (error) {
     console.error('Failed to load public settings:', error)
@@ -713,7 +745,8 @@ async function handleRegister(): Promise<void> {
           password: formData.password,
           turnstile_token: turnstileToken.value,
           promo_code: formData.promo_code || undefined,
-          invitation_code: formData.invitation_code || undefined
+          invitation_code: formData.invitation_code || undefined,
+          referral_code: formData.referral_code || undefined
         })
       )
 
@@ -728,7 +761,8 @@ async function handleRegister(): Promise<void> {
       password: formData.password,
       turnstile_token: turnstileEnabled.value ? turnstileToken.value : undefined,
       promo_code: formData.promo_code || undefined,
-      invitation_code: formData.invitation_code || undefined
+      invitation_code: formData.invitation_code || undefined,
+      referral_code: formData.referral_code || undefined
     })
 
     // Show success toast

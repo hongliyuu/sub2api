@@ -63,7 +63,10 @@ func TestAPIContracts(t *testing.T) {
 					"balance_notify_threshold": null,
 					"balance_notify_extra_emails": null,
 					"total_recharged": 0,
-					"run_mode": "standard"
+					"run_mode": "standard",
+					"invite_code": "",
+					"invite_count": 0,
+					"invite_earnings": 0
 				}
 			}`,
 		},
@@ -578,6 +581,11 @@ func TestAPIContracts(t *testing.T) {
 						"enable_identity_patch": true,
 						"identity_patch_prompt": "",
 						"invitation_code_enabled": false,
+						"invitation_rebate_enabled": false,
+						"invitation_rebate_mode": "fixed",
+						"invitation_rebate_amount": 0,
+						"invitation_rebate_trigger": "first",
+						"invitation_rebate_min_recharge": 0,
 						"home_content": "",
 					"hide_ccs_import_button": false,
 					"purchase_subscription_enabled": false,
@@ -903,6 +911,18 @@ func (r *stubUserRepo) EnableTotp(ctx context.Context, userID int64) error {
 }
 
 func (r *stubUserRepo) DisableTotp(ctx context.Context, userID int64) error {
+	return errors.New("not implemented")
+}
+
+func (r *stubUserRepo) GetByInviteCode(ctx context.Context, inviteCode string) (*service.User, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (r *stubUserRepo) IncrementInviteCount(ctx context.Context, userID int64) error {
+	return errors.New("not implemented")
+}
+
+func (r *stubUserRepo) AddInviteEarnings(ctx context.Context, userID int64, amount float64) error {
 	return errors.New("not implemented")
 }
 

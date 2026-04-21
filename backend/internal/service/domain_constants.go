@@ -261,6 +261,13 @@ const (
 
 	// Web Search Emulation
 	SettingKeyWebSearchEmulationConfig = "web_search_emulation_config" // JSON 配置
+
+	// Invitation Rebate
+	SettingKeyInvitationRebateEnabled     = "invitation_rebate_enabled"
+	SettingKeyInvitationRebateMode        = "invitation_rebate_mode"         // "fixed" | "percentage"
+	SettingKeyInvitationRebateAmount      = "invitation_rebate_amount"       // 固定金额或百分比值
+	SettingKeyInvitationRebateTrigger     = "invitation_rebate_trigger"      // "first" | "every"
+	SettingKeyInvitationRebateMinRecharge = "invitation_rebate_min_recharge" // 最低充值金额触发门槛
 )
 
 // AdminAPIKeyPrefix is the prefix for admin API keys (distinct from user "sk-" keys).

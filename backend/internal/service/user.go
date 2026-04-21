@@ -37,6 +37,12 @@ type User struct {
 	BalanceNotifyExtraEmails   []NotifyEmailEntry
 	TotalRecharged             float64
 
+	// 邀请返利
+	InviteCode     string
+	InvitedBy      *int64
+	InviteCount    int
+	InviteEarnings float64
+
 	APIKeys       []APIKey
 	Subscriptions []UserSubscription
 }

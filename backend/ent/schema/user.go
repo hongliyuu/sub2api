@@ -88,6 +88,20 @@ func (User) Fields() []ent.Field {
 		field.Float("total_recharged").
 			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
 			Default(0),
+
+		// 邀请返利
+		field.String("invite_code").
+			MaxLen(32).
+			Default("").
+			Optional(),
+		field.Int64("invited_by").
+			Optional().
+			Nillable(),
+		field.Int("invite_count").
+			Default(0),
+		field.Float("invite_earnings").
+			SchemaType(map[string]string{dialect.Postgres: "decimal(20,8)"}).
+			Default(0),
 	}
 }
 
@@ -112,5 +126,7 @@ func (User) Indexes() []ent.Index {
 		// email 字段已在 Fields() 中声明 Unique()，无需重复索引
 		index.Fields("status"),
 		index.Fields("deleted_at"),
+		index.Fields("invite_code"),
+		index.Fields("invited_by"),
 	}
 }

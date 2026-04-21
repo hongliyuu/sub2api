@@ -49,6 +49,15 @@ const maxTokenLength = 8192
 // refreshTokenPrefix is the prefix for refresh tokens to distinguish them from access tokens.
 const refreshTokenPrefix = "rt_"
 
+// generateInviteCode generates a unique 8-character invite code for a new user.
+func generateInviteCode() (string, error) {
+	b := make([]byte, 4)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
 // JWTClaims JWT载荷数据
 type JWTClaims struct {
 	UserID       int64  `json:"user_id"`
@@ -108,11 +117,11 @@ func NewAuthService(
 
 // Register 用户注册，返回token和用户
 func (s *AuthService) Register(ctx context.Context, email, password string) (string, *User, error) {
-	return s.RegisterWithVerification(ctx, email, password, "", "", "")
+	return s.RegisterWithVerification(ctx, email, password, "", "", "", "")
 }
 
-// RegisterWithVerification 用户注册（支持邮件验证、优惠码和邀请码），返回token和用户
-func (s *AuthService) RegisterWithVerification(ctx context.Context, email, password, verifyCode, promoCode, invitationCode string) (string, *User, error) {
+// RegisterWithVerification 用户注册（支持邮件验证、优惠码、邀请码和邀请返利引荐码），返回token和用户
+func (s *AuthService) RegisterWithVerification(ctx context.Context, email, password, verifyCode, promoCode, invitationCode, referralCode string) (string, *User, error) {
 	// 检查是否开放注册（默认关闭：settingService 未配置时不允许注册）
 	if s.settingService == nil || !s.settingService.IsRegistrationEnabled(ctx) {
 		return "", nil, ErrRegDisabled
@@ -188,6 +197,7 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 	}
 
 	// 创建用户
+	inviteCode, _ := generateInviteCode()
 	user := &User{
 		Email:        email,
 		PasswordHash: hashedPassword,
@@ -195,6 +205,15 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 		Balance:      defaultBalance,
 		Concurrency:  defaultConcurrency,
 		Status:       StatusActive,
+		InviteCode:   inviteCode,
+	}
+
+	// 解析邀请返利引荐码
+	referralCode = strings.TrimSpace(referralCode)
+	if referralCode != "" {
+		if inviter, err := s.userRepo.GetByInviteCode(ctx, referralCode); err == nil {
+			user.InvitedBy = &inviter.ID
+		}
 	}
 
 	if err := s.userRepo.Create(ctx, user); err != nil {
@@ -206,6 +225,13 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 		return "", nil, ErrServiceUnavailable
 	}
 	s.assignDefaultSubscriptions(ctx, user.ID)
+
+	// 邀请返利：记录邀请人的邀请次数
+	if user.InvitedBy != nil {
+		if err := s.userRepo.IncrementInviteCount(ctx, *user.InvitedBy); err != nil {
+			logger.LegacyPrintf("service.auth", "[Auth] Failed to increment invite count for user %d: %v", *user.InvitedBy, err)
+		}
+	}
 
 	// 标记邀请码为已使用（如果使用了邀请码）
 	if invitationRedeemCode != nil {
@@ -477,6 +503,7 @@ func (s *AuthService) LoginOrRegisterOAuth(ctx context.Context, email, username 
 				defaultConcurrency = s.settingService.GetDefaultConcurrency(ctx)
 			}
 
+			oauthInviteCode1, _ := generateInviteCode()
 			newUser := &User{
 				Email:        email,
 				Username:     username,
@@ -485,6 +512,7 @@ func (s *AuthService) LoginOrRegisterOAuth(ctx context.Context, email, username 
 				Balance:      defaultBalance,
 				Concurrency:  defaultConcurrency,
 				Status:       StatusActive,
+				InviteCode:   oauthInviteCode1,
 			}
 
 			if err := s.userRepo.Create(ctx, newUser); err != nil {
@@ -591,6 +619,7 @@ func (s *AuthService) LoginOrRegisterOAuthWithTokenPair(ctx context.Context, ema
 				defaultConcurrency = s.settingService.GetDefaultConcurrency(ctx)
 			}
 
+			oauthInviteCode2, _ := generateInviteCode()
 			newUser := &User{
 				Email:        email,
 				Username:     username,
@@ -599,6 +628,7 @@ func (s *AuthService) LoginOrRegisterOAuthWithTokenPair(ctx context.Context, ema
 				Balance:      defaultBalance,
 				Concurrency:  defaultConcurrency,
 				Status:       StatusActive,
+				InviteCode:   oauthInviteCode2,
 			}
 
 			if s.entClient != nil && invitationRedeemCode != nil {

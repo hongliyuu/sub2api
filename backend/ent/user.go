@@ -55,6 +55,14 @@ type User struct {
 	BalanceNotifyExtraEmails string `json:"balance_notify_extra_emails,omitempty"`
 	// TotalRecharged holds the value of the "total_recharged" field.
 	TotalRecharged float64 `json:"total_recharged,omitempty"`
+	// InviteCode holds the value of the "invite_code" field.
+	InviteCode string `json:"invite_code,omitempty"`
+	// InvitedBy holds the value of the "invited_by" field.
+	InvitedBy *int64 `json:"invited_by,omitempty"`
+	// InviteCount holds the value of the "invite_count" field.
+	InviteCount int `json:"invite_count,omitempty"`
+	// InviteEarnings holds the value of the "invite_earnings" field.
+	InviteEarnings float64 `json:"invite_earnings,omitempty"`
 	// Edges holds the relations/edges for other nodes in the graph.
 	// The values are being populated by the UserQuery when eager-loading is set.
 	Edges        UserEdges `json:"edges"`
@@ -196,11 +204,11 @@ func (*User) scanValues(columns []string) ([]any, error) {
 		switch columns[i] {
 		case user.FieldTotpEnabled, user.FieldBalanceNotifyEnabled:
 			values[i] = new(sql.NullBool)
-		case user.FieldBalance, user.FieldBalanceNotifyThreshold, user.FieldTotalRecharged:
+		case user.FieldBalance, user.FieldBalanceNotifyThreshold, user.FieldTotalRecharged, user.FieldInviteEarnings:
 			values[i] = new(sql.NullFloat64)
-		case user.FieldID, user.FieldConcurrency:
+		case user.FieldID, user.FieldConcurrency, user.FieldInvitedBy, user.FieldInviteCount:
 			values[i] = new(sql.NullInt64)
-		case user.FieldEmail, user.FieldPasswordHash, user.FieldRole, user.FieldStatus, user.FieldUsername, user.FieldNotes, user.FieldTotpSecretEncrypted, user.FieldBalanceNotifyThresholdType, user.FieldBalanceNotifyExtraEmails:
+		case user.FieldEmail, user.FieldPasswordHash, user.FieldRole, user.FieldStatus, user.FieldUsername, user.FieldNotes, user.FieldTotpSecretEncrypted, user.FieldBalanceNotifyThresholdType, user.FieldBalanceNotifyExtraEmails, user.FieldInviteCode:
 			values[i] = new(sql.NullString)
 		case user.FieldCreatedAt, user.FieldUpdatedAt, user.FieldDeletedAt, user.FieldTotpEnabledAt:
 			values[i] = new(sql.NullTime)
@@ -342,6 +350,31 @@ func (_m *User) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field total_recharged", values[i])
 			} else if value.Valid {
 				_m.TotalRecharged = value.Float64
+			}
+		case user.FieldInviteCode:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field invite_code", values[i])
+			} else if value.Valid {
+				_m.InviteCode = value.String
+			}
+		case user.FieldInvitedBy:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field invited_by", values[i])
+			} else if value.Valid {
+				_m.InvitedBy = new(int64)
+				*_m.InvitedBy = value.Int64
+			}
+		case user.FieldInviteCount:
+			if value, ok := values[i].(*sql.NullInt64); !ok {
+				return fmt.Errorf("unexpected type %T for field invite_count", values[i])
+			} else if value.Valid {
+				_m.InviteCount = int(value.Int64)
+			}
+		case user.FieldInviteEarnings:
+			if value, ok := values[i].(*sql.NullFloat64); !ok {
+				return fmt.Errorf("unexpected type %T for field invite_earnings", values[i])
+			} else if value.Valid {
+				_m.InviteEarnings = value.Float64
 			}
 		default:
 			_m.selectValues.Set(columns[i], values[i])
@@ -498,6 +531,20 @@ func (_m *User) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("total_recharged=")
 	builder.WriteString(fmt.Sprintf("%v", _m.TotalRecharged))
+	builder.WriteString(", ")
+	builder.WriteString("invite_code=")
+	builder.WriteString(_m.InviteCode)
+	builder.WriteString(", ")
+	if v := _m.InvitedBy; v != nil {
+		builder.WriteString("invited_by=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
+	builder.WriteString(", ")
+	builder.WriteString("invite_count=")
+	builder.WriteString(fmt.Sprintf("%v", _m.InviteCount))
+	builder.WriteString(", ")
+	builder.WriteString("invite_earnings=")
+	builder.WriteString(fmt.Sprintf("%v", _m.InviteEarnings))
 	builder.WriteByte(')')
 	return builder.String()
 }

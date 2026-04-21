@@ -28271,6 +28271,13 @@ type UserMutation struct {
 	balance_notify_extra_emails   *string
 	total_recharged               *float64
 	addtotal_recharged            *float64
+	invite_code                   *string
+	invited_by                    *int64
+	addinvited_by                 *int64
+	invite_count                  *int
+	addinvite_count               *int
+	invite_earnings               *float64
+	addinvite_earnings            *float64
 	clearedFields                 map[string]struct{}
 	api_keys                      map[int64]struct{}
 	removedapi_keys               map[int64]struct{}
@@ -29222,6 +29229,237 @@ func (m *UserMutation) ResetTotalRecharged() {
 	m.addtotal_recharged = nil
 }
 
+// SetInviteCode sets the "invite_code" field.
+func (m *UserMutation) SetInviteCode(s string) {
+	m.invite_code = &s
+}
+
+// InviteCode returns the value of the "invite_code" field in the mutation.
+func (m *UserMutation) InviteCode() (r string, exists bool) {
+	v := m.invite_code
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInviteCode returns the old "invite_code" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldInviteCode(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInviteCode is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInviteCode requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInviteCode: %w", err)
+	}
+	return oldValue.InviteCode, nil
+}
+
+// ClearInviteCode clears the value of the "invite_code" field.
+func (m *UserMutation) ClearInviteCode() {
+	m.invite_code = nil
+	m.clearedFields[user.FieldInviteCode] = struct{}{}
+}
+
+// InviteCodeCleared returns if the "invite_code" field was cleared in this mutation.
+func (m *UserMutation) InviteCodeCleared() bool {
+	_, ok := m.clearedFields[user.FieldInviteCode]
+	return ok
+}
+
+// ResetInviteCode resets all changes to the "invite_code" field.
+func (m *UserMutation) ResetInviteCode() {
+	m.invite_code = nil
+	delete(m.clearedFields, user.FieldInviteCode)
+}
+
+// SetInvitedBy sets the "invited_by" field.
+func (m *UserMutation) SetInvitedBy(i int64) {
+	m.invited_by = &i
+	m.addinvited_by = nil
+}
+
+// InvitedBy returns the value of the "invited_by" field in the mutation.
+func (m *UserMutation) InvitedBy() (r int64, exists bool) {
+	v := m.invited_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInvitedBy returns the old "invited_by" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldInvitedBy(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInvitedBy is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInvitedBy requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInvitedBy: %w", err)
+	}
+	return oldValue.InvitedBy, nil
+}
+
+// AddInvitedBy adds i to the "invited_by" field.
+func (m *UserMutation) AddInvitedBy(i int64) {
+	if m.addinvited_by != nil {
+		*m.addinvited_by += i
+	} else {
+		m.addinvited_by = &i
+	}
+}
+
+// AddedInvitedBy returns the value that was added to the "invited_by" field in this mutation.
+func (m *UserMutation) AddedInvitedBy() (r int64, exists bool) {
+	v := m.addinvited_by
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearInvitedBy clears the value of the "invited_by" field.
+func (m *UserMutation) ClearInvitedBy() {
+	m.invited_by = nil
+	m.addinvited_by = nil
+	m.clearedFields[user.FieldInvitedBy] = struct{}{}
+}
+
+// InvitedByCleared returns if the "invited_by" field was cleared in this mutation.
+func (m *UserMutation) InvitedByCleared() bool {
+	_, ok := m.clearedFields[user.FieldInvitedBy]
+	return ok
+}
+
+// ResetInvitedBy resets all changes to the "invited_by" field.
+func (m *UserMutation) ResetInvitedBy() {
+	m.invited_by = nil
+	m.addinvited_by = nil
+	delete(m.clearedFields, user.FieldInvitedBy)
+}
+
+// SetInviteCount sets the "invite_count" field.
+func (m *UserMutation) SetInviteCount(i int) {
+	m.invite_count = &i
+	m.addinvite_count = nil
+}
+
+// InviteCount returns the value of the "invite_count" field in the mutation.
+func (m *UserMutation) InviteCount() (r int, exists bool) {
+	v := m.invite_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInviteCount returns the old "invite_count" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldInviteCount(ctx context.Context) (v int, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInviteCount is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInviteCount requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInviteCount: %w", err)
+	}
+	return oldValue.InviteCount, nil
+}
+
+// AddInviteCount adds i to the "invite_count" field.
+func (m *UserMutation) AddInviteCount(i int) {
+	if m.addinvite_count != nil {
+		*m.addinvite_count += i
+	} else {
+		m.addinvite_count = &i
+	}
+}
+
+// AddedInviteCount returns the value that was added to the "invite_count" field in this mutation.
+func (m *UserMutation) AddedInviteCount() (r int, exists bool) {
+	v := m.addinvite_count
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetInviteCount resets all changes to the "invite_count" field.
+func (m *UserMutation) ResetInviteCount() {
+	m.invite_count = nil
+	m.addinvite_count = nil
+}
+
+// SetInviteEarnings sets the "invite_earnings" field.
+func (m *UserMutation) SetInviteEarnings(f float64) {
+	m.invite_earnings = &f
+	m.addinvite_earnings = nil
+}
+
+// InviteEarnings returns the value of the "invite_earnings" field in the mutation.
+func (m *UserMutation) InviteEarnings() (r float64, exists bool) {
+	v := m.invite_earnings
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldInviteEarnings returns the old "invite_earnings" field's value of the User entity.
+// If the User object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserMutation) OldInviteEarnings(ctx context.Context) (v float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldInviteEarnings is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldInviteEarnings requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldInviteEarnings: %w", err)
+	}
+	return oldValue.InviteEarnings, nil
+}
+
+// AddInviteEarnings adds f to the "invite_earnings" field.
+func (m *UserMutation) AddInviteEarnings(f float64) {
+	if m.addinvite_earnings != nil {
+		*m.addinvite_earnings += f
+	} else {
+		m.addinvite_earnings = &f
+	}
+}
+
+// AddedInviteEarnings returns the value that was added to the "invite_earnings" field in this mutation.
+func (m *UserMutation) AddedInviteEarnings() (r float64, exists bool) {
+	v := m.addinvite_earnings
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ResetInviteEarnings resets all changes to the "invite_earnings" field.
+func (m *UserMutation) ResetInviteEarnings() {
+	m.invite_earnings = nil
+	m.addinvite_earnings = nil
+}
+
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by ids.
 func (m *UserMutation) AddAPIKeyIDs(ids ...int64) {
 	if m.api_keys == nil {
@@ -29796,7 +30034,7 @@ func (m *UserMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserMutation) Fields() []string {
-	fields := make([]string, 0, 19)
+	fields := make([]string, 0, 23)
 	if m.created_at != nil {
 		fields = append(fields, user.FieldCreatedAt)
 	}
@@ -29854,6 +30092,18 @@ func (m *UserMutation) Fields() []string {
 	if m.total_recharged != nil {
 		fields = append(fields, user.FieldTotalRecharged)
 	}
+	if m.invite_code != nil {
+		fields = append(fields, user.FieldInviteCode)
+	}
+	if m.invited_by != nil {
+		fields = append(fields, user.FieldInvitedBy)
+	}
+	if m.invite_count != nil {
+		fields = append(fields, user.FieldInviteCount)
+	}
+	if m.invite_earnings != nil {
+		fields = append(fields, user.FieldInviteEarnings)
+	}
 	return fields
 }
 
@@ -29900,6 +30150,14 @@ func (m *UserMutation) Field(name string) (ent.Value, bool) {
 		return m.BalanceNotifyExtraEmails()
 	case user.FieldTotalRecharged:
 		return m.TotalRecharged()
+	case user.FieldInviteCode:
+		return m.InviteCode()
+	case user.FieldInvitedBy:
+		return m.InvitedBy()
+	case user.FieldInviteCount:
+		return m.InviteCount()
+	case user.FieldInviteEarnings:
+		return m.InviteEarnings()
 	}
 	return nil, false
 }
@@ -29947,6 +30205,14 @@ func (m *UserMutation) OldField(ctx context.Context, name string) (ent.Value, er
 		return m.OldBalanceNotifyExtraEmails(ctx)
 	case user.FieldTotalRecharged:
 		return m.OldTotalRecharged(ctx)
+	case user.FieldInviteCode:
+		return m.OldInviteCode(ctx)
+	case user.FieldInvitedBy:
+		return m.OldInvitedBy(ctx)
+	case user.FieldInviteCount:
+		return m.OldInviteCount(ctx)
+	case user.FieldInviteEarnings:
+		return m.OldInviteEarnings(ctx)
 	}
 	return nil, fmt.Errorf("unknown User field %s", name)
 }
@@ -30089,6 +30355,34 @@ func (m *UserMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetTotalRecharged(v)
 		return nil
+	case user.FieldInviteCode:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInviteCode(v)
+		return nil
+	case user.FieldInvitedBy:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInvitedBy(v)
+		return nil
+	case user.FieldInviteCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInviteCount(v)
+		return nil
+	case user.FieldInviteEarnings:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetInviteEarnings(v)
+		return nil
 	}
 	return fmt.Errorf("unknown User field %s", name)
 }
@@ -30109,6 +30403,15 @@ func (m *UserMutation) AddedFields() []string {
 	if m.addtotal_recharged != nil {
 		fields = append(fields, user.FieldTotalRecharged)
 	}
+	if m.addinvited_by != nil {
+		fields = append(fields, user.FieldInvitedBy)
+	}
+	if m.addinvite_count != nil {
+		fields = append(fields, user.FieldInviteCount)
+	}
+	if m.addinvite_earnings != nil {
+		fields = append(fields, user.FieldInviteEarnings)
+	}
 	return fields
 }
 
@@ -30125,6 +30428,12 @@ func (m *UserMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedBalanceNotifyThreshold()
 	case user.FieldTotalRecharged:
 		return m.AddedTotalRecharged()
+	case user.FieldInvitedBy:
+		return m.AddedInvitedBy()
+	case user.FieldInviteCount:
+		return m.AddedInviteCount()
+	case user.FieldInviteEarnings:
+		return m.AddedInviteEarnings()
 	}
 	return nil, false
 }
@@ -30162,6 +30471,27 @@ func (m *UserMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddTotalRecharged(v)
 		return nil
+	case user.FieldInvitedBy:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddInvitedBy(v)
+		return nil
+	case user.FieldInviteCount:
+		v, ok := value.(int)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddInviteCount(v)
+		return nil
+	case user.FieldInviteEarnings:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddInviteEarnings(v)
+		return nil
 	}
 	return fmt.Errorf("unknown User numeric field %s", name)
 }
@@ -30181,6 +30511,12 @@ func (m *UserMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(user.FieldBalanceNotifyThreshold) {
 		fields = append(fields, user.FieldBalanceNotifyThreshold)
+	}
+	if m.FieldCleared(user.FieldInviteCode) {
+		fields = append(fields, user.FieldInviteCode)
+	}
+	if m.FieldCleared(user.FieldInvitedBy) {
+		fields = append(fields, user.FieldInvitedBy)
 	}
 	return fields
 }
@@ -30207,6 +30543,12 @@ func (m *UserMutation) ClearField(name string) error {
 		return nil
 	case user.FieldBalanceNotifyThreshold:
 		m.ClearBalanceNotifyThreshold()
+		return nil
+	case user.FieldInviteCode:
+		m.ClearInviteCode()
+		return nil
+	case user.FieldInvitedBy:
+		m.ClearInvitedBy()
 		return nil
 	}
 	return fmt.Errorf("unknown User nullable field %s", name)
@@ -30272,6 +30614,18 @@ func (m *UserMutation) ResetField(name string) error {
 		return nil
 	case user.FieldTotalRecharged:
 		m.ResetTotalRecharged()
+		return nil
+	case user.FieldInviteCode:
+		m.ResetInviteCode()
+		return nil
+	case user.FieldInvitedBy:
+		m.ResetInvitedBy()
+		return nil
+	case user.FieldInviteCount:
+		m.ResetInviteCount()
+		return nil
+	case user.FieldInviteEarnings:
+		m.ResetInviteEarnings()
 		return nil
 	}
 	return fmt.Errorf("unknown User field %s", name)
