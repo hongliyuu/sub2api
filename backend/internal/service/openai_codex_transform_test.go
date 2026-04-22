@@ -240,16 +240,34 @@ func TestNormalizeCodexModel_Gpt53(t *testing.T) {
 		"gpt 5.4":                   "gpt-5.4",
 		"gpt-5.4-mini":              "gpt-5.4-mini",
 		"gpt 5.4 mini":              "gpt-5.4-mini",
-		"gpt-5.4-nano":              "gpt-5.4-nano",
-		"gpt 5.4 nano":              "gpt-5.4-nano",
 		"gpt-5.3":                   "gpt-5.3-codex",
 		"gpt-5.3-codex":             "gpt-5.3-codex",
 		"gpt-5.3-codex-xhigh":       "gpt-5.3-codex",
-		"gpt-5.3-codex-spark":       "gpt-5.3-codex",
-		"gpt 5.3 codex spark":       "gpt-5.3-codex",
-		"gpt-5.3-codex-spark-high":  "gpt-5.3-codex",
-		"gpt-5.3-codex-spark-xhigh": "gpt-5.3-codex",
+		"gpt-5.3-codex-spark":       "gpt-5.3-codex-spark",
+		"gpt 5.3 codex spark":       "gpt-5.3-codex-spark",
+		"gpt-5.3-codex-spark-high":  "gpt-5.3-codex-spark",
+		"gpt-5.3-codex-spark-xhigh": "gpt-5.3-codex-spark",
 		"gpt 5.3 codex":             "gpt-5.3-codex",
+	}
+
+	for input, expected := range cases {
+		require.Equal(t, expected, normalizeCodexModel(input))
+	}
+}
+
+func TestNormalizeCodexModel_RemovedModelsFallbackToSupportedTargets(t *testing.T) {
+	cases := map[string]string{
+		"":                   "gpt-5.4",
+		"gpt-5":              "gpt-5.4",
+		"gpt-5-mini":         "gpt-5.4",
+		"gpt-5-nano":         "gpt-5.4",
+		"gpt-5.1":            "gpt-5.4",
+		"gpt-5.1-codex":      "gpt-5.3-codex",
+		"gpt-5.1-codex-max":  "gpt-5.3-codex",
+		"gpt-5.1-codex-mini": "gpt-5.3-codex",
+		"gpt-5.2-codex":      "gpt-5.2",
+		"codex-mini-latest":  "gpt-5.3-codex",
+		"gpt-5-codex":        "gpt-5.3-codex",
 	}
 
 	for input, expected := range cases {
@@ -481,10 +499,10 @@ func TestExtractSystemMessagesFromInput(t *testing.T) {
 	})
 }
 
-// TestApplyCodexOAuthTransform_StripsPromptCacheRetention 回归测试:
-// Cursor 发的 /v1/chat/completions body 会带 prompt_cache_retention 参数,
-// 但 Codex 上游(ChatGPT internal endpoint)不支持,必须在 transform 里剥掉,
-// 否则上游返回 "Unsupported parameter: prompt_cache_retention"。
+// TestApplyCodexOAuthTransform_StripsPromptCacheRetention is a regression
+// test: some clients (e.g. Cursor cloud via the Responses-shape compat path)
+// send prompt_cache_retention, but the ChatGPT internal Codex endpoint
+// rejects it with "Unsupported parameter: prompt_cache_retention".
 func TestApplyCodexOAuthTransform_StripsPromptCacheRetention(t *testing.T) {
 	reqBody := map[string]any{
 		"model":                  "gpt-5.1",

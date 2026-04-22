@@ -156,10 +156,10 @@ func TestCursorMixedShape_JSONRoundtrip(t *testing.T) {
 
 // TestCursorMixedShape_StripsUnsupportedFields mirrors the strip loop in
 // ForwardAsChatCompletions (isResponsesShape branch). Cursor cloud sends
-// prompt_cache_retention, safety_identifier and metadata as top-level
-// Responses API parameters, which Codex upstreams reject with
+// prompt_cache_retention, safety_identifier, metadata and stream_options
+// as top-level Responses API parameters, which Codex upstreams reject with
 // "Unsupported parameter: ...". The fix must remove them from the raw body
-// before it is forwarded, for BOTH OAuth and API Key accounts.
+// before it is forwarded, for BOTH OAuth and API Key account types.
 func TestCursorMixedShape_StripsUnsupportedFields(t *testing.T) {
 	cursorBody := []byte(`{
 		"model": "gpt-5.4",
@@ -171,7 +171,7 @@ func TestCursorMixedShape_StripsUnsupportedFields(t *testing.T) {
 		"input": [{"role":"user","content":"hi"}]
 	}`)
 
-	// Sanity: the input body actually contains all unsupported fields.
+	// Sanity: the test fixture contains every field the production code strips.
 	for _, field := range cursorResponsesUnsupportedFields {
 		require.True(t, gjson.GetBytes(cursorBody, field).Exists(),
 			"test fixture must contain %s", field)

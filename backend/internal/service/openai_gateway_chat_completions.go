@@ -22,10 +22,14 @@ import (
 )
 
 // cursorResponsesUnsupportedFields are top-level Responses API parameters that
-// Codex upstreams reject with "Unsupported parameter: ...". These must be
-// stripped when forwarding a raw Cursor body (Responses-shape, see isResponsesShape
-// branch in ForwardAsChatCompletions). Kept in sync with the list in
-// openai_gateway_service.go:2034 used by the /v1/responses passthrough path.
+// Codex upstreams reject with "Unsupported parameter: ...". They must be
+// stripped when forwarding a raw client body through the Responses-shape
+// short-circuit in ForwardAsChatCompletions (see isResponsesShape branch).
+// The normal Chat Completions → Responses conversion path is unaffected
+// because ChatCompletionsRequest has no fields for these parameters — unknown
+// fields are dropped naturally by json.Unmarshal. Kept semantically in sync
+// with the list in openai_gateway_service.go:2034 used by the /v1/responses
+// passthrough path.
 var cursorResponsesUnsupportedFields = []string{
 	"prompt_cache_retention",
 	"safety_identifier",
@@ -106,20 +110,24 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 			return nil, fmt.Errorf("rewrite model in responses-shape body: %w", err)
 		}
 		// Strip Responses API parameters that no Codex upstream accepts.
-		// Kept in sync with openai_gateway_service.go:2034 (Forward path).
-		// Because this branch forwards the raw body (unlike the normal path
-		// which rebuilds it from ChatCompletionsRequest and drops unknown
-		// fields by construction), we must filter explicitly here.
+		// Because this branch forwards the raw body (the normal path rebuilds
+		// it from ChatCompletionsRequest and drops unknown fields naturally),
+		// we must filter these fields explicitly here — otherwise the upstream
+		// rejects the request with "Unsupported parameter: ...".
 		for _, field := range cursorResponsesUnsupportedFields {
 			if stripped, derr := sjson.DeleteBytes(responsesBody, field); derr == nil {
 				responsesBody = stripped
 			}
 		}
+		responsesBody, normalizedServiceTier, err := normalizeResponsesBodyServiceTier(responsesBody)
+		if err != nil {
+			return nil, fmt.Errorf("normalize service_tier in responses-shape body: %w", err)
+		}
 		// Minimal stub populated from the raw body so downstream billing
 		// propagation (ServiceTier, ReasoningEffort) keeps working.
 		responsesReq = &apicompat.ResponsesRequest{
 			Model:       upstreamModel,
-			ServiceTier: gjson.GetBytes(responsesBody, "service_tier").String(),
+			ServiceTier: normalizedServiceTier,
 		}
 		if effort := gjson.GetBytes(responsesBody, "reasoning.effort").String(); effort != "" {
 			responsesReq.Reasoning = &apicompat.ResponsesReasoning{Effort: effort}
@@ -132,6 +140,7 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 			return nil, fmt.Errorf("convert chat completions to responses: %w", err)
 		}
 		responsesReq.Model = upstreamModel
+		normalizeResponsesRequestServiceTier(responsesReq)
 		responsesBody, err = json.Marshal(responsesReq)
 		if err != nil {
 			return nil, fmt.Errorf("marshal responses request: %w", err)
@@ -294,6 +303,41 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 	}
 
 	return result, handleErr
+}
+
+func normalizeResponsesRequestServiceTier(req *apicompat.ResponsesRequest) {
+	if req == nil {
+		return
+	}
+	req.ServiceTier = normalizedOpenAIServiceTierValue(req.ServiceTier)
+}
+
+func normalizeResponsesBodyServiceTier(body []byte) ([]byte, string, error) {
+	if len(body) == 0 {
+		return body, "", nil
+	}
+	rawServiceTier := gjson.GetBytes(body, "service_tier").String()
+	if rawServiceTier == "" {
+		return body, "", nil
+	}
+	normalizedServiceTier := normalizedOpenAIServiceTierValue(rawServiceTier)
+	if normalizedServiceTier == "" {
+		trimmed, err := sjson.DeleteBytes(body, "service_tier")
+		return trimmed, "", err
+	}
+	if normalizedServiceTier == rawServiceTier {
+		return body, normalizedServiceTier, nil
+	}
+	trimmed, err := sjson.SetBytes(body, "service_tier", normalizedServiceTier)
+	return trimmed, normalizedServiceTier, err
+}
+
+func normalizedOpenAIServiceTierValue(raw string) string {
+	normalized := normalizeOpenAIServiceTier(raw)
+	if normalized == nil {
+		return ""
+	}
+	return *normalized
 }
 
 // handleChatCompletionsErrorResponse reads an upstream error and returns it in
