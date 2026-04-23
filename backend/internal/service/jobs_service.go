@@ -29,7 +29,15 @@ const (
 	JobExecutorLocal    = "bf2025-local"
 	JobExecutorPyWorker = "py-worker"
 
-	defaultJobRemoteTimeout = 15 * time.Second
+	defaultJobRemoteTimeout          = 15 * time.Second
+	defaultJobRemoteResponseMaxBytes = 16 * 1024 * 1024
+
+	jobsLocalBaseURLEnv       = "SUB2API_JOBS_LOCAL_BASE_URL"
+	jobsLocalAPIKeyEnv        = "SUB2API_JOBS_LOCAL_EXECUTION_API_KEY"
+	jobsWorkerSharedTokenEnv  = "SUB2API_WORKER_SHARED_TOKEN"
+	defaultJobsLocalBaseURL   = "http://127.0.0.1:8080"
+	jobsExecutionHeaderAuth   = "Authorization"
+	jobsExecutionHeaderAPIKey = "x-api-key"
 )
 
 type CreateJobInput struct {
@@ -37,6 +45,7 @@ type CreateJobInput struct {
 	Input          map[string]any    `json:"input,omitempty"`
 	Metadata       map[string]string `json:"metadata,omitempty"`
 	PreferExecutor string            `json:"prefer_executor,omitempty"`
+	ExecutionToken string            `json:"-"`
 }
 
 type Job struct {
@@ -69,12 +78,17 @@ type jobsExecutor interface {
 
 type localJobsExecutor struct {
 	name         string
+	baseURL      string
+	fallbackKey  string
+	timeout      time.Duration
+	client       *http.Client
 	capabilities map[string]struct{}
 }
 
 type remoteJobsExecutor struct {
 	name         string
 	baseURL      string
+	sharedToken  string
 	timeout      time.Duration
 	client       *http.Client
 	capabilities map[string]struct{}
@@ -122,7 +136,7 @@ func newJobsService(remoteTimeout time.Duration, remoteWorkers []jobsExecutor) *
 	}
 	return &JobsService{
 		jobs: make(map[string]Job),
-		localExecutor: newLocalJobsExecutor(JobExecutorLocal, []string{
+		localExecutor: newLocalJobsExecutor(JobExecutorLocal, strings.TrimSpace(getenv(jobsLocalBaseURLEnv)), strings.TrimSpace(getenv(jobsLocalAPIKeyEnv)), remoteTimeout, []string{
 			JobCapabilityTextBasic,
 			JobCapabilityImageGeneration,
 		}),
@@ -247,9 +261,19 @@ func (s *JobsService) storeJob(job Job) {
 	s.jobs[job.JobID] = cloneJob(job)
 }
 
-func newLocalJobsExecutor(name string, capabilities []string) jobsExecutor {
+func newLocalJobsExecutor(name, baseURL, fallbackKey string, timeout time.Duration, capabilities []string) jobsExecutor {
+	if strings.TrimSpace(baseURL) == "" {
+		baseURL = defaultJobsLocalBaseURL
+	}
+	if timeout <= 0 {
+		timeout = defaultJobRemoteTimeout
+	}
 	return &localJobsExecutor{
 		name:         name,
+		baseURL:      strings.TrimRight(strings.TrimSpace(baseURL), "/"),
+		fallbackKey:  strings.TrimSpace(fallbackKey),
+		timeout:      timeout,
+		client:       &http.Client{Timeout: timeout},
 		capabilities: buildCapabilitySet(capabilities),
 	}
 }
@@ -265,6 +289,7 @@ func newRemoteJobsExecutor(name, baseURL string, timeout time.Duration, capabili
 	return &remoteJobsExecutor{
 		name:         name,
 		baseURL:      baseURL,
+		sharedToken:  strings.TrimSpace(getenv(jobsWorkerSharedTokenEnv)),
 		timeout:      timeout,
 		client:       &http.Client{Timeout: timeout},
 		capabilities: buildCapabilitySet(capabilities),
@@ -280,16 +305,15 @@ func (e *localJobsExecutor) Supports(capability string) bool {
 	return ok
 }
 
-func (e *localJobsExecutor) Execute(_ context.Context, job Job, input CreateJobInput) (any, error) {
-	return map[string]any{
-		"handled_by":  e.name,
-		"mode":        "pilot_local_executor",
-		"capability":  input.Capability,
-		"job_id":      job.JobID,
-		"input":       cloneAnyMap(input.Input),
-		"metadata":    cloneStringMap(input.Metadata),
-		"description": "local pilot executor placeholder completed on center",
-	}, nil
+func (e *localJobsExecutor) Execute(ctx context.Context, job Job, input CreateJobInput) (any, error) {
+	token := strings.TrimSpace(input.ExecutionToken)
+	if token == "" {
+		token = e.fallbackKey
+	}
+	if token == "" {
+		return nil, infraerrors.ServiceUnavailable("JOB_LOCAL_AUTH_NOT_CONFIGURED", "local job execution token is not configured")
+	}
+	return executeLocalGatewayJSON(ctx, e.client, e.baseURL, token, input.Capability, cloneAnyMap(input.Input))
 }
 
 func (e *remoteJobsExecutor) Name() string { return e.name }
@@ -313,6 +337,9 @@ func (e *remoteJobsExecutor) Execute(ctx context.Context, job Job, input CreateJ
 	if err != nil {
 		return nil, infraerrors.InternalServer("JOB_REMOTE_MARSHAL_FAILED", "failed to encode remote job payload").WithCause(err)
 	}
+	if strings.TrimSpace(e.sharedToken) == "" {
+		return nil, infraerrors.ServiceUnavailable("JOB_REMOTE_AUTH_NOT_CONFIGURED", "remote worker shared token is not configured")
+	}
 
 	reqCtx, cancel := context.WithTimeout(ctx, e.timeout)
 	defer cancel()
@@ -322,6 +349,7 @@ func (e *remoteJobsExecutor) Execute(ctx context.Context, job Job, input CreateJ
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Sub2API-Job-ID", job.JobID)
+	req.Header.Set("X-Sub2API-Worker-Token", e.sharedToken)
 
 	resp, err := e.client.Do(req)
 	if err != nil {
@@ -329,7 +357,7 @@ func (e *remoteJobsExecutor) Execute(ctx context.Context, job Job, input CreateJ
 	}
 	defer resp.Body.Close()
 
-	respBody, readErr := io.ReadAll(io.LimitReader(resp.Body, 2*1024*1024))
+	respBody, readErr := io.ReadAll(io.LimitReader(resp.Body, defaultJobRemoteResponseMaxBytes))
 	if readErr != nil {
 		return nil, infraerrors.ServiceUnavailable("JOB_REMOTE_RESPONSE_READ_FAILED", "failed to read remote worker response").WithCause(readErr)
 	}
@@ -374,6 +402,65 @@ func parseRemoteJobResponse(body []byte) (remoteJobExecuteResponse, error) {
 		parsed.Status = JobStatusSucceeded
 	}
 	return parsed, nil
+}
+
+func executeLocalGatewayJSON(ctx context.Context, client *http.Client, baseURL, token, capability string, input map[string]any) (any, error) {
+	endpoint, err := localGatewayEndpointForCapability(capability)
+	if err != nil {
+		return nil, err
+	}
+
+	bodyMap := cloneAnyMap(input)
+	if bodyMap == nil {
+		bodyMap = map[string]any{}
+	}
+	if stream, ok := bodyMap["stream"].(bool); ok && stream {
+		return nil, infraerrors.BadRequest("JOB_STREAM_UNSUPPORTED", "stream=true is not supported for job execution")
+	}
+
+	body, err := json.Marshal(bodyMap)
+	if err != nil {
+		return nil, infraerrors.BadRequest("JOB_INPUT_INVALID", "job input must be valid JSON object").WithCause(err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(baseURL, "/")+endpoint, bytes.NewReader(body))
+	if err != nil {
+		return nil, infraerrors.InternalServer("JOB_LOCAL_REQUEST_BUILD_FAILED", "failed to build local job execution request").WithCause(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(jobsExecutionHeaderAuth, "Bearer "+token)
+	req.Header.Set(jobsExecutionHeaderAPIKey, token)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, infraerrors.ServiceUnavailable("JOB_LOCAL_REQUEST_FAILED", "local job execution request failed").WithCause(err)
+	}
+	defer resp.Body.Close()
+
+	respBody, readErr := io.ReadAll(io.LimitReader(resp.Body, 8*1024*1024))
+	if readErr != nil {
+		return nil, infraerrors.ServiceUnavailable("JOB_LOCAL_RESPONSE_READ_FAILED", "failed to read local job execution response").WithCause(readErr)
+	}
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return nil, infraerrors.ServiceUnavailable("JOB_LOCAL_BAD_STATUS", fmt.Sprintf("local executor returned %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody))))
+	}
+
+	var parsed any
+	if err := json.Unmarshal(respBody, &parsed); err != nil {
+		return nil, infraerrors.ServiceUnavailable("JOB_LOCAL_RESPONSE_INVALID", "local executor response is not valid JSON").WithCause(err)
+	}
+	return parsed, nil
+}
+
+func localGatewayEndpointForCapability(capability string) (string, error) {
+	switch strings.TrimSpace(capability) {
+	case JobCapabilityTextBasic:
+		return "/v1/responses", nil
+	case JobCapabilityImageGeneration:
+		return "/v1/images/generations", nil
+	default:
+		return "", infraerrors.BadRequest("JOB_CAPABILITY_UNSUPPORTED", "capability is not supported by local executor")
+	}
 }
 
 func buildCapabilitySet(capabilities []string) map[string]struct{} {

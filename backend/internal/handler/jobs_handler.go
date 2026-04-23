@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
+	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -42,6 +43,7 @@ func (h *JobsHandler) Create(c *gin.Context) {
 		Input:          req.Input,
 		Metadata:       req.Metadata,
 		PreferExecutor: req.PreferExecutor,
+		ExecutionToken: extractJobExecutionToken(c),
 	})
 	if err != nil {
 		response.ErrorFrom(c, err)
@@ -58,4 +60,23 @@ func (h *JobsHandler) Get(c *gin.Context) {
 		return
 	}
 	response.Success(c, job)
+}
+
+func extractJobExecutionToken(c *gin.Context) string {
+	authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
+	if authHeader != "" {
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) == 2 && strings.EqualFold(parts[0], "Bearer") {
+			return strings.TrimSpace(parts[1])
+		}
+	}
+	for _, key := range []string{"x-api-key", "x-goog-api-key"} {
+		if token := strings.TrimSpace(c.GetHeader(key)); token != "" {
+			return token
+		}
+	}
+	if apiKey, ok := middleware.GetAPIKeyFromContext(c); ok && apiKey != nil {
+		return strings.TrimSpace(apiKey.Key)
+	}
+	return ""
 }
