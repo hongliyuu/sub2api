@@ -35,6 +35,8 @@ const (
 	jobsLocalBaseURLEnv       = "SUB2API_JOBS_LOCAL_BASE_URL"
 	jobsLocalAPIKeyEnv        = "SUB2API_JOBS_LOCAL_EXECUTION_API_KEY"
 	jobsWorkerSharedTokenEnv  = "SUB2API_WORKER_SHARED_TOKEN"
+	jobsWorkerRegistryEnv     = "SUB2API_JOBS_WORKER_REGISTRY"
+	legacyJobsPyWorkerURLEnv  = "SUB2API_PY_WORKER_URL"
 	defaultJobsLocalBaseURL   = "http://127.0.0.1:8080"
 	jobsExecutionHeaderAuth   = "Authorization"
 	jobsExecutionHeaderAPIKey = "x-api-key"
@@ -108,6 +110,13 @@ type remoteJobExecuteResponse struct {
 	Result any    `json:"result,omitempty"`
 }
 
+type jobsWorkerRegistryEntry struct {
+	Name         string   `json:"name"`
+	BaseURL      string   `json:"base_url"`
+	Capabilities []string `json:"capabilities"`
+	TimeoutMs    int      `json:"timeout_ms,omitempty"`
+}
+
 type responseEnvelope struct {
 	Code    int             `json:"code"`
 	Data    json.RawMessage `json:"data"`
@@ -115,12 +124,7 @@ type responseEnvelope struct {
 }
 
 func NewJobsService() *JobsService {
-	return newJobsService(defaultJobRemoteTimeout, []jobsExecutor{
-		newRemoteJobsExecutor(JobExecutorPyWorker, strings.TrimSpace(getenv("SUB2API_PY_WORKER_URL")), defaultJobRemoteTimeout, []string{
-			JobCapabilityTextBasic,
-			JobCapabilityImageGeneration,
-		}),
-	})
+	return newJobsService(defaultJobRemoteTimeout, configuredRemoteJobsExecutors(defaultJobRemoteTimeout))
 }
 
 func newJobsService(remoteTimeout time.Duration, remoteWorkers []jobsExecutor) *JobsService {
@@ -142,6 +146,71 @@ func newJobsService(remoteTimeout time.Duration, remoteWorkers []jobsExecutor) *
 		}),
 		remoteWorkers: filteredWorkers,
 	}
+}
+
+func configuredRemoteJobsExecutors(defaultTimeout time.Duration) []jobsExecutor {
+	if defaultTimeout <= 0 {
+		defaultTimeout = defaultJobRemoteTimeout
+	}
+
+	if registryExecutors := parseJobsWorkerRegistry(getenv(jobsWorkerRegistryEnv), defaultTimeout); len(registryExecutors) > 0 {
+		return registryExecutors
+	}
+
+	return []jobsExecutor{
+		newRemoteJobsExecutor(JobExecutorPyWorker, strings.TrimSpace(getenv(legacyJobsPyWorkerURLEnv)), defaultTimeout, []string{
+			JobCapabilityTextBasic,
+			JobCapabilityImageGeneration,
+		}),
+	}
+}
+
+func parseJobsWorkerRegistry(raw string, defaultTimeout time.Duration) []jobsExecutor {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+
+	var entries []jobsWorkerRegistryEntry
+	if err := json.Unmarshal([]byte(raw), &entries); err != nil {
+		log.Printf("[jobs] failed to parse worker registry env=%s: %v", jobsWorkerRegistryEnv, err)
+		return nil
+	}
+
+	seenNames := make(map[string]struct{}, len(entries))
+	executors := make([]jobsExecutor, 0, len(entries))
+	for _, entry := range entries {
+		name := strings.TrimSpace(entry.Name)
+		baseURL := strings.TrimSpace(entry.BaseURL)
+		capabilities := buildCapabilitySet(entry.Capabilities)
+		switch {
+		case name == "":
+			log.Printf("[jobs] skipping worker registry entry with empty name")
+			continue
+		case baseURL == "":
+			log.Printf("[jobs] skipping worker registry entry name=%s because base_url is empty", name)
+			continue
+		case len(capabilities) == 0:
+			log.Printf("[jobs] skipping worker registry entry name=%s because capabilities are empty", name)
+			continue
+		}
+		if _, exists := seenNames[name]; exists {
+			log.Printf("[jobs] skipping duplicate worker registry entry name=%s", name)
+			continue
+		}
+
+		timeout := defaultTimeout
+		if entry.TimeoutMs > 0 {
+			timeout = time.Duration(entry.TimeoutMs) * time.Millisecond
+		}
+		executor := newRemoteJobsExecutor(name, baseURL, timeout, entry.Capabilities)
+		if executor == nil {
+			continue
+		}
+		executors = append(executors, executor)
+		seenNames[name] = struct{}{}
+	}
+	return executors
 }
 
 func (s *JobsService) CreateJob(ctx context.Context, input CreateJobInput) (Job, error) {

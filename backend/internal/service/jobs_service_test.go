@@ -11,6 +11,30 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestConfiguredRemoteJobsExecutorsUsesRegistryFirst(t *testing.T) {
+	t.Setenv(jobsWorkerRegistryEnv, `[{"name":"py-worker","base_url":"http://10.0.0.12:8080","capabilities":["text.basic","image.generation"],"timeout_ms":4500}]`)
+	t.Setenv(legacyJobsPyWorkerURLEnv, "http://legacy-worker:8080")
+	t.Setenv(jobsWorkerSharedTokenEnv, "shared-secret")
+
+	executors := configuredRemoteJobsExecutors(time.Second)
+	require.Len(t, executors, 1)
+	require.Equal(t, "py-worker", executors[0].Name())
+	require.Equal(t, "remote", executors[0].Kind())
+	require.True(t, executors[0].Supports(JobCapabilityTextBasic))
+	require.True(t, executors[0].Supports(JobCapabilityImageGeneration))
+}
+
+func TestConfiguredRemoteJobsExecutorsFallsBackToLegacyEnv(t *testing.T) {
+	t.Setenv(jobsWorkerRegistryEnv, `not-json`)
+	t.Setenv(legacyJobsPyWorkerURLEnv, "http://legacy-worker:8080")
+	t.Setenv(jobsWorkerSharedTokenEnv, "shared-secret")
+
+	executors := configuredRemoteJobsExecutors(time.Second)
+	require.Len(t, executors, 1)
+	require.Equal(t, JobExecutorPyWorker, executors[0].Name())
+	require.True(t, executors[0].Supports(JobCapabilityTextBasic))
+}
+
 func TestJobsServiceCreateJobUsesLocalExecutorByDefault(t *testing.T) {
 	local := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, "/v1/responses", r.URL.Path)
@@ -110,6 +134,41 @@ func TestJobsServiceCreateJobUsesRemoteWorkerWhenAvailable(t *testing.T) {
 	require.Equal(t, JobExecutorPyWorker, job.SelectedExecutor)
 	require.Equal(t, "remote", job.SelectedExecutorKind)
 	require.Equal(t, []string{JobExecutorPyWorker}, job.DispatchTrace)
+}
+
+func TestJobsServiceCreateJobRoutesToPreferredRegistryWorker(t *testing.T) {
+	t.Setenv(jobsWorkerSharedTokenEnv, "shared-secret")
+	workerA := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "wrong worker", http.StatusConflict)
+	}))
+	defer workerA.Close()
+	workerB := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		require.Equal(t, "shared-secret", r.Header.Get("X-Sub2API-Worker-Token"))
+		_ = json.NewEncoder(w).Encode(remoteJobExecuteResponse{
+			Status: JobStatusSucceeded,
+			Result: map[string]any{
+				"handled_by": "image-worker",
+			},
+		})
+	}))
+	defer workerB.Close()
+
+	svc := newJobsService(time.Second, []jobsExecutor{
+		newRemoteJobsExecutor("text-worker", workerA.URL, time.Second, []string{JobCapabilityTextBasic}),
+		newRemoteJobsExecutor("image-worker", workerB.URL, time.Second, []string{JobCapabilityImageGeneration}),
+	})
+
+	job, err := svc.CreateJob(context.Background(), CreateJobInput{
+		Capability:     JobCapabilityImageGeneration,
+		PreferExecutor: "image-worker",
+		Input: map[string]any{
+			"prompt": "draw a cat",
+		},
+	})
+	require.NoError(t, err)
+	require.Equal(t, JobStatusSucceeded, job.Status)
+	require.Equal(t, "image-worker", job.SelectedExecutor)
+	require.Equal(t, []string{"image-worker"}, job.DispatchTrace)
 }
 
 func TestJobsServiceGetJobReturnsNotFound(t *testing.T) {
