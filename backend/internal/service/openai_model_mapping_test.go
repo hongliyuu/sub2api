@@ -114,6 +114,28 @@ func TestResolveOpenAIForwardModel(t *testing.T) {
 	}
 }
 
+func TestAccountModelMapping_AllowsMappedTargetPassthrough(t *testing.T) {
+	account := &Account{
+		Platform: PlatformOpenAI,
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{
+				"gpt-5.3-codex": "gpt-5.3-codex-spark",
+			},
+		},
+	}
+
+	if !account.IsModelSupported("gpt-5.3-codex-spark") {
+		t.Fatal("mapped target should be requestable directly")
+	}
+	mapped, matched := account.ResolveMappedModel("gpt-5.3-codex-spark")
+	if !matched {
+		t.Fatal("mapped target should match model mapping")
+	}
+	if mapped != "gpt-5.3-codex-spark" {
+		t.Fatalf("ResolveMappedModel target passthrough = %q, want gpt-5.3-codex-spark", mapped)
+	}
+}
+
 func TestResolveOpenAIForwardModel_PreventsClaudeModelFromFallingBackToGpt54(t *testing.T) {
 	account := &Account{
 		Credentials: map[string]any{},

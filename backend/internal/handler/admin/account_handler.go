@@ -11,6 +11,7 @@ import (
 	"log"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1814,9 +1815,28 @@ func (h *AccountHandler) GetAvailableModels(c *gin.Context) {
 			return
 		}
 
+		modelIDs := make([]string, 0, len(mapping)*2)
+		seen := make(map[string]struct{}, len(mapping)*2)
+		addModelID := func(model string) {
+			model = strings.TrimSpace(model)
+			if model == "" {
+				return
+			}
+			if _, ok := seen[model]; ok {
+				return
+			}
+			seen[model] = struct{}{}
+			modelIDs = append(modelIDs, model)
+		}
+		for requestedModel, mappedModel := range mapping {
+			addModelID(requestedModel)
+			addModelID(mappedModel)
+		}
+		sort.Strings(modelIDs)
+
 		// Return mapped models
 		var models []openai.Model
-		for requestedModel := range mapping {
+		for _, requestedModel := range modelIDs {
 			var found bool
 			for _, dm := range openai.DefaultModels {
 				if dm.ID == requestedModel {

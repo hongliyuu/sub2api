@@ -7,37 +7,39 @@ import (
 )
 
 var codexModelMap = map[string]string{
-	"gpt-5.5":                    "gpt-5.5",
-	"gpt-5.4":                    "gpt-5.4",
-	"gpt-5.4-mini":               "gpt-5.4-mini",
-	"gpt-5.4-none":               "gpt-5.4",
-	"gpt-5.4-low":                "gpt-5.4",
-	"gpt-5.4-medium":             "gpt-5.4",
-	"gpt-5.4-high":               "gpt-5.4",
-	"gpt-5.4-xhigh":              "gpt-5.4",
-	"gpt-5.4-chat-latest":        "gpt-5.4",
-	"gpt-5.3":                    "gpt-5.3-codex",
-	"gpt-5.3-none":               "gpt-5.3-codex",
-	"gpt-5.3-low":                "gpt-5.3-codex",
-	"gpt-5.3-medium":             "gpt-5.3-codex",
-	"gpt-5.3-high":               "gpt-5.3-codex",
-	"gpt-5.3-xhigh":              "gpt-5.3-codex",
-	"gpt-5.3-codex":              "gpt-5.3-codex",
-	"gpt-5.3-codex-spark":        "gpt-5.3-codex-spark",
-	"gpt-5.3-codex-spark-low":    "gpt-5.3-codex-spark",
-	"gpt-5.3-codex-spark-medium": "gpt-5.3-codex-spark",
-	"gpt-5.3-codex-spark-high":   "gpt-5.3-codex-spark",
-	"gpt-5.3-codex-spark-xhigh":  "gpt-5.3-codex-spark",
-	"gpt-5.3-codex-low":          "gpt-5.3-codex",
-	"gpt-5.3-codex-medium":       "gpt-5.3-codex",
-	"gpt-5.3-codex-high":         "gpt-5.3-codex",
-	"gpt-5.3-codex-xhigh":        "gpt-5.3-codex",
-	"gpt-5.2":                    "gpt-5.2",
-	"gpt-5.2-none":               "gpt-5.2",
-	"gpt-5.2-low":                "gpt-5.2",
-	"gpt-5.2-medium":             "gpt-5.2",
-	"gpt-5.2-high":               "gpt-5.2",
-	"gpt-5.2-xhigh":              "gpt-5.2",
+	"gpt-5.5":                     "gpt-5.5",
+	"gpt-5.4":                     "gpt-5.4",
+	"gpt-5.4-mini":                "gpt-5.4-mini",
+	"gpt-5.4-none":                "gpt-5.4",
+	"gpt-5.4-low":                 "gpt-5.4",
+	"gpt-5.4-medium":              "gpt-5.4",
+	"gpt-5.4-high":                "gpt-5.4",
+	"gpt-5.4-xhigh":               "gpt-5.4",
+	"gpt-5.4-chat-latest":         "gpt-5.4",
+	"gpt-5.3":                     "gpt-5.3-codex",
+	"gpt-5.3-none":                "gpt-5.3-codex",
+	"gpt-5.3-low":                 "gpt-5.3-codex",
+	"gpt-5.3-medium":              "gpt-5.3-codex",
+	"gpt-5.3-high":                "gpt-5.3-codex",
+	"gpt-5.3-xhigh":               "gpt-5.3-codex",
+	"gpt-5.3-codex":               "gpt-5.3-codex",
+	"gpt-5.3-codex-spark":         "gpt-5.3-codex-spark",
+	"gpt-5.3-codex-spark-none":    "gpt-5.3-codex-spark",
+	"gpt-5.3-codex-spark-minimal": "gpt-5.3-codex-spark",
+	"gpt-5.3-codex-spark-low":     "gpt-5.3-codex-spark",
+	"gpt-5.3-codex-spark-medium":  "gpt-5.3-codex-spark",
+	"gpt-5.3-codex-spark-high":    "gpt-5.3-codex-spark",
+	"gpt-5.3-codex-spark-xhigh":   "gpt-5.3-codex-spark",
+	"gpt-5.3-codex-low":           "gpt-5.3-codex",
+	"gpt-5.3-codex-medium":        "gpt-5.3-codex",
+	"gpt-5.3-codex-high":          "gpt-5.3-codex",
+	"gpt-5.3-codex-xhigh":         "gpt-5.3-codex",
+	"gpt-5.2":                     "gpt-5.2",
+	"gpt-5.2-none":                "gpt-5.2",
+	"gpt-5.2-low":                 "gpt-5.2",
+	"gpt-5.2-medium":              "gpt-5.2",
+	"gpt-5.2-high":                "gpt-5.2",
+	"gpt-5.2-xhigh":               "gpt-5.2",
 }
 
 type codexTransformResult struct {
@@ -114,6 +116,10 @@ func applyCodexOAuthTransform(reqBody map[string]any, isCodexCLI bool, isCompact
 			delete(reqBody, key)
 			result.Modified = true
 		}
+	}
+
+	if normalizeCodexReasoningForUpstream(reqBody) {
+		result.Modified = true
 	}
 
 	// 兼容遗留的 functions 和 function_call，转换为 tools 和 tool_choice
@@ -387,6 +393,93 @@ func stringifyCodexContentText(value any) string {
 		}
 		return fmt.Sprint(v)
 	}
+}
+
+func normalizeCodexReasoningForUpstream(reqBody map[string]any) bool {
+	if reqBody == nil {
+		return false
+	}
+
+	model := firstNonEmptyString(reqBody["model"])
+	if isCodexSparkModel(model) {
+		return normalizeCodexSparkReasoningForUpstream(reqBody, model)
+	}
+
+	modified := false
+	if _, ok := reqBody["reasoning"]; ok {
+		delete(reqBody, "reasoning")
+		modified = true
+	}
+	if _, ok := reqBody["reasoning_effort"]; ok {
+		delete(reqBody, "reasoning_effort")
+		modified = true
+	}
+	return modified
+}
+
+func normalizeCodexSparkReasoningForUpstream(reqBody map[string]any, model string) bool {
+	if reqBody == nil {
+		return false
+	}
+
+	modified := false
+	effort := ""
+	if reasoning, ok := reqBody["reasoning"].(map[string]any); ok {
+		if _, hasSummary := reasoning["summary"]; hasSummary {
+			delete(reasoning, "summary")
+			modified = true
+		}
+		if rawEffort, ok := reasoning["effort"].(string); ok {
+			effort = normalizeOpenAIReasoningEffort(rawEffort)
+		}
+	}
+	if effort == "" {
+		if rawEffort, ok := reqBody["reasoning_effort"].(string); ok {
+			effort = normalizeOpenAIReasoningEffort(rawEffort)
+		}
+	}
+	if effort == "" {
+		effort = deriveOpenAIReasoningEffortFromModel(model)
+	}
+
+	if _, ok := reqBody["reasoning_effort"]; ok {
+		delete(reqBody, "reasoning_effort")
+		modified = true
+	}
+
+	if effort == "" {
+		if reasoning, ok := reqBody["reasoning"].(map[string]any); ok {
+			if _, hasEffort := reasoning["effort"]; hasEffort {
+				delete(reasoning, "effort")
+				modified = true
+			}
+			if len(reasoning) == 0 || onlyReasoningSummary(reasoning) {
+				delete(reqBody, "reasoning")
+				modified = true
+			}
+		}
+		return modified
+	}
+
+	reasoning, ok := reqBody["reasoning"].(map[string]any)
+	if !ok || reasoning == nil {
+		reasoning = map[string]any{}
+		reqBody["reasoning"] = reasoning
+		modified = true
+	}
+	if current, _ := reasoning["effort"].(string); current != effort {
+		reasoning["effort"] = effort
+		modified = true
+	}
+	return modified
+}
+
+func onlyReasoningSummary(reasoning map[string]any) bool {
+	if len(reasoning) != 1 {
+		return false
+	}
+	_, ok := reasoning["summary"]
+	return ok
 }
 
 func normalizeCodexOAuthInputBody(body []byte) ([]byte, bool, error) {

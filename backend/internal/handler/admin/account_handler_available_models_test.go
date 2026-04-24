@@ -63,8 +63,9 @@ func TestAccountHandlerGetAvailableModels_OpenAIOAuthUsesExplicitModelMapping(t 
 		} `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	require.Len(t, resp.Data, 1)
+	require.Len(t, resp.Data, 2)
 	require.Equal(t, "gpt-5", resp.Data[0].ID)
+	require.Equal(t, "gpt-5.1", resp.Data[1].ID)
 }
 
 func TestAccountHandlerGetAvailableModels_OpenAIOAuthPassthroughFallsBackToDefaults(t *testing.T) {

@@ -73,7 +73,7 @@ func TestExtractOpenAIReasoningEffortFromBody(t *testing.T) {
 			wantValue: "xhigh",
 		},
 		{
-			name:    "minimal 归一化为空",
+			name:    "minimal 不推导 reasoning",
 			body:    []byte(`{"reasoning":{"effort":"minimal"}}`),
 			model:   "gpt-5-high",
 			wantNil: true,

@@ -856,6 +856,7 @@ func TestNormalizeCodexModel_Gpt53(t *testing.T) {
 		"gpt-5.3-codex-xhigh":       "gpt-5.3-codex",
 		"gpt-5.3-codex-spark":       "gpt-5.3-codex-spark",
 		"gpt 5.3 codex spark":       "gpt-5.3-codex-spark",
+		"gpt-5.3-codex-spark-none":  "gpt-5.3-codex-spark",
 		"gpt-5.3-codex-spark-high":  "gpt-5.3-codex-spark",
 		"gpt-5.3-codex-spark-xhigh": "gpt-5.3-codex-spark",
 		"gpt 5.3 codex":             "gpt-5.3-codex",
@@ -899,6 +900,72 @@ func TestApplyCodexOAuthTransform_PreservesBareSparkModel(t *testing.T) {
 	store, ok := reqBody["store"].(bool)
 	require.True(t, ok)
 	require.False(t, store)
+}
+
+func TestApplyCodexOAuthTransform_StripsSparkReasoningSummary(t *testing.T) {
+	reqBody := map[string]any{
+		"model": "gpt-5.3-codex-spark",
+		"reasoning": map[string]any{
+			"effort":  "x-high",
+			"summary": "auto",
+		},
+		"input": []any{},
+	}
+
+	result := applyCodexOAuthTransform(reqBody, false, false)
+
+	require.True(t, result.Modified)
+	reasoning, ok := reqBody["reasoning"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "xhigh", reasoning["effort"])
+	require.NotContains(t, reasoning, "summary")
+}
+
+func TestApplyCodexOAuthTransform_ConvertsSparkReasoningEffort(t *testing.T) {
+	reqBody := map[string]any{
+		"model":            "gpt-5.3-codex-spark",
+		"reasoning_effort": "x-high",
+		"input":            []any{},
+	}
+
+	result := applyCodexOAuthTransform(reqBody, false, false)
+
+	require.True(t, result.Modified)
+	require.NotContains(t, reqBody, "reasoning_effort")
+	reasoning, ok := reqBody["reasoning"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "xhigh", reasoning["effort"])
+}
+
+func TestApplyCodexOAuthTransform_DerivesSparkReasoningFromModelSuffix(t *testing.T) {
+	reqBody := map[string]any{
+		"model": "gpt-5.3-codex-spark(xhigh)",
+		"input": []any{},
+	}
+
+	result := applyCodexOAuthTransform(reqBody, false, false)
+
+	require.True(t, result.Modified)
+	reasoning, ok := reqBody["reasoning"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "xhigh", reasoning["effort"])
+}
+
+func TestApplyCodexOAuthTransform_RemovesNonSparkReasoning(t *testing.T) {
+	reqBody := map[string]any{
+		"model": "gpt-5.3-codex",
+		"reasoning": map[string]any{
+			"effort": "high",
+		},
+		"reasoning_effort": "x-high",
+		"input":            []any{},
+	}
+
+	result := applyCodexOAuthTransform(reqBody, false, false)
+
+	require.True(t, result.Modified)
+	require.NotContains(t, reqBody, "reasoning")
+	require.NotContains(t, reqBody, "reasoning_effort")
 }
 
 func TestApplyCodexOAuthTransform_TrimmedModelWithoutPolicyRewrite(t *testing.T) {

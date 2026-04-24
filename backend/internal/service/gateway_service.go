@@ -8759,8 +8759,11 @@ func (s *GatewayService) GetAvailableModels(ctx context.Context, groupID *int64,
 		mapping := acc.GetModelMapping()
 		if len(mapping) > 0 {
 			hasAnyMapping = true
-			for model := range mapping {
+			for model, target := range mapping {
 				modelSet[model] = struct{}{}
+				if trimmedTarget := strings.TrimSpace(target); trimmedTarget != "" {
+					modelSet[trimmedTarget] = struct{}{}
+				}
 			}
 		}
 	}
