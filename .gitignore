@@ -53,6 +53,7 @@ pnpm-debug.log*
 *.env
 !.env.example
 docker-compose.override.yml
+deploy/docker-compose.local.override.yml
 
 # ===================
 # IDE / 编辑器
@@ -110,6 +111,8 @@ backend/data/
 backend/config.yaml
 deploy/config.yaml
 backend/.installed
+access_token
+chatgpt_account_id
 
 # ===================
 # 其他
