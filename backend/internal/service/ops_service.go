@@ -478,21 +478,25 @@ func sanitizeAndTrimRequestBody(raw []byte, maxBytes int) (jsonString string, tr
 }
 
 func redactSensitiveJSON(v any) any {
+	return redactSensitiveJSONValue(v, "")
+}
+
+func redactSensitiveJSONValue(v any, parentKey string) any {
 	switch t := v.(type) {
 	case map[string]any:
 		out := make(map[string]any, len(t))
 		for k, vv := range t {
-			if isSensitiveKey(k) {
+			if parentKey != "properties" && isSensitiveKey(k) {
 				out[k] = "[REDACTED]"
 				continue
 			}
-			out[k] = redactSensitiveJSON(vv)
+			out[k] = redactSensitiveJSONValue(vv, strings.ToLower(strings.TrimSpace(k)))
 		}
 		return out
 	case []any:
 		out := make([]any, 0, len(t))
 		for _, vv := range t {
-			out = append(out, redactSensitiveJSON(vv))
+			out = append(out, redactSensitiveJSONValue(vv, parentKey))
 		}
 		return out
 	default:

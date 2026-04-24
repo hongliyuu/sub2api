@@ -1,6 +1,10 @@
 package service
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/tidwall/gjson"
+)
 
 // ToolContinuationSignals 聚合工具续链相关信号，避免重复遍历 input。
 type ToolContinuationSignals struct {
@@ -46,7 +50,7 @@ func NeedsToolContinuation(reqBody map[string]any) bool {
 			continue
 		}
 		itemType, _ := itemMap["type"].(string)
-		if itemType == "function_call_output" || itemType == "item_reference" {
+		if isToolCallOutputType(itemType) || itemType == "item_reference" {
 			return true
 		}
 	}
@@ -73,13 +77,13 @@ func AnalyzeToolContinuationSignals(reqBody map[string]any) ToolContinuationSign
 			continue
 		}
 		itemType, _ := itemMap["type"].(string)
-		switch itemType {
-		case "tool_call", "function_call":
+		switch {
+		case isToolCallContextType(itemType):
 			callID, _ := itemMap["call_id"].(string)
 			if strings.TrimSpace(callID) != "" {
 				signals.HasToolCallContext = true
 			}
-		case "function_call_output":
+		case isToolCallOutputType(itemType):
 			signals.HasFunctionCallOutput = true
 			callID, _ := itemMap["call_id"].(string)
 			callID = strings.TrimSpace(callID)
@@ -91,7 +95,7 @@ func AnalyzeToolContinuationSignals(reqBody map[string]any) ToolContinuationSign
 				callIDs = make(map[string]struct{})
 			}
 			callIDs[callID] = struct{}{}
-		case "item_reference":
+		case itemType == "item_reference":
 			signals.HasItemReference = true
 			idValue, _ := itemMap["id"].(string)
 			idValue = strings.TrimSpace(idValue)
@@ -142,10 +146,10 @@ func ValidateFunctionCallOutputContext(reqBody map[string]any) FunctionCallOutpu
 			continue
 		}
 		itemType, _ := itemMap["type"].(string)
-		switch itemType {
-		case "function_call_output":
+		switch {
+		case isToolCallOutputType(itemType):
 			result.HasFunctionCallOutput = true
-		case "tool_call", "function_call":
+		case isToolCallContextType(itemType):
 			callID, _ := itemMap["call_id"].(string)
 			if strings.TrimSpace(callID) != "" {
 				result.HasToolCallContext = true
@@ -168,8 +172,8 @@ func ValidateFunctionCallOutputContext(reqBody map[string]any) FunctionCallOutpu
 			continue
 		}
 		itemType, _ := itemMap["type"].(string)
-		switch itemType {
-		case "function_call_output":
+		switch {
+		case isToolCallOutputType(itemType):
 			callID, _ := itemMap["call_id"].(string)
 			callID = strings.TrimSpace(callID)
 			if callID == "" {
@@ -177,7 +181,7 @@ func ValidateFunctionCallOutputContext(reqBody map[string]any) FunctionCallOutpu
 				continue
 			}
 			callIDs[callID] = struct{}{}
-		case "item_reference":
+		case itemType == "item_reference":
 			idValue, _ := itemMap["id"].(string)
 			idValue = strings.TrimSpace(idValue)
 			if idValue == "" {
@@ -259,6 +263,38 @@ func HasItemReferenceForCallIDs(reqBody map[string]any, callIDs []string) bool {
 		}
 	}
 	return true
+}
+
+func HasToolCallOutputInBody(body []byte) bool {
+	if len(body) == 0 {
+		return false
+	}
+	input := gjson.GetBytes(body, "input")
+	if !input.Exists() || !input.IsArray() {
+		return false
+	}
+	for _, item := range input.Array() {
+		if isToolCallOutputType(item.Get("type").String()) {
+			return true
+		}
+	}
+	return false
+}
+
+func isToolCallOutputType(itemType string) bool {
+	itemType = strings.TrimSpace(itemType)
+	if itemType == "" {
+		return false
+	}
+	return itemType == "function_call_output" || itemType == "tool_search_output" || strings.HasSuffix(itemType, "_call_output")
+}
+
+func isToolCallContextType(itemType string) bool {
+	itemType = strings.TrimSpace(itemType)
+	if itemType == "" {
+		return false
+	}
+	return itemType == "tool_call" || itemType == "function_call" || strings.HasSuffix(itemType, "_call")
 }
 
 // hasNonEmptyString 判断字段是否为非空字符串。
