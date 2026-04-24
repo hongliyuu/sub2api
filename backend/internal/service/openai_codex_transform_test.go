@@ -92,11 +92,12 @@ func TestApplyCodexOAuthTransform_ToolContinuationNormalizesToolReferenceIDsOnly
 	require.Equal(t, "fc1", second["call_id"])
 }
 
-func TestApplyCodexOAuthTransform_ToolSearchOutputPreservesCallID(t *testing.T) {
+func TestApplyCodexOAuthTransform_ToolSearchOutputPreservesReferences(t *testing.T) {
 	reqBody := map[string]any{
 		"model": "gpt-5.2",
 		"input": []any{
-			map[string]any{"type": "tool_search_output", "call_id": "call_1", "output": "ok"},
+			map[string]any{"type": "item_reference", "id": "call_1"},
+			map[string]any{"type": "tool_search_output", "call_id": "call_1", "output": "ok", "id": "ts_1"},
 		},
 	}
 
@@ -104,12 +105,18 @@ func TestApplyCodexOAuthTransform_ToolSearchOutputPreservesCallID(t *testing.T) 
 
 	input, ok := reqBody["input"].([]any)
 	require.True(t, ok)
-	require.Len(t, input, 1)
+	require.Len(t, input, 2)
 
 	first, ok := input[0].(map[string]any)
 	require.True(t, ok)
-	require.Equal(t, "tool_search_output", first["type"])
-	require.Equal(t, "fc1", first["call_id"])
+	require.Equal(t, "item_reference", first["type"])
+	require.Equal(t, "call_1", first["id"])
+
+	second, ok := input[1].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "tool_search_output", second["type"])
+	require.Equal(t, "call_1", second["call_id"])
+	require.Equal(t, "ts_1", second["id"])
 }
 
 func TestApplyCodexOAuthTransform_CustomAndMCPToolOutputsPreserveCallID(t *testing.T) {
@@ -129,11 +136,11 @@ func TestApplyCodexOAuthTransform_CustomAndMCPToolOutputsPreserveCallID(t *testi
 
 	first, ok := input[0].(map[string]any)
 	require.True(t, ok)
-	require.Equal(t, "fccustom", first["call_id"])
+	require.Equal(t, "call_custom", first["call_id"])
 
 	second, ok := input[1].(map[string]any)
 	require.True(t, ok)
-	require.Equal(t, "fcmcp", second["call_id"])
+	require.Equal(t, "call_mcp", second["call_id"])
 }
 
 func TestApplyCodexOAuthTransform_ImageAndWebSearchCallsDoNotGainCallID(t *testing.T) {
@@ -286,7 +293,7 @@ func TestApplyCodexOAuthTransform_PreservesFunctionCallInputName(t *testing.T) {
 	item, ok := input[0].(map[string]any)
 	require.True(t, ok)
 	require.Equal(t, "shell", item["name"])
-	require.Equal(t, "fc1", item["call_id"])
+	require.Equal(t, "call_1", item["call_id"])
 }
 
 func TestApplyCodexOAuthTransform_PreservesMCPToolCallIDAndName(t *testing.T) {
@@ -311,7 +318,7 @@ func TestApplyCodexOAuthTransform_PreservesMCPToolCallIDAndName(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "mcp_tool_call", item["type"])
 	require.Equal(t, "remote_tool", item["name"])
-	require.Equal(t, "fcabc", item["call_id"])
+	require.Equal(t, "call_abc", item["call_id"])
 }
 
 func TestCodexInputItemRequiresNameTypesAllowCallID(t *testing.T) {
@@ -319,6 +326,75 @@ func TestCodexInputItemRequiresNameTypesAllowCallID(t *testing.T) {
 		require.True(t, codexInputItemRequiresName(typ), typ)
 		require.True(t, isCodexToolCallItemType(typ), typ)
 	}
+}
+
+func TestApplyCodexOAuthTransform_ToolSearchCallAndOutputKeepCallIDAndTools(t *testing.T) {
+	reqBody := map[string]any{
+		"model": "gpt-5.5",
+		"input": []any{
+			map[string]any{
+				"type":      "function_call",
+				"call_id":   "call_plainFunction",
+				"name":      "exec_command",
+				"arguments": "{}",
+			},
+			map[string]any{
+				"type":    "function_call_output",
+				"call_id": "call_plainFunction",
+				"output":  "ok",
+			},
+			map[string]any{
+				"type":      "tool_search_call",
+				"call_id":   "call_qpiTsISHGx7zAlmWN9P2lU4H",
+				"status":    "completed",
+				"execution": "client",
+				"arguments": map[string]any{"query": "grok-search search latest posts", "limit": float64(10)},
+			},
+			map[string]any{
+				"type":      "tool_search_output",
+				"call_id":   "call_qpiTsISHGx7zAlmWN9P2lU4H",
+				"status":    "completed",
+				"execution": "client",
+				"tools": []any{
+					map[string]any{
+						"type": "namespace",
+						"name": "mcp__grok_search__",
+						"tools": []any{
+							map[string]any{"type": "function", "name": "search"},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	applyCodexOAuthTransform(reqBody, false, false)
+
+	input, ok := reqBody["input"].([]any)
+	require.True(t, ok)
+	require.Len(t, input, 4)
+
+	functionCall, ok := input[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "function_call", functionCall["type"])
+	require.Equal(t, "call_plainFunction", functionCall["call_id"])
+
+	functionOutput, ok := input[1].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "function_call_output", functionOutput["type"])
+	require.Equal(t, "call_plainFunction", functionOutput["call_id"])
+
+	call, ok := input[2].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "tool_search_call", call["type"])
+	require.Equal(t, "call_qpiTsISHGx7zAlmWN9P2lU4H", call["call_id"])
+
+	output, ok := input[3].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "tool_search_output", output["type"])
+	require.Equal(t, "call_qpiTsISHGx7zAlmWN9P2lU4H", output["call_id"])
+	require.Contains(t, output, "tools")
+	require.NotContains(t, output, "output")
 }
 
 func TestApplyCodexOAuthTransform_ExplicitStoreFalsePreserved(t *testing.T) {

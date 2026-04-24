@@ -1058,6 +1058,27 @@ func isInstructionsEmpty(reqBody map[string]any) bool {
 // filterCodexInput 按需过滤 item_reference 与 id。
 // preserveReferences 为 true 时保持引用与 id，以满足续链请求对上下文的依赖。
 func filterCodexInput(input []any, preserveReferences bool) []any {
+	preserveCallIDPrefixes := hasCodexToolSearchInputItem(input)
+	normalizeReferenceIDs := make(map[string]struct{})
+	if !preserveCallIDPrefixes {
+		for _, item := range input {
+			m, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			typ, _ := m["type"].(string)
+			if !shouldNormalizeCodexCallIDPrefix(typ) {
+				continue
+			}
+			if callID, ok := m["call_id"].(string); ok && strings.HasPrefix(callID, "call_") {
+				normalizeReferenceIDs[callID] = struct{}{}
+			}
+			if id, ok := m["id"].(string); ok && strings.HasPrefix(id, "call_") {
+				normalizeReferenceIDs[id] = struct{}{}
+			}
+		}
+	}
+
 	filtered := make([]any, 0, len(input))
 	for _, item := range input {
 		m, ok := item.(map[string]any)
@@ -1088,7 +1109,9 @@ func filterCodexInput(input []any, preserveReferences bool) []any {
 				newItem[key] = value
 			}
 			if id, ok := newItem["id"].(string); ok && strings.HasPrefix(id, "call_") {
-				newItem["id"] = fixCallIDPrefix(id)
+				if _, shouldNormalize := normalizeReferenceIDs[id]; shouldNormalize {
+					newItem["id"] = fixCallIDPrefix(id)
+				}
 			}
 			filtered = append(filtered, newItem)
 			continue
@@ -1118,7 +1141,7 @@ func filterCodexInput(input []any, preserveReferences bool) []any {
 				}
 			}
 
-			if callID != "" {
+			if callID != "" && !preserveCallIDPrefixes && shouldNormalizeCodexCallIDPrefix(typ) {
 				fixedCallID := fixCallIDPrefix(callID)
 				if fixedCallID != callID {
 					ensureCopy()
@@ -1158,18 +1181,35 @@ func filterCodexInput(input []any, preserveReferences bool) []any {
 	return filtered
 }
 
+func hasCodexToolSearchInputItem(input []any) bool {
+	for _, item := range input {
+		m, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		typ, _ := m["type"].(string)
+		typ = strings.TrimSpace(typ)
+		if typ == "tool_search_call" || typ == "tool_search_output" || strings.HasPrefix(typ, "tool_search_") {
+			return true
+		}
+	}
+	return false
+}
+
 func isCodexToolCallItemType(typ string) bool {
+	typ = strings.TrimSpace(typ)
+	if typ == "" {
+		return false
+	}
+	if isCodexStatusOnlyCallItemType(typ) {
+		return false
+	}
+	return strings.HasSuffix(typ, "_call") || isToolCallOutputType(typ)
+}
+
+func isCodexStatusOnlyCallItemType(typ string) bool {
 	switch typ {
-	case "function_call",
-		"tool_call",
-		"local_shell_call",
-		"tool_search_call",
-		"custom_tool_call",
-		"mcp_tool_call",
-		"function_call_output",
-		"mcp_tool_call_output",
-		"custom_tool_call_output",
-		"tool_search_output":
+	case "image_generation_call", "web_search_call":
 		return true
 	default:
 		return false
@@ -1179,6 +1219,15 @@ func isCodexToolCallItemType(typ string) bool {
 func codexInputItemRequiresName(typ string) bool {
 	switch strings.TrimSpace(typ) {
 	case "function_call", "custom_tool_call", "mcp_tool_call":
+		return true
+	default:
+		return false
+	}
+}
+
+func shouldNormalizeCodexCallIDPrefix(typ string) bool {
+	switch strings.TrimSpace(typ) {
+	case "function_call", "function_call_output", "tool_call":
 		return true
 	default:
 		return false
@@ -1215,6 +1264,9 @@ func normalizeCodexTools(reqBody map[string]any) bool {
 
 		// OpenAI Responses-style tools use top-level name/parameters.
 		if name, ok := toolMap["name"].(string); ok && strings.TrimSpace(name) != "" {
+			if normalizeOpenAIToolSchemaInMap(toolMap) {
+				modified = true
+			}
 			validTools = append(validTools, toolMap)
 			continue
 		}
@@ -1252,6 +1304,9 @@ func normalizeCodexTools(reqBody map[string]any) bool {
 				modified = true
 			}
 		}
+		if normalizeOpenAIToolSchemaInMap(toolMap) {
+			modified = true
+		}
 
 		validTools = append(validTools, toolMap)
 	}
@@ -1260,5 +1315,76 @@ func normalizeCodexTools(reqBody map[string]any) bool {
 		reqBody["tools"] = validTools
 	}
 
+	return modified
+}
+
+func normalizeOpenAIToolSchemas(reqBody map[string]any) bool {
+	rawTools, ok := reqBody["tools"]
+	if !ok || rawTools == nil {
+		return false
+	}
+	tools, ok := rawTools.([]any)
+	if !ok {
+		return false
+	}
+	modified := false
+	for _, rawTool := range tools {
+		toolMap, ok := rawTool.(map[string]any)
+		if !ok {
+			continue
+		}
+		if normalizeOpenAIToolSchemaInMap(toolMap) {
+			modified = true
+		}
+	}
+	return modified
+}
+
+func normalizeOpenAIToolSchemaInMap(toolMap map[string]any) bool {
+	if toolMap == nil || strings.TrimSpace(firstNonEmptyString(toolMap["type"])) != "function" {
+		return false
+	}
+	parameters, exists := toolMap["parameters"]
+	if !exists || parameters == nil {
+		return false
+	}
+	switch schema := parameters.(type) {
+	case bool:
+		return false
+	case map[string]any:
+		return normalizeOpenAIJSONSchemaProperties(schema)
+	default:
+		toolMap["parameters"] = map[string]any{
+			"type":                 "object",
+			"properties":           map[string]any{},
+			"additionalProperties": true,
+		}
+		return true
+	}
+}
+
+func normalizeOpenAIJSONSchemaProperties(schema map[string]any) bool {
+	if schema == nil {
+		return false
+	}
+	rawProperties, ok := schema["properties"]
+	if !ok || rawProperties == nil {
+		return false
+	}
+	properties, ok := rawProperties.(map[string]any)
+	if !ok {
+		schema["properties"] = map[string]any{}
+		return true
+	}
+	modified := false
+	for key, value := range properties {
+		switch value.(type) {
+		case map[string]any, bool:
+			continue
+		default:
+			properties[key] = map[string]any{}
+			modified = true
+		}
+	}
 	return modified
 }

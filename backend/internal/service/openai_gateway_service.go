@@ -1853,9 +1853,22 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		return nil, errors.New("openai ws v1 is temporarily unsupported; use ws v2")
 	}
 	passthroughEnabled := account.IsOpenAIPassthroughEnabled()
+	autoPassthroughReason := ""
+	if !passthroughEnabled {
+		autoPassthroughReason = shouldAutoRouteOpenAIOAuthToolSearchPassthrough(account, reqModel, body)
+		passthroughEnabled = autoPassthroughReason != ""
+	}
 	if passthroughEnabled {
 		// 透传分支只需要轻量提取字段，避免热路径全量 Unmarshal。
 		reasoningEffort := extractOpenAIReasoningEffortFromBody(body, reqModel)
+		if autoPassthroughReason != "" {
+			logger.LegacyPrintf("service.openai_gateway",
+				"[OpenAI 自动透传] GPT-5.5 tool-search 请求自动走 OAuth 透传: account=%d model=%s reason=%s",
+				account.ID,
+				reqModel,
+				autoPassthroughReason,
+			)
+		}
 		return s.forwardOpenAIPassthrough(ctx, c, account, originalBody, reqModel, reasoningEffort, reqStream, startTime)
 	}
 
@@ -2524,6 +2537,13 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	startTime time.Time,
 ) (*OpenAIForwardResult, error) {
 	if account != nil && account.Type == AccountTypeOAuth {
+		normalizedBody, normalized, err := normalizeOpenAIPassthroughOAuthBody(body, isOpenAIResponsesCompactPath(c))
+		if err != nil {
+			return nil, err
+		}
+		if normalized {
+			body = normalizedBody
+		}
 		if rejectReason := detectOpenAIPassthroughInstructionsRejectReason(reqModel, body); rejectReason != "" {
 			rejectMsg := "OpenAI codex passthrough requires a non-empty instructions field"
 			setOpsUpstreamError(c, http.StatusForbidden, rejectMsg, "")
@@ -2545,14 +2565,6 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 				},
 			})
 			return nil, fmt.Errorf("openai passthrough rejected before upstream: %s", rejectReason)
-		}
-
-		normalizedBody, normalized, err := normalizeOpenAIPassthroughOAuthBody(body, isOpenAIResponsesCompactPath(c))
-		if err != nil {
-			return nil, err
-		}
-		if normalized {
-			body = normalizedBody
 		}
 		reqStream = gjson.GetBytes(body, "stream").Bool()
 	}
@@ -2838,6 +2850,55 @@ func shouldFailoverOpenAIPassthroughResponse(statusCode int) bool {
 	default:
 		return false
 	}
+}
+
+func shouldAutoRouteOpenAIOAuthToolSearchPassthrough(account *Account, reqModel string, body []byte) string {
+	if account == nil || !account.IsOpenAI() || account.Type != AccountTypeOAuth {
+		return ""
+	}
+	model := strings.ToLower(strings.TrimSpace(reqModel))
+	if !strings.Contains(model, "gpt-5.5") {
+		return ""
+	}
+	if len(body) == 0 || !gjson.ValidBytes(body) {
+		return ""
+	}
+	if hasOpenAIToolSearchInputSignal(body) {
+		return "tool_search_input"
+	}
+	if hasOpenAIWebSearchToolSignal(body) {
+		return "web_search_tool"
+	}
+	return ""
+}
+
+func hasOpenAIToolSearchInputSignal(body []byte) bool {
+	input := gjson.GetBytes(body, "input")
+	if !input.IsArray() {
+		return false
+	}
+	for _, item := range input.Array() {
+		itemType := strings.TrimSpace(item.Get("type").String())
+		if itemType == "tool_search_output" || itemType == "tool_search_call" || strings.HasPrefix(itemType, "tool_search_") {
+			return true
+		}
+	}
+	return false
+}
+
+func hasOpenAIWebSearchToolSignal(body []byte) bool {
+	tools := gjson.GetBytes(body, "tools")
+	if !tools.IsArray() {
+		return false
+	}
+	for _, tool := range tools.Array() {
+		toolType := strings.TrimSpace(tool.Get("type").String())
+		toolName := strings.TrimSpace(tool.Get("name").String())
+		if toolType == "web_search" || strings.HasPrefix(toolType, "web_search_") || toolName == "web_search" || strings.HasPrefix(toolName, "web_search_") {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *OpenAIGatewayService) handleFailoverErrorResponsePassthrough(
@@ -5045,6 +5106,15 @@ func normalizeOpenAIPassthroughOAuthBody(body []byte, compact bool) ([]byte, boo
 	normalized := body
 	changed := false
 
+	if instructions := gjson.GetBytes(normalized, "instructions"); !instructions.Exists() || instructions.Type != gjson.String || strings.TrimSpace(instructions.String()) == "" {
+		next, err := sjson.SetBytes(normalized, "instructions", "You are a helpful coding assistant.")
+		if err != nil {
+			return body, false, fmt.Errorf("normalize passthrough body instructions: %w", err)
+		}
+		normalized = next
+		changed = true
+	}
+
 	if compact {
 		if store := gjson.GetBytes(normalized, "store"); store.Exists() {
 			next, err := sjson.DeleteBytes(normalized, "store")
@@ -5090,7 +5160,34 @@ func normalizeOpenAIPassthroughOAuthBody(body []byte, compact bool) ([]byte, boo
 		changed = true
 	}
 
+	normalizedTools, toolsChanged, err := normalizeOpenAIToolSchemasInBody(normalized)
+	if err != nil {
+		return body, false, fmt.Errorf("normalize passthrough body tools: %w", err)
+	}
+	if toolsChanged {
+		normalized = normalizedTools
+		changed = true
+	}
+
 	return normalized, changed, nil
+}
+
+func normalizeOpenAIToolSchemasInBody(body []byte) ([]byte, bool, error) {
+	if len(body) == 0 || !bytesContainsJSONField(body, "tools") {
+		return body, false, nil
+	}
+	var reqBody map[string]any
+	if err := json.Unmarshal(body, &reqBody); err != nil {
+		return body, false, err
+	}
+	if !normalizeOpenAIToolSchemas(reqBody) {
+		return body, false, nil
+	}
+	normalized, err := json.Marshal(reqBody)
+	if err != nil {
+		return body, false, err
+	}
+	return normalized, true, nil
 }
 
 func detectOpenAIPassthroughInstructionsRejectReason(reqModel string, body []byte) string {
