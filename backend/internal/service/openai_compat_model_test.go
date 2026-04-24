@@ -65,6 +65,15 @@ func TestApplyOpenAICompatModelNormalization(t *testing.T) {
 		require.Equal(t, "low", req.OutputConfig.Effort)
 	})
 
+	t.Run("strips none suffix without deriving reasoning", func(t *testing.T) {
+		req := &apicompat.AnthropicRequest{Model: "gpt-5.3-codex-spark-none"}
+
+		applyOpenAICompatModelNormalization(req)
+
+		require.Equal(t, "gpt-5.3-codex-spark", req.Model)
+		require.Nil(t, req.OutputConfig)
+	})
+
 	t.Run("non openai model is untouched", func(t *testing.T) {
 		req := &apicompat.AnthropicRequest{Model: "claude-opus-4-6"}
 
@@ -119,11 +128,10 @@ func TestForwardAsAnthropic_NormalizesRoutingAndEffortForGpt54XHigh(t *testing.T
 	require.Equal(t, "gpt-5.4-xhigh", result.Model)
 	require.Equal(t, "gpt-5.4", result.UpstreamModel)
 	require.Equal(t, "gpt-5.4", result.BillingModel)
-	require.NotNil(t, result.ReasoningEffort)
-	require.Equal(t, "xhigh", *result.ReasoningEffort)
+	require.Nil(t, result.ReasoningEffort)
 
 	require.Equal(t, "gpt-5.4", gjson.GetBytes(upstream.lastBody, "model").String())
-	require.Equal(t, "xhigh", gjson.GetBytes(upstream.lastBody, "reasoning.effort").String())
+	require.False(t, gjson.GetBytes(upstream.lastBody, "reasoning").Exists())
 	require.Equal(t, http.StatusOK, rec.Code)
 	require.Equal(t, "gpt-5.4-xhigh", gjson.GetBytes(rec.Body.Bytes(), "model").String())
 	require.Equal(t, "ok", gjson.GetBytes(rec.Body.Bytes(), "content.0.text").String())

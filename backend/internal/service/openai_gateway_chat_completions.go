@@ -111,6 +111,10 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 		if err != nil {
 			return nil, fmt.Errorf("normalize service_tier in responses-shape body: %w", err)
 		}
+		responsesBody, _, err = normalizeOpenAIReasoningForUpstreamBody(responsesBody)
+		if err != nil {
+			return nil, fmt.Errorf("normalize reasoning in responses-shape body: %w", err)
+		}
 		// Minimal stub populated from the raw body so downstream billing
 		// propagation (ServiceTier, ReasoningEffort) keeps working.
 		responsesReq = &apicompat.ResponsesRequest{
@@ -129,6 +133,7 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 		}
 		responsesReq.Model = upstreamModel
 		normalizeResponsesRequestServiceTier(responsesReq)
+		normalizeResponsesRequestReasoningForUpstream(responsesReq)
 		responsesBody, err = json.Marshal(responsesReq)
 		if err != nil {
 			return nil, fmt.Errorf("marshal responses request: %w", err)

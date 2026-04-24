@@ -548,6 +548,18 @@ func mappingSupportsRequestedModel(mapping map[string]string, requestedModel str
 	return false
 }
 
+func mappingSupportsMappedTarget(mapping map[string]string, requestedModel string) bool {
+	if requestedModel == "" {
+		return false
+	}
+	for _, target := range mapping {
+		if strings.TrimSpace(target) == requestedModel {
+			return true
+		}
+	}
+	return false
+}
+
 func resolveRequestedModelInMapping(mapping map[string]string, requestedModel string) (mappedModel string, matched bool) {
 	if requestedModel == "" {
 		return "", false
@@ -568,8 +580,14 @@ func (a *Account) IsModelSupported(requestedModel string) bool {
 	if mappingSupportsRequestedModel(mapping, requestedModel) {
 		return true
 	}
+	if mappingSupportsMappedTarget(mapping, requestedModel) {
+		return true
+	}
 	normalized := normalizeRequestedModelForLookup(a.Platform, requestedModel)
-	return normalized != requestedModel && mappingSupportsRequestedModel(mapping, normalized)
+	if normalized == requestedModel {
+		return false
+	}
+	return mappingSupportsRequestedModel(mapping, normalized) || mappingSupportsMappedTarget(mapping, normalized)
 }
 
 // GetMappedModel 获取映射后的模型名（支持通配符，最长优先匹配）
@@ -589,10 +607,16 @@ func (a *Account) ResolveMappedModel(requestedModel string) (mappedModel string,
 	if mappedModel, matched := resolveRequestedModelInMapping(mapping, requestedModel); matched {
 		return mappedModel, true
 	}
+	if mappingSupportsMappedTarget(mapping, requestedModel) {
+		return requestedModel, true
+	}
 	normalized := normalizeRequestedModelForLookup(a.Platform, requestedModel)
 	if normalized != requestedModel {
 		if mappedModel, matched := resolveRequestedModelInMapping(mapping, normalized); matched {
 			return mappedModel, true
+		}
+		if mappingSupportsMappedTarget(mapping, normalized) {
+			return normalized, true
 		}
 	}
 	return requestedModel, false

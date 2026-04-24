@@ -80,6 +80,7 @@ func splitOpenAICompatReasoningModel(model string) (normalizedModel string, reas
 	last := strings.NewReplacer("-", "", "_", "", " ", "").Replace(parts[len(parts)-1])
 	switch last {
 	case "none", "minimal":
+		reasoningEffort = ""
 	case "low", "medium", "high":
 		reasoningEffort = last
 	case "xhigh", "extrahigh":
