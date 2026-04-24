@@ -5070,6 +5070,15 @@ func normalizeOpenAIPassthroughOAuthBody(body []byte, compact bool) ([]byte, boo
 		}
 	}
 
+	normalizedInput, inputChanged, err := normalizeCodexOAuthInputBody(normalized)
+	if err != nil {
+		return body, false, fmt.Errorf("normalize passthrough body input: %w", err)
+	}
+	if inputChanged {
+		normalized = normalizedInput
+		changed = true
+	}
+
 	return normalized, changed, nil
 }
 
