@@ -25,7 +25,7 @@ type FunctionCallOutputValidation struct {
 }
 
 // NeedsToolContinuation 判定请求是否需要工具调用续链处理。
-// 满足以下任一信号即视为续链：previous_response_id、input 内包含 function_call_output/item_reference、
+// 满足以下任一信号即视为续链：previous_response_id、input 内包含工具输出/item_reference、
 // 或显式声明 tools/tool_choice。
 func NeedsToolContinuation(reqBody map[string]any) bool {
 	if reqBody == nil {
@@ -50,7 +50,7 @@ func NeedsToolContinuation(reqBody map[string]any) bool {
 			continue
 		}
 		itemType, _ := itemMap["type"].(string)
-		if isToolCallOutputType(itemType) || itemType == "item_reference" {
+		if isToolCallContextType(itemType) || isToolCallOutputType(itemType) || itemType == "item_reference" {
 			return true
 		}
 	}
@@ -292,6 +292,9 @@ func isToolCallOutputType(itemType string) bool {
 func isToolCallContextType(itemType string) bool {
 	itemType = strings.TrimSpace(itemType)
 	if itemType == "" {
+		return false
+	}
+	if isCodexStatusOnlyCallItemType(itemType) {
 		return false
 	}
 	return itemType == "tool_call" || itemType == "function_call" || strings.HasSuffix(itemType, "_call")
