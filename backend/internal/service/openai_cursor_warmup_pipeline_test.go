@@ -197,3 +197,12 @@ func TestCursorMixedShape_StripsUnsupportedFields(t *testing.T) {
 	assert.True(t, gjson.GetBytes(result, "input").IsArray())
 	assert.Equal(t, "user", gjson.GetBytes(result, "input.0.role").String())
 }
+
+// TestCollectTopLevelKeys verifies the diagnostic helper used in
+// ForwardAsChatCompletions to log the full set of top-level fields a Cursor
+// request carries. A single log line should reveal every field name.
+func TestCollectTopLevelKeys(t *testing.T) {
+	body := []byte(`{"model":"gpt-5.4","stream":true,"input":[],"metadata":{},"tools":[]}`)
+	keys := collectTopLevelKeys(body)
+	assert.ElementsMatch(t, []string{"model", "stream", "input", "metadata", "tools"}, keys)
+}

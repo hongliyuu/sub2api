@@ -406,6 +406,7 @@ func ProvideBillingCacheService(
 
 // ProviderSet is the Wire provider set for all services
 var ProviderSet = wire.NewSet(
+	NewCardsIssueService,
 	// Core services
 	NewAuthService,
 	NewUserService,

@@ -120,6 +120,10 @@ type CreateUserInput struct {
 	Concurrency   int
 	RPMLimit      int
 	AllowedGroups []int64
+	SignupSource  string
+	// SkipDefaultSubscriptions disables the default subscription grant hook for
+	// system-managed callers that need fully explicit balance/subscription control.
+	SkipDefaultSubscriptions bool
 }
 
 type UpdateUserInput struct {
@@ -651,6 +655,7 @@ func (s *adminServiceImpl) CreateUser(ctx context.Context, input *CreateUserInpu
 		RPMLimit:      input.RPMLimit,
 		Status:        StatusActive,
 		AllowedGroups: input.AllowedGroups,
+		SignupSource:  input.SignupSource,
 	}
 	if err := user.SetPassword(input.Password); err != nil {
 		return nil, err
@@ -658,7 +663,9 @@ func (s *adminServiceImpl) CreateUser(ctx context.Context, input *CreateUserInpu
 	if err := s.userRepo.Create(ctx, user); err != nil {
 		return nil, err
 	}
-	s.assignDefaultSubscriptions(ctx, user.ID)
+	if !input.SkipDefaultSubscriptions {
+		s.assignDefaultSubscriptions(ctx, user.ID)
+	}
 	return user, nil
 }
 

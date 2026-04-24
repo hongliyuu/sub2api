@@ -34,6 +34,7 @@ type AdminHandlers struct {
 	ChannelMonitor         *admin.ChannelMonitorHandler
 	ChannelMonitorTemplate *admin.ChannelMonitorRequestTemplateHandler
 	Payment                *admin.PaymentHandler
+	CardsIssue             *admin.CardsIssueHandler
 }
 
 // Handlers contains all HTTP handlers
@@ -54,6 +55,7 @@ type Handlers struct {
 	Payment          *PaymentHandler
 	PaymentWebhook   *PaymentWebhookHandler
 	AvailableChannel *AvailableChannelHandler
+	CardsIssue       *CardsIssueHandler
 }
 
 // BuildInfo contains build-time information
