@@ -503,9 +503,7 @@ func (_u *APIKeyUpdate) RemoveUsageLogs(v ...*UsageLog) *APIKeyUpdate {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *APIKeyUpdate) Save(ctx context.Context) (int, error) {
-	if err := _u.defaults(); err != nil {
-		return 0, err
-	}
+	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -532,15 +530,11 @@ func (_u *APIKeyUpdate) ExecX(ctx context.Context) {
 }
 
 // defaults sets the default values of the builder before save.
-func (_u *APIKeyUpdate) defaults() error {
+func (_u *APIKeyUpdate) defaults() {
 	if _, ok := _u.mutation.UpdatedAt(); !ok {
-		if apikey.UpdateDefaultUpdatedAt == nil {
-			return fmt.Errorf("ent: uninitialized apikey.UpdateDefaultUpdatedAt (forgotten import ent/runtime?)")
-		}
 		v := apikey.UpdateDefaultUpdatedAt()
 		_u.mutation.SetUpdatedAt(v)
 	}
-	return nil
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -1303,9 +1297,7 @@ func (_u *APIKeyUpdateOne) Select(field string, fields ...string) *APIKeyUpdateO
 
 // Save executes the query and returns the updated APIKey entity.
 func (_u *APIKeyUpdateOne) Save(ctx context.Context) (*APIKey, error) {
-	if err := _u.defaults(); err != nil {
-		return nil, err
-	}
+	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -1332,15 +1324,11 @@ func (_u *APIKeyUpdateOne) ExecX(ctx context.Context) {
 }
 
 // defaults sets the default values of the builder before save.
-func (_u *APIKeyUpdateOne) defaults() error {
+func (_u *APIKeyUpdateOne) defaults() {
 	if _, ok := _u.mutation.UpdatedAt(); !ok {
-		if apikey.UpdateDefaultUpdatedAt == nil {
-			return fmt.Errorf("ent: uninitialized apikey.UpdateDefaultUpdatedAt (forgotten import ent/runtime?)")
-		}
 		v := apikey.UpdateDefaultUpdatedAt()
 		_u.mutation.SetUpdatedAt(v)
 	}
-	return nil
 }
 
 // check runs all checks and user-defined validators on the builder.

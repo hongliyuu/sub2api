@@ -282,9 +282,7 @@ func (_c *UserSubscriptionCreate) Mutation() *UserSubscriptionMutation {
 
 // Save creates the UserSubscription in the database.
 func (_c *UserSubscriptionCreate) Save(ctx context.Context) (*UserSubscription, error) {
-	if err := _c.defaults(); err != nil {
-		return nil, err
-	}
+	_c.defaults()
 	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
@@ -311,18 +309,12 @@ func (_c *UserSubscriptionCreate) ExecX(ctx context.Context) {
 }
 
 // defaults sets the default values of the builder before save.
-func (_c *UserSubscriptionCreate) defaults() error {
+func (_c *UserSubscriptionCreate) defaults() {
 	if _, ok := _c.mutation.CreatedAt(); !ok {
-		if usersubscription.DefaultCreatedAt == nil {
-			return fmt.Errorf("ent: uninitialized usersubscription.DefaultCreatedAt (forgotten import ent/runtime?)")
-		}
 		v := usersubscription.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
 	}
 	if _, ok := _c.mutation.UpdatedAt(); !ok {
-		if usersubscription.DefaultUpdatedAt == nil {
-			return fmt.Errorf("ent: uninitialized usersubscription.DefaultUpdatedAt (forgotten import ent/runtime?)")
-		}
 		v := usersubscription.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
 	}
@@ -343,13 +335,9 @@ func (_c *UserSubscriptionCreate) defaults() error {
 		_c.mutation.SetMonthlyUsageUsd(v)
 	}
 	if _, ok := _c.mutation.AssignedAt(); !ok {
-		if usersubscription.DefaultAssignedAt == nil {
-			return fmt.Errorf("ent: uninitialized usersubscription.DefaultAssignedAt (forgotten import ent/runtime?)")
-		}
 		v := usersubscription.DefaultAssignedAt()
 		_c.mutation.SetAssignedAt(v)
 	}
-	return nil
 }
 
 // check runs all checks and user-defined validators on the builder.

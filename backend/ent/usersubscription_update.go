@@ -394,9 +394,7 @@ func (_u *UserSubscriptionUpdate) RemoveUsageLogs(v ...*UsageLog) *UserSubscript
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *UserSubscriptionUpdate) Save(ctx context.Context) (int, error) {
-	if err := _u.defaults(); err != nil {
-		return 0, err
-	}
+	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -423,15 +421,11 @@ func (_u *UserSubscriptionUpdate) ExecX(ctx context.Context) {
 }
 
 // defaults sets the default values of the builder before save.
-func (_u *UserSubscriptionUpdate) defaults() error {
+func (_u *UserSubscriptionUpdate) defaults() {
 	if _, ok := _u.mutation.UpdatedAt(); !ok {
-		if usersubscription.UpdateDefaultUpdatedAt == nil {
-			return fmt.Errorf("ent: uninitialized usersubscription.UpdateDefaultUpdatedAt (forgotten import ent/runtime?)")
-		}
 		v := usersubscription.UpdateDefaultUpdatedAt()
 		_u.mutation.SetUpdatedAt(v)
 	}
-	return nil
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -1053,9 +1047,7 @@ func (_u *UserSubscriptionUpdateOne) Select(field string, fields ...string) *Use
 
 // Save executes the query and returns the updated UserSubscription entity.
 func (_u *UserSubscriptionUpdateOne) Save(ctx context.Context) (*UserSubscription, error) {
-	if err := _u.defaults(); err != nil {
-		return nil, err
-	}
+	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -1082,15 +1074,11 @@ func (_u *UserSubscriptionUpdateOne) ExecX(ctx context.Context) {
 }
 
 // defaults sets the default values of the builder before save.
-func (_u *UserSubscriptionUpdateOne) defaults() error {
+func (_u *UserSubscriptionUpdateOne) defaults() {
 	if _, ok := _u.mutation.UpdatedAt(); !ok {
-		if usersubscription.UpdateDefaultUpdatedAt == nil {
-			return fmt.Errorf("ent: uninitialized usersubscription.UpdateDefaultUpdatedAt (forgotten import ent/runtime?)")
-		}
 		v := usersubscription.UpdateDefaultUpdatedAt()
 		_u.mutation.SetUpdatedAt(v)
 	}
-	return nil
 }
 
 // check runs all checks and user-defined validators on the builder.

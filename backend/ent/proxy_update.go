@@ -215,9 +215,7 @@ func (_u *ProxyUpdate) RemoveAccounts(v ...*Account) *ProxyUpdate {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *ProxyUpdate) Save(ctx context.Context) (int, error) {
-	if err := _u.defaults(); err != nil {
-		return 0, err
-	}
+	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -244,15 +242,11 @@ func (_u *ProxyUpdate) ExecX(ctx context.Context) {
 }
 
 // defaults sets the default values of the builder before save.
-func (_u *ProxyUpdate) defaults() error {
+func (_u *ProxyUpdate) defaults() {
 	if _, ok := _u.mutation.UpdatedAt(); !ok {
-		if proxy.UpdateDefaultUpdatedAt == nil {
-			return fmt.Errorf("ent: uninitialized proxy.UpdateDefaultUpdatedAt (forgotten import ent/runtime?)")
-		}
 		v := proxy.UpdateDefaultUpdatedAt()
 		_u.mutation.SetUpdatedAt(v)
 	}
-	return nil
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -605,9 +599,7 @@ func (_u *ProxyUpdateOne) Select(field string, fields ...string) *ProxyUpdateOne
 
 // Save executes the query and returns the updated Proxy entity.
 func (_u *ProxyUpdateOne) Save(ctx context.Context) (*Proxy, error) {
-	if err := _u.defaults(); err != nil {
-		return nil, err
-	}
+	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -634,15 +626,11 @@ func (_u *ProxyUpdateOne) ExecX(ctx context.Context) {
 }
 
 // defaults sets the default values of the builder before save.
-func (_u *ProxyUpdateOne) defaults() error {
+func (_u *ProxyUpdateOne) defaults() {
 	if _, ok := _u.mutation.UpdatedAt(); !ok {
-		if proxy.UpdateDefaultUpdatedAt == nil {
-			return fmt.Errorf("ent: uninitialized proxy.UpdateDefaultUpdatedAt (forgotten import ent/runtime?)")
-		}
 		v := proxy.UpdateDefaultUpdatedAt()
 		_u.mutation.SetUpdatedAt(v)
 	}
-	return nil
 }
 
 // check runs all checks and user-defined validators on the builder.

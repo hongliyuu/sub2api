@@ -153,9 +153,7 @@ func (_c *ProxyCreate) Mutation() *ProxyMutation {
 
 // Save creates the Proxy in the database.
 func (_c *ProxyCreate) Save(ctx context.Context) (*Proxy, error) {
-	if err := _c.defaults(); err != nil {
-		return nil, err
-	}
+	_c.defaults()
 	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
@@ -182,18 +180,12 @@ func (_c *ProxyCreate) ExecX(ctx context.Context) {
 }
 
 // defaults sets the default values of the builder before save.
-func (_c *ProxyCreate) defaults() error {
+func (_c *ProxyCreate) defaults() {
 	if _, ok := _c.mutation.CreatedAt(); !ok {
-		if proxy.DefaultCreatedAt == nil {
-			return fmt.Errorf("ent: uninitialized proxy.DefaultCreatedAt (forgotten import ent/runtime?)")
-		}
 		v := proxy.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
 	}
 	if _, ok := _c.mutation.UpdatedAt(); !ok {
-		if proxy.DefaultUpdatedAt == nil {
-			return fmt.Errorf("ent: uninitialized proxy.DefaultUpdatedAt (forgotten import ent/runtime?)")
-		}
 		v := proxy.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
 	}
@@ -201,7 +193,6 @@ func (_c *ProxyCreate) defaults() error {
 		v := proxy.DefaultStatus
 		_c.mutation.SetStatus(v)
 	}
-	return nil
 }
 
 // check runs all checks and user-defined validators on the builder.
