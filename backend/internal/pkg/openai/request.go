@@ -14,6 +14,7 @@ var CodexCLIUserAgentPrefixes = []string{
 var CodexOfficialClientUserAgentPrefixes = []string{
 	"codex_cli_rs/",
 	"codex_vscode/",
+	"codex-tui/",
 	"codex_app/",
 	"codex_chatgpt_desktop/",
 	"codex_atlas/",
@@ -27,6 +28,7 @@ var CodexOfficialClientUserAgentPrefixes = []string{
 // 例如 codex_cli_rs、codex_vscode、codex_chatgpt_desktop、codex_atlas、codex_exec、codex_sdk_ts 等。
 var CodexOfficialClientOriginatorPrefixes = []string{
 	"codex_",
+	"codex-",
 	"codex ",
 }
 
@@ -64,6 +66,37 @@ func IsCodexOfficialClientByHeaders(userAgent, originator string) bool {
 	return IsCodexOfficialClientRequest(userAgent) || IsCodexOfficialClientOriginator(originator)
 }
 
+// ExtractCodexClientVersion extracts the semantic-ish version token from a
+// Codex official client User-Agent, for example "0.125.0" from
+// "codex-tui/0.125.0" or "Codex Desktop/1.2.3".
+func ExtractCodexClientVersion(userAgent string) string {
+	ua := strings.TrimSpace(userAgent)
+	if ua == "" {
+		return ""
+	}
+
+	lowerUA := strings.ToLower(ua)
+	start := strings.Index(lowerUA, "codex")
+	if start < 0 {
+		return ""
+	}
+
+	candidate := ua[start:]
+	slash := strings.Index(candidate, "/")
+	if slash < 0 || slash+1 >= len(candidate) {
+		return ""
+	}
+
+	version := trimCodexClientVersionToken(candidate[slash+1:])
+	if version == "" {
+		return ""
+	}
+	if version[0] < '0' || version[0] > '9' {
+		return ""
+	}
+	return version
+}
+
 func normalizeCodexClientHeader(value string) string {
 	return strings.ToLower(strings.TrimSpace(value))
 }
@@ -80,4 +113,21 @@ func matchCodexClientHeaderPrefixes(value string, prefixes []string) bool {
 		}
 	}
 	return false
+}
+
+func trimCodexClientVersionToken(value string) string {
+	end := 0
+	for end < len(value) {
+		ch := value[end]
+		switch {
+		case ch >= '0' && ch <= '9':
+		case ch >= 'a' && ch <= 'z':
+		case ch >= 'A' && ch <= 'Z':
+		case ch == '.', ch == '-', ch == '_':
+		default:
+			return value[:end]
+		}
+		end++
+	}
+	return value[:end]
 }

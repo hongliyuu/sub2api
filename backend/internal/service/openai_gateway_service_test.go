@@ -1635,7 +1635,8 @@ func TestOpenAIBuildUpstreamRequestOpenAIPassthroughPreservesCompactPath(t *test
 	require.NoError(t, err)
 	require.Equal(t, chatgptCodexURL+"/compact", req.URL.String())
 	require.Equal(t, "application/json", req.Header.Get("Accept"))
-	require.Equal(t, codexCLIVersion, req.Header.Get("Version"))
+	require.Equal(t, codexCompactUserAgent, req.Header.Get("User-Agent"))
+	require.Equal(t, codexCompactVersion, req.Header.Get("Version"))
 	require.NotEmpty(t, req.Header.Get("Session_Id"))
 }
 
@@ -1655,8 +1656,36 @@ func TestOpenAIBuildUpstreamRequestCompactForcesJSONAcceptForOAuth(t *testing.T)
 	require.NoError(t, err)
 	require.Equal(t, chatgptCodexURL+"/compact", req.URL.String())
 	require.Equal(t, "application/json", req.Header.Get("Accept"))
-	require.Equal(t, codexCLIVersion, req.Header.Get("Version"))
+	require.Equal(t, codexCompactUserAgent, req.Header.Get("User-Agent"))
+	require.Equal(t, codexCompactVersion, req.Header.Get("Version"))
 	require.NotEmpty(t, req.Header.Get("Session_Id"))
+}
+
+func TestOpenAIBuildUpstreamRequestCompactPreservesOfficialClientHeaders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses/compact", bytes.NewReader([]byte(`{"model":"gpt-5.5"}`)))
+	c.Request.Header.Set("User-Agent", "codex-tui/0.125.0")
+	c.Request.Header.Set("Version", "0.125.0")
+	c.Request.Header.Set("Originator", "codex-tui")
+	c.Request.Header.Set("X-Codex-Installation-Id", "install-123")
+	c.Request.Header.Set("X-Codex-Window-Id", "window-456")
+
+	svc := &OpenAIGatewayService{}
+	account := &Account{
+		Type:        AccountTypeOAuth,
+		Credentials: map[string]any{"chatgpt_account_id": "chatgpt-acc"},
+	}
+
+	isCodexCLI := openai.IsCodexOfficialClientByHeaders(c.GetHeader("User-Agent"), c.GetHeader("originator"))
+	req, err := svc.buildUpstreamRequest(c.Request.Context(), c, account, []byte(`{"model":"gpt-5.5"}`), "token", false, "", isCodexCLI)
+	require.NoError(t, err)
+	require.Equal(t, "codex-tui/0.125.0", req.Header.Get("User-Agent"))
+	require.Equal(t, "0.125.0", req.Header.Get("Version"))
+	require.Equal(t, "codex-tui", req.Header.Get("Originator"))
+	require.Equal(t, "install-123", req.Header.Get("X-Codex-Installation-Id"))
+	require.Equal(t, "window-456", req.Header.Get("X-Codex-Window-Id"))
 }
 
 func TestOpenAIBuildUpstreamRequestPreservesCompactPathForAPIKeyBaseURL(t *testing.T) {
@@ -1719,6 +1748,33 @@ func TestOpenAIBuildUpstreamRequestOAuthOfficialClientOriginatorCompatibility(t 
 			require.Equal(t, tt.wantOriginator, req.Header.Get("originator"))
 		})
 	}
+}
+
+func TestNormalizeOpenAICompactRequestBodyPreservesNewerCodexFields(t *testing.T) {
+	body := []byte(`{
+		"model":"gpt-5.5",
+		"instructions":"be helpful",
+		"input":[{"type":"message","role":"user","content":"hi"}],
+		"tools":[{"type":"function","name":"apply_patch"}],
+		"parallel_tool_calls":true,
+		"reasoning":{"effort":"medium"},
+		"text":{"format":{"type":"text"}},
+		"prompt_cache_key":"cache-1",
+		"store":true,
+		"stream":true
+	}`)
+
+	normalized, changed, err := NormalizeOpenAICompactRequestBodyForTest(body)
+	require.NoError(t, err)
+	require.True(t, changed)
+	require.Equal(t, "gpt-5.5", gjson.GetBytes(normalized, "model").String())
+	require.Equal(t, "apply_patch", gjson.GetBytes(normalized, "tools.0.name").String())
+	require.True(t, gjson.GetBytes(normalized, "parallel_tool_calls").Bool())
+	require.Equal(t, "medium", gjson.GetBytes(normalized, "reasoning.effort").String())
+	require.Equal(t, "text", gjson.GetBytes(normalized, "text.format.type").String())
+	require.False(t, gjson.GetBytes(normalized, "prompt_cache_key").Exists())
+	require.False(t, gjson.GetBytes(normalized, "store").Exists())
+	require.False(t, gjson.GetBytes(normalized, "stream").Exists())
 }
 
 // ==================== P1-08 修复：model 替换性能优化测试 ====================

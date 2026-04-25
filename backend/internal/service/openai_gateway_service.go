@@ -41,6 +41,7 @@ const (
 	openaiPlatformAPIURL   = "https://api.openai.com/v1/responses"
 	openaiStickySessionTTL = time.Hour // 粘性会话TTL
 	codexCLIUserAgent      = "codex_cli_rs/0.104.0"
+	codexCompactUserAgent  = "codex-tui/0.125.0"
 	// codex_cli_only 拒绝时单个请求头日志长度上限（字符）
 	codexCLIOnlyHeaderValueMaxBytes = 256
 
@@ -55,35 +56,42 @@ const (
 	openAIWSRetryJitterRatioDefault    = 0.2
 	openAICompactSessionSeedKey        = "openai_compact_session_seed"
 	codexCLIVersion                    = "0.104.0"
+	codexCompactVersion                = "0.125.0"
 	// Codex 限额快照仅用于后台展示/诊断，不需要每个成功请求都立即落库。
 	openAICodexSnapshotPersistMinInterval = 30 * time.Second
 )
 
 // OpenAI allowed headers whitelist (for non-passthrough).
 var openaiAllowedHeaders = map[string]bool{
-	"accept-language":       true,
-	"content-type":          true,
-	"conversation_id":       true,
-	"user-agent":            true,
-	"originator":            true,
-	"session_id":            true,
-	"x-codex-turn-state":    true,
-	"x-codex-turn-metadata": true,
+	"accept-language":         true,
+	"content-type":            true,
+	"conversation_id":         true,
+	"user-agent":              true,
+	"version":                 true,
+	"originator":              true,
+	"session_id":              true,
+	"x-codex-installation-id": true,
+	"x-codex-turn-state":      true,
+	"x-codex-turn-metadata":   true,
+	"x-codex-window-id":       true,
 }
 
 // OpenAI passthrough allowed headers whitelist.
 // 透传模式下仅放行这些低风险请求头，避免将非标准/环境噪声头传给上游触发风控。
 var openaiPassthroughAllowedHeaders = map[string]bool{
-	"accept":                true,
-	"accept-language":       true,
-	"content-type":          true,
-	"conversation_id":       true,
-	"openai-beta":           true,
-	"user-agent":            true,
-	"originator":            true,
-	"session_id":            true,
-	"x-codex-turn-state":    true,
-	"x-codex-turn-metadata": true,
+	"accept":                  true,
+	"accept-language":         true,
+	"content-type":            true,
+	"conversation_id":         true,
+	"openai-beta":             true,
+	"user-agent":              true,
+	"version":                 true,
+	"originator":              true,
+	"session_id":              true,
+	"x-codex-installation-id": true,
+	"x-codex-turn-state":      true,
+	"x-codex-turn-metadata":   true,
+	"x-codex-window-id":       true,
 }
 
 // codex_cli_only 拒绝时记录的请求头白名单（仅用于诊断日志，不参与上游透传）
@@ -1194,6 +1202,53 @@ func resolveOpenAIUpstreamOriginator(c *gin.Context, isOfficialClient bool) stri
 		return "codex_cli_rs"
 	}
 	return "opencode"
+}
+
+func isLegacyCodexFallbackUserAgent(userAgent string) bool {
+	return strings.EqualFold(strings.TrimSpace(userAgent), codexCLIUserAgent)
+}
+
+func resolveOpenAICompactUpstreamUserAgent(clientUserAgent, currentUserAgent string) string {
+	clientUserAgent = strings.TrimSpace(clientUserAgent)
+	if openai.IsCodexOfficialClientRequest(clientUserAgent) {
+		return clientUserAgent
+	}
+
+	currentUserAgent = strings.TrimSpace(currentUserAgent)
+	if openai.IsCodexOfficialClientRequest(currentUserAgent) && !isLegacyCodexFallbackUserAgent(currentUserAgent) {
+		return currentUserAgent
+	}
+
+	return codexCompactUserAgent
+}
+
+func resolveOpenAICompactUpstreamVersion(clientVersion, clientUserAgent, currentUserAgent string) string {
+	if version := strings.TrimSpace(clientVersion); version != "" {
+		return version
+	}
+
+	for _, userAgent := range []string{strings.TrimSpace(clientUserAgent), strings.TrimSpace(currentUserAgent)} {
+		if userAgent == "" || isLegacyCodexFallbackUserAgent(userAgent) || !openai.IsCodexOfficialClientRequest(userAgent) {
+			continue
+		}
+		if version := openai.ExtractCodexClientVersion(userAgent); version != "" {
+			return version
+		}
+	}
+
+	return codexCompactVersion
+}
+
+func applyOpenAICompactClientHeaders(req *http.Request, clientUserAgent, clientVersion string) {
+	if req == nil {
+		return
+	}
+
+	resolvedUserAgent := resolveOpenAICompactUpstreamUserAgent(clientUserAgent, req.Header.Get("user-agent"))
+	if resolvedUserAgent != "" {
+		req.Header.Set("user-agent", resolvedUserAgent)
+	}
+	req.Header.Set("version", resolveOpenAICompactUpstreamVersion(clientVersion, clientUserAgent, resolvedUserAgent))
 }
 
 // BindStickySession sets session -> account binding with standard TTL.
@@ -2902,6 +2957,13 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 		return nil, err
 	}
 
+	clientUserAgent := ""
+	clientVersion := ""
+	if c != nil && c.Request != nil {
+		clientUserAgent = c.Request.Header.Get("user-agent")
+		clientVersion = c.Request.Header.Get("version")
+	}
+
 	// 透传客户端请求头（安全白名单）。
 	allowTimeoutHeaders := s.isOpenAIPassthroughTimeoutHeadersAllowed()
 	if c != nil && c.Request != nil {
@@ -2935,9 +2997,6 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 		clientConversationID := strings.TrimSpace(req.Header.Get("conversation_id"))
 		if isOpenAIResponsesCompactPath(c) {
 			req.Header.Set("accept", "application/json")
-			if req.Header.Get("version") == "" {
-				req.Header.Set("version", codexCLIVersion)
-			}
 			if clientSessionID == "" {
 				clientSessionID = resolveOpenAICompactSessionID(c)
 			}
@@ -2973,9 +3032,13 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 	if s.cfg != nil && s.cfg.Gateway.ForceCodexCLI {
 		req.Header.Set("user-agent", codexCLIUserAgent)
 	}
-	// OAuth 安全透传：对非 Codex UA 统一兜底，降低被上游风控拦截概率。
-	if account.Type == AccountTypeOAuth && !openai.IsCodexCLIRequest(req.Header.Get("user-agent")) {
-		req.Header.Set("user-agent", codexCLIUserAgent)
+	// OAuth 安全透传：非 compact 保持旧 Codex CLI 兼容兜底；compact 则保留/补齐新版官方客户端头。
+	if account.Type == AccountTypeOAuth {
+		if isOpenAIResponsesCompactPath(c) {
+			applyOpenAICompactClientHeaders(req, clientUserAgent, clientVersion)
+		} else if !openai.IsCodexOfficialClientRequest(req.Header.Get("user-agent")) {
+			req.Header.Set("user-agent", codexCLIUserAgent)
+		}
 	}
 
 	if req.Header.Get("content-type") == "" {
@@ -3429,6 +3492,13 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 		return nil, err
 	}
 
+	clientUserAgent := ""
+	clientVersion := ""
+	if c != nil && c.Request != nil {
+		clientUserAgent = c.Request.Header.Get("user-agent")
+		clientVersion = c.Request.Header.Get("version")
+	}
+
 	// Set authentication header
 	req.Header.Set("authorization", "Bearer "+token)
 
@@ -3462,9 +3532,6 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 		apiKeyID := getAPIKeyIDFromContext(c)
 		if isOpenAIResponsesCompactPath(c) {
 			req.Header.Set("accept", "application/json")
-			if req.Header.Get("version") == "" {
-				req.Header.Set("version", codexCLIVersion)
-			}
 			compactSession := resolveOpenAICompactSessionID(c)
 			req.Header.Set("session_id", isolateOpenAISessionID(apiKeyID, compactSession))
 		} else {
@@ -3487,6 +3554,9 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 	// 用于网关未透传/改写 User-Agent 时，仍能命中 Codex 侧识别逻辑。
 	if s.cfg != nil && s.cfg.Gateway.ForceCodexCLI {
 		req.Header.Set("user-agent", codexCLIUserAgent)
+	}
+	if account.Type == AccountTypeOAuth && isOpenAIResponsesCompactPath(c) {
+		applyOpenAICompactClientHeaders(req, clientUserAgent, clientVersion)
 	}
 
 	// Ensure required headers exist
@@ -4599,20 +4669,23 @@ func normalizeOpenAICompactRequestBody(body []byte) ([]byte, bool, error) {
 		return body, false, nil
 	}
 
-	normalized := []byte(`{}`)
-	for _, field := range []string{"model", "input", "instructions", "previous_response_id"} {
-		value := gjson.GetBytes(body, field)
-		if !value.Exists() {
+	// compact 请求只移除已知会触发上游兼容问题的字段，保留新版 Codex
+	// 客户端新增的 tools/reasoning/text 等字段，避免随着上游 schema 演进再次过时。
+	normalized := body
+	changed := false
+	for _, field := range []string{"prompt_cache_key", "store", "stream"} {
+		if !gjson.GetBytes(normalized, field).Exists() {
 			continue
 		}
-		next, err := sjson.SetRawBytes(normalized, field, []byte(value.Raw))
+		next, err := sjson.DeleteBytes(normalized, field)
 		if err != nil {
-			return body, false, fmt.Errorf("normalize compact body %s: %w", field, err)
+			return body, false, fmt.Errorf("normalize compact body delete %s: %w", field, err)
 		}
 		normalized = next
+		changed = true
 	}
 
-	if bytes.Equal(bytes.TrimSpace(body), bytes.TrimSpace(normalized)) {
+	if !changed || bytes.Equal(bytes.TrimSpace(body), bytes.TrimSpace(normalized)) {
 		return body, false, nil
 	}
 	return normalized, true, nil
@@ -5286,6 +5359,14 @@ func normalizeOpenAIPassthroughOAuthBody(body []byte, compact bool) ([]byte, boo
 	changed := false
 
 	if compact {
+		if promptCacheKey := gjson.GetBytes(normalized, "prompt_cache_key"); promptCacheKey.Exists() {
+			next, err := sjson.DeleteBytes(normalized, "prompt_cache_key")
+			if err != nil {
+				return body, false, fmt.Errorf("normalize passthrough body delete prompt_cache_key: %w", err)
+			}
+			normalized = next
+			changed = true
+		}
 		if store := gjson.GetBytes(normalized, "store"); store.Exists() {
 			next, err := sjson.DeleteBytes(normalized, "store")
 			if err != nil {
