@@ -1051,6 +1051,18 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	if settings.WeChatConnectFrontendRedirectURL == "" {
 		settings.WeChatConnectFrontendRedirectURL = defaultWeChatConnectFrontend
 	}
+	settings.PromptFilterKeywords = NormalizePromptFilterKeywords(settings.PromptFilterKeywords)
+	if settings.PromptFilterViolationLimit <= 0 {
+		settings.PromptFilterViolationLimit = DefaultPromptFilterViolationLimit
+	}
+	settings.PromptFilterWarningMessage = strings.TrimSpace(settings.PromptFilterWarningMessage)
+	if settings.PromptFilterWarningMessage == "" {
+		settings.PromptFilterWarningMessage = DefaultPromptFilterWarningMessage
+	}
+	settings.PromptFilterBanMessage = strings.TrimSpace(settings.PromptFilterBanMessage)
+	if settings.PromptFilterBanMessage == "" {
+		settings.PromptFilterBanMessage = DefaultPromptFilterBanMessage
+	}
 
 	updates := make(map[string]string)
 
@@ -1193,6 +1205,17 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyEnableIdentityPatch] = strconv.FormatBool(settings.EnableIdentityPatch)
 	updates[SettingKeyIdentityPatchPrompt] = settings.IdentityPatchPrompt
 
+	// Prompt keyword filter
+	promptFilterKeywordsJSON, err := json.Marshal(settings.PromptFilterKeywords)
+	if err != nil {
+		return nil, fmt.Errorf("marshal prompt filter keywords: %w", err)
+	}
+	updates[SettingKeyPromptFilterEnabled] = strconv.FormatBool(settings.PromptFilterEnabled)
+	updates[SettingKeyPromptFilterKeywords] = string(promptFilterKeywordsJSON)
+	updates[SettingKeyPromptFilterViolationLimit] = strconv.Itoa(settings.PromptFilterViolationLimit)
+	updates[SettingKeyPromptFilterWarningMessage] = settings.PromptFilterWarningMessage
+	updates[SettingKeyPromptFilterBanMessage] = settings.PromptFilterBanMessage
+
 	// Ops monitoring (vNext)
 	updates[SettingKeyOpsMonitoringEnabled] = strconv.FormatBool(settings.OpsMonitoringEnabled)
 	updates[SettingKeyOpsRealtimeMonitoringEnabled] = strconv.FormatBool(settings.OpsRealtimeMonitoringEnabled)
@@ -1291,6 +1314,13 @@ func (s *SettingService) refreshCachedSettings(settings *SystemSettings) {
 		metadataPassthrough:    settings.EnableMetadataPassthrough,
 		cchSigning:             settings.EnableCCHSigning,
 		expiresAt:              time.Now().Add(gatewayForwardingCacheTTL).UnixNano(),
+	})
+	RefreshPromptFilterRuntimeCache(PromptFilterRuntime{
+		Enabled:        settings.PromptFilterEnabled,
+		Keywords:       NormalizePromptFilterKeywords(settings.PromptFilterKeywords),
+		ViolationLimit: parsePromptFilterViolationLimit(strconv.Itoa(settings.PromptFilterViolationLimit)),
+		WarningMessage: strings.TrimSpace(firstNonEmpty(settings.PromptFilterWarningMessage, DefaultPromptFilterWarningMessage)),
+		BanMessage:     strings.TrimSpace(firstNonEmpty(settings.PromptFilterBanMessage, DefaultPromptFilterBanMessage)),
 	})
 	openAIAdvancedSchedulerSettingSF.Forget(openAIAdvancedSchedulerSettingKey)
 	openAIAdvancedSchedulerSettingCache.Store(&cachedOpenAIAdvancedSchedulerSetting{
@@ -1790,6 +1820,13 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyEnableIdentityPatch: "true",
 		SettingKeyIdentityPatchPrompt: "",
 
+		// Prompt keyword filter defaults
+		SettingKeyPromptFilterEnabled:        "false",
+		SettingKeyPromptFilterKeywords:       "[]",
+		SettingKeyPromptFilterViolationLimit: strconv.Itoa(DefaultPromptFilterViolationLimit),
+		SettingKeyPromptFilterWarningMessage: DefaultPromptFilterWarningMessage,
+		SettingKeyPromptFilterBanMessage:     DefaultPromptFilterBanMessage,
+
 		// Ops monitoring defaults (vNext)
 		SettingKeyOpsMonitoringEnabled:         "true",
 		SettingKeyOpsRealtimeMonitoringEnabled: "true",
@@ -2099,6 +2136,14 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		result.EnableIdentityPatch = true
 	}
 	result.IdentityPatchPrompt = settings[SettingKeyIdentityPatchPrompt]
+
+	// Prompt keyword filter
+	promptFilterRuntime := ParsePromptFilterRuntime(settings)
+	result.PromptFilterEnabled = promptFilterRuntime.Enabled
+	result.PromptFilterKeywords = promptFilterRuntime.Keywords
+	result.PromptFilterViolationLimit = promptFilterRuntime.ViolationLimit
+	result.PromptFilterWarningMessage = promptFilterRuntime.WarningMessage
+	result.PromptFilterBanMessage = promptFilterRuntime.BanMessage
 
 	// Ops monitoring settings (default: enabled, fail-open)
 	result.OpsMonitoringEnabled = !isFalseSettingValue(settings[SettingKeyOpsMonitoringEnabled])
