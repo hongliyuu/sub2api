@@ -1128,18 +1128,26 @@ func (s *OpenAIGatewayService) ExtractSessionID(c *gin.Context, body []byte) str
 // GenerateSessionHash generates a sticky-session hash for OpenAI requests.
 //
 // Priority:
-//  1. Header: session_id
-//  2. Header: conversation_id
+//  1. Header: conversation_id
+//  2. Header: session_id
 //  3. Body:   prompt_cache_key (opencode)
 //  4. Body:   content-based fallback (model + system + tools + first user message)
+//
+// Why conversation_id comes first:
+// Codex clients can keep a long-lived session_id while starting a brand-new
+// conversation_id for each fresh thread. If we key sticky state by session_id
+// first, a new question can accidentally inherit the previous conversation's
+// turn_state / sessionConn / upstream continuation anchor and look like the
+// model answered the last prompt again. Using conversation_id when available
+// makes the sticky boundary follow the actual conversation switch.
 func (s *OpenAIGatewayService) GenerateSessionHash(c *gin.Context, body []byte) string {
 	if c == nil {
 		return ""
 	}
 
-	sessionID := strings.TrimSpace(c.GetHeader("session_id"))
+	sessionID := strings.TrimSpace(c.GetHeader("conversation_id"))
 	if sessionID == "" {
-		sessionID = strings.TrimSpace(c.GetHeader("conversation_id"))
+		sessionID = strings.TrimSpace(c.GetHeader("session_id"))
 	}
 	if sessionID == "" && len(body) > 0 {
 		sessionID = strings.TrimSpace(gjson.GetBytes(body, "prompt_cache_key").String())
@@ -2941,8 +2949,16 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 		}
 		apiKeyID := getAPIKeyIDFromContext(c)
 		// 先保存客户端原始值，再做 compact 补充，避免后续统一隔离时读到已处理的值。
-		clientSessionID := strings.TrimSpace(req.Header.Get("session_id"))
 		clientConversationID := strings.TrimSpace(req.Header.Get("conversation_id"))
+		// Keep the upstream session boundary aligned with conversation_id first.
+		// This matters when the client reuses one stable session_id across multiple
+		// independent conversations: if upstream session_id keeps following that
+		// stable value, ChatGPT/OpenAI can continue the old conversation and return
+		// the previous question's answer in the new thread.
+		clientSessionID := clientConversationID
+		if clientSessionID == "" {
+			clientSessionID = strings.TrimSpace(req.Header.Get("session_id"))
+		}
 		if isOpenAIResponsesCompactPath(c) {
 			req.Header.Set("accept", "application/json")
 			if req.Header.Get("version") == "" {
@@ -4854,11 +4870,14 @@ func normalizeOpenAICompactRequestBody(body []byte) ([]byte, bool, error) {
 
 func resolveOpenAICompactSessionID(c *gin.Context) string {
 	if c != nil {
-		if sessionID := strings.TrimSpace(c.GetHeader("session_id")); sessionID != "" {
-			return sessionID
-		}
+		// compact requests can omit explicit sticky hints in the body, so when both
+		// headers exist we still prefer conversation_id to avoid carrying an older
+		// conversation forward under a reused client session_id.
 		if conversationID := strings.TrimSpace(c.GetHeader("conversation_id")); conversationID != "" {
 			return conversationID
+		}
+		if sessionID := strings.TrimSpace(c.GetHeader("session_id")); sessionID != "" {
+			return sessionID
 		}
 		if seed, ok := c.Get(openAICompactSessionSeedKey); ok {
 			if seedStr, ok := seed.(string); ok && strings.TrimSpace(seedStr) != "" {
