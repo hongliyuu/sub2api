@@ -577,6 +577,24 @@ func applyDeepSeekThinkingMode(req *apicompat.ChatCompletionsRequest, enabled bo
 	_ = enabled
 }
 
+// deepseekThinkingSuffix is the convention used to mark a mapped DeepSeek
+// model as thinking-enabled. The upstream call keeps the suffix on the model
+// id (DeepSeek V4 selects thinking via the suffix); persistence and billing
+// strip it so cost lookups don't need to know about this convention.
+const deepseekThinkingSuffix = "[thinking]"
+
+// IsDeepSeekThinkingModel reports whether a mapped model id carries the
+// DeepSeek thinking suffix.
+func IsDeepSeekThinkingModel(model string) bool {
+	return strings.HasSuffix(model, deepseekThinkingSuffix)
+}
+
+// StripDeepSeekThinkingSuffix returns model with the DeepSeek thinking suffix
+// removed; safe to call on any string.
+func StripDeepSeekThinkingSuffix(model string) string {
+	return strings.TrimSuffix(model, deepseekThinkingSuffix)
+}
+
 func buildDeepSeekChatCompletionsURL(s *GatewayService, account *Account) (string, error) {
 	baseURL := account.GetDeepSeekBaseURL()
 	if baseURL == "" {
