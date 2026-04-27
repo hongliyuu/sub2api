@@ -87,6 +87,9 @@ func applyCodexOAuthTransform(reqBody map[string]any, isCodexCLI bool, isCompact
 		}
 		result.NormalizedModel = normalizedModel
 	}
+	if normalizeCodexReasoningEffortForModel(reqBody, normalizedModel) {
+		result.Modified = true
+	}
 
 	if isCompact {
 		if _, ok := reqBody["store"]; ok {
@@ -496,6 +499,83 @@ func normalizeCodexModel(model string) string {
 
 func isCodexSparkModel(model string) bool {
 	return normalizeCodexModel(model) == "gpt-5.3-codex-spark"
+}
+
+func defaultCodexReasoningEffort(model string) string {
+	switch normalizeCodexModel(model) {
+	case "gpt-5.3-codex", "gpt-5.3-codex-spark":
+		return "medium"
+	default:
+		return ""
+	}
+}
+
+func normalizeCodexReasoningEffortForModel(reqBody map[string]any, model string) bool {
+	if len(reqBody) == 0 {
+		return false
+	}
+	fallback := defaultCodexReasoningEffort(model)
+	if fallback == "" {
+		return false
+	}
+
+	nextEffort := fallback
+	if rawEffort, ok := readOpenAIReasoningEffortRaw(reqBody); ok {
+		normalized, known := normalizeCodexReasoningEffortValue(rawEffort, fallback)
+		if !known {
+			return false
+		}
+		nextEffort = normalized
+	} else if derivedEffort := deriveOpenAIReasoningEffortFromModel(model); derivedEffort != "" {
+		nextEffort = derivedEffort
+	}
+
+	modified := false
+	reasoning, _ := reqBody["reasoning"].(map[string]any)
+	if reasoning == nil {
+		reasoning = map[string]any{}
+		reqBody["reasoning"] = reasoning
+		modified = true
+	}
+	if effort, _ := reasoning["effort"].(string); effort != nextEffort {
+		reasoning["effort"] = nextEffort
+		modified = true
+	}
+	if _, ok := reqBody["reasoning_effort"]; ok {
+		delete(reqBody, "reasoning_effort")
+		modified = true
+	}
+	return modified
+}
+
+func readOpenAIReasoningEffortRaw(reqBody map[string]any) (string, bool) {
+	if reasoning, ok := reqBody["reasoning"].(map[string]any); ok {
+		if effort, ok := reasoning["effort"].(string); ok {
+			return effort, true
+		}
+	}
+	if effort, ok := reqBody["reasoning_effort"].(string); ok {
+		return effort, true
+	}
+	return "", false
+}
+
+func normalizeCodexReasoningEffortValue(raw string, fallback string) (string, bool) {
+	value := strings.ToLower(strings.TrimSpace(raw))
+	if value == "" {
+		return fallback, true
+	}
+	value = strings.NewReplacer("-", "", "_", "", " ", "").Replace(value)
+	switch value {
+	case "none", "minimal":
+		return fallback, true
+	case "low", "medium", "high":
+		return value, true
+	case "xhigh", "extrahigh":
+		return "xhigh", true
+	default:
+		return "", false
+	}
 }
 
 func hasOpenAIImageGenerationTool(reqBody map[string]any) bool {
