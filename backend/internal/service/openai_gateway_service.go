@@ -5537,6 +5537,10 @@ func deriveOpenAIReasoningEffortFromModel(model string) string {
 		return ""
 	}
 
+	if _, effort, ok := splitOpenAICompatReasoningModel(model); ok {
+		return effort
+	}
+
 	modelID := strings.TrimSpace(model)
 	if strings.Contains(modelID, "/") {
 		parts := strings.Split(modelID, "/")
@@ -5622,6 +5626,22 @@ func normalizeOpenAIPassthroughOAuthBody(body []byte, compact bool) ([]byte, boo
 			next, err := sjson.SetBytes(normalized, "stream", true)
 			if err != nil {
 				return body, false, fmt.Errorf("normalize passthrough body stream=true: %w", err)
+			}
+			normalized = next
+			changed = true
+		}
+	}
+
+	model := strings.TrimSpace(gjson.GetBytes(normalized, "model").String())
+	if defaultCodexReasoningEffort(model) != "" {
+		reqBody := make(map[string]any)
+		if err := json.Unmarshal(normalized, &reqBody); err != nil {
+			return body, false, fmt.Errorf("normalize passthrough body reasoning: %w", err)
+		}
+		if normalizeCodexReasoningEffortForModel(reqBody, model) {
+			next, err := json.Marshal(reqBody)
+			if err != nil {
+				return body, false, fmt.Errorf("serialize passthrough body reasoning: %w", err)
 			}
 			normalized = next
 			changed = true

@@ -1209,3 +1209,37 @@ func TestOpenAIGatewayService_OAuthPassthrough_AllowTimeoutHeadersWhenConfigured
 	require.Equal(t, "120000", upstream.lastReq.Header.Get("x-stainless-timeout"))
 	require.Empty(t, upstream.lastReq.Header.Get("X-Test"))
 }
+
+func TestNormalizeOpenAIPassthroughOAuthBody_NormalizesSparkReasoning(t *testing.T) {
+	t.Run("explicit none uses default", func(t *testing.T) {
+		body := []byte(`{"model":"gpt-5.3-codex-spark","stream":false,"reasoning":{"effort":"none"},"input":[]}`)
+
+		got, changed, err := normalizeOpenAIPassthroughOAuthBody(body, false)
+
+		require.NoError(t, err)
+		require.True(t, changed)
+		require.Equal(t, "medium", gjson.GetBytes(got, "reasoning.effort").String())
+		require.True(t, gjson.GetBytes(got, "stream").Bool())
+		require.False(t, gjson.GetBytes(got, "store").Bool())
+	})
+
+	t.Run("missing effort uses default", func(t *testing.T) {
+		body := []byte(`{"model":"gpt-5.3-codex-spark","input":[]}`)
+
+		got, changed, err := normalizeOpenAIPassthroughOAuthBody(body, false)
+
+		require.NoError(t, err)
+		require.True(t, changed)
+		require.Equal(t, "medium", gjson.GetBytes(got, "reasoning.effort").String())
+	})
+
+	t.Run("supported effort is preserved", func(t *testing.T) {
+		body := []byte(`{"model":"gpt-5.3-codex-spark","reasoning":{"effort":"x-high"},"input":[]}`)
+
+		got, changed, err := normalizeOpenAIPassthroughOAuthBody(body, false)
+
+		require.NoError(t, err)
+		require.True(t, changed)
+		require.Equal(t, "xhigh", gjson.GetBytes(got, "reasoning.effort").String())
+	})
+}
