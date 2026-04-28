@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -518,11 +519,13 @@ func TestOpenAIGatewayService_Forward_WSv2_OAuthOriginatorCompatibility(t *testi
 		name           string
 		userAgent      string
 		originator     string
+		requestModel   string
 		wantOriginator string
 	}{
 		{name: "desktop originator preserved", originator: "Codex Desktop", wantOriginator: "Codex Desktop"},
 		{name: "vscode originator preserved", originator: "codex_vscode", wantOriginator: "codex_vscode"},
 		{name: "official ua fallback to codex_cli_rs", userAgent: "Codex Desktop/1.2.3", wantOriginator: "codex_cli_rs"},
+		{name: "spark forces codex cli originator", userAgent: "claude-cli/2.1.92 (external, cli)", requestModel: "gpt-5.3-codex-spark", wantOriginator: "codex_cli_rs"},
 	}
 
 	for _, tt := range tests {
@@ -582,11 +585,19 @@ func TestOpenAIGatewayService_Forward_WSv2_OAuthOriginatorCompatibility(t *testi
 				},
 			}
 
-			body := []byte(`{"model":"gpt-5.1","stream":false,"input":[{"type":"input_text","text":"hello"}]}`)
+			requestModel := tt.requestModel
+			if requestModel == "" {
+				requestModel = "gpt-5.1"
+			}
+			body := []byte(fmt.Sprintf(`{"model":%q,"stream":false,"input":[{"type":"input_text","text":"hello"}]}`, requestModel))
 			result, err := svc.Forward(context.Background(), c, account, body)
 			require.NoError(t, err)
 			require.NotNil(t, result)
 			require.Equal(t, tt.wantOriginator, captureDialer.lastHeaders.Get("originator"))
+			if requestModel == "gpt-5.3-codex-spark" {
+				require.Equal(t, codexCLIUserAgent, captureDialer.lastHeaders.Get("user-agent"))
+				require.Equal(t, "gpt-5.3-codex-spark", captureConn.lastWrite["model"])
+			}
 		})
 	}
 }
