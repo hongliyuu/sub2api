@@ -14782,6 +14782,11 @@ type GroupMutation struct {
 	appendsupported_model_scopes            []string
 	sort_order                              *int
 	addsort_order                           *int
+	display_icon                            *string
+	display_name                            *string
+	display_rate_multiplier                 *float64
+	adddisplay_rate_multiplier              *float64
+	claude_code_persona                     *bool
 	allow_messages_dispatch                 *bool
 	require_oauth_only                      *bool
 	require_privacy_set                     *bool
@@ -16197,6 +16202,210 @@ func (m *GroupMutation) ResetSortOrder() {
 	m.addsort_order = nil
 }
 
+// SetDisplayIcon sets the "display_icon" field.
+func (m *GroupMutation) SetDisplayIcon(s string) {
+	m.display_icon = &s
+}
+
+// DisplayIcon returns the value of the "display_icon" field in the mutation.
+func (m *GroupMutation) DisplayIcon() (r string, exists bool) {
+	v := m.display_icon
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDisplayIcon returns the old "display_icon" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldDisplayIcon(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDisplayIcon is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDisplayIcon requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDisplayIcon: %w", err)
+	}
+	return oldValue.DisplayIcon, nil
+}
+
+// ClearDisplayIcon clears the value of the "display_icon" field.
+func (m *GroupMutation) ClearDisplayIcon() {
+	m.display_icon = nil
+	m.clearedFields[group.FieldDisplayIcon] = struct{}{}
+}
+
+// DisplayIconCleared returns if the "display_icon" field was cleared in this mutation.
+func (m *GroupMutation) DisplayIconCleared() bool {
+	_, ok := m.clearedFields[group.FieldDisplayIcon]
+	return ok
+}
+
+// ResetDisplayIcon resets all changes to the "display_icon" field.
+func (m *GroupMutation) ResetDisplayIcon() {
+	m.display_icon = nil
+	delete(m.clearedFields, group.FieldDisplayIcon)
+}
+
+// SetDisplayName sets the "display_name" field.
+func (m *GroupMutation) SetDisplayName(s string) {
+	m.display_name = &s
+}
+
+// DisplayName returns the value of the "display_name" field in the mutation.
+func (m *GroupMutation) DisplayName() (r string, exists bool) {
+	v := m.display_name
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDisplayName returns the old "display_name" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldDisplayName(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDisplayName is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDisplayName requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDisplayName: %w", err)
+	}
+	return oldValue.DisplayName, nil
+}
+
+// ClearDisplayName clears the value of the "display_name" field.
+func (m *GroupMutation) ClearDisplayName() {
+	m.display_name = nil
+	m.clearedFields[group.FieldDisplayName] = struct{}{}
+}
+
+// DisplayNameCleared returns if the "display_name" field was cleared in this mutation.
+func (m *GroupMutation) DisplayNameCleared() bool {
+	_, ok := m.clearedFields[group.FieldDisplayName]
+	return ok
+}
+
+// ResetDisplayName resets all changes to the "display_name" field.
+func (m *GroupMutation) ResetDisplayName() {
+	m.display_name = nil
+	delete(m.clearedFields, group.FieldDisplayName)
+}
+
+// SetDisplayRateMultiplier sets the "display_rate_multiplier" field.
+func (m *GroupMutation) SetDisplayRateMultiplier(f float64) {
+	m.display_rate_multiplier = &f
+	m.adddisplay_rate_multiplier = nil
+}
+
+// DisplayRateMultiplier returns the value of the "display_rate_multiplier" field in the mutation.
+func (m *GroupMutation) DisplayRateMultiplier() (r float64, exists bool) {
+	v := m.display_rate_multiplier
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldDisplayRateMultiplier returns the old "display_rate_multiplier" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldDisplayRateMultiplier(ctx context.Context) (v *float64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldDisplayRateMultiplier is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldDisplayRateMultiplier requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldDisplayRateMultiplier: %w", err)
+	}
+	return oldValue.DisplayRateMultiplier, nil
+}
+
+// AddDisplayRateMultiplier adds f to the "display_rate_multiplier" field.
+func (m *GroupMutation) AddDisplayRateMultiplier(f float64) {
+	if m.adddisplay_rate_multiplier != nil {
+		*m.adddisplay_rate_multiplier += f
+	} else {
+		m.adddisplay_rate_multiplier = &f
+	}
+}
+
+// AddedDisplayRateMultiplier returns the value that was added to the "display_rate_multiplier" field in this mutation.
+func (m *GroupMutation) AddedDisplayRateMultiplier() (r float64, exists bool) {
+	v := m.adddisplay_rate_multiplier
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearDisplayRateMultiplier clears the value of the "display_rate_multiplier" field.
+func (m *GroupMutation) ClearDisplayRateMultiplier() {
+	m.display_rate_multiplier = nil
+	m.adddisplay_rate_multiplier = nil
+	m.clearedFields[group.FieldDisplayRateMultiplier] = struct{}{}
+}
+
+// DisplayRateMultiplierCleared returns if the "display_rate_multiplier" field was cleared in this mutation.
+func (m *GroupMutation) DisplayRateMultiplierCleared() bool {
+	_, ok := m.clearedFields[group.FieldDisplayRateMultiplier]
+	return ok
+}
+
+// ResetDisplayRateMultiplier resets all changes to the "display_rate_multiplier" field.
+func (m *GroupMutation) ResetDisplayRateMultiplier() {
+	m.display_rate_multiplier = nil
+	m.adddisplay_rate_multiplier = nil
+	delete(m.clearedFields, group.FieldDisplayRateMultiplier)
+}
+
+// SetClaudeCodePersona sets the "claude_code_persona" field.
+func (m *GroupMutation) SetClaudeCodePersona(b bool) {
+	m.claude_code_persona = &b
+}
+
+// ClaudeCodePersona returns the value of the "claude_code_persona" field in the mutation.
+func (m *GroupMutation) ClaudeCodePersona() (r bool, exists bool) {
+	v := m.claude_code_persona
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldClaudeCodePersona returns the old "claude_code_persona" field's value of the Group entity.
+// If the Group object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *GroupMutation) OldClaudeCodePersona(ctx context.Context) (v bool, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldClaudeCodePersona is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldClaudeCodePersona requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldClaudeCodePersona: %w", err)
+	}
+	return oldValue.ClaudeCodePersona, nil
+}
+
+// ResetClaudeCodePersona resets all changes to the "claude_code_persona" field.
+func (m *GroupMutation) ResetClaudeCodePersona() {
+	m.claude_code_persona = nil
+}
+
 // SetAllowMessagesDispatch sets the "allow_messages_dispatch" field.
 func (m *GroupMutation) SetAllowMessagesDispatch(b bool) {
 	m.allow_messages_dispatch = &b
@@ -16791,7 +17000,7 @@ func (m *GroupMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *GroupMutation) Fields() []string {
-	fields := make([]string, 0, 31)
+	fields := make([]string, 0, 35)
 	if m.created_at != nil {
 		fields = append(fields, group.FieldCreatedAt)
 	}
@@ -16866,6 +17075,18 @@ func (m *GroupMutation) Fields() []string {
 	}
 	if m.sort_order != nil {
 		fields = append(fields, group.FieldSortOrder)
+	}
+	if m.display_icon != nil {
+		fields = append(fields, group.FieldDisplayIcon)
+	}
+	if m.display_name != nil {
+		fields = append(fields, group.FieldDisplayName)
+	}
+	if m.display_rate_multiplier != nil {
+		fields = append(fields, group.FieldDisplayRateMultiplier)
+	}
+	if m.claude_code_persona != nil {
+		fields = append(fields, group.FieldClaudeCodePersona)
 	}
 	if m.allow_messages_dispatch != nil {
 		fields = append(fields, group.FieldAllowMessagesDispatch)
@@ -16943,6 +17164,14 @@ func (m *GroupMutation) Field(name string) (ent.Value, bool) {
 		return m.SupportedModelScopes()
 	case group.FieldSortOrder:
 		return m.SortOrder()
+	case group.FieldDisplayIcon:
+		return m.DisplayIcon()
+	case group.FieldDisplayName:
+		return m.DisplayName()
+	case group.FieldDisplayRateMultiplier:
+		return m.DisplayRateMultiplier()
+	case group.FieldClaudeCodePersona:
+		return m.ClaudeCodePersona()
 	case group.FieldAllowMessagesDispatch:
 		return m.AllowMessagesDispatch()
 	case group.FieldRequireOauthOnly:
@@ -17014,6 +17243,14 @@ func (m *GroupMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldSupportedModelScopes(ctx)
 	case group.FieldSortOrder:
 		return m.OldSortOrder(ctx)
+	case group.FieldDisplayIcon:
+		return m.OldDisplayIcon(ctx)
+	case group.FieldDisplayName:
+		return m.OldDisplayName(ctx)
+	case group.FieldDisplayRateMultiplier:
+		return m.OldDisplayRateMultiplier(ctx)
+	case group.FieldClaudeCodePersona:
+		return m.OldClaudeCodePersona(ctx)
 	case group.FieldAllowMessagesDispatch:
 		return m.OldAllowMessagesDispatch(ctx)
 	case group.FieldRequireOauthOnly:
@@ -17210,6 +17447,34 @@ func (m *GroupMutation) SetField(name string, value ent.Value) error {
 		}
 		m.SetSortOrder(v)
 		return nil
+	case group.FieldDisplayIcon:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDisplayIcon(v)
+		return nil
+	case group.FieldDisplayName:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDisplayName(v)
+		return nil
+	case group.FieldDisplayRateMultiplier:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetDisplayRateMultiplier(v)
+		return nil
+	case group.FieldClaudeCodePersona:
+		v, ok := value.(bool)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetClaudeCodePersona(v)
+		return nil
 	case group.FieldAllowMessagesDispatch:
 		v, ok := value.(bool)
 		if !ok {
@@ -17293,6 +17558,9 @@ func (m *GroupMutation) AddedFields() []string {
 	if m.addsort_order != nil {
 		fields = append(fields, group.FieldSortOrder)
 	}
+	if m.adddisplay_rate_multiplier != nil {
+		fields = append(fields, group.FieldDisplayRateMultiplier)
+	}
 	if m.addrpm_limit != nil {
 		fields = append(fields, group.FieldRpmLimit)
 	}
@@ -17326,6 +17594,8 @@ func (m *GroupMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedFallbackGroupIDOnInvalidRequest()
 	case group.FieldSortOrder:
 		return m.AddedSortOrder()
+	case group.FieldDisplayRateMultiplier:
+		return m.AddedDisplayRateMultiplier()
 	case group.FieldRpmLimit:
 		return m.AddedRpmLimit()
 	}
@@ -17414,6 +17684,13 @@ func (m *GroupMutation) AddField(name string, value ent.Value) error {
 		}
 		m.AddSortOrder(v)
 		return nil
+	case group.FieldDisplayRateMultiplier:
+		v, ok := value.(float64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddDisplayRateMultiplier(v)
+		return nil
 	case group.FieldRpmLimit:
 		v, ok := value.(int)
 		if !ok {
@@ -17462,6 +17739,15 @@ func (m *GroupMutation) ClearedFields() []string {
 	if m.FieldCleared(group.FieldModelRouting) {
 		fields = append(fields, group.FieldModelRouting)
 	}
+	if m.FieldCleared(group.FieldDisplayIcon) {
+		fields = append(fields, group.FieldDisplayIcon)
+	}
+	if m.FieldCleared(group.FieldDisplayName) {
+		fields = append(fields, group.FieldDisplayName)
+	}
+	if m.FieldCleared(group.FieldDisplayRateMultiplier) {
+		fields = append(fields, group.FieldDisplayRateMultiplier)
+	}
 	return fields
 }
 
@@ -17508,6 +17794,15 @@ func (m *GroupMutation) ClearField(name string) error {
 		return nil
 	case group.FieldModelRouting:
 		m.ClearModelRouting()
+		return nil
+	case group.FieldDisplayIcon:
+		m.ClearDisplayIcon()
+		return nil
+	case group.FieldDisplayName:
+		m.ClearDisplayName()
+		return nil
+	case group.FieldDisplayRateMultiplier:
+		m.ClearDisplayRateMultiplier()
 		return nil
 	}
 	return fmt.Errorf("unknown Group nullable field %s", name)
@@ -17591,6 +17886,18 @@ func (m *GroupMutation) ResetField(name string) error {
 		return nil
 	case group.FieldSortOrder:
 		m.ResetSortOrder()
+		return nil
+	case group.FieldDisplayIcon:
+		m.ResetDisplayIcon()
+		return nil
+	case group.FieldDisplayName:
+		m.ResetDisplayName()
+		return nil
+	case group.FieldDisplayRateMultiplier:
+		m.ResetDisplayRateMultiplier()
+		return nil
+	case group.FieldClaudeCodePersona:
+		m.ResetClaudeCodePersona()
 		return nil
 	case group.FieldAllowMessagesDispatch:
 		m.ResetAllowMessagesDispatch()

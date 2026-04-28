@@ -497,6 +497,87 @@ func (_u *GroupUpdate) AddSortOrder(v int) *GroupUpdate {
 	return _u
 }
 
+// SetDisplayIcon sets the "display_icon" field.
+func (_u *GroupUpdate) SetDisplayIcon(v string) *GroupUpdate {
+	_u.mutation.SetDisplayIcon(v)
+	return _u
+}
+
+// SetNillableDisplayIcon sets the "display_icon" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableDisplayIcon(v *string) *GroupUpdate {
+	if v != nil {
+		_u.SetDisplayIcon(*v)
+	}
+	return _u
+}
+
+// ClearDisplayIcon clears the value of the "display_icon" field.
+func (_u *GroupUpdate) ClearDisplayIcon() *GroupUpdate {
+	_u.mutation.ClearDisplayIcon()
+	return _u
+}
+
+// SetDisplayName sets the "display_name" field.
+func (_u *GroupUpdate) SetDisplayName(v string) *GroupUpdate {
+	_u.mutation.SetDisplayName(v)
+	return _u
+}
+
+// SetNillableDisplayName sets the "display_name" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableDisplayName(v *string) *GroupUpdate {
+	if v != nil {
+		_u.SetDisplayName(*v)
+	}
+	return _u
+}
+
+// ClearDisplayName clears the value of the "display_name" field.
+func (_u *GroupUpdate) ClearDisplayName() *GroupUpdate {
+	_u.mutation.ClearDisplayName()
+	return _u
+}
+
+// SetDisplayRateMultiplier sets the "display_rate_multiplier" field.
+func (_u *GroupUpdate) SetDisplayRateMultiplier(v float64) *GroupUpdate {
+	_u.mutation.ResetDisplayRateMultiplier()
+	_u.mutation.SetDisplayRateMultiplier(v)
+	return _u
+}
+
+// SetNillableDisplayRateMultiplier sets the "display_rate_multiplier" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableDisplayRateMultiplier(v *float64) *GroupUpdate {
+	if v != nil {
+		_u.SetDisplayRateMultiplier(*v)
+	}
+	return _u
+}
+
+// AddDisplayRateMultiplier adds value to the "display_rate_multiplier" field.
+func (_u *GroupUpdate) AddDisplayRateMultiplier(v float64) *GroupUpdate {
+	_u.mutation.AddDisplayRateMultiplier(v)
+	return _u
+}
+
+// ClearDisplayRateMultiplier clears the value of the "display_rate_multiplier" field.
+func (_u *GroupUpdate) ClearDisplayRateMultiplier() *GroupUpdate {
+	_u.mutation.ClearDisplayRateMultiplier()
+	return _u
+}
+
+// SetClaudeCodePersona sets the "claude_code_persona" field.
+func (_u *GroupUpdate) SetClaudeCodePersona(v bool) *GroupUpdate {
+	_u.mutation.SetClaudeCodePersona(v)
+	return _u
+}
+
+// SetNillableClaudeCodePersona sets the "claude_code_persona" field if the given value is not nil.
+func (_u *GroupUpdate) SetNillableClaudeCodePersona(v *bool) *GroupUpdate {
+	if v != nil {
+		_u.SetClaudeCodePersona(*v)
+	}
+	return _u
+}
+
 // SetAllowMessagesDispatch sets the "allow_messages_dispatch" field.
 func (_u *GroupUpdate) SetAllowMessagesDispatch(v bool) *GroupUpdate {
 	_u.mutation.SetAllowMessagesDispatch(v)
@@ -811,9 +892,7 @@ func (_u *GroupUpdate) RemoveAllowedUsers(v ...*User) *GroupUpdate {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *GroupUpdate) Save(ctx context.Context) (int, error) {
-	if err := _u.defaults(); err != nil {
-		return 0, err
-	}
+	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -840,15 +919,11 @@ func (_u *GroupUpdate) ExecX(ctx context.Context) {
 }
 
 // defaults sets the default values of the builder before save.
-func (_u *GroupUpdate) defaults() error {
+func (_u *GroupUpdate) defaults() {
 	if _, ok := _u.mutation.UpdatedAt(); !ok {
-		if group.UpdateDefaultUpdatedAt == nil {
-			return fmt.Errorf("ent: uninitialized group.UpdateDefaultUpdatedAt (forgotten import ent/runtime?)")
-		}
 		v := group.UpdateDefaultUpdatedAt()
 		_u.mutation.SetUpdatedAt(v)
 	}
-	return nil
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -871,6 +946,16 @@ func (_u *GroupUpdate) check() error {
 	if v, ok := _u.mutation.SubscriptionType(); ok {
 		if err := group.SubscriptionTypeValidator(v); err != nil {
 			return &ValidationError{Name: "subscription_type", err: fmt.Errorf(`ent: validator failed for field "Group.subscription_type": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.DisplayIcon(); ok {
+		if err := group.DisplayIconValidator(v); err != nil {
+			return &ValidationError{Name: "display_icon", err: fmt.Errorf(`ent: validator failed for field "Group.display_icon": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.DisplayName(); ok {
+		if err := group.DisplayNameValidator(v); err != nil {
+			return &ValidationError{Name: "display_name", err: fmt.Errorf(`ent: validator failed for field "Group.display_name": %w`, err)}
 		}
 	}
 	if v, ok := _u.mutation.DefaultMappedModel(); ok {
@@ -1035,6 +1120,30 @@ func (_u *GroupUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedSortOrder(); ok {
 		_spec.AddField(group.FieldSortOrder, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.DisplayIcon(); ok {
+		_spec.SetField(group.FieldDisplayIcon, field.TypeString, value)
+	}
+	if _u.mutation.DisplayIconCleared() {
+		_spec.ClearField(group.FieldDisplayIcon, field.TypeString)
+	}
+	if value, ok := _u.mutation.DisplayName(); ok {
+		_spec.SetField(group.FieldDisplayName, field.TypeString, value)
+	}
+	if _u.mutation.DisplayNameCleared() {
+		_spec.ClearField(group.FieldDisplayName, field.TypeString)
+	}
+	if value, ok := _u.mutation.DisplayRateMultiplier(); ok {
+		_spec.SetField(group.FieldDisplayRateMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedDisplayRateMultiplier(); ok {
+		_spec.AddField(group.FieldDisplayRateMultiplier, field.TypeFloat64, value)
+	}
+	if _u.mutation.DisplayRateMultiplierCleared() {
+		_spec.ClearField(group.FieldDisplayRateMultiplier, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.ClaudeCodePersona(); ok {
+		_spec.SetField(group.FieldClaudeCodePersona, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.AllowMessagesDispatch(); ok {
 		_spec.SetField(group.FieldAllowMessagesDispatch, field.TypeBool, value)
@@ -1832,6 +1941,87 @@ func (_u *GroupUpdateOne) AddSortOrder(v int) *GroupUpdateOne {
 	return _u
 }
 
+// SetDisplayIcon sets the "display_icon" field.
+func (_u *GroupUpdateOne) SetDisplayIcon(v string) *GroupUpdateOne {
+	_u.mutation.SetDisplayIcon(v)
+	return _u
+}
+
+// SetNillableDisplayIcon sets the "display_icon" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableDisplayIcon(v *string) *GroupUpdateOne {
+	if v != nil {
+		_u.SetDisplayIcon(*v)
+	}
+	return _u
+}
+
+// ClearDisplayIcon clears the value of the "display_icon" field.
+func (_u *GroupUpdateOne) ClearDisplayIcon() *GroupUpdateOne {
+	_u.mutation.ClearDisplayIcon()
+	return _u
+}
+
+// SetDisplayName sets the "display_name" field.
+func (_u *GroupUpdateOne) SetDisplayName(v string) *GroupUpdateOne {
+	_u.mutation.SetDisplayName(v)
+	return _u
+}
+
+// SetNillableDisplayName sets the "display_name" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableDisplayName(v *string) *GroupUpdateOne {
+	if v != nil {
+		_u.SetDisplayName(*v)
+	}
+	return _u
+}
+
+// ClearDisplayName clears the value of the "display_name" field.
+func (_u *GroupUpdateOne) ClearDisplayName() *GroupUpdateOne {
+	_u.mutation.ClearDisplayName()
+	return _u
+}
+
+// SetDisplayRateMultiplier sets the "display_rate_multiplier" field.
+func (_u *GroupUpdateOne) SetDisplayRateMultiplier(v float64) *GroupUpdateOne {
+	_u.mutation.ResetDisplayRateMultiplier()
+	_u.mutation.SetDisplayRateMultiplier(v)
+	return _u
+}
+
+// SetNillableDisplayRateMultiplier sets the "display_rate_multiplier" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableDisplayRateMultiplier(v *float64) *GroupUpdateOne {
+	if v != nil {
+		_u.SetDisplayRateMultiplier(*v)
+	}
+	return _u
+}
+
+// AddDisplayRateMultiplier adds value to the "display_rate_multiplier" field.
+func (_u *GroupUpdateOne) AddDisplayRateMultiplier(v float64) *GroupUpdateOne {
+	_u.mutation.AddDisplayRateMultiplier(v)
+	return _u
+}
+
+// ClearDisplayRateMultiplier clears the value of the "display_rate_multiplier" field.
+func (_u *GroupUpdateOne) ClearDisplayRateMultiplier() *GroupUpdateOne {
+	_u.mutation.ClearDisplayRateMultiplier()
+	return _u
+}
+
+// SetClaudeCodePersona sets the "claude_code_persona" field.
+func (_u *GroupUpdateOne) SetClaudeCodePersona(v bool) *GroupUpdateOne {
+	_u.mutation.SetClaudeCodePersona(v)
+	return _u
+}
+
+// SetNillableClaudeCodePersona sets the "claude_code_persona" field if the given value is not nil.
+func (_u *GroupUpdateOne) SetNillableClaudeCodePersona(v *bool) *GroupUpdateOne {
+	if v != nil {
+		_u.SetClaudeCodePersona(*v)
+	}
+	return _u
+}
+
 // SetAllowMessagesDispatch sets the "allow_messages_dispatch" field.
 func (_u *GroupUpdateOne) SetAllowMessagesDispatch(v bool) *GroupUpdateOne {
 	_u.mutation.SetAllowMessagesDispatch(v)
@@ -2159,9 +2349,7 @@ func (_u *GroupUpdateOne) Select(field string, fields ...string) *GroupUpdateOne
 
 // Save executes the query and returns the updated Group entity.
 func (_u *GroupUpdateOne) Save(ctx context.Context) (*Group, error) {
-	if err := _u.defaults(); err != nil {
-		return nil, err
-	}
+	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -2188,15 +2376,11 @@ func (_u *GroupUpdateOne) ExecX(ctx context.Context) {
 }
 
 // defaults sets the default values of the builder before save.
-func (_u *GroupUpdateOne) defaults() error {
+func (_u *GroupUpdateOne) defaults() {
 	if _, ok := _u.mutation.UpdatedAt(); !ok {
-		if group.UpdateDefaultUpdatedAt == nil {
-			return fmt.Errorf("ent: uninitialized group.UpdateDefaultUpdatedAt (forgotten import ent/runtime?)")
-		}
 		v := group.UpdateDefaultUpdatedAt()
 		_u.mutation.SetUpdatedAt(v)
 	}
-	return nil
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -2219,6 +2403,16 @@ func (_u *GroupUpdateOne) check() error {
 	if v, ok := _u.mutation.SubscriptionType(); ok {
 		if err := group.SubscriptionTypeValidator(v); err != nil {
 			return &ValidationError{Name: "subscription_type", err: fmt.Errorf(`ent: validator failed for field "Group.subscription_type": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.DisplayIcon(); ok {
+		if err := group.DisplayIconValidator(v); err != nil {
+			return &ValidationError{Name: "display_icon", err: fmt.Errorf(`ent: validator failed for field "Group.display_icon": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.DisplayName(); ok {
+		if err := group.DisplayNameValidator(v); err != nil {
+			return &ValidationError{Name: "display_name", err: fmt.Errorf(`ent: validator failed for field "Group.display_name": %w`, err)}
 		}
 	}
 	if v, ok := _u.mutation.DefaultMappedModel(); ok {
@@ -2400,6 +2594,30 @@ func (_u *GroupUpdateOne) sqlSave(ctx context.Context) (_node *Group, err error)
 	}
 	if value, ok := _u.mutation.AddedSortOrder(); ok {
 		_spec.AddField(group.FieldSortOrder, field.TypeInt, value)
+	}
+	if value, ok := _u.mutation.DisplayIcon(); ok {
+		_spec.SetField(group.FieldDisplayIcon, field.TypeString, value)
+	}
+	if _u.mutation.DisplayIconCleared() {
+		_spec.ClearField(group.FieldDisplayIcon, field.TypeString)
+	}
+	if value, ok := _u.mutation.DisplayName(); ok {
+		_spec.SetField(group.FieldDisplayName, field.TypeString, value)
+	}
+	if _u.mutation.DisplayNameCleared() {
+		_spec.ClearField(group.FieldDisplayName, field.TypeString)
+	}
+	if value, ok := _u.mutation.DisplayRateMultiplier(); ok {
+		_spec.SetField(group.FieldDisplayRateMultiplier, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.AddedDisplayRateMultiplier(); ok {
+		_spec.AddField(group.FieldDisplayRateMultiplier, field.TypeFloat64, value)
+	}
+	if _u.mutation.DisplayRateMultiplierCleared() {
+		_spec.ClearField(group.FieldDisplayRateMultiplier, field.TypeFloat64)
+	}
+	if value, ok := _u.mutation.ClaudeCodePersona(); ok {
+		_spec.SetField(group.FieldClaudeCodePersona, field.TypeBool, value)
 	}
 	if value, ok := _u.mutation.AllowMessagesDispatch(); ok {
 		_spec.SetField(group.FieldAllowMessagesDispatch, field.TypeBool, value)

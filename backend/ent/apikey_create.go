@@ -339,9 +339,7 @@ func (_c *APIKeyCreate) Mutation() *APIKeyMutation {
 
 // Save creates the APIKey in the database.
 func (_c *APIKeyCreate) Save(ctx context.Context) (*APIKey, error) {
-	if err := _c.defaults(); err != nil {
-		return nil, err
-	}
+	_c.defaults()
 	return withHooks(ctx, _c.sqlSave, _c.mutation, _c.hooks)
 }
 
@@ -368,18 +366,12 @@ func (_c *APIKeyCreate) ExecX(ctx context.Context) {
 }
 
 // defaults sets the default values of the builder before save.
-func (_c *APIKeyCreate) defaults() error {
+func (_c *APIKeyCreate) defaults() {
 	if _, ok := _c.mutation.CreatedAt(); !ok {
-		if apikey.DefaultCreatedAt == nil {
-			return fmt.Errorf("ent: uninitialized apikey.DefaultCreatedAt (forgotten import ent/runtime?)")
-		}
 		v := apikey.DefaultCreatedAt()
 		_c.mutation.SetCreatedAt(v)
 	}
 	if _, ok := _c.mutation.UpdatedAt(); !ok {
-		if apikey.DefaultUpdatedAt == nil {
-			return fmt.Errorf("ent: uninitialized apikey.DefaultUpdatedAt (forgotten import ent/runtime?)")
-		}
 		v := apikey.DefaultUpdatedAt()
 		_c.mutation.SetUpdatedAt(v)
 	}
@@ -419,7 +411,6 @@ func (_c *APIKeyCreate) defaults() error {
 		v := apikey.DefaultUsage7d
 		_c.mutation.SetUsage7d(v)
 	}
-	return nil
 }
 
 // check runs all checks and user-defined validators on the builder.

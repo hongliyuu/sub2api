@@ -1974,7 +1974,7 @@ func TestReplaceModelInSSELine(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := svc.replaceModelInSSELine(tt.line, tt.from, tt.to)
+			got := svc.replaceModelInSSELine(tt.line, tt.from, tt.to, false)
 			require.Equal(t, tt.expected, got)
 		})
 	}
@@ -2022,7 +2022,7 @@ func TestReplaceModelInSSEBody(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := svc.replaceModelInSSEBody(tt.body, tt.from, tt.to)
+			got := svc.replaceModelInSSEBody(tt.body, tt.from, tt.to, false)
 			require.Equal(t, tt.expected, got)
 		})
 	}
@@ -2084,7 +2084,7 @@ func TestReplaceModelInResponseBody(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := svc.replaceModelInResponseBody([]byte(tt.body), tt.from, tt.to)
+			got := svc.replaceModelInResponseBody([]byte(tt.body), tt.from, tt.to, false)
 			require.Equal(t, tt.expected, string(got))
 		})
 	}

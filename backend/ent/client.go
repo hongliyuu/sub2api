@@ -647,14 +647,12 @@ func (c *APIKeyClient) QueryUsageLogs(_m *APIKey) *UsageLogQuery {
 
 // Hooks returns the client hooks.
 func (c *APIKeyClient) Hooks() []Hook {
-	hooks := c.hooks.APIKey
-	return append(hooks[:len(hooks):len(hooks)], apikey.Hooks[:]...)
+	return c.hooks.APIKey
 }
 
 // Interceptors returns the client interceptors.
 func (c *APIKeyClient) Interceptors() []Interceptor {
-	inters := c.inters.APIKey
-	return append(inters[:len(inters):len(inters)], apikey.Interceptors[:]...)
+	return c.inters.APIKey
 }
 
 func (c *APIKeyClient) mutate(ctx context.Context, m *APIKeyMutation) (Value, error) {
@@ -846,14 +844,12 @@ func (c *AccountClient) QueryAccountGroups(_m *Account) *AccountGroupQuery {
 
 // Hooks returns the client hooks.
 func (c *AccountClient) Hooks() []Hook {
-	hooks := c.hooks.Account
-	return append(hooks[:len(hooks):len(hooks)], account.Hooks[:]...)
+	return c.hooks.Account
 }
 
 // Interceptors returns the client interceptors.
 func (c *AccountClient) Interceptors() []Interceptor {
-	inters := c.inters.Account
-	return append(inters[:len(inters):len(inters)], account.Interceptors[:]...)
+	return c.inters.Account
 }
 
 func (c *AccountClient) mutate(ctx context.Context, m *AccountMutation) (Value, error) {
@@ -2630,14 +2626,12 @@ func (c *GroupClient) QueryUserAllowedGroups(_m *Group) *UserAllowedGroupQuery {
 
 // Hooks returns the client hooks.
 func (c *GroupClient) Hooks() []Hook {
-	hooks := c.hooks.Group
-	return append(hooks[:len(hooks):len(hooks)], group.Hooks[:]...)
+	return c.hooks.Group
 }
 
 // Interceptors returns the client interceptors.
 func (c *GroupClient) Interceptors() []Interceptor {
-	inters := c.inters.Group
-	return append(inters[:len(inters):len(inters)], group.Interceptors[:]...)
+	return c.inters.Group
 }
 
 func (c *GroupClient) mutate(ctx context.Context, m *GroupMutation) (Value, error) {
@@ -3973,14 +3967,12 @@ func (c *ProxyClient) QueryAccounts(_m *Proxy) *AccountQuery {
 
 // Hooks returns the client hooks.
 func (c *ProxyClient) Hooks() []Hook {
-	hooks := c.hooks.Proxy
-	return append(hooks[:len(hooks):len(hooks)], proxy.Hooks[:]...)
+	return c.hooks.Proxy
 }
 
 // Interceptors returns the client interceptors.
 func (c *ProxyClient) Interceptors() []Interceptor {
-	inters := c.inters.Proxy
-	return append(inters[:len(inters):len(inters)], proxy.Interceptors[:]...)
+	return c.inters.Proxy
 }
 
 func (c *ProxyClient) mutate(ctx context.Context, m *ProxyMutation) (Value, error) {
@@ -5359,14 +5351,12 @@ func (c *UserClient) QueryUserAllowedGroups(_m *User) *UserAllowedGroupQuery {
 
 // Hooks returns the client hooks.
 func (c *UserClient) Hooks() []Hook {
-	hooks := c.hooks.User
-	return append(hooks[:len(hooks):len(hooks)], user.Hooks[:]...)
+	return c.hooks.User
 }
 
 // Interceptors returns the client interceptors.
 func (c *UserClient) Interceptors() []Interceptor {
-	inters := c.inters.User
-	return append(inters[:len(inters):len(inters)], user.Interceptors[:]...)
+	return c.inters.User
 }
 
 func (c *UserClient) mutate(ctx context.Context, m *UserMutation) (Value, error) {
@@ -5626,14 +5616,12 @@ func (c *UserAttributeDefinitionClient) QueryValues(_m *UserAttributeDefinition)
 
 // Hooks returns the client hooks.
 func (c *UserAttributeDefinitionClient) Hooks() []Hook {
-	hooks := c.hooks.UserAttributeDefinition
-	return append(hooks[:len(hooks):len(hooks)], userattributedefinition.Hooks[:]...)
+	return c.hooks.UserAttributeDefinition
 }
 
 // Interceptors returns the client interceptors.
 func (c *UserAttributeDefinitionClient) Interceptors() []Interceptor {
-	inters := c.inters.UserAttributeDefinition
-	return append(inters[:len(inters):len(inters)], userattributedefinition.Interceptors[:]...)
+	return c.inters.UserAttributeDefinition
 }
 
 func (c *UserAttributeDefinitionClient) mutate(ctx context.Context, m *UserAttributeDefinitionMutation) (Value, error) {
@@ -5990,14 +5978,12 @@ func (c *UserSubscriptionClient) QueryUsageLogs(_m *UserSubscription) *UsageLogQ
 
 // Hooks returns the client hooks.
 func (c *UserSubscriptionClient) Hooks() []Hook {
-	hooks := c.hooks.UserSubscription
-	return append(hooks[:len(hooks):len(hooks)], usersubscription.Hooks[:]...)
+	return c.hooks.UserSubscription
 }
 
 // Interceptors returns the client interceptors.
 func (c *UserSubscriptionClient) Interceptors() []Interceptor {
-	inters := c.inters.UserSubscription
-	return append(inters[:len(inters):len(inters)], usersubscription.Interceptors[:]...)
+	return c.inters.UserSubscription
 }
 
 func (c *UserSubscriptionClient) mutate(ctx context.Context, m *UserSubscriptionMutation) (Value, error) {

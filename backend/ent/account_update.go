@@ -593,9 +593,7 @@ func (_u *AccountUpdate) RemoveUsageLogs(v ...*UsageLog) *AccountUpdate {
 
 // Save executes the query and returns the number of nodes affected by the update operation.
 func (_u *AccountUpdate) Save(ctx context.Context) (int, error) {
-	if err := _u.defaults(); err != nil {
-		return 0, err
-	}
+	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -622,15 +620,11 @@ func (_u *AccountUpdate) ExecX(ctx context.Context) {
 }
 
 // defaults sets the default values of the builder before save.
-func (_u *AccountUpdate) defaults() error {
+func (_u *AccountUpdate) defaults() {
 	if _, ok := _u.mutation.UpdatedAt(); !ok {
-		if account.UpdateDefaultUpdatedAt == nil {
-			return fmt.Errorf("ent: uninitialized account.UpdateDefaultUpdatedAt (forgotten import ent/runtime?)")
-		}
 		v := account.UpdateDefaultUpdatedAt()
 		_u.mutation.SetUpdatedAt(v)
 	}
-	return nil
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -1533,9 +1527,7 @@ func (_u *AccountUpdateOne) Select(field string, fields ...string) *AccountUpdat
 
 // Save executes the query and returns the updated Account entity.
 func (_u *AccountUpdateOne) Save(ctx context.Context) (*Account, error) {
-	if err := _u.defaults(); err != nil {
-		return nil, err
-	}
+	_u.defaults()
 	return withHooks(ctx, _u.sqlSave, _u.mutation, _u.hooks)
 }
 
@@ -1562,15 +1554,11 @@ func (_u *AccountUpdateOne) ExecX(ctx context.Context) {
 }
 
 // defaults sets the default values of the builder before save.
-func (_u *AccountUpdateOne) defaults() error {
+func (_u *AccountUpdateOne) defaults() {
 	if _, ok := _u.mutation.UpdatedAt(); !ok {
-		if account.UpdateDefaultUpdatedAt == nil {
-			return fmt.Errorf("ent: uninitialized account.UpdateDefaultUpdatedAt (forgotten import ent/runtime?)")
-		}
 		v := account.UpdateDefaultUpdatedAt()
 		_u.mutation.SetUpdatedAt(v)
 	}
-	return nil
 }
 
 // check runs all checks and user-defined validators on the builder.

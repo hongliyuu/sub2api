@@ -48,10 +48,6 @@ import (
 // to their package variables.
 func init() {
 	apikeyMixin := schema.APIKey{}.Mixin()
-	apikeyMixinHooks1 := apikeyMixin[1].Hooks()
-	apikey.Hooks[0] = apikeyMixinHooks1[0]
-	apikeyMixinInters1 := apikeyMixin[1].Interceptors()
-	apikey.Interceptors[0] = apikeyMixinInters1[0]
 	apikeyMixinFields0 := apikeyMixin[0].Fields()
 	_ = apikeyMixinFields0
 	apikeyFields := schema.APIKey{}.Fields()
@@ -141,10 +137,6 @@ func init() {
 	// apikey.DefaultUsage7d holds the default value on creation for the usage_7d field.
 	apikey.DefaultUsage7d = apikeyDescUsage7d.Default.(float64)
 	accountMixin := schema.Account{}.Mixin()
-	accountMixinHooks1 := accountMixin[1].Hooks()
-	account.Hooks[0] = accountMixinHooks1[0]
-	accountMixinInters1 := accountMixin[1].Interceptors()
-	account.Interceptors[0] = accountMixinInters1[0]
 	accountMixinFields0 := accountMixin[0].Fields()
 	_ = accountMixinFields0
 	accountFields := schema.Account{}.Fields()
@@ -737,10 +729,6 @@ func init() {
 	// errorpassthroughrule.DefaultSkipMonitoring holds the default value on creation for the skip_monitoring field.
 	errorpassthroughrule.DefaultSkipMonitoring = errorpassthroughruleDescSkipMonitoring.Default.(bool)
 	groupMixin := schema.Group{}.Mixin()
-	groupMixinHooks1 := groupMixin[1].Hooks()
-	group.Hooks[0] = groupMixinHooks1[0]
-	groupMixinInters1 := groupMixin[1].Interceptors()
-	group.Interceptors[0] = groupMixinInters1[0]
 	groupMixinFields0 := groupMixin[0].Fields()
 	_ = groupMixinFields0
 	groupFields := schema.Group{}.Fields()
@@ -823,30 +811,42 @@ func init() {
 	groupDescSortOrder := groupFields[21].Descriptor()
 	// group.DefaultSortOrder holds the default value on creation for the sort_order field.
 	group.DefaultSortOrder = groupDescSortOrder.Default.(int)
+	// groupDescDisplayIcon is the schema descriptor for display_icon field.
+	groupDescDisplayIcon := groupFields[22].Descriptor()
+	// group.DisplayIconValidator is a validator for the "display_icon" field. It is called by the builders before save.
+	group.DisplayIconValidator = groupDescDisplayIcon.Validators[0].(func(string) error)
+	// groupDescDisplayName is the schema descriptor for display_name field.
+	groupDescDisplayName := groupFields[23].Descriptor()
+	// group.DisplayNameValidator is a validator for the "display_name" field. It is called by the builders before save.
+	group.DisplayNameValidator = groupDescDisplayName.Validators[0].(func(string) error)
+	// groupDescClaudeCodePersona is the schema descriptor for claude_code_persona field.
+	groupDescClaudeCodePersona := groupFields[25].Descriptor()
+	// group.DefaultClaudeCodePersona holds the default value on creation for the claude_code_persona field.
+	group.DefaultClaudeCodePersona = groupDescClaudeCodePersona.Default.(bool)
 	// groupDescAllowMessagesDispatch is the schema descriptor for allow_messages_dispatch field.
-	groupDescAllowMessagesDispatch := groupFields[22].Descriptor()
+	groupDescAllowMessagesDispatch := groupFields[26].Descriptor()
 	// group.DefaultAllowMessagesDispatch holds the default value on creation for the allow_messages_dispatch field.
 	group.DefaultAllowMessagesDispatch = groupDescAllowMessagesDispatch.Default.(bool)
 	// groupDescRequireOauthOnly is the schema descriptor for require_oauth_only field.
-	groupDescRequireOauthOnly := groupFields[23].Descriptor()
+	groupDescRequireOauthOnly := groupFields[27].Descriptor()
 	// group.DefaultRequireOauthOnly holds the default value on creation for the require_oauth_only field.
 	group.DefaultRequireOauthOnly = groupDescRequireOauthOnly.Default.(bool)
 	// groupDescRequirePrivacySet is the schema descriptor for require_privacy_set field.
-	groupDescRequirePrivacySet := groupFields[24].Descriptor()
+	groupDescRequirePrivacySet := groupFields[28].Descriptor()
 	// group.DefaultRequirePrivacySet holds the default value on creation for the require_privacy_set field.
 	group.DefaultRequirePrivacySet = groupDescRequirePrivacySet.Default.(bool)
 	// groupDescDefaultMappedModel is the schema descriptor for default_mapped_model field.
-	groupDescDefaultMappedModel := groupFields[25].Descriptor()
+	groupDescDefaultMappedModel := groupFields[29].Descriptor()
 	// group.DefaultDefaultMappedModel holds the default value on creation for the default_mapped_model field.
 	group.DefaultDefaultMappedModel = groupDescDefaultMappedModel.Default.(string)
 	// group.DefaultMappedModelValidator is a validator for the "default_mapped_model" field. It is called by the builders before save.
 	group.DefaultMappedModelValidator = groupDescDefaultMappedModel.Validators[0].(func(string) error)
 	// groupDescMessagesDispatchModelConfig is the schema descriptor for messages_dispatch_model_config field.
-	groupDescMessagesDispatchModelConfig := groupFields[26].Descriptor()
+	groupDescMessagesDispatchModelConfig := groupFields[30].Descriptor()
 	// group.DefaultMessagesDispatchModelConfig holds the default value on creation for the messages_dispatch_model_config field.
 	group.DefaultMessagesDispatchModelConfig = groupDescMessagesDispatchModelConfig.Default.(domain.OpenAIMessagesDispatchModelConfig)
 	// groupDescRpmLimit is the schema descriptor for rpm_limit field.
-	groupDescRpmLimit := groupFields[27].Descriptor()
+	groupDescRpmLimit := groupFields[31].Descriptor()
 	// group.DefaultRpmLimit holds the default value on creation for the rpm_limit field.
 	group.DefaultRpmLimit = groupDescRpmLimit.Default.(int)
 	idempotencyrecordMixin := schema.IdempotencyRecord{}.Mixin()
@@ -1247,10 +1247,6 @@ func init() {
 	// promocodeusage.DefaultUsedAt holds the default value on creation for the used_at field.
 	promocodeusage.DefaultUsedAt = promocodeusageDescUsedAt.Default.(func() time.Time)
 	proxyMixin := schema.Proxy{}.Mixin()
-	proxyMixinHooks1 := proxyMixin[1].Hooks()
-	proxy.Hooks[0] = proxyMixinHooks1[0]
-	proxyMixinInters1 := proxyMixin[1].Interceptors()
-	proxy.Interceptors[0] = proxyMixinInters1[0]
 	proxyMixinFields0 := proxyMixin[0].Fields()
 	_ = proxyMixinFields0
 	proxyFields := schema.Proxy{}.Fields()
@@ -1719,10 +1715,6 @@ func init() {
 	// usagelog.DefaultCreatedAt holds the default value on creation for the created_at field.
 	usagelog.DefaultCreatedAt = usagelogDescCreatedAt.Default.(func() time.Time)
 	userMixin := schema.User{}.Mixin()
-	userMixinHooks1 := userMixin[1].Hooks()
-	user.Hooks[0] = userMixinHooks1[0]
-	userMixinInters1 := userMixin[1].Interceptors()
-	user.Interceptors[0] = userMixinInters1[0]
 	userMixinFields0 := userMixin[0].Fields()
 	_ = userMixinFields0
 	userFields := schema.User{}.Fields()
@@ -1840,10 +1832,6 @@ func init() {
 	// userallowedgroup.DefaultCreatedAt holds the default value on creation for the created_at field.
 	userallowedgroup.DefaultCreatedAt = userallowedgroupDescCreatedAt.Default.(func() time.Time)
 	userattributedefinitionMixin := schema.UserAttributeDefinition{}.Mixin()
-	userattributedefinitionMixinHooks1 := userattributedefinitionMixin[1].Hooks()
-	userattributedefinition.Hooks[0] = userattributedefinitionMixinHooks1[0]
-	userattributedefinitionMixinInters1 := userattributedefinitionMixin[1].Interceptors()
-	userattributedefinition.Interceptors[0] = userattributedefinitionMixinInters1[0]
 	userattributedefinitionMixinFields0 := userattributedefinitionMixin[0].Fields()
 	_ = userattributedefinitionMixinFields0
 	userattributedefinitionFields := schema.UserAttributeDefinition{}.Fields()
@@ -1962,10 +1950,6 @@ func init() {
 	// userattributevalue.DefaultValue holds the default value on creation for the value field.
 	userattributevalue.DefaultValue = userattributevalueDescValue.Default.(string)
 	usersubscriptionMixin := schema.UserSubscription{}.Mixin()
-	usersubscriptionMixinHooks1 := usersubscriptionMixin[1].Hooks()
-	usersubscription.Hooks[0] = usersubscriptionMixinHooks1[0]
-	usersubscriptionMixinInters1 := usersubscriptionMixin[1].Interceptors()
-	usersubscription.Interceptors[0] = usersubscriptionMixinInters1[0]
 	usersubscriptionMixinFields0 := usersubscriptionMixin[0].Fields()
 	_ = usersubscriptionMixinFields0
 	usersubscriptionFields := schema.UserSubscription{}.Fields()
