@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -15,6 +16,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	coderws "github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
+	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
@@ -120,6 +122,26 @@ func TestReadRequestBodyWithPrealloc(t *testing.T) {
 	body, err := pkghttputil.ReadRequestBodyWithPrealloc(req)
 	require.NoError(t, err)
 	require.Equal(t, payload, string(body))
+}
+
+func TestReadRequestBodyWithPrealloc_Zstd(t *testing.T) {
+	payload := `{"model":"gpt-5","input":"hello"}`
+	var compressed bytes.Buffer
+	encoder, err := zstd.NewWriter(&compressed)
+	require.NoError(t, err)
+	_, err = encoder.Write([]byte(payload))
+	require.NoError(t, err)
+	require.NoError(t, encoder.Close())
+
+	req := httptest.NewRequest(http.MethodPost, "/v1/responses", &compressed)
+	req.Header.Set("Content-Encoding", "zstd")
+	req.ContentLength = int64(compressed.Len())
+
+	body, err := pkghttputil.ReadRequestBodyWithPrealloc(req)
+	require.NoError(t, err)
+	require.Equal(t, payload, string(body))
+	require.Empty(t, req.Header.Get("Content-Encoding"))
+	require.Equal(t, int64(-1), req.ContentLength)
 }
 
 func TestReadRequestBodyWithPrealloc_MaxBytesError(t *testing.T) {
