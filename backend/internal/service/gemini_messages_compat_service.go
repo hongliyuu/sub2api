@@ -579,7 +579,9 @@ func (s *GeminiMessagesCompatService) Forward(ctx context.Context, c *gin.Contex
 
 	originalModel := req.Model
 	mappedModel := req.Model
-	if account.Type == AccountTypeAPIKey {
+	if account.Credentials != nil {
+		// OAuth Gemini accounts can also rely on model_mapping, especially when
+		// bridging client-requested Gemini models onto Code Assist-supported ones.
 		mappedModel = account.GetMappedModel(req.Model)
 	}
 
@@ -1094,7 +1096,9 @@ func (s *GeminiMessagesCompatService) ForwardNative(ctx context.Context, c *gin.
 	body = ensureGeminiFunctionCallThoughtSignatures(body)
 
 	mappedModel := originalModel
-	if account.Type == AccountTypeAPIKey {
+	if account.Credentials != nil {
+		// OAuth Gemini accounts can also rely on model_mapping, especially when
+		// bridging client-requested Gemini models onto Code Assist-supported ones.
 		mappedModel = account.GetMappedModel(originalModel)
 	}
 
