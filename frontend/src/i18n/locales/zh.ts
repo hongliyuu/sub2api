@@ -246,6 +246,18 @@ export default {
   common: {
     loading: '加载中...',
     submitting: '提交中...',
+    userSearch: {
+      typeToSearch: '输入邮箱开始搜索',
+      noMatches: '未找到匹配用户'
+    },
+    entitySearch: {
+      typeToSearch: '输入关键字搜索',
+      typeOrFocus: '输入关键字或聚焦查看默认列表',
+      noMatches: '无匹配结果'
+    },
+    tagInput: {
+      enterToAdd: '回车添加'
+    },
     justNow: '刚刚',
     save: '保存',
     saved: '保存成功',
@@ -272,6 +284,7 @@ export default {
     yes: '是',
     no: '否',
     all: '全部',
+    global: '全',
     none: '无',
     selectAll: '全选',
     noData: '暂无数据',
@@ -336,6 +349,75 @@ export default {
         minutes: '{m}m',
         withSuffix: '{time} 后解除'
       }
+    },
+    // 通用错误码 → 文案映射（与后端 pkgerrors.Reason 对齐）：admin/user 全站共用，
+    // handler 层统一返回 reason 后由前端按 reason 取该 key 渲染本地化提示。
+    errors: {
+      INVALID_REQUEST_BODY: '请求格式错误',
+      INVALID_ID: 'ID 无效',
+      SERVICE_QUOTA_UNAVAILABLE: '服务限额功能暂不可用',
+      // Account
+      INVALID_ACCOUNT_ID: '账号 ID 无效',
+      ACCOUNT_NOT_FOUND: '账号不存在',
+      ACCOUNT_DUPLICATE: '账号已存在',
+      // User
+      INVALID_USER_ID: '用户 ID 无效',
+      USER_NOT_FOUND: '用户不存在',
+      EMAIL_INVALID: '邮箱格式错误',
+      BALANCE_INVALID: '余额数值无效',
+      // Group
+      INVALID_GROUP_ID: '分组 ID 无效',
+      GROUP_NOT_FOUND: '分组不存在',
+      GROUP_DUPLICATE: '分组名已存在',
+      INVALID_GROUP_FILTER: '分组筛选参数无效',
+      // Setting
+      INVALID_SETTING_KEY: '设置项无效',
+      SETTING_REQUIRED: '设置项必填',
+      TURNSTILE_SITE_KEY_REQUIRED: 'Turnstile Site Key 必填',
+      TURNSTILE_SECRET_REQUIRED: 'Turnstile Secret 必填',
+      // Account 补充（audit 8 发现 backend 已用但前端未翻译）
+      INVALID_RATE_MULTIPLIER: '倍率参数无效',
+      ACCOUNT_IDS_REQUIRED: '账号 ID 列表必填',
+      INVALID_EXTRA_FIELD: '扩展字段无效',
+      NO_UPDATES_PROVIDED: '未提供更新内容',
+      PRIVACY_UNSUPPORTED: '该账号不支持隐私设置',
+      MISSING_ACCESS_TOKEN: '缺少 access token',
+      TIER_REFRESH_UNSUPPORTED: '该账号不支持等级刷新',
+      TOTP_ENCRYPTION_KEY_MISSING: 'TOTP 加密密钥未配置',
+      // Service quota（handler 与 service 层 reason → 用户文案）
+      SERVICE_QUOTA_MONITOR_UNAVAILABLE: '限额监控暂不可用',
+      SERVICE_QUOTA_INVALID_RULE: '限额规则配置无效',
+      SERVICE_QUOTA_INVALID_COUNTER_MODE: '计数模式无效',
+      SERVICE_QUOTA_INVALID_LIMITERS: '请至少配置一个限流器',
+      SERVICE_QUOTA_INVALID_LIMITER_TYPE: '限流器类型无效',
+      SERVICE_QUOTA_INVALID_LIMIT_VALUE: '限额数值无效',
+      SERVICE_QUOTA_INVALID_WINDOW_MODE: '时间窗口模式无效',
+      SERVICE_QUOTA_DUPLICATE_LIMITER: '限流器配置重复',
+      SERVICE_QUOTA_INVALID_TOKEN_COMPONENT: 'Token 计费项无效',
+      SERVICE_QUOTA_INVALID_PATHS: '请至少配置一个路径',
+      SERVICE_QUOTA_SCOPE_ACCOUNT_NOT_FOUND: '指定的账号不存在',
+      SERVICE_QUOTA_SCOPE_GROUP_NOT_FOUND: '指定的分组不存在',
+      SERVICE_QUOTA_SCOPE_CHANNEL_NOT_FOUND: '指定的渠道不存在',
+      SERVICE_QUOTA_SCOPE_MISMATCH: '限制范围与规则不匹配',
+      SERVICE_QUOTA_INVALID_RESET_TARGET: '重置目标参数无效',
+      // 通用鉴权 / 监控错误
+      UNAUTHENTICATED: '请先登录',
+      SNAPSHOT_FAILED: '加载实时数据失败，请稍后重试',
+      INVALID_QUERY_PARAM: '查询参数无效'
+    }
+  },
+
+  // 通用字段校验错误码 → i18n 文案。
+  // 任意 dialog 走 fieldErrorI18nKeys(code, moduleNamespace) 时，先查模块专属
+  // namespace（如 admin.serviceQuota.errors.*），未命中回退到本通用 namespace。
+  validation: {
+    fieldErrors: {
+      REQUIRED: '必填',
+      MIN: '值过小',
+      MAX: '值过大',
+      ONEOF: '取值不在允许范围',
+      MUST_BE_POSITIVE: '必须为正数',
+      INVALID_VALUE: '取值无效'
     }
   },
 
@@ -378,6 +460,10 @@ export default {
     channelPricing: '渠道定价',
     channelMonitor: '渠道监控',
     channelStatus: '渠道状态',
+    serviceQuota: '服务配额',
+    serviceQuotaMonitor: '限额监控',
+    serviceQuotaConfig: '限额配置',
+    myQuota: '我的限额',
   },
 
   // Auth
@@ -846,6 +932,9 @@ export default {
     imageUnitPrice: '单张价格',
     cacheRead: '读取',
     cacheWrite: '写入',
+    cacheHit: '缓存读取',
+    cacheCreate: '缓存写入',
+    cacheHitRate: '缓存命中率',
     serviceTier: '服务档位',
     serviceTierPriority: 'Fast',
     serviceTierFlex: 'Flex',
@@ -1788,8 +1877,6 @@ export default {
       failedToAdjust: '调整失败',
       emailRequired: '请输入邮箱',
       concurrencyMin: '并发数不能小于1',
-      soraStorageQuota: 'Sora 存储配额',
-      soraStorageQuotaHint: '单位 GB，0 表示使用分组或系统默认配额',
       amountRequired: '请输入有效金额',
       insufficientBalance: '余额不足',
       setAllowedGroups: '设置允许分组',
@@ -3075,7 +3162,7 @@ export default {
       // Quota control (Anthropic OAuth/SetupToken only)
       quotaControl: {
         title: '配额控制',
-        hint: '配置费用窗口、会话限制、客户端亲和等调度控制。',
+        hint: '配置费用窗口、会话限制等调度控制。',
         windowCost: {
           label: '5h窗口费用控制',
           hint: '限制账号在5小时窗口内的费用使用',
@@ -3121,7 +3208,7 @@ export default {
           label: 'TLS 指纹模拟',
           hint: '模拟 Node.js/Claude Code 客户端的 TLS 指纹',
           defaultProfile: '内置默认',
-          randomProfile: '随机'
+          randomProfile: '随机',
         },
         sessionIdMasking: {
           label: '会话 ID 伪装',
@@ -3138,25 +3225,7 @@ export default {
           hint: '启用后将请求转发到自定义中继服务，代理地址将作为 URL 参数传递给中继服务',
           urlHint: '中继服务地址（如 https://relay.example.com）',
         },
-        clientAffinity: {
-          label: '客户端亲和调度',
-          hint: '启用后，新会话会优先调度到该客户端之前使用过的账号，避免频繁切换账号'
-        }
       },
-      affinityNoClients: '无亲和客户端',
-      affinityClients: '{count} 个亲和客户端：',
-      affinitySection: '客户端亲和',
-      affinitySectionHint: '控制客户端在账号间的分布。通过配置区域阈值来平衡负载。',
-      affinityToggle: '启用客户端亲和',
-      affinityToggleHint: '新会话优先调度到该客户端之前使用过的账号',
-      affinityBase: '基础限额（绿区）',
-      affinityBasePlaceholder: '留空表示不限制',
-      affinityBaseHint: '绿区最大客户端数量（完整优先级调度）',
-      affinityBaseOffHint: '未开启绿区限制，所有客户端均享受完整优先级调度',
-      affinityBuffer: '缓冲区（黄区）',
-      affinityBufferPlaceholder: '例如 3',
-      affinityBufferHint: '黄区允许的额外客户端数量（降级优先级调度）',
-      affinityBufferInfinite: '不限制',
       expired: '已过期',
       proxy: '代理',
       noProxy: '无代理',
@@ -4051,6 +4120,183 @@ export default {
       failedToUpdate: '更新优惠码失败',
       failedToDelete: '删除优惠码失败',
       failedToLoadUsages: '加载使用记录失败'
+    },
+
+
+    serviceQuota: {
+      title: '服务配额',
+      description: '在现有用户配额之上，额外管理 RPM、TPM、TPD、每日美元消费以及并发请求等规则。',
+      createRule: '新建规则',
+      editRule: '编辑服务配额规则',
+      deleteRule: '删除服务配额规则',
+      emptyTitle: '暂无服务配额规则',
+      emptyDescription: '创建第一条规则，在现有配额之上叠加限制。',
+      userId: '用户 ID：{id}',
+      unnamedRule: '未命名规则 #{id}',
+      loadError: '加载服务配额规则失败',
+      saveSuccess: '服务配额规则已保存',
+      saveError: '保存服务配额规则失败',
+      deleteSuccess: '服务配额规则已删除',
+      deleteError: '删除服务配额规则失败',
+      toggleSuccess: '状态更新成功',
+      toggleError: '状态更新失败',
+      counterResetOnToggle: '已重置该规则的限流计数',
+      deleteConfirm: '删除规则 {name}？删除后立即停止生效。',
+      filters: {
+        allCounterModes: '全部计数模式',
+        allFallback: '全部默认状态',
+        allStatus: '全部状态'
+      },
+      columns: {
+        status: '状态',
+        name: '名称',
+        limiters: '限流器',
+        paths: '路径',
+        counterMode: '计数模式',
+        targetUsers: '绑定用户',
+        fallback: '是否默认',
+        type: '类型',
+        window: '窗口',
+        limit: '限额',
+        actions: '操作'
+      },
+      targetUsersOverflow: '等 {count} 人',
+      scopeDetails: {
+        platform: '平台：{value}',
+        channel: '渠道：{value}',
+        group: '分组：{value}',
+        account: '账号：{value}',
+        model: '模型：{value}',
+        channelCount: '渠道 ×{count}',
+        groupCount: '分组 ×{count}',
+        accountCount: '账号 ×{count}',
+        allRequests: '所有请求'
+      },
+      limiters: {
+        rpm: 'RPM',
+        tpm: 'TPM',
+        tpd: 'TPD',
+        dailyUsd: '每日美元消费',
+        concurrency: '并发请求',
+        rpmCountOnArrival: {
+          label: '请求到达即计入',
+          help: '默认关闭，仅成功请求计入；开启后请求被路由到账号即 +1，避免高并发超额'
+        }
+      },
+      counterModes: {
+        user: '指定用户',
+        perUser: '所有用户',
+        shared: '全局共享'
+      },
+      counterModeHints: {
+        user: '只对指定的用户列表生效，每人独立计数',
+        perUser: '对 scope 内所有用户生效，按 user_id 分片计数',
+        shared: '对 scope 内所有用户生效，共享同一个计数器'
+      },
+      fallback: {
+        label: '默认规则',
+        hint: '仅在同一 limiter 类型没有其他非默认规则命中时生效（限流器粒度）',
+        yes: '默认',
+        no: '常规'
+      },
+      windows: {
+        fixed: '固定窗口',
+        rolling: '滑动窗口',
+        none: '不设窗口'
+      },
+      form: {
+        name: '规则名称',
+        namePlaceholder: '便于识别的备注，可留空',
+        counterMode: '计数模式',
+        fallback: '默认规则',
+        targetUserIds: '绑定用户 ID',
+        targetUserIdsPlaceholder: '逗号分隔的用户 ID，例如 1,2,3',
+        targetUserIdsRequired: '计数模式为"指定用户"时必填',
+        limitersTitle: '限流器（一条规则可同时配置多种）',
+        limitersHint: '同一类型只能配置一个；并发不支持窗口',
+        pathsTitle: '匹配路径（命中任意一条即生效）',
+        pathsHint: '每条路径按 平台 → 渠道 → 分组 → 账号 → 模型 单选；留空表示不限制该维度',
+        platform: '平台',
+        platformPlaceholder: '例如 anthropic / openai / gemini',
+        channelId: '渠道',
+        groupId: '分组',
+        accountId: '账号',
+        modelPattern: '模型通配符',
+        modelPatternPlaceholder: '例如 claude-opus-* 或精确模型名',
+        modelPatternHint: '支持通配符 *，例如 claude-* 匹配该平台下所有 claude 模型',
+        required: '必填'
+      },
+      limiterEditor: {
+        empty: '尚未添加限流器，点击下方按钮添加',
+        add: '添加限流器'
+      },
+      tokenComponents: {
+        title: '计入项',
+        input: '输入',
+        output: '输出',
+        cache_creation: '缓存写入',
+        cache_read: '缓存读取',
+        minOneRequired: '至少勾选 1 项'
+      },
+      pathEditor: {
+        empty: '尚未添加路径，点击下方按钮添加',
+        add: '添加路径',
+        pathIndex: '路径 #{index}'
+      },
+      errors: {
+        limitValueMustBePositive: '限额必须 > 0',
+        formInvalid: '表单存在错误，请修正后再保存',
+        REQUIRED: '必填',
+        INVALID_VALUE: '取值无效',
+        MUST_BE_POSITIVE: '必须 > 0',
+        TARGET_USERS_REQUIRED: '请至少选择 1 个用户',
+        TOKEN_COMPONENTS_REQUIRED: '至少勾选 1 项',
+        PLATFORM_REQUIRED: '平台必填'
+      }
+    },
+
+    serviceQuotaMonitor: {
+      title: '限额监控',
+      description: '实时查看所有服务限流器的当前用量与负载',
+      disabled: '服务限额未启用，请前往「设置 → 功能开关」开启',
+      empty: '当前没有活跃的服务限流器',
+      truncated: '超过 {count} 条已截断',
+      loadError: '加载限额监控失败',
+      notActive: '未活跃',
+      fallbackTag: '默认',
+      resetIn: '重置: {seconds}s 后',
+      scopeHintNoUser: '未选择用户：显示「指定用户」与「全局共享」规则；选择用户后还可看到「按用户独立」实时计数',
+      scopeHintWithUser: '已选用户：显示该用户被指定的规则、全局共享规则与该用户的独立计数',
+      asOf: '数据更新于 {seconds} 秒前',
+      refresh: '刷新',
+      filters: {
+        rule: '规则',
+        user: '用户',
+        channel: '渠道',
+        group: '分组',
+        account: '账号',
+        platform: '平台',
+        clear: '清空筛选'
+      },
+      columns: {
+        rule: '规则',
+        path: '路径',
+        limiter: '限流类型',
+        window: '窗口',
+        usage: '用量',
+        counterMode: '限制模式',
+        scopeUser: '用户',
+        isFallback: '是否默认',
+        actions: '操作'
+      },
+      statusActive: '现在',
+      refreshTitle: '刷新这个限流器的最新计数',
+      reset: '重置',
+      resetTitle: '清空这个限流器的当前计数',
+      resetConfirmTitle: '确认重置该限流器计数？',
+      resetConfirmMessage: '将清空规则「{rule}」的 {limiter} 当前计数。已用完的 quota 将立即恢复，已并发占用的槽位会被释放（在飞请求 Release 时自动跳过空 key）。该操作不可撤销。',
+      resetSuccess: '已重置该限流器计数',
+      resetError: '重置失败'
     },
 
     // Usage Records
@@ -4948,6 +5194,13 @@ export default {
           enabled: '启用可用渠道',
           enabledHint: '关闭后用户端侧边栏入口隐藏，接口返回空数组。',
         },
+        serviceQuota: {
+          title: '服务配额',
+          description: '开启后显示服务配额菜单，并在现有用户配额之上叠加检查 RPM / TPM / TPD / 每日美元 / 并发请求规则。',
+          configureLink: '进入服务配额规则管理',
+          enabled: '启用服务配额',
+          enabledHint: '关闭时不执行服务配额规则。',
+        },
         affiliate: {
           title: '邀请返利',
           description: '老用户邀请新用户注册，新用户充值后老用户按比例获得返利额度。默认关闭。',
@@ -5265,12 +5518,6 @@ export default {
         integrationDoc: '支付集成文档',
         integrationDocHint: '包含接口说明、幂等语义及示例代码'
       },
-      soraClient: {
-        title: 'Sora 客户端',
-        description: '控制是否在侧边栏展示 Sora 客户端入口',
-        enabled: '启用 Sora 客户端',
-        enabledHint: '开启后，侧边栏将显示 Sora 入口，用户可访问 Sora 功能'
-      },
       customMenu: {
         title: '自定义菜单页面',
         description: '添加自定义 iframe 页面到侧边栏导航。每个页面可以设置为普通用户或管理员可见。',
@@ -5522,98 +5769,6 @@ export default {
         securityWarning: '警告：此密钥拥有完整的管理员权限，请妥善保管。',
         usage: '使用方法：在请求头中添加 x-api-key: <your-admin-api-key>'
       },
-      soraS3: {
-        title: 'Sora 存储配置',
-        description: '以多配置列表管理 Sora 媒体存储，支持 S3 和 Google Drive',
-        newProfile: '新建配置',
-        reloadProfiles: '刷新列表',
-        empty: '暂无存储配置，请先创建',
-        createTitle: '新建存储配置',
-        editTitle: '编辑存储配置',
-        selectProvider: '选择存储类型',
-        providerS3Desc: 'S3 兼容对象存储',
-        providerGDriveDesc: 'Google Drive 云盘',
-        profileID: '配置 ID',
-        profileName: '配置名称',
-        setActive: '创建后设为生效',
-        saveProfile: '保存配置',
-        activateProfile: '设为生效',
-        profileCreated: '存储配置创建成功',
-        profileSaved: '存储配置保存成功',
-        profileDeleted: '存储配置删除成功',
-        profileActivated: '生效配置已切换',
-        profileIDRequired: '请填写配置 ID',
-        profileNameRequired: '请填写配置名称',
-        profileSelectRequired: '请先选择配置',
-        endpointRequired: '启用时必须填写 S3 端点',
-        bucketRequired: '启用时必须填写存储桶',
-        accessKeyRequired: '启用时必须填写 Access Key ID',
-        deleteConfirm: '确定删除存储配置 {profileID} 吗？',
-        columns: {
-          profile: '配置',
-          profileId: 'Profile ID',
-          name: '名称',
-          provider: '存储类型',
-          active: '生效状态',
-          endpoint: '端点',
-          bucket: '存储桶',
-          storagePath: '存储路径',
-          capacityUsage: '容量 / 已用',
-          capacityUnlimited: '无限制',
-          videoCount: '视频数',
-          videoCompleted: '完成',
-          videoInProgress: '进行中',
-          quota: '默认配额',
-          updatedAt: '更新时间',
-          actions: '操作',
-          rootFolder: '根目录',
-          testInTable: '测试',
-          testingInTable: '测试中...',
-          testTimeout: '测试超时（15秒）'
-        },
-        enabled: '启用存储',
-        enabledHint: '启用后，Sora 生成的媒体文件将自动上传到存储',
-        endpoint: 'S3 端点',
-        region: '区域',
-        bucket: '存储桶',
-        prefix: '对象前缀',
-        accessKeyId: 'Access Key ID',
-        secretAccessKey: 'Secret Access Key',
-        secretConfigured: '(已配置，留空保持不变)',
-        cdnUrl: 'CDN URL',
-        cdnUrlHint: '可选，配置后使用 CDN URL 访问文件',
-        forcePathStyle: '强制路径风格（Path Style）',
-        defaultQuota: '默认存储配额',
-        defaultQuotaHint: '未在用户或分组级别指定配额时的默认值，0 表示无限制',
-        testConnection: '测试连接',
-        testing: '测试中...',
-        testSuccess: '连接测试成功',
-        testFailed: '连接测试失败',
-        saved: '存储设置保存成功',
-        saveFailed: '保存存储设置失败',
-        gdrive: {
-          authType: '认证方式',
-          serviceAccount: '服务账号',
-          clientId: 'Client ID',
-          clientSecret: 'Client Secret',
-          clientSecretConfigured: '(已配置，留空保持不变)',
-          refreshToken: 'Refresh Token',
-          refreshTokenConfigured: '(已配置，留空保持不变)',
-          serviceAccountJson: '服务账号 JSON',
-          serviceAccountConfigured: '(已配置，留空保持不变)',
-          folderId: 'Folder ID（可选）',
-          authorize: '授权 Google Drive',
-          authorizeHint: '通过 OAuth2 获取 Refresh Token',
-          oauthFieldsRequired: '请先填写 Client ID 和 Client Secret',
-          oauthSuccess: 'Google Drive 授权成功',
-          oauthFailed: 'Google Drive 授权失败',
-          closeWindow: '此窗口将自动关闭',
-          processing: '正在处理授权...',
-          testStorage: '测试存储',
-          testSuccess: 'Google Drive 存储测试成功（上传、访问、删除均正常）',
-          testFailed: 'Google Drive 存储测试失败'
-        }
-      },
       overloadCooldown: {
         title: '529 过载冷却',
         description: '配置上游返回 529（过载）时的账号调度暂停策略',
@@ -5648,6 +5803,7 @@ export default {
       rectifier: {
         title: '请求整流器',
         description: '当上游返回特定错误时，自动修正请求参数并重试，提高请求成功率',
+        passthroughNotice: '注意：账号级别开启「自动透传（仅替换认证）」后，整流器对该账号不生效——透传保留原始请求体不做改写。',
         enabled: '启用请求整流器',
         enabledHint: '总开关，关闭后所有整流功能均不生效',
         thinkingSignature: 'Thinking 签名整流',
@@ -5661,6 +5817,13 @@ export default {
         apikeyPatternsHint:
           '额外的关键词，匹配响应体中的内容（不区分大小写）。内置规则始终生效，此处用于补充额外匹配。',
         apikeyPatternPlaceholder: '例如：thinking_error 或 签名无效',
+        advisorTool: 'Advisor Tool 整流',
+        advisorToolHint:
+          '当上游不识别 advisor-tool-2026-03-01 beta header 时，自动剥离该 header 与 advisor 工具定义并重试（内置规则始终生效）',
+        advisorToolPatterns: '自定义匹配关键词',
+        advisorToolPatternsHint:
+          '额外的关键词，匹配响应体中的内容（不区分大小写）。内置规则始终生效，此处用于补充额外匹配。',
+        advisorToolPatternPlaceholder: '例如：advisor-tool 或 not supported',
         addPattern: '添加关键词',
         saved: '整流器设置保存成功',
         saveFailed: '保存整流器设置失败'
@@ -6049,6 +6212,30 @@ export default {
     resetIn: '{time} 后重置',
     windowNotActive: '等待首次使用',
     usageOf: '已用 {used} / {limit}'
+  },
+
+  // 用户端"我的限额"页（复用 admin RuntimeTable 的子集列）
+  userQuotaMonitor: {
+    title: '我的限额',
+    description: '实时查看您命中的服务限流器与当前用量',
+    disabled: '服务限额功能未启用',
+    empty: '暂未命中任何服务限流规则',
+    emptyAfterFilter: '当前筛选条件下没有匹配的限流器',
+    truncated: '超过 {count} 条已截断',
+    loadError: '加载我的限额失败',
+    refresh: '手动刷新',
+    filters: {
+      rule: '规则',
+      platform: '平台',
+      scope: '限额范围',
+      scopeGlobal: '仅全局共享',
+      scopeMine: '仅我的独立',
+      limiterType: '限流类型',
+      status: '状态',
+      statusExceeded: '已超限',
+      statusHealthy: '健康',
+      reset: '重置筛选'
+    }
   },
 
   // Onboarding Tour
@@ -6534,5 +6721,4 @@ export default {
       },
     },
   },
-
 }

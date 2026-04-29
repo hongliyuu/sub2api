@@ -4432,25 +4432,30 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 				// 不是签名错误（或整流器已关闭），继续检查 budget 约束
 				errMsg := extractUpstreamErrorMessage(respBody)
 				if isThinkingBudgetConstraintError(errMsg) && s.settingService.IsBudgetRectifierEnabled(ctx) {
-					appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
-						Platform:           account.Platform,
-						AccountID:          account.ID,
-						AccountName:        account.Name,
-						UpstreamStatusCode: resp.StatusCode,
-						UpstreamRequestID:  resp.Header.Get("x-request-id"),
-						UpstreamURL:        safeUpstreamURL(upstreamReq.URL.String()),
-						Kind:               "budget_constraint_error",
-						Message:            errMsg,
-						Detail: func() string {
-							if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
-								return truncateString(string(respBody), s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes)
-							}
-							return ""
-						}(),
-					})
-
 					rectifiedBody, applied := RectifyThinkingBudget(body)
-					if applied && time.Since(retryStart) < maxRetryElapsed {
+					if !applied {
+						logger.LegacyPrintf("service.gateway", "Account %d: budget rectifier matched error but body did not change, skipping retry", account.ID)
+					}
+					// 单次重试，不与 signature 整流共享 retry budget——进到这里上游已返回 budget 错误，
+					// 不重试 = 必然失败；客户端断开由 DoWithTLS 内部 ctx 兜底。
+					if applied {
+						appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+							Platform:           account.Platform,
+							AccountID:          account.ID,
+							AccountName:        account.Name,
+							UpstreamStatusCode: resp.StatusCode,
+							UpstreamRequestID:  resp.Header.Get("x-request-id"),
+							UpstreamURL:        safeUpstreamURL(upstreamReq.URL.String()),
+							Kind:               "budget_constraint_error",
+							Message:            errMsg,
+							Detail: func() string {
+								if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
+									return truncateString(string(respBody), s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes)
+								}
+								return ""
+							}(),
+						})
+
 						logger.LegacyPrintf("service.gateway", "Account %d: detected budget_tokens constraint error, retrying with rectified budget (budget_tokens=%d, max_tokens=%d)", account.ID, BudgetRectifyBudgetTokens, BudgetRectifyMaxTokens)
 						budgetRetryCtx, releaseBudgetRetryCtx := detachStreamUpstreamContext(ctx, reqStream)
 						budgetRetryReq, buildErr := s.buildUpstreamRequest(budgetRetryCtx, c, account, rectifiedBody, token, tokenType, reqModel, reqStream, shouldMimicClaudeCode)
@@ -4467,6 +4472,65 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 							logger.LegacyPrintf("service.gateway", "Account %d: budget rectifier retry failed: %v", account.ID, retryErr)
 						} else {
 							logger.LegacyPrintf("service.gateway", "Account %d: budget rectifier retry build failed: %v", account.ID, buildErr)
+						}
+					}
+				} else if s.shouldRectifyAdvisorToolError(ctx, respBody) {
+					// Advisor Tool 整流：上游不识别 advisor-tool-2026-03-01 beta header 时，
+					// 剥离 anthropic-beta 中的该 token 并删除 tools[] 里 type=advisor_20260301 的工具后重试。
+					rectifiedBody, bodyApplied := RectifyAdvisorTool(body)
+					// 触发条件：body 里有 advisor 工具（已剥）或客户端 header 里带 advisor-tool token（待剥）。
+					// 大小写不敏感比较以防御客户端发送 `Advisor-Tool-2026-03-01` 等变体。
+					headerHasAdvisor := containsBetaTokenIgnoreCase(getHeaderRaw(c.Request.Header, "anthropic-beta"), AdvisorBetaToken)
+					if !bodyApplied && !headerHasAdvisor {
+						logger.LegacyPrintf("service.gateway", "Account %d: advisor-tool rectifier matched error but body+header have no advisor token, skipping retry", account.ID)
+					}
+					// 单次重试，不与 signature 整流共享 retry budget——进到这里上游已确认是 advisor 错误，
+					// 不重试 = 必然失败；客户端断开由 DoWithTLS 内部 ctx 兜底。
+					if bodyApplied || headerHasAdvisor {
+						appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
+							Platform:           account.Platform,
+							AccountID:          account.ID,
+							AccountName:        account.Name,
+							UpstreamStatusCode: resp.StatusCode,
+							UpstreamRequestID:  resp.Header.Get("x-request-id"),
+							UpstreamURL:        safeUpstreamURL(upstreamReq.URL.String()),
+							Kind:               "advisor_tool_unsupported",
+							Message:            extractUpstreamErrorMessage(respBody),
+							Detail: func() string {
+								if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
+									return truncateString(string(respBody), s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes)
+								}
+								return ""
+							}(),
+						})
+
+						logger.LegacyPrintf("service.gateway", "Account %d: detected advisor-tool unsupported, retrying without %s beta+tool", account.ID, AdvisorBetaToken)
+						advisorRetryCtx, releaseAdvisorRetryCtx := detachStreamUpstreamContext(ctx, reqStream)
+						advisorRetryReq, buildErr := s.buildUpstreamRequest(advisorRetryCtx, c, account, rectifiedBody, token, tokenType, reqModel, reqStream, shouldMimicClaudeCode)
+						releaseAdvisorRetryCtx()
+						if buildErr == nil {
+							// 剥离 advisor token；若剥完 anthropic-beta 变空则删除整个 header，避免发送空值。
+							// 注意必须用 delHeaderRaw 而非 Header.Del——后者仅删 canonical 形式，
+							// 而 anthropic-beta 在本项目以小写 wire casing 存储，会留下幽灵 entry。
+							if v := getHeaderRaw(advisorRetryReq.Header, "anthropic-beta"); v != "" {
+								stripped := stripBetaTokenIgnoreCase(v, AdvisorBetaToken)
+								if stripped == "" {
+									delHeaderRaw(advisorRetryReq.Header, "anthropic-beta")
+								} else {
+									setHeaderRaw(advisorRetryReq.Header, "anthropic-beta", stripped)
+								}
+							}
+							advisorRetryResp, retryErr := s.httpUpstream.DoWithTLS(advisorRetryReq, proxyURL, account.ID, account.Concurrency, tlsProfile)
+							if retryErr == nil {
+								resp = advisorRetryResp
+								break
+							}
+							if advisorRetryResp != nil && advisorRetryResp.Body != nil {
+								_ = advisorRetryResp.Body.Close()
+							}
+							logger.LegacyPrintf("service.gateway", "Account %d: advisor-tool rectifier retry failed: %v", account.ID, retryErr)
+						} else {
+							logger.LegacyPrintf("service.gateway", "Account %d: advisor-tool rectifier retry build failed: %v", account.ID, buildErr)
 						}
 					}
 				}
@@ -6186,6 +6250,43 @@ func containsBetaToken(header, token string) bool {
 	return false
 }
 
+// containsBetaTokenIgnoreCase 大小写不敏感版本，用于 advisor-tool 整流路径——
+// 客户端理论上可能发送 `Advisor-Tool-2026-03-01` 等大小写变体，与 stripBetaTokenIgnoreCase 配套。
+func containsBetaTokenIgnoreCase(header, token string) bool {
+	if header == "" || token == "" {
+		return false
+	}
+	lowerToken := strings.ToLower(token)
+	for _, p := range strings.Split(header, ",") {
+		if strings.EqualFold(strings.TrimSpace(p), lowerToken) {
+			return true
+		}
+	}
+	return false
+}
+
+// stripBetaTokenIgnoreCase 从逗号分隔的 anthropic-beta header 中大小写不敏感地剥除单个 token。
+// 与 stripBetaTokens 不同（后者大小写敏感），专用于 advisor 整流防御客户端大小写变体。
+// 剥完所有 token 时返回空串，调用方应 Header.Del 而不是 Set 空值。
+func stripBetaTokenIgnoreCase(header, token string) string {
+	if header == "" || token == "" {
+		return header
+	}
+	parts := strings.Split(header, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if strings.EqualFold(p, token) {
+			continue
+		}
+		out = append(out, p)
+	}
+	return strings.Join(out, ",")
+}
+
 func filterBetaTokens(tokens []string, filterSet map[string]struct{}) []string {
 	if len(tokens) == 0 || len(filterSet) == 0 {
 		return tokens
@@ -6347,6 +6448,19 @@ func (s *GatewayService) isSignatureErrorPattern(ctx context.Context, account *A
 		return matchSignaturePatterns(respBody, settings.APIKeySignaturePatterns)
 	}
 	return false
+}
+
+// shouldRectifyAdvisorToolError 判断是否应触发 advisor-tool 整流（剥 header + tool 后重试）。
+// 仅当总开关 + advisor-tool 子开关均开启，且响应体匹配内置或自定义关键词时返回 true。
+func (s *GatewayService) shouldRectifyAdvisorToolError(ctx context.Context, respBody []byte) bool {
+	if s.settingService == nil {
+		return false
+	}
+	settings, err := s.settingService.GetRectifierSettings(ctx)
+	if err != nil || !settings.Enabled || !settings.AdvisorToolEnabled {
+		return false
+	}
+	return IsAdvisorToolUnsupportedError(respBody, settings.AdvisorToolPatterns)
 }
 
 // matchSignaturePatterns 检查响应体是否匹配自定义关键词列表（不区分大小写）。
@@ -7446,19 +7560,20 @@ func (s *GatewayService) getUserGroupRateMultiplier(ctx context.Context, userID,
 
 // RecordUsageInput 记录使用量的输入参数
 type RecordUsageInput struct {
-	Result             *ForwardResult
-	ParsedRequest      *ParsedRequest
-	APIKey             *APIKey
-	User               *User
-	Account            *Account
-	Subscription       *UserSubscription  // 可选：订阅信息
-	InboundEndpoint    string             // 入站端点（客户端请求路径）
-	UpstreamEndpoint   string             // 上游端点（标准化后的上游路径）
-	UserAgent          string             // 请求的 User-Agent
-	IPAddress          string             // 请求的客户端 IP 地址
-	RequestPayloadHash string             // 请求体语义哈希，用于降低 request_id 误复用时的静默误去重风险
-	ForceCacheBilling  bool               // 强制缓存计费：将 input_tokens 转为 cache_read 计费（用于粘性会话切换）
-	APIKeyService      APIKeyQuotaUpdater // 可选：用于更新API Key配额
+	Result              *ForwardResult
+	ParsedRequest       *ParsedRequest
+	APIKey              *APIKey
+	User                *User
+	Account             *Account
+	Subscription        *UserSubscription  // 可选：订阅信息
+	InboundEndpoint     string             // 入站端点（客户端请求路径）
+	UpstreamEndpoint    string             // 上游端点（标准化后的上游路径）
+	UserAgent           string             // 请求的 User-Agent
+	IPAddress           string             // 请求的客户端 IP 地址
+	RequestPayloadHash  string             // 请求体语义哈希，用于降低 request_id 误复用时的静默误去重风险
+	ForceCacheBilling   bool               // 强制缓存计费：将 input_tokens 转为 cache_read 计费（用于粘性会话切换）
+	APIKeyService       APIKeyQuotaUpdater // 可选：用于更新API Key配额
+	ServiceQuotaRequest ServiceQuotaCheckRequest
 
 	ChannelUsageFields // 渠道映射信息（由 handler 在 Forward 前解析）
 }
@@ -7478,6 +7593,9 @@ type usageLogBestEffortWriter interface {
 }
 
 // postUsageBillingParams 统一扣费所需的参数
+//
+// 4 个 Token 字段分开传，便于 service quota TPM/TPD 限流器按各自 token_components
+// 配置自由选择计入项；下游 Record 调用直接用这 4 个值组装 ServiceQuotaRecordRequest。
 type postUsageBillingParams struct {
 	Cost                  *CostBreakdown
 	User                  *User
@@ -7488,6 +7606,11 @@ type postUsageBillingParams struct {
 	IsSubscriptionBill    bool
 	AccountRateMultiplier float64
 	APIKeyService         APIKeyQuotaUpdater
+	ServiceQuotaRequest   ServiceQuotaCheckRequest
+	InputTokens           int64
+	OutputTokens          int64
+	CacheCreationTokens   int64
+	CacheReadTokens       int64
 }
 
 func (p *postUsageBillingParams) shouldDeductAPIKeyQuota() bool {
@@ -7500,6 +7623,38 @@ func (p *postUsageBillingParams) shouldUpdateRateLimits() bool {
 
 func (p *postUsageBillingParams) shouldUpdateAccountQuota() bool {
 	return p.Cost.TotalCost > 0 && p.Account.IsAPIKeyOrBedrock() && p.Account.HasAnyQuotaLimit()
+}
+
+// buildServiceQuotaRecordRequest 从 postUsageBillingParams 装配 ServiceQuotaRecordRequest。
+//
+// 返回 ok=false 表示"本次请求不需要写服务限额计数"——目前唯一硬约束是 p.User == nil
+// （未鉴权或异常路径），因为所有 limiter 计数 key 都需要 UserID 以做 per-user/shared 区分。
+//
+// 注意 ServiceQuotaRequest 已在 caller 路径就装填了 platform / channel / model 等字段，
+// 这里只补上随响应才确定的 UserID/GroupID/Platform/AccountID 覆盖（同 APIKey 的 group 一致）。
+func buildServiceQuotaRecordRequest(p *postUsageBillingParams) (ServiceQuotaRecordRequest, bool) {
+	if p == nil || p.User == nil || p.Cost == nil {
+		return ServiceQuotaRecordRequest{}, false
+	}
+	req := p.ServiceQuotaRequest
+	req.UserID = p.User.ID
+	if p.APIKey != nil && p.APIKey.GroupID != nil {
+		req.GroupID = *p.APIKey.GroupID
+	}
+	if p.APIKey != nil && p.APIKey.Group != nil {
+		req.Platform = p.APIKey.Group.Platform
+	}
+	if p.Account != nil {
+		req.AccountID = p.Account.ID
+	}
+	return ServiceQuotaRecordRequest{
+		ServiceQuotaCheckRequest: req,
+		InputTokens:              p.InputTokens,
+		OutputTokens:             p.OutputTokens,
+		CacheCreationTokens:      p.CacheCreationTokens,
+		CacheReadTokens:          p.CacheReadTokens,
+		Cost:                     p.Cost.ActualCost,
+	}, true
 }
 
 // postUsageBilling is the legacy fallback billing path used when the unified
@@ -7689,6 +7844,9 @@ func finalizePostUsageBilling(p *postUsageBillingParams, deps *billingDeps, resu
 	if p.Cost.ActualCost > 0 && p.APIKey != nil && p.APIKey.HasRateLimits() {
 		deps.billingCacheService.QueueUpdateAPIKeyRateLimitUsage(p.APIKey.ID, p.Cost.ActualCost)
 	}
+	if record, ok := buildServiceQuotaRecordRequest(p); ok && deps.billingCacheService != nil {
+		deps.billingCacheService.RecordServiceQuotaUsage(context.Background(), record)
+	}
 
 	deps.deferredService.ScheduleLastUsedUpdate(p.Account.ID)
 
@@ -7851,19 +8009,20 @@ type recordUsageOpts struct {
 // RecordUsage 记录使用量并扣费（或更新订阅用量）
 func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInput) error {
 	return s.recordUsageCore(ctx, &recordUsageCoreInput{
-		Result:             input.Result,
-		APIKey:             input.APIKey,
-		User:               input.User,
-		Account:            input.Account,
-		Subscription:       input.Subscription,
-		InboundEndpoint:    input.InboundEndpoint,
-		UpstreamEndpoint:   input.UpstreamEndpoint,
-		UserAgent:          input.UserAgent,
-		IPAddress:          input.IPAddress,
-		RequestPayloadHash: input.RequestPayloadHash,
-		ForceCacheBilling:  input.ForceCacheBilling,
-		APIKeyService:      input.APIKeyService,
-		ChannelUsageFields: input.ChannelUsageFields,
+		Result:              input.Result,
+		APIKey:              input.APIKey,
+		User:                input.User,
+		Account:             input.Account,
+		Subscription:        input.Subscription,
+		InboundEndpoint:     input.InboundEndpoint,
+		UpstreamEndpoint:    input.UpstreamEndpoint,
+		UserAgent:           input.UserAgent,
+		IPAddress:           input.IPAddress,
+		RequestPayloadHash:  input.RequestPayloadHash,
+		ForceCacheBilling:   input.ForceCacheBilling,
+		APIKeyService:       input.APIKeyService,
+		ServiceQuotaRequest: input.ServiceQuotaRequest,
+		ChannelUsageFields:  input.ChannelUsageFields,
 	}, &recordUsageOpts{
 		EnableClaudePath: true,
 	})
@@ -7926,6 +8085,7 @@ type recordUsageCoreInput struct {
 	ForceCacheBilling  bool
 	APIKeyService      APIKeyQuotaUpdater
 	ChannelUsageFields
+	ServiceQuotaRequest ServiceQuotaCheckRequest
 }
 
 // recordUsageCore 是 RecordUsage 和 RecordUsageWithLongContext 的统一实现。
@@ -8030,6 +8190,11 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		IsSubscriptionBill:    isSubscriptionBilling,
 		AccountRateMultiplier: accountRateMultiplier,
 		APIKeyService:         input.APIKeyService,
+		ServiceQuotaRequest:   input.ServiceQuotaRequest,
+		InputTokens:           int64(usageLog.InputTokens),
+		OutputTokens:          int64(usageLog.OutputTokens),
+		CacheCreationTokens:   int64(usageLog.CacheCreationTokens),
+		CacheReadTokens:       int64(usageLog.CacheReadTokens),
 	}, s.billingDeps(), s.usageBillingRepo)
 
 	if billingErr != nil {
