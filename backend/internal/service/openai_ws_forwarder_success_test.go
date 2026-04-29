@@ -219,6 +219,7 @@ func TestNormalizeOpenAIWSCodexReasoningPayloadRaw_OAuthSpark(t *testing.T) {
 
 		require.NoError(t, err)
 		require.True(t, modified)
+		require.Equal(t, "gpt-5.3-codex", gjson.GetBytes(got, "model").String())
 		require.Equal(t, "medium", gjson.GetBytes(got, "reasoning.effort").String())
 	})
 
@@ -229,6 +230,7 @@ func TestNormalizeOpenAIWSCodexReasoningPayloadRaw_OAuthSpark(t *testing.T) {
 
 		require.NoError(t, err)
 		require.True(t, modified)
+		require.Equal(t, "gpt-5.3-codex", gjson.GetBytes(got, "model").String())
 		require.Equal(t, "medium", gjson.GetBytes(got, "reasoning.effort").String())
 	})
 }
@@ -596,7 +598,7 @@ func TestOpenAIGatewayService_Forward_WSv2_OAuthOriginatorCompatibility(t *testi
 			require.Equal(t, tt.wantOriginator, captureDialer.lastHeaders.Get("originator"))
 			if requestModel == "gpt-5.3-codex-spark" {
 				require.Equal(t, codexCLIUserAgent, captureDialer.lastHeaders.Get("user-agent"))
-				require.Equal(t, "gpt-5.3-codex-spark", captureConn.lastWrite["model"])
+				require.Equal(t, "gpt-5.3-codex", captureConn.lastWrite["model"])
 			}
 		})
 	}

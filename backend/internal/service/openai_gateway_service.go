@@ -2234,17 +2234,25 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 	}
 
+	forceCodexCLIHeaders := false
 	if account.Type == AccountTypeOAuth {
 		codexResult := applyCodexOAuthTransform(reqBody, isCodexCLI, isCompactRequest)
 		if codexResult.Modified {
 			bodyModified = true
 			disablePatch()
 		}
+		if codexResult.ForceCodexCLI {
+			forceCodexCLIHeaders = true
+		}
 		if codexResult.NormalizedModel != "" {
 			upstreamModel = codexResult.NormalizedModel
 		}
 		if codexResult.PromptCacheKey != "" {
 			promptCacheKey = codexResult.PromptCacheKey
+		}
+		if normalizeOpenAICodexInternalServiceTier(reqBody) {
+			bodyModified = true
+			disablePatch()
 		}
 	}
 
@@ -2491,7 +2499,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 				wsReqBody,
 				token,
 				wsDecision,
-				isCodexCLI,
+				isCodexCLI || forceCodexCLIHeaders,
 				reqStream,
 				originalModel,
 				upstreamModel,
@@ -2606,7 +2614,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	for {
 		// Build upstream request
 		upstreamCtx, releaseUpstreamCtx := detachStreamUpstreamContext(ctx, reqStream)
-		upstreamIsCodexCLI := isCodexCLI || requiresCodexCLIHeadersForOAuthModel(account, upstreamModel)
+		upstreamIsCodexCLI := isCodexCLI || forceCodexCLIHeaders || requiresCodexCLIHeadersForOAuthModel(account, upstreamModel)
 		upstreamReq, err := s.buildUpstreamRequest(upstreamCtx, c, account, body, token, reqStream, promptCacheKey, upstreamIsCodexCLI)
 		releaseUpstreamCtx()
 		if err != nil {
@@ -2790,12 +2798,16 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 			return nil, fmt.Errorf("openai passthrough rejected before upstream: %s", rejectReason)
 		}
 
+		forceCodexCLIHeaders := requiresCodexCLIHeadersForOAuthModel(account, gjson.GetBytes(body, "model").String())
 		normalizedBody, normalized, err := normalizeOpenAIPassthroughOAuthBody(body, isOpenAIResponsesCompactPath(c))
 		if err != nil {
 			return nil, err
 		}
 		if normalized {
 			body = normalizedBody
+		}
+		if forceCodexCLIHeaders && c != nil {
+			c.Set("openai_passthrough_force_codex_cli_headers", true)
 		}
 		reqStream = gjson.GetBytes(body, "stream").Bool()
 	}
@@ -2858,7 +2870,13 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	}
 
 	upstreamCtx, releaseUpstreamCtx := detachStreamUpstreamContext(ctx, reqStream)
-	upstreamReq, err := s.buildUpstreamRequestOpenAIPassthrough(upstreamCtx, c, account, body, token)
+	forceCodexCLIHeaders := false
+	if c != nil {
+		if v, ok := c.Get("openai_passthrough_force_codex_cli_headers"); ok {
+			forceCodexCLIHeaders = v == true
+		}
+	}
+	upstreamReq, err := s.buildUpstreamRequestOpenAIPassthrough(upstreamCtx, c, account, body, token, forceCodexCLIHeaders)
 	releaseUpstreamCtx()
 	if err != nil {
 		return nil, err
@@ -2983,6 +3001,7 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 	account *Account,
 	body []byte,
 	token string,
+	forceCodexCLIHeaders bool,
 ) (*http.Request, error) {
 	targetURL := openaiPlatformAPIURL
 	switch account.Type {
@@ -3028,7 +3047,7 @@ func (s *OpenAIGatewayService) buildUpstreamRequestOpenAIPassthrough(
 	// OAuth 透传到 ChatGPT internal API 时补齐必要头。
 	if account.Type == AccountTypeOAuth {
 		promptCacheKey := strings.TrimSpace(gjson.GetBytes(body, "prompt_cache_key").String())
-		forceCodexCLIHeaders := requiresCodexCLIHeadersForOAuthModel(account, gjson.GetBytes(body, "model").String())
+		forceCodexCLIHeaders = forceCodexCLIHeaders || requiresCodexCLIHeadersForOAuthModel(account, gjson.GetBytes(body, "model").String())
 		req.Host = "chatgpt.com"
 		if chatgptAccountID := account.GetChatGPTAccountID(); chatgptAccountID != "" {
 			req.Header.Set("chatgpt-account-id", chatgptAccountID)
@@ -5632,6 +5651,13 @@ func normalizeOpenAIPassthroughOAuthBody(body []byte, compact bool) ([]byte, boo
 		}
 	}
 
+	if next, ok, err := normalizeOpenAICodexInternalServiceTierBody(normalized); err != nil {
+		return body, false, fmt.Errorf("normalize passthrough body service_tier: %w", err)
+	} else if ok {
+		normalized = next
+		changed = true
+	}
+
 	model := strings.TrimSpace(gjson.GetBytes(normalized, "model").String())
 	if defaultCodexReasoningEffort(model) != "" {
 		reqBody := make(map[string]any)
@@ -5646,6 +5672,14 @@ func normalizeOpenAIPassthroughOAuthBody(body []byte, compact bool) ([]byte, boo
 			normalized = next
 			changed = true
 		}
+	}
+	if upstreamModel := normalizeChatGPTCodexModelForUpstream(model); upstreamModel != "" && upstreamModel != model {
+		next, err := sjson.SetBytes(normalized, "model", upstreamModel)
+		if err != nil {
+			return body, false, fmt.Errorf("normalize passthrough body model: %w", err)
+		}
+		normalized = next
+		changed = true
 	}
 
 	return normalized, changed, nil
@@ -5726,6 +5760,72 @@ func normalizeOpenAIServiceTier(raw string) *string {
 	default:
 		return nil
 	}
+}
+
+// normalizeOpenAICodexInternalServiceTier removes service_tier values that are
+// valid for the public OpenAI API but rejected by ChatGPT's internal Codex
+// endpoint. API key accounts do not use this helper.
+func normalizeOpenAICodexInternalServiceTier(reqBody map[string]any) bool {
+	if reqBody == nil {
+		return false
+	}
+	raw, exists := reqBody["service_tier"]
+	if !exists {
+		return false
+	}
+	rawString, ok := raw.(string)
+	if !ok {
+		delete(reqBody, "service_tier")
+		return true
+	}
+	normalized, keep := normalizeOpenAICodexInternalServiceTierValue(rawString)
+	if !keep {
+		delete(reqBody, "service_tier")
+		return true
+	}
+	if rawString != normalized {
+		reqBody["service_tier"] = normalized
+		return true
+	}
+	return false
+}
+
+func normalizeOpenAICodexInternalServiceTierBody(body []byte) ([]byte, bool, error) {
+	if len(body) == 0 {
+		return body, false, nil
+	}
+	value := gjson.GetBytes(body, "service_tier")
+	if !value.Exists() {
+		return body, false, nil
+	}
+	if value.Type != gjson.String {
+		next, err := sjson.DeleteBytes(body, "service_tier")
+		return next, true, err
+	}
+	normalized, keep := normalizeOpenAICodexInternalServiceTierValue(value.String())
+	if !keep {
+		next, err := sjson.DeleteBytes(body, "service_tier")
+		return next, true, err
+	}
+	if value.String() == normalized {
+		return body, false, nil
+	}
+	next, err := sjson.SetBytes(body, "service_tier", normalized)
+	return next, true, err
+}
+
+func normalizeOpenAICodexInternalServiceTierValue(raw string) (string, bool) {
+	value := strings.ToLower(strings.TrimSpace(raw))
+	if value == "" {
+		return "", false
+	}
+	if value == "fast" {
+		value = "priority"
+	}
+	if value == "priority" {
+		return value, true
+	}
+	return "", false
 }
 
 // OpenAIFastBlockedError indicates a request was rejected by the OpenAI fast

@@ -844,7 +844,7 @@ func TestNormalizeCodexModel_RemovedModelsFallbackToSupportedTargets(t *testing.
 	}
 }
 
-func TestApplyCodexOAuthTransform_PreservesBareSparkModel(t *testing.T) {
+func TestApplyCodexOAuthTransform_RewritesBareSparkModelForChatGPTCodex(t *testing.T) {
 	reqBody := map[string]any{
 		"model": "gpt-5.3-codex-spark",
 		"input": []any{},
@@ -852,8 +852,9 @@ func TestApplyCodexOAuthTransform_PreservesBareSparkModel(t *testing.T) {
 
 	result := applyCodexOAuthTransform(reqBody, false, false)
 
-	require.Equal(t, "gpt-5.3-codex-spark", reqBody["model"])
-	require.Equal(t, "gpt-5.3-codex-spark", result.NormalizedModel)
+	require.Equal(t, "gpt-5.3-codex", reqBody["model"])
+	require.Equal(t, "gpt-5.3-codex", result.NormalizedModel)
+	require.True(t, result.ForceCodexCLI)
 	store, ok := reqBody["store"].(bool)
 	require.True(t, ok)
 	require.False(t, store)
@@ -862,7 +863,7 @@ func TestApplyCodexOAuthTransform_PreservesBareSparkModel(t *testing.T) {
 	require.Equal(t, "medium", reasoning["effort"])
 }
 
-func TestApplyCodexOAuthTransform_TrimmedModelWithoutPolicyRewrite(t *testing.T) {
+func TestApplyCodexOAuthTransform_TrimmedSparkModelRewritesForChatGPTCodex(t *testing.T) {
 	reqBody := map[string]any{
 		"model": "  gpt-5.3-codex-spark  ",
 		"input": []any{},
@@ -870,8 +871,9 @@ func TestApplyCodexOAuthTransform_TrimmedModelWithoutPolicyRewrite(t *testing.T)
 
 	result := applyCodexOAuthTransform(reqBody, false, false)
 
-	require.Equal(t, "gpt-5.3-codex-spark", reqBody["model"])
-	require.Equal(t, "gpt-5.3-codex-spark", result.NormalizedModel)
+	require.Equal(t, "gpt-5.3-codex", reqBody["model"])
+	require.Equal(t, "gpt-5.3-codex", result.NormalizedModel)
+	require.True(t, result.ForceCodexCLI)
 	require.True(t, result.Modified)
 }
 

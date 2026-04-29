@@ -44,6 +44,7 @@ type codexTransformResult struct {
 	Modified        bool
 	NormalizedModel string
 	PromptCacheKey  string
+	ForceCodexCLI   bool
 }
 
 const (
@@ -80,6 +81,7 @@ func applyCodexOAuthTransform(reqBody map[string]any, isCodexCLI bool, isCompact
 		model = v
 	}
 	normalizedModel := strings.TrimSpace(model)
+	requestedCodexModel := normalizeCodexModel(normalizedModel)
 	if normalizedModel != "" {
 		if model != normalizedModel {
 			reqBody["model"] = normalizedModel
@@ -88,6 +90,14 @@ func applyCodexOAuthTransform(reqBody map[string]any, isCodexCLI bool, isCompact
 		result.NormalizedModel = normalizedModel
 	}
 	if normalizeCodexReasoningEffortForModel(reqBody, normalizedModel) {
+		result.Modified = true
+	}
+	if isCodexSparkModel(normalizedModel) {
+		result.ForceCodexCLI = true
+	}
+	if upstreamModel := normalizeChatGPTCodexModelForUpstream(normalizedModel); upstreamModel != "" && upstreamModel != normalizedModel {
+		reqBody["model"] = upstreamModel
+		result.NormalizedModel = upstreamModel
 		result.Modified = true
 	}
 
@@ -174,7 +184,7 @@ func applyCodexOAuthTransform(reqBody map[string]any, isCodexCLI bool, isCompact
 	if applyInstructions(reqBody, isCodexCLI) {
 		result.Modified = true
 	}
-	if isCodexSparkModel(normalizedModel) && applyCodexSparkImageUnsupportedInstructions(reqBody) {
+	if requestedCodexModel == "gpt-5.3-codex-spark" && applyCodexSparkImageUnsupportedInstructions(reqBody) {
 		result.Modified = true
 	}
 
@@ -499,6 +509,15 @@ func normalizeCodexModel(model string) string {
 
 func isCodexSparkModel(model string) bool {
 	return normalizeCodexModel(model) == "gpt-5.3-codex-spark"
+}
+
+func normalizeChatGPTCodexModelForUpstream(model string) string {
+	switch normalizeCodexModel(model) {
+	case "gpt-5.3-codex-spark":
+		return "gpt-5.3-codex"
+	default:
+		return strings.TrimSpace(model)
+	}
 }
 
 func defaultCodexReasoningEffort(model string) string {

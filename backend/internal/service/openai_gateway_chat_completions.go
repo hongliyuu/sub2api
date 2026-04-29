@@ -151,13 +151,16 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 	}
 	logger.L().Debug("openai chat_completions: model mapping applied", logFields...)
 
+	upstreamIsCodexCLI := requiresCodexCLIHeadersForOAuthModel(account, upstreamModel)
 	if account.Type == AccountTypeOAuth {
 		var reqBody map[string]any
 		if err := json.Unmarshal(responsesBody, &reqBody); err != nil {
 			return nil, fmt.Errorf("unmarshal for codex transform: %w", err)
 		}
-		upstreamIsCodexCLI := requiresCodexCLIHeadersForOAuthModel(account, upstreamModel)
 		codexResult := applyCodexOAuthTransform(reqBody, upstreamIsCodexCLI, false)
+		if codexResult.ForceCodexCLI {
+			upstreamIsCodexCLI = true
+		}
 		if codexResult.NormalizedModel != "" {
 			upstreamModel = codexResult.NormalizedModel
 		}
@@ -165,6 +168,12 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 			promptCacheKey = codexResult.PromptCacheKey
 		} else if promptCacheKey != "" {
 			reqBody["prompt_cache_key"] = promptCacheKey
+		}
+		if normalizeOpenAICodexInternalServiceTier(reqBody) {
+			responsesReq.ServiceTier = ""
+			if tier := extractOpenAIServiceTier(reqBody); tier != nil {
+				responsesReq.ServiceTier = *tier
+			}
 		}
 		responsesBody, err = json.Marshal(reqBody)
 		if err != nil {
@@ -190,7 +199,6 @@ func (s *OpenAIGatewayService) ForwardAsChatCompletions(
 	}
 
 	// 6. Build upstream request
-	upstreamIsCodexCLI := requiresCodexCLIHeadersForOAuthModel(account, upstreamModel)
 	upstreamReq, err := s.buildUpstreamRequest(ctx, c, account, responsesBody, token, true, promptCacheKey, upstreamIsCodexCLI)
 	if err != nil {
 		return nil, fmt.Errorf("build upstream request: %w", err)

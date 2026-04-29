@@ -1201,6 +1201,9 @@ func (s *OpenAIGatewayService) buildOpenAIWSCreatePayload(reqBody map[string]any
 		payload["store"] = false
 	}
 	normalizeOpenAIWSCodexReasoningPayload(payload, account)
+	if account != nil && account.Type == AccountTypeOAuth {
+		normalizeOpenAICodexInternalServiceTier(payload)
+	}
 	return payload
 }
 
@@ -1209,7 +1212,12 @@ func normalizeOpenAIWSCodexReasoningPayload(payload map[string]any, account *Acc
 		return false
 	}
 	model, _ := payload["model"].(string)
-	return normalizeCodexReasoningEffortForModel(payload, model)
+	modified := normalizeCodexReasoningEffortForModel(payload, model)
+	if upstreamModel := normalizeChatGPTCodexModelForUpstream(model); upstreamModel != "" && upstreamModel != strings.TrimSpace(model) {
+		payload["model"] = upstreamModel
+		modified = true
+	}
+	return modified
 }
 
 func normalizeOpenAIWSCodexReasoningPayloadRaw(payload []byte, model string, account *Account) ([]byte, bool, error) {
@@ -1227,7 +1235,12 @@ func normalizeOpenAIWSCodexReasoningPayloadRaw(payload []byte, model string, acc
 	if strings.TrimSpace(model) != "" {
 		decoded["model"] = model
 	}
-	if !normalizeCodexReasoningEffortForModel(decoded, model) {
+	modified := normalizeCodexReasoningEffortForModel(decoded, model)
+	if upstreamModel := normalizeChatGPTCodexModelForUpstream(model); upstreamModel != "" && upstreamModel != strings.TrimSpace(model) {
+		decoded["model"] = upstreamModel
+		modified = true
+	}
+	if !modified {
 		return payload, false, nil
 	}
 	rebuilt, err := json.Marshal(decoded)
