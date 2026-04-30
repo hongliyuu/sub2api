@@ -1246,8 +1246,8 @@
           </p>
         </div>
 
-        <!-- 模型路由配置（仅 anthropic 平台） -->
-        <div v-if="createForm.platform === 'anthropic'" class="border-t pt-4">
+        <!-- 模型路由配置（anthropic / universal 平台） -->
+        <div v-if="createForm.platform === 'anthropic' || createForm.platform === 'universal'" class="border-t pt-4">
           <div class="mb-1.5 flex items-center gap-1">
             <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
               {{ t("admin.groups.modelRouting.title") }}
@@ -2377,8 +2377,8 @@
           </p>
         </div>
 
-        <!-- 模型路由配置（仅 anthropic 平台） -->
-        <div v-if="editForm.platform === 'anthropic'" class="border-t pt-4">
+        <!-- 模型路由配置（anthropic / universal 平台） -->
+        <div v-if="editForm.platform === 'anthropic' || editForm.platform === 'universal'" class="border-t pt-4">
           <div class="mb-1.5 flex items-center gap-1">
             <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
               {{ t("admin.groups.modelRouting.title") }}
@@ -2825,6 +2825,7 @@ const platformOptions = computed(() => [
   { value: "openai", label: "OpenAI" },
   { value: "gemini", label: "Gemini" },
   { value: "antigravity", label: "Antigravity" },
+  { value: "universal", label: "Universal（跨平台）" },
 ]);
 
 const platformFilterOptions = computed(() => [
@@ -2833,6 +2834,7 @@ const platformFilterOptions = computed(() => [
   { value: "openai", label: "OpenAI" },
   { value: "gemini", label: "Gemini" },
   { value: "antigravity", label: "Antigravity" },
+  { value: "universal", label: "Universal（跨平台）" },
 ]);
 
 const editStatusOptions = computed(() => [
