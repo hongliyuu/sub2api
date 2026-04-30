@@ -2822,6 +2822,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		eventCount := 0
 		tokenEventCount := 0
 		terminalEventCount := 0
+		emittedToolCall := false
 		firstEventType := ""
 		lastEventType := ""
 		needModelReplace := false
@@ -2939,6 +2940,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 					upstreamMessage = replaceOpenAIWSMessageModel(upstreamMessage, mappedModel, originalModel)
 				}
 				if openAIWSEventMayContainToolCalls(eventType) && openAIWSMessageLikelyContainsToolCalls(upstreamMessage) {
+					emittedToolCall = true
 					if corrected, changed := s.toolCorrector.CorrectToolCallsInSSEBytes(upstreamMessage); changed {
 						upstreamMessage = corrected
 					}
@@ -3004,6 +3006,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 					ResponseHeaders: lease.HandshakeHeaders(),
 					Duration:        time.Since(turnStart),
 					FirstTokenMs:    firstTokenMs,
+					HasToolCall:     emittedToolCall,
 				}, nil
 			}
 		}
@@ -3075,6 +3078,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 	lastTurnResponseID := ""
 	lastTurnPayload := []byte(nil)
 	var lastTurnStrictState *openAIWSIngressPreviousTurnStrictState
+	lastTurnHasToolCall := false
 	lastTurnReplayInput := []json.RawMessage(nil)
 	lastTurnReplayInputExists := false
 	currentTurnReplayInput := []json.RawMessage(nil)
@@ -3254,7 +3258,10 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			shouldKeepPreviousResponseID := false
 			strictReason := ""
 			var strictErr error
-			if lastTurnStrictState != nil {
+			if lastTurnHasToolCall && expectedPrev != "" && currentPreviousResponseID == expectedPrev {
+				shouldKeepPreviousResponseID = true
+				strictReason = "previous_turn_has_tool_call"
+			} else if lastTurnStrictState != nil {
 				shouldKeepPreviousResponseID, strictReason, strictErr = shouldKeepIngressPreviousResponseIDWithStrictState(
 					lastTurnStrictState,
 					currentPayload,
@@ -3365,7 +3372,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 					truncateOpenAIWSLogValue(pingErr.Error(), openAIWSLogValueMaxLen),
 				)
 				if forcePreferredConn {
-					if !turnPrevRecoveryTried && currentPreviousResponseID != "" {
+					if !turnPrevRecoveryTried && currentPreviousResponseID != "" && !hasFunctionCallOutput {
 						updatedPayload, removed, dropErr := dropPreviousResponseIDFromRawPayload(currentPayload)
 						if dropErr != nil || !removed {
 							reason := "not_removed"
@@ -3489,6 +3496,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		lastTurnPayload = cloneOpenAIWSPayloadBytes(currentPayload)
 		lastTurnReplayInput = cloneOpenAIWSRawMessages(currentTurnReplayInput)
 		lastTurnReplayInputExists = currentTurnReplayInputExists
+		lastTurnHasToolCall = result.HasToolCall
 		nextStrictState, strictStateErr := buildOpenAIWSIngressPreviousTurnStrictState(currentPayload)
 		if strictStateErr != nil {
 			lastTurnStrictState = nil
