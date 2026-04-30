@@ -228,6 +228,9 @@ type OpenAIForwardResult struct {
 	// ReasoningEffort is extracted from request body (reasoning.effort) or derived from model suffix.
 	// Stored for usage records display; nil means not provided / not applicable.
 	ReasoningEffort *string
+	// UserAgent 是经过传输层改写后的实际上游 User-Agent。
+	// 当入站请求没有 UA 时，RecordUsage 会用它作为 usage log 兜底值。
+	UserAgent       string
 	Stream          bool
 	OpenAIWSMode    bool
 	ResponseHeaders http.Header
@@ -5172,9 +5175,13 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		billingMode := string(BillingModeToken)
 		usageLog.BillingMode = &billingMode
 	}
-	// 添加 UserAgent
-	if input.UserAgent != "" {
-		usageLog.UserAgent = &input.UserAgent
+	// 添加 UserAgent：优先保留入站客户端 UA；WS/OAuth 可能在上游握手时兜底为 Codex UA。
+	if userAgent := strings.TrimSpace(input.UserAgent); userAgent != "" {
+		usageLog.UserAgent = &userAgent
+	} else if result != nil {
+		if userAgent := strings.TrimSpace(result.UserAgent); userAgent != "" {
+			usageLog.UserAgent = &userAgent
+		}
 	}
 
 	// 添加 IPAddress

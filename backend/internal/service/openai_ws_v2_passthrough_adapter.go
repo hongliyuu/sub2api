@@ -92,6 +92,13 @@ func openAIWSPassthroughPolicyModelForFrame(account *Account, payload []byte) st
 	return normalizeOpenAIModelForUpstream(account, account.GetMappedModel(original))
 }
 
+func openAIWSPassthroughRequestModelForFrame(payload []byte) string {
+	if len(payload) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(gjson.GetBytes(payload, "model").String())
+}
+
 // openAIWSPassthroughPolicyModelFromSessionFrame returns the upstream model
 // derived from a session.update frame's session.model field. Returns "" when
 // the frame is not a session.update event or carries no session.model. Used
@@ -122,6 +129,17 @@ func openAIWSPassthroughPolicyModelFromSessionFrame(account *Account, payload []
 		return ""
 	}
 	return normalizeOpenAIModelForUpstream(account, account.GetMappedModel(original))
+}
+
+func openAIWSPassthroughRequestModelFromSessionFrame(payload []byte) string {
+	if len(payload) == 0 {
+		return ""
+	}
+	frameType := strings.TrimSpace(gjson.GetBytes(payload, "type").String())
+	if frameType != "session.update" {
+		return ""
+	}
+	return strings.TrimSpace(gjson.GetBytes(payload, "session.model").String())
 }
 
 const openaiWSV2PassthroughModeFields = "ws_mode=passthrough ws_router=v2"
@@ -204,6 +222,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	// silently passed through, defeating the policy on every frame after
 	// the first.
 	capturedSessionModel := openAIWSPassthroughPolicyModelForFrame(account, firstClientMessage)
+	capturedSessionRequestModel := openAIWSPassthroughRequestModelForFrame(firstClientMessage)
 	updatedFirst, blocked, policyErr := s.applyOpenAIFastPolicyToWSResponseCreate(ctx, account, capturedSessionModel, firstClientMessage)
 	if policyErr != nil {
 		return fmt.Errorf("apply openai fast policy on first ws frame: %w", policyErr)
@@ -238,10 +257,15 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	// 因此使用 atomic.Pointer[string] 在 filter（runClientToUpstream
 	// goroutine）和 OnTurnComplete / final result（runUpstreamToClient
 	// goroutine）之间同步当前 turn 的 service_tier。
+	// reasoning_effort 同样属于每个 response.create 的请求元数据，
+	// 需要随同当前 turn 一起写入 usage log；后缀推导必须使用请求原始模型，
+	// 不能使用已被 OAuth/Codex 归一化后的上游 policy 模型。
 	// extractOpenAIServiceTierFromBody 返回 *string，本身是指针类型，
 	// 可直接 Store/Load 而无需额外封装。
 	var requestServiceTierPtr atomic.Pointer[string]
 	requestServiceTierPtr.Store(extractOpenAIServiceTierFromBody(firstClientMessage))
+	var requestReasoningEffortPtr atomic.Pointer[string]
+	requestReasoningEffortPtr.Store(extractOpenAIReasoningEffortFromBody(firstClientMessage, capturedSessionRequestModel))
 
 	wsURL, err := s.buildOpenAIResponsesWSURL(account)
 	if err != nil {
@@ -269,6 +293,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 		isCodexCLI = true
 	}
 	headers, _ := s.buildOpenAIWSHeaders(c, account, token, wsDecision, isCodexCLI, "", "", "")
+	effectiveUserAgent := strings.TrimSpace(headers.Get("User-Agent"))
 	proxyURL := ""
 	if account.ProxyID != nil && account.Proxy != nil {
 		proxyURL = account.Proxy.URL()
@@ -327,6 +352,9 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			if updated := openAIWSPassthroughPolicyModelFromSessionFrame(account, payload); updated != "" {
 				capturedSessionModel = updated
 			}
+			if updated := openAIWSPassthroughRequestModelFromSessionFrame(payload); updated != "" {
+				capturedSessionRequestModel = updated
+			}
 			// Per-frame model first; if the client omits "model" on a
 			// follow-up frame (legal in Realtime), fall back to the
 			// session-level model captured from the first frame so the
@@ -335,6 +363,10 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			model := openAIWSPassthroughPolicyModelForFrame(account, payload)
 			if model == "" {
 				model = capturedSessionModel
+			}
+			reasoningModel := openAIWSPassthroughRequestModelForFrame(payload)
+			if reasoningModel == "" {
+				reasoningModel = capturedSessionRequestModel
 			}
 			out, blocked, policyErr := s.applyOpenAIFastPolicyToWSResponseCreate(ctx, account, model, payload)
 			// 多轮 passthrough billing：仅在成功（non-block / non-err）
@@ -354,6 +386,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			if policyErr == nil && blocked == nil &&
 				strings.TrimSpace(gjson.GetBytes(payload, "type").String()) == "response.create" {
 				requestServiceTierPtr.Store(extractOpenAIServiceTierFromBody(out))
+				requestReasoningEffortPtr.Store(extractOpenAIReasoningEffortFromBody(out, reasoningModel))
 			}
 			return out, blocked, policyErr
 		},
@@ -398,6 +431,8 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 					},
 					Model:           turn.RequestModel,
 					ServiceTier:     requestServiceTierPtr.Load(),
+					ReasoningEffort: requestReasoningEffortPtr.Load(),
+					UserAgent:       effectiveUserAgent,
 					Stream:          true,
 					OpenAIWSMode:    true,
 					ResponseHeaders: cloneHeader(handshakeHeaders),
@@ -446,6 +481,8 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 		},
 		Model:           relayResult.RequestModel,
 		ServiceTier:     requestServiceTierPtr.Load(),
+		ReasoningEffort: requestReasoningEffortPtr.Load(),
+		UserAgent:       effectiveUserAgent,
 		Stream:          true,
 		OpenAIWSMode:    true,
 		ResponseHeaders: cloneHeader(handshakeHeaders),

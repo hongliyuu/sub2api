@@ -913,6 +913,34 @@ func TestOpenAIGatewayServiceRecordUsage_UsesRequestedModelAndUpstreamModelMetad
 	require.Equal(t, 1, userRepo.deductCalls)
 }
 
+func TestOpenAIGatewayServiceRecordUsage_UsesResultUserAgentFallback(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	userRepo := &openAIRecordUsageUserRepoStub{}
+	subRepo := &openAIRecordUsageSubRepoStub{}
+	svc := newOpenAIRecordUsageServiceForTest(usageRepo, userRepo, subRepo, nil)
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID: "resp_ws_ua_fallback",
+			Model:     "gpt-5.1",
+			UserAgent: "codex_cli_rs/0.125.0",
+			Usage: OpenAIUsage{
+				InputTokens:  1,
+				OutputTokens: 1,
+			},
+		},
+		APIKey:    &APIKey{ID: 10},
+		User:      &User{ID: 20},
+		Account:   &Account{ID: 30},
+		UserAgent: "",
+	})
+
+	require.NoError(t, err)
+	require.NotNil(t, usageRepo.lastLog)
+	require.NotNil(t, usageRepo.lastLog.UserAgent)
+	require.Equal(t, "codex_cli_rs/0.125.0", *usageRepo.lastLog.UserAgent)
+}
+
 func TestOpenAIGatewayServiceRecordUsage_BillsMappedRequestsUsingRequestedModel(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
 	userRepo := &openAIRecordUsageUserRepoStub{}

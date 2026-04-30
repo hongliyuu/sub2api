@@ -972,6 +972,73 @@ func TestPassthroughBilling_MultiTurnServiceTierFollowsFilteredFrames(t *testing
 		"turn 3: response.create without service_tier overwrites billing to nil to match upstream default")
 }
 
+func TestPassthroughBilling_MultiTurnReasoningEffortUsesRequestModelSuffix(t *testing.T) {
+	svc := newOpenAIGatewayServiceWithSettings(t, DefaultOpenAIFastPolicySettings())
+	account := &Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth}
+
+	// passthrough 同时维护两个模型视角：
+	// policyModel 给 fast-policy 使用，会经过 OAuth/Codex 上游归一化；
+	// requestModel 给 usage log 的 reasoning 后缀推导使用，必须保留原始后缀。
+	var requestReasoningEffortPtr atomic.Pointer[string]
+	capturedSessionPolicyModel := ""
+	capturedSessionRequestModel := ""
+	filter := func(msgType coderws.MessageType, payload []byte) ([]byte, *OpenAIFastBlockedError, error) {
+		if msgType != coderws.MessageText {
+			return payload, nil, nil
+		}
+		if updated := openAIWSPassthroughPolicyModelFromSessionFrame(account, payload); updated != "" {
+			capturedSessionPolicyModel = updated
+		}
+		if updated := openAIWSPassthroughRequestModelFromSessionFrame(payload); updated != "" {
+			capturedSessionRequestModel = updated
+		}
+		policyModel := openAIWSPassthroughPolicyModelForFrame(account, payload)
+		if policyModel == "" {
+			policyModel = capturedSessionPolicyModel
+		}
+		requestModel := openAIWSPassthroughRequestModelForFrame(payload)
+		if requestModel == "" {
+			requestModel = capturedSessionRequestModel
+		}
+
+		out, blocked, policyErr := svc.applyOpenAIFastPolicyToWSResponseCreate(context.Background(), account, policyModel, payload)
+		if policyErr == nil && blocked == nil &&
+			strings.TrimSpace(gjson.GetBytes(payload, "type").String()) == "response.create" {
+			requestReasoningEffortPtr.Store(extractOpenAIReasoningEffortFromBody(out, requestModel))
+		}
+		return out, blocked, policyErr
+	}
+
+	firstFrame := []byte(`{"type":"response.create","model":"gpt-5.4"}`)
+	firstPolicyModel := openAIWSPassthroughPolicyModelForFrame(account, firstFrame)
+	firstOut, firstBlocked, firstErr := svc.applyOpenAIFastPolicyToWSResponseCreate(context.Background(), account, firstPolicyModel, firstFrame)
+	require.NoError(t, firstErr)
+	require.Nil(t, firstBlocked)
+	capturedSessionPolicyModel = firstPolicyModel
+	capturedSessionRequestModel = openAIWSPassthroughRequestModelForFrame(firstFrame)
+	requestReasoningEffortPtr.Store(extractOpenAIReasoningEffortFromBody(firstOut, capturedSessionRequestModel))
+	require.Nil(t, requestReasoningEffortPtr.Load(), "first turn has no reasoning suffix")
+
+	sessionUpdate := []byte(`{"type":"session.update","session":{"model":"gpt-5.4-xhigh"}}`)
+	_, sessionBlocked, sessionErr := filter(coderws.MessageText, sessionUpdate)
+	require.NoError(t, sessionErr)
+	require.Nil(t, sessionBlocked)
+	require.Equal(t, "gpt-5.4", capturedSessionPolicyModel,
+		"OAuth/Codex policy model is normalized and no longer carries the xhigh suffix")
+	require.Equal(t, "gpt-5.4-xhigh", capturedSessionRequestModel,
+		"reasoning suffix derivation must keep the original request/session model")
+	require.Nil(t, requestReasoningEffortPtr.Load(), "session.update alone must not mutate per-turn reasoning")
+
+	followupFrame := []byte(`{"type":"response.create","input":[]}`)
+	out, blocked, err := filter(coderws.MessageText, followupFrame)
+	require.NoError(t, err)
+	require.Nil(t, blocked)
+	require.Equal(t, string(followupFrame), string(out), "follow-up frame without model should pass through unchanged")
+	effort := requestReasoningEffortPtr.Load()
+	require.NotNil(t, effort, "follow-up turn should derive reasoning from the raw session model suffix")
+	require.Equal(t, "xhigh", *effort)
+}
+
 // TestPassthroughBilling_BlockedFrameDoesNotMutateServiceTier locks in the
 // "block keeps previous" semantic: when policy returns block on a
 // response.create frame, that frame is never sent upstream, so billing tier
