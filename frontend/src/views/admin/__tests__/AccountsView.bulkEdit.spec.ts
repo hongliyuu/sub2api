@@ -68,13 +68,13 @@ const DataTableStub = {
 
 const AccountBulkActionsBarStub = {
   props: ['selectedIds'],
-  emits: ['edit-filtered'],
-  template: '<button data-test="edit-filtered" @click="$emit(\'edit-filtered\')">edit filtered</button>'
+  emits: ['edit-selected'],
+  template: '<button data-test="edit-selected" @click="$emit(\'edit-selected\')">edit selected</button>'
 }
 
 const BulkEditAccountModalStub = {
-  props: ['show', 'target'],
-  template: '<div data-test="bulk-edit-modal" :data-show="String(show)" :data-target-mode="target?.mode ?? \'\'"></div>'
+  props: ['show', 'accountIds'],
+  template: '<div data-test="bulk-edit-modal" :data-show="String(show)" :data-account-ids="(accountIds || []).join(\',\')"></div>'
 }
 
 describe('admin AccountsView bulk edit scope', () => {
@@ -104,7 +104,7 @@ describe('admin AccountsView bulk edit scope', () => {
     getAllGroups.mockResolvedValue([])
   })
 
-  it('opens bulk edit in filtered-results mode from the bulk actions dropdown', async () => {
+  it('opens bulk edit for selected accounts from the bulk actions dropdown', async () => {
     const wrapper = mount(AccountsView, {
       global: {
         stubs: {
@@ -143,10 +143,10 @@ describe('admin AccountsView bulk edit scope', () => {
     })
 
     await flushPromises()
-    await wrapper.get('[data-test="edit-filtered"]').trigger('click')
+    await wrapper.get('[data-test="edit-selected"]').trigger('click')
     await flushPromises()
 
     expect(wrapper.get('[data-test="bulk-edit-modal"]').attributes('data-show')).toBe('true')
-    expect(wrapper.get('[data-test="bulk-edit-modal"]').attributes('data-target-mode')).toBe('filtered')
+    expect(wrapper.get('[data-test="bulk-edit-modal"]').attributes('data-account-ids')).toBe('')
   })
 })

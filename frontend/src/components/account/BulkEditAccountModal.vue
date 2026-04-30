@@ -17,7 +17,7 @@
               d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
             />
           </svg>
-          {{ t('admin.accounts.bulkEdit.selectionInfo', { count: targetMode === 'filtered' ? targetPreviewCount : accountIds.length }) }}
+          {{ t('admin.accounts.bulkEdit.selectionInfo', { count: accountIds.length }) }}
         </p>
       </div>
 
@@ -1014,13 +1014,6 @@ interface Props {
   accountIds: number[]
   selectedPlatforms: AccountPlatform[]
   selectedTypes: AccountType[]
-  target?: {
-    mode: 'selected' | 'filtered'
-    filters?: Record<string, unknown>
-    previewCount?: number
-    selectedPlatforms?: AccountPlatform[]
-    selectedTypes?: AccountType[]
-  }
   proxies: ProxyConfig[]
   groups: AdminGroup[]
 }
@@ -1035,10 +1028,8 @@ const { t } = useI18n()
 const appStore = useAppStore()
 
 // Platform awareness
-const targetMode = computed(() => props.target?.mode ?? 'selected')
-const targetPreviewCount = computed(() => props.target?.previewCount ?? props.accountIds.length)
-const targetSelectedPlatforms = computed(() => props.target?.selectedPlatforms ?? props.selectedPlatforms)
-const targetSelectedTypes = computed(() => props.target?.selectedTypes ?? props.selectedTypes)
+const targetSelectedPlatforms = computed(() => props.selectedPlatforms)
+const targetSelectedTypes = computed(() => props.selectedTypes)
 const isMixedPlatform = computed(() => targetSelectedPlatforms.value.length > 1)
 
 const allOpenAIPassthroughCapable = computed(() => {
@@ -1446,7 +1437,7 @@ const preCheckMixedChannelRisk = async (built: Record<string, unknown>): Promise
 }
 
 const handleSubmit = async () => {
-  if (targetMode.value === 'selected' && props.accountIds.length === 0) {
+  if (props.accountIds.length === 0) {
     appStore.showError(t('admin.accounts.bulkEdit.noSelection'))
     return
   }
@@ -1496,12 +1487,7 @@ const submitBulkUpdate = async (baseUpdates: Record<string, unknown>) => {
   submitting.value = true
 
   try {
-    const res = targetMode.value === 'filtered' && props.target?.filters
-      ? await adminAPI.accounts.bulkUpdate({
-        filters: props.target.filters,
-        ...updates
-      })
-      : await adminAPI.accounts.bulkUpdate(props.accountIds, updates)
+    const res = await adminAPI.accounts.bulkUpdate(props.accountIds, updates)
     const success = res.success || 0
     const failed = res.failed || 0
 
