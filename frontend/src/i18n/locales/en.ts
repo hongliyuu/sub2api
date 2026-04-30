@@ -2596,6 +2596,7 @@ export default {
         paused: 'Paused',
         limited: 'Limited',
         rateLimited: 'Rate Limited',
+        notRateLimited: 'Not rate limited',
         overloaded: 'Overloaded',
         tempUnschedulable: 'Temp Unschedulable',
         quotaExceeded: 'Quota Exceeded',
@@ -2627,7 +2628,21 @@ export default {
         proxy: 'Proxy',
         lastUsed: 'Last Used',
         expiresAt: 'Expires At',
-        actions: 'Actions'
+        actions: 'Actions',
+        resetWidths: 'Reset column widths'
+      },
+      filters: {
+        title: 'Filters',
+        account: 'Account',
+        status: 'Status',
+        plan: 'Plan',
+        platform: 'Platform',
+        type: 'Type',
+        privacy: 'Privacy',
+        group: 'Group',
+        clearAll: 'Clear all',
+        allPlans: 'All Plans',
+        unrecognizedPlan: 'Unrecognized'
       },
       allPrivacyModes: 'All Privacy States',
       privacyUnset: 'Unset',

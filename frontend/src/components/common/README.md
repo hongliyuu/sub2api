@@ -16,7 +16,10 @@ A generic data table component with sorting, loading states, and custom cell ren
 - `defaultSortKey?: string` - Default sort key (only used if no persisted sort state)
 - `defaultSortOrder?: 'asc' | 'desc'` - Default sort order (default: `asc`)
 - `sortStorageKey?: string` - Persist sort state (key + order) to localStorage
+- `columnWidthStorageKey?: string` - Persist desktop column widths to localStorage. Column resizing is only enabled when this prop is set and a column has `resizable: true`.
 - `rowKey?: string | (row: any) => string | number` - Row key field or resolver (defaults to `row.id`, falls back to index)
+
+Column resizing uses `width`, `minWidth`, and `maxWidth` from each column. Desktop tables use fixed layout when widths are configured, so long cell text is clipped instead of forcing the column wider than its configured limits.
 
 **Slots:**
 

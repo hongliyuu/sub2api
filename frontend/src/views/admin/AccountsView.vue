@@ -113,6 +113,14 @@
                       <span>{{ col.label }}</span>
                       <Icon v-if="isColumnVisible(col.key)" name="check" size="sm" class="text-primary-500" />
                     </button>
+                    <div class="my-1 border-t border-gray-100 dark:border-gray-700"></div>
+                    <button
+                      @click="resetTableColumnWidths"
+                      class="flex w-full items-center justify-between rounded-md px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"
+                    >
+                      <span>{{ t('admin.accounts.columns.resetWidths') }}</span>
+                      <Icon name="refresh" size="sm" class="text-gray-400" />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -147,7 +155,6 @@
           @reset-status="handleBulkResetStatus"
           @refresh-token="handleBulkRefreshToken"
           @edit-selected="openBulkEditSelected"
-          @edit-filtered="openBulkEditFiltered"
           @clear="clearSelection"
           @select-page="selectPage"
           @toggle-schedulable="handleBulkToggleSchedulable"
@@ -164,6 +171,7 @@
           default-sort-key="name"
           default-sort-order="asc"
           :sort-storage-key="ACCOUNT_SORT_STORAGE_KEY"
+          column-width-storage-key="account-table-column-widths"
           :estimate-row-height="72"
           :overscan="5"
         >
@@ -318,7 +326,6 @@
       :account-ids="selIds"
       :selected-platforms="selPlatforms"
       :selected-types="selTypes"
-      :target="bulkEditTarget ?? undefined"
       :proxies="proxies"
       :groups="groups"
       @close="showBulkEdit = false"
@@ -384,29 +391,6 @@ const proxies = ref<AccountProxy[]>([])
 const groups = ref<AdminGroup[]>([])
 const accountTableRef = ref<HTMLElement | null>(null)
 const dataTableRef = ref<InstanceType<typeof DataTable> | null>(null)
-type AccountBulkEditTarget =
-  | {
-      mode: 'selected'
-      accountIds: number[]
-      selectedPlatforms: AccountPlatform[]
-      selectedTypes: AccountType[]
-    }
-  | {
-      mode: 'filtered'
-      filters: {
-        platform?: string
-        type?: string
-        status?: string
-        group?: string
-        search?: string
-        privacy_mode?: string
-        sort_by?: string
-        sort_order?: AccountSortOrder
-      }
-      previewCount: number
-      selectedPlatforms: AccountPlatform[]
-      selectedTypes: AccountType[]
-    }
 const selPlatforms = computed<AccountPlatform[]>(() => {
   const platforms = new Set(
     accounts.value
@@ -430,7 +414,6 @@ const showImportData = ref(false)
 const showExportDataDialog = ref(false)
 const includeProxyOnExport = ref(true)
 const showBulkEdit = ref(false)
-const bulkEditTarget = ref<AccountBulkEditTarget | null>(null)
 const showTempUnsched = ref(false)
 const showDeleteDialog = ref(false)
 const showReAuth = ref(false)
@@ -670,6 +653,11 @@ const toggleColumn = (key: string) => {
   }
 }
 
+const resetTableColumnWidths = () => {
+  (dataTableRef.value as any)?.resetColumnWidths?.()
+  showColumnDropdown.value = false
+}
+
 const isColumnVisible = (key: string) => !hiddenColumns.has(key)
 
 const {
@@ -689,6 +677,7 @@ const {
     type: '',
     status: '',
     privacy_mode: '',
+    plan_type: '',
     group: '',
     search: '',
     sort_by: sortState.sort_by,
@@ -892,6 +881,7 @@ const refreshAccountsIncrementally = async () => {
         type?: string
         status?: string
         privacy_mode?: string
+        plan_type?: string
         group?: string
         search?: string
         sort_by?: string
@@ -1033,26 +1023,26 @@ function getAntigravityTierClass(row: any): string {
 // All available columns
 const allColumns = computed(() => {
   const c = [
-    { key: 'select', label: '', sortable: false },
-    { key: 'name', label: t('admin.accounts.columns.name'), sortable: true },
-    { key: 'platform_type', label: t('admin.accounts.columns.platformType'), sortable: false },
-    { key: 'capacity', label: t('admin.accounts.columns.capacity'), sortable: false },
-    { key: 'status', label: t('admin.accounts.columns.status'), sortable: true },
-    { key: 'schedulable', label: t('admin.accounts.columns.schedulable'), sortable: true },
-    { key: 'today_stats', label: t('admin.accounts.columns.todayStats'), sortable: false }
+    { key: 'select', label: '', sortable: false, width: 52, minWidth: 52, maxWidth: 52, resizable: false },
+    { key: 'name', label: t('admin.accounts.columns.name'), sortable: true, width: 220, minWidth: 160, maxWidth: 420, resizable: true },
+    { key: 'platform_type', label: t('admin.accounts.columns.platformType'), sortable: false, width: 180, minWidth: 140, maxWidth: 300, resizable: true },
+    { key: 'capacity', label: t('admin.accounts.columns.capacity'), sortable: false, width: 170, minWidth: 140, maxWidth: 260, resizable: true },
+    { key: 'status', label: t('admin.accounts.columns.status'), sortable: true, width: 150, minWidth: 120, maxWidth: 240, resizable: true },
+    { key: 'schedulable', label: t('admin.accounts.columns.schedulable'), sortable: true, width: 110, minWidth: 96, maxWidth: 150, resizable: true },
+    { key: 'today_stats', label: t('admin.accounts.columns.todayStats'), sortable: false, width: 180, minWidth: 150, maxWidth: 260, resizable: true }
   ]
   if (!authStore.isSimpleMode) {
-    c.push({ key: 'groups', label: t('admin.accounts.columns.groups'), sortable: false })
+    c.push({ key: 'groups', label: t('admin.accounts.columns.groups'), sortable: false, width: 180, minWidth: 130, maxWidth: 280, resizable: true })
   }
   c.push(
-    { key: 'usage', label: t('admin.accounts.columns.usageWindows'), sortable: false },
-    { key: 'proxy', label: t('admin.accounts.columns.proxy'), sortable: false },
-    { key: 'priority', label: t('admin.accounts.columns.priority'), sortable: true },
-    { key: 'rate_multiplier', label: t('admin.accounts.columns.billingRateMultiplier'), sortable: true },
-    { key: 'last_used_at', label: t('admin.accounts.columns.lastUsed'), sortable: true },
-    { key: 'expires_at', label: t('admin.accounts.columns.expiresAt'), sortable: true },
-    { key: 'notes', label: t('admin.accounts.columns.notes'), sortable: false },
-    { key: 'actions', label: t('admin.accounts.columns.actions'), sortable: false }
+    { key: 'usage', label: t('admin.accounts.columns.usageWindows'), sortable: false, width: 220, minWidth: 180, maxWidth: 360, resizable: true },
+    { key: 'proxy', label: t('admin.accounts.columns.proxy'), sortable: false, width: 170, minWidth: 130, maxWidth: 280, resizable: true },
+    { key: 'priority', label: t('admin.accounts.columns.priority'), sortable: true, width: 100, minWidth: 80, maxWidth: 140, resizable: true },
+    { key: 'rate_multiplier', label: t('admin.accounts.columns.billingRateMultiplier'), sortable: true, width: 130, minWidth: 110, maxWidth: 180, resizable: true },
+    { key: 'last_used_at', label: t('admin.accounts.columns.lastUsed'), sortable: true, width: 150, minWidth: 130, maxWidth: 220, resizable: true },
+    { key: 'expires_at', label: t('admin.accounts.columns.expiresAt'), sortable: true, width: 180, minWidth: 140, maxWidth: 260, resizable: true },
+    { key: 'notes', label: t('admin.accounts.columns.notes'), sortable: false, width: 220, minWidth: 150, maxWidth: 360, resizable: true },
+    { key: 'actions', label: t('admin.accounts.columns.actions'), sortable: false, width: 140, minWidth: 120, maxWidth: 220, resizable: true }
   )
   return c
 })
@@ -1260,91 +1250,67 @@ const handleBulkToggleSchedulable = async (schedulable: boolean) => {
     appStore.showError(t('common.error'))
   }
 }
-const buildBulkEditFilterSnapshot = () => {
-  const rawParams = toRaw(params) as Record<string, unknown>
-  const sortOrder: AccountSortOrder = rawParams.sort_order === 'desc' ? 'desc' : 'asc'
-  return {
-    platform: typeof rawParams.platform === 'string' ? rawParams.platform : '',
-    type: typeof rawParams.type === 'string' ? rawParams.type : '',
-    status: typeof rawParams.status === 'string' ? rawParams.status : '',
-    group: typeof rawParams.group === 'string' ? rawParams.group : '',
-    search: typeof rawParams.search === 'string' ? rawParams.search : '',
-    privacy_mode: typeof rawParams.privacy_mode === 'string' ? rawParams.privacy_mode : '',
-    sort_by: typeof rawParams.sort_by === 'string' ? rawParams.sort_by : '',
-    sort_order: sortOrder
-  }
-}
-
-const collectSelectionMetadata = (rows: Account[]) => {
-  const selectedPlatforms = Array.from(new Set(rows.map(account => account.platform)))
-  const selectedTypes = Array.from(new Set(rows.map(account => account.type)))
-  return { selectedPlatforms, selectedTypes }
-}
-
 const openBulkEditSelected = () => {
-  bulkEditTarget.value = {
-    mode: 'selected',
-    accountIds: [...selIds.value],
-    selectedPlatforms: [...selPlatforms.value],
-    selectedTypes: [...selTypes.value]
-  }
-  showBulkEdit.value = true
-}
-
-const openBulkEditFiltered = async () => {
-  const filters = buildBulkEditFilterSnapshot()
-  const preview = await adminAPI.accounts.list(1, 100, filters)
-  const { selectedPlatforms, selectedTypes } = collectSelectionMetadata(preview.items)
-  bulkEditTarget.value = {
-    mode: 'filtered',
-    filters,
-    previewCount: preview.total,
-    selectedPlatforms,
-    selectedTypes
-  }
   showBulkEdit.value = true
 }
 
 const handleBulkUpdated = () => {
   showBulkEdit.value = false
-  bulkEditTarget.value = null
   clearSelection()
   reload()
 }
 const handleDataImported = () => { showImportData.value = false; reload() }
 const ACCOUNT_UNGROUPED_GROUP_QUERY_VALUE = 'ungrouped'
 const ACCOUNT_PRIVACY_MODE_UNSET_QUERY_VALUE = '__unset__'
+const ACCOUNT_PLAN_TYPE_UNSET_QUERY_VALUE = '__unset__'
 const buildAccountQueryFilters = () => ({
   platform: params.platform || '',
   type: params.type || '',
   status: params.status || '',
   group: params.group || '',
   privacy_mode: params.privacy_mode || '',
+  plan_type: params.plan_type || '',
   search: params.search || '',
   sort_by: sortState.sort_by,
   sort_order: sortState.sort_order
 })
+const splitAccountFilterValues = (value: unknown) => String(value ?? '')
+  .split(',')
+  .map((item) => item.trim())
+  .filter(Boolean)
+
 const accountMatchesCurrentFilters = (account: Account) => {
   const filters = buildAccountQueryFilters()
   if (filters.platform && account.platform !== filters.platform) return false
   if (filters.type && account.type !== filters.type) return false
-  if (filters.status) {
+  const statusValues = splitAccountFilterValues(filters.status)
+  if (statusValues.length > 0) {
     const now = Date.now()
     const rateLimitResetAt = account.rate_limit_reset_at ? new Date(account.rate_limit_reset_at).getTime() : Number.NaN
     const isRateLimited = Number.isFinite(rateLimitResetAt) && rateLimitResetAt > now
     const tempUnschedUntil = account.temp_unschedulable_until ? new Date(account.temp_unschedulable_until).getTime() : Number.NaN
     const isTempUnschedulable = Number.isFinite(tempUnschedUntil) && tempUnschedUntil > now
+    const excludeRateLimited = statusValues.includes('not_rate_limited')
+    const concreteStatusValues = statusValues.filter((status) => status !== 'not_rate_limited')
 
-    if (filters.status === 'active') {
-      if (account.status !== 'active' || isRateLimited || isTempUnschedulable || !account.schedulable) return false
-    } else if (filters.status === 'rate_limited') {
-      if (account.status !== 'active' || !isRateLimited || isTempUnschedulable) return false
-    } else if (filters.status === 'temp_unschedulable') {
-      if (account.status !== 'active' || !isTempUnschedulable) return false
-    } else if (filters.status === 'unschedulable') {
-      if (account.status !== 'active' || account.schedulable || isRateLimited || isTempUnschedulable) return false
-    } else if (account.status !== filters.status) {
-      return false
+    if (excludeRateLimited && isRateLimited) return false
+    if (concreteStatusValues.length > 0) {
+      const matchesStatus = concreteStatusValues.some((status) => {
+        if (status === 'active') {
+          return account.status === 'active' && !isRateLimited && !isTempUnschedulable && account.schedulable
+        }
+        if (status === 'rate_limited') {
+          return account.status === 'active' && isRateLimited && !isTempUnschedulable
+        }
+        if (status === 'temp_unschedulable') {
+          return account.status === 'active' && isTempUnschedulable
+        }
+        if (status === 'unschedulable') {
+          return account.status === 'active' && !account.schedulable && !isRateLimited && !isTempUnschedulable
+        }
+        return account.status === status
+      })
+      if (!matchesStatus) return false
     }
   }
   if (filters.group) {
@@ -1362,6 +1328,17 @@ const accountMatchesCurrentFilters = (account: Account) => {
     } else if (privacyMode !== filters.privacy_mode) {
       return false
     }
+  }
+  const planType = typeof account.credentials?.plan_type === 'string' ? account.credentials.plan_type : ''
+  const planTypeValues = splitAccountFilterValues(filters.plan_type)
+  if (planTypeValues.length > 0) {
+    const matchesPlanType = planTypeValues.some((value) => {
+      if (value === ACCOUNT_PLAN_TYPE_UNSET_QUERY_VALUE) {
+        return planType.trim() === ''
+      }
+      return planType === value
+    })
+    if (!matchesPlanType) return false
   }
   const search = String(filters.search || '').trim().toLowerCase()
   if (search && !account.name.toLowerCase().includes(search)) return false

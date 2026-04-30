@@ -80,12 +80,16 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 		return nil, fmt.Errorf("marshal responses request: %w", err)
 	}
 
+	upstreamIsCodexCLI := requiresCodexCLIHeadersForOAuthModel(account, upstreamModel)
 	if account.Type == AccountTypeOAuth {
 		var reqBody map[string]any
 		if err := json.Unmarshal(responsesBody, &reqBody); err != nil {
 			return nil, fmt.Errorf("unmarshal for codex transform: %w", err)
 		}
-		codexResult := applyCodexOAuthTransform(reqBody, false, false)
+		codexResult := applyCodexOAuthTransform(reqBody, upstreamIsCodexCLI, false)
+		if codexResult.ForceCodexCLI {
+			upstreamIsCodexCLI = true
+		}
 		forcedTemplateText := ""
 		if s.cfg != nil {
 			forcedTemplateText = s.cfg.Gateway.ForcedCodexInstructionsTemplate
@@ -111,6 +115,12 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 			promptCacheKey = codexResult.PromptCacheKey
 		} else if promptCacheKey != "" {
 			reqBody["prompt_cache_key"] = promptCacheKey
+		}
+		if normalizeOpenAICodexInternalServiceTier(reqBody) {
+			responsesReq.ServiceTier = ""
+			if tier := extractOpenAIServiceTier(reqBody); tier != nil {
+				responsesReq.ServiceTier = *tier
+			}
 		}
 		// OAuth codex transform forces stream=true upstream, so always use
 		// the streaming response handler regardless of what the client asked.
@@ -163,7 +173,7 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	}
 
 	// 6. Build upstream request
-	upstreamReq, err := s.buildUpstreamRequest(ctx, c, account, responsesBody, token, isStream, promptCacheKey, false)
+	upstreamReq, err := s.buildUpstreamRequest(ctx, c, account, responsesBody, token, isStream, promptCacheKey, upstreamIsCodexCLI)
 	if err != nil {
 		return nil, fmt.Errorf("build upstream request: %w", err)
 	}

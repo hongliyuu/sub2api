@@ -448,6 +448,55 @@ func TestOpenAIGatewayService_OAuthLegacy_CompositeCodexUAUsesCodexOriginator(t 
 	require.NotEqual(t, "opencode", upstream.lastReq.Header.Get("originator"))
 }
 
+func TestOpenAIGatewayService_ForwardAsAnthropic_SparkUsesCodexCLIIdentityForAnyUserAgent(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", bytes.NewReader(nil))
+	c.Request.Header.Set("User-Agent", "claude-cli/2.1.92 (external, cli)")
+	c.Request.Header.Set("Content-Type", "application/json")
+
+	inputBody := []byte(`{"model":"gpt-5.3-codex-spark","max_tokens":16,"messages":[{"role":"user","content":"hi"}],"stream":true}`)
+
+	upstreamSSE := strings.Join([]string{
+		`data: {"type":"response.completed","response":{"id":"resp_1","object":"response","model":"gpt-5.3-codex-spark","status":"completed","output":[{"type":"message","id":"msg_1","role":"assistant","status":"completed","content":[{"type":"output_text","text":"spark-ok"}]}],"usage":{"input_tokens":5,"output_tokens":2,"total_tokens":7}}}`,
+		"",
+		"data: [DONE]",
+		"",
+	}, "\n")
+	upstream := &httpUpstreamRecorder{resp: &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}, "x-request-id": []string{"rid_spark"}},
+		Body:       io.NopCloser(strings.NewReader(upstreamSSE)),
+	}}
+
+	svc := &OpenAIGatewayService{
+		cfg:          &config.Config{Gateway: config.GatewayConfig{ForceCodexCLI: false}},
+		httpUpstream: upstream,
+	}
+	account := &Account{
+		ID:             123,
+		Name:           "acc",
+		Platform:       PlatformOpenAI,
+		Type:           AccountTypeOAuth,
+		Concurrency:    1,
+		Credentials:    map[string]any{"access_token": "oauth-token", "chatgpt_account_id": "chatgpt-acc"},
+		Status:         StatusActive,
+		Schedulable:    true,
+		RateMultiplier: f64p(1),
+	}
+
+	result, err := svc.ForwardAsAnthropic(context.Background(), c, account, inputBody, "", "")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, upstream.lastReq)
+	require.Equal(t, "gpt-5.3-codex", gjson.GetBytes(upstream.lastBody, "model").String())
+	require.Equal(t, "codex_cli_rs", upstream.lastReq.Header.Get("originator"))
+	require.Equal(t, codexCLIVersion, upstream.lastReq.Header.Get("version"))
+	require.Equal(t, codexCLIUserAgent, upstream.lastReq.Header.Get("User-Agent"))
+}
+
 func TestOpenAIGatewayService_OAuthPassthrough_ResponseHeadersAllowXCodex(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -880,6 +929,98 @@ func TestOpenAIGatewayService_OAuthPassthrough_StreamingSetsFirstTokenMs(t *test
 	require.Equal(t, "priority", *result.ServiceTier)
 }
 
+func TestOpenAIGatewayService_OAuthLegacy_DropsFlexServiceTierBeforeCodexUpstream(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(nil))
+	c.Request.Header.Set("User-Agent", "codex_cli_rs/0.1.0")
+
+	originalBody := []byte(`{"model":"gpt-5.3-codex","stream":true,"service_tier":"flex","instructions":"local-test-instructions","input":[{"type":"input_text","text":"hi"}]}`)
+	upstreamSSE := strings.Join([]string{
+		`data: {"type":"response.output_text.delta","delta":"h"}`,
+		"",
+		"data: [DONE]",
+		"",
+	}, "\n")
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}, "x-request-id": []string{"rid"}},
+		Body:       io.NopCloser(strings.NewReader(upstreamSSE)),
+	}
+	upstream := &httpUpstreamRecorder{resp: resp}
+	svc := &OpenAIGatewayService{
+		cfg:          &config.Config{Gateway: config.GatewayConfig{ForceCodexCLI: false}},
+		httpUpstream: upstream,
+	}
+	account := &Account{
+		ID:             123,
+		Name:           "acc",
+		Platform:       PlatformOpenAI,
+		Type:           AccountTypeOAuth,
+		Concurrency:    1,
+		Credentials:    map[string]any{"access_token": "oauth-token", "chatgpt_account_id": "chatgpt-acc"},
+		Status:         StatusActive,
+		Schedulable:    true,
+		RateMultiplier: f64p(1),
+	}
+
+	result, err := svc.Forward(context.Background(), c, account, originalBody)
+
+	require.NoError(t, err)
+	require.NotNil(t, upstream.lastReq)
+	require.False(t, gjson.GetBytes(upstream.lastBody, "service_tier").Exists())
+	require.Nil(t, result.ServiceTier)
+	require.Equal(t, "https://chatgpt.com/backend-api/codex/responses", upstream.lastReq.URL.String())
+}
+
+func TestOpenAIGatewayService_OAuthLegacy_MapsFastServiceTierToPriorityForCodexUpstream(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	rec := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(rec)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", bytes.NewReader(nil))
+	c.Request.Header.Set("User-Agent", "codex_cli_rs/0.1.0")
+
+	originalBody := []byte(`{"model":"gpt-5.3-codex","stream":true,"service_tier":"fast","instructions":"local-test-instructions","input":[{"type":"input_text","text":"hi"}]}`)
+	upstreamSSE := strings.Join([]string{
+		`data: {"type":"response.output_text.delta","delta":"h"}`,
+		"",
+		"data: [DONE]",
+		"",
+	}, "\n")
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{"Content-Type": []string{"text/event-stream"}, "x-request-id": []string{"rid"}},
+		Body:       io.NopCloser(strings.NewReader(upstreamSSE)),
+	}
+	upstream := &httpUpstreamRecorder{resp: resp}
+	svc := &OpenAIGatewayService{
+		cfg:          &config.Config{Gateway: config.GatewayConfig{ForceCodexCLI: false}},
+		httpUpstream: upstream,
+	}
+	account := &Account{
+		ID:             123,
+		Name:           "acc",
+		Platform:       PlatformOpenAI,
+		Type:           AccountTypeOAuth,
+		Concurrency:    1,
+		Credentials:    map[string]any{"access_token": "oauth-token", "chatgpt_account_id": "chatgpt-acc"},
+		Status:         StatusActive,
+		Schedulable:    true,
+		RateMultiplier: f64p(1),
+	}
+
+	result, err := svc.Forward(context.Background(), c, account, originalBody)
+
+	require.NoError(t, err)
+	require.NotNil(t, upstream.lastReq)
+	require.Equal(t, "priority", gjson.GetBytes(upstream.lastBody, "service_tier").String())
+	require.NotNil(t, result.ServiceTier)
+	require.Equal(t, "priority", *result.ServiceTier)
+}
+
 func TestOpenAIGatewayService_OAuthPassthrough_StreamClientDisconnectStillCollectsUsage(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -1159,4 +1300,64 @@ func TestOpenAIGatewayService_OAuthPassthrough_AllowTimeoutHeadersWhenConfigured
 	require.NotNil(t, upstream.lastReq)
 	require.Equal(t, "120000", upstream.lastReq.Header.Get("x-stainless-timeout"))
 	require.Empty(t, upstream.lastReq.Header.Get("X-Test"))
+}
+
+func TestNormalizeOpenAIPassthroughOAuthBody_NormalizesSparkReasoning(t *testing.T) {
+	t.Run("explicit none uses default", func(t *testing.T) {
+		body := []byte(`{"model":"gpt-5.3-codex-spark","stream":false,"reasoning":{"effort":"none"},"input":[]}`)
+
+		got, changed, err := normalizeOpenAIPassthroughOAuthBody(body, false)
+
+		require.NoError(t, err)
+		require.True(t, changed)
+		require.Equal(t, "gpt-5.3-codex", gjson.GetBytes(got, "model").String())
+		require.Equal(t, "medium", gjson.GetBytes(got, "reasoning.effort").String())
+		require.True(t, gjson.GetBytes(got, "stream").Bool())
+		require.False(t, gjson.GetBytes(got, "store").Bool())
+	})
+
+	t.Run("missing effort uses default", func(t *testing.T) {
+		body := []byte(`{"model":"gpt-5.3-codex-spark","input":[]}`)
+
+		got, changed, err := normalizeOpenAIPassthroughOAuthBody(body, false)
+
+		require.NoError(t, err)
+		require.True(t, changed)
+		require.Equal(t, "gpt-5.3-codex", gjson.GetBytes(got, "model").String())
+		require.Equal(t, "medium", gjson.GetBytes(got, "reasoning.effort").String())
+	})
+
+	t.Run("supported effort is preserved", func(t *testing.T) {
+		body := []byte(`{"model":"gpt-5.3-codex-spark","reasoning":{"effort":"x-high"},"input":[]}`)
+
+		got, changed, err := normalizeOpenAIPassthroughOAuthBody(body, false)
+
+		require.NoError(t, err)
+		require.True(t, changed)
+		require.Equal(t, "gpt-5.3-codex", gjson.GetBytes(got, "model").String())
+		require.Equal(t, "xhigh", gjson.GetBytes(got, "reasoning.effort").String())
+	})
+}
+
+func TestNormalizeOpenAIPassthroughOAuthBody_ServiceTierForCodexInternal(t *testing.T) {
+	t.Run("flex is removed", func(t *testing.T) {
+		body := []byte(`{"model":"gpt-5.3-codex","stream":true,"service_tier":"flex","input":[]}`)
+
+		got, changed, err := normalizeOpenAIPassthroughOAuthBody(body, false)
+
+		require.NoError(t, err)
+		require.True(t, changed)
+		require.False(t, gjson.GetBytes(got, "service_tier").Exists())
+		require.True(t, gjson.GetBytes(got, "stream").Bool())
+	})
+
+	t.Run("fast maps to priority", func(t *testing.T) {
+		body := []byte(`{"model":"gpt-5.3-codex","stream":true,"service_tier":"fast","input":[]}`)
+
+		got, changed, err := normalizeOpenAIPassthroughOAuthBody(body, false)
+
+		require.NoError(t, err)
+		require.True(t, changed)
+		require.Equal(t, "priority", gjson.GetBytes(got, "service_tier").String())
+	})
 }

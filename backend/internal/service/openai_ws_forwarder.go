@@ -1200,7 +1200,54 @@ func (s *OpenAIGatewayService) buildOpenAIWSCreatePayload(reqBody map[string]any
 	if account != nil && account.Type == AccountTypeOAuth && !s.isOpenAIWSStoreRecoveryAllowed(account) {
 		payload["store"] = false
 	}
+	normalizeOpenAIWSCodexReasoningPayload(payload, account)
+	if account != nil && account.Type == AccountTypeOAuth {
+		normalizeOpenAICodexInternalServiceTier(payload)
+	}
 	return payload
+}
+
+func normalizeOpenAIWSCodexReasoningPayload(payload map[string]any, account *Account) bool {
+	if len(payload) == 0 || account == nil || account.Type != AccountTypeOAuth {
+		return false
+	}
+	model, _ := payload["model"].(string)
+	modified := normalizeCodexReasoningEffortForModel(payload, model)
+	if upstreamModel := normalizeChatGPTCodexModelForUpstream(model); upstreamModel != "" && upstreamModel != strings.TrimSpace(model) {
+		payload["model"] = upstreamModel
+		modified = true
+	}
+	return modified
+}
+
+func normalizeOpenAIWSCodexReasoningPayloadRaw(payload []byte, model string, account *Account) ([]byte, bool, error) {
+	if len(payload) == 0 || account == nil || account.Type != AccountTypeOAuth {
+		return payload, false, nil
+	}
+	if defaultCodexReasoningEffort(model) == "" {
+		return payload, false, nil
+	}
+
+	decoded := make(map[string]any)
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		return payload, false, err
+	}
+	if strings.TrimSpace(model) != "" {
+		decoded["model"] = model
+	}
+	modified := normalizeCodexReasoningEffortForModel(decoded, model)
+	if upstreamModel := normalizeChatGPTCodexModelForUpstream(model); upstreamModel != "" && upstreamModel != strings.TrimSpace(model) {
+		decoded["model"] = upstreamModel
+		modified = true
+	}
+	if !modified {
+		return payload, false, nil
+	}
+	rebuilt, err := json.Marshal(decoded)
+	if err != nil {
+		return payload, false, err
+	}
+	return rebuilt, true, nil
 }
 
 func setOpenAIWSTurnMetadata(payload map[string]any, turnMetadata string) {
@@ -1803,7 +1850,8 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 	storeDisabledConnMode := s.openAIWSStoreDisabledConnMode()
 	forceNewConnByPolicy := shouldForceNewConnOnStoreDisabled(storeDisabledConnMode, lastFailureReason)
 	forceNewConn := forceNewConnByPolicy && storeDisabled && previousResponseID == "" && sessionHash != "" && preferredConnID == ""
-	wsHeaders, sessionResolution := s.buildOpenAIWSHeaders(c, account, token, decision, isCodexCLI, turnState, turnMetadata, promptCacheKey)
+	headerIsCodexCLI := isCodexCLI || requiresCodexCLIHeadersForOAuthModel(account, openAIWSPayloadString(payload, "model"))
+	wsHeaders, sessionResolution := s.buildOpenAIWSHeaders(c, account, token, decision, headerIsCodexCLI, turnState, turnMetadata, promptCacheKey)
 	logOpenAIWSModeDebug(
 		"acquire_start account_id=%d account_type=%s transport=%s preferred_conn_id=%s has_previous_response_id=%v session_hash=%s has_turn_state=%v turn_state_len=%d has_turn_metadata=%v turn_metadata_len=%d store_disabled=%v store_disabled_conn_mode=%s retry_last_reason=%s force_new_conn=%v header_user_agent=%s header_openai_beta=%s header_originator=%s header_accept_language=%s header_session_id=%s header_conversation_id=%s session_id_source=%s conversation_id_source=%s has_prompt_cache_key=%v has_chatgpt_account_id=%v has_authorization=%v has_session_id=%v has_conversation_id=%v proxy_enabled=%v",
 		account.ID,
@@ -2446,6 +2494,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		promptCacheKey     string
 		previousResponseID string
 		originalModel      string
+		upstreamModel      string
 		payloadBytes       int
 	}
 
@@ -2543,6 +2592,11 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			}
 			normalized = next
 		}
+		if next, modified, normalizeErr := normalizeOpenAIWSCodexReasoningPayloadRaw(normalized, upstreamModel, account); normalizeErr != nil {
+			return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket request payload", normalizeErr)
+		} else if modified {
+			normalized = next
+		}
 
 		// Apply OpenAI Fast Policy on the response.create frame using the same
 		// evaluator/normalize/scope rules as the HTTP entrypoints. This is the
@@ -2588,6 +2642,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			promptCacheKey:     promptCacheKey,
 			previousResponseID: previousResponseID,
 			originalModel:      originalModel,
+			upstreamModel:      upstreamModel,
 			payloadBytes:       len(normalized),
 		}, nil
 	}
@@ -2622,7 +2677,9 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		}
 	}
 
-	isCodexCLI := openai.IsCodexOfficialClientByHeaders(c.GetHeader("User-Agent"), c.GetHeader("originator")) || (s.cfg != nil && s.cfg.Gateway.ForceCodexCLI)
+	isCodexCLI := openai.IsCodexOfficialClientByHeaders(c.GetHeader("User-Agent"), c.GetHeader("originator")) ||
+		(s.cfg != nil && s.cfg.Gateway.ForceCodexCLI) ||
+		requiresCodexCLIHeadersForOAuthModel(account, firstPayload.upstreamModel)
 	wsHeaders, _ := s.buildOpenAIWSHeaders(c, account, token, wsDecision, isCodexCLI, turnState, strings.TrimSpace(c.GetHeader(openAIWSTurnMetadataHeader)), firstPayload.promptCacheKey)
 	baseAcquireReq := openAIWSAcquireRequest{
 		Account: account,
@@ -3540,7 +3597,8 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		if nextPayload.promptCacheKey != "" {
 			// ingress 会话在整个客户端 WS 生命周期内复用同一上游连接；
 			// prompt_cache_key 对握手头的更新仅在未来需要重新建连时生效。
-			updatedHeaders, _ := s.buildOpenAIWSHeaders(c, account, token, wsDecision, isCodexCLI, turnState, strings.TrimSpace(c.GetHeader(openAIWSTurnMetadataHeader)), nextPayload.promptCacheKey)
+			nextIsCodexCLI := isCodexCLI || requiresCodexCLIHeadersForOAuthModel(account, nextPayload.upstreamModel)
+			updatedHeaders, _ := s.buildOpenAIWSHeaders(c, account, token, wsDecision, nextIsCodexCLI, turnState, strings.TrimSpace(c.GetHeader(openAIWSTurnMetadataHeader)), nextPayload.promptCacheKey)
 			baseAcquireReq.Headers = updatedHeaders
 		}
 		if nextPayload.previousResponseID != "" {

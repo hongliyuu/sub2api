@@ -220,6 +220,7 @@ func (s *AccountRepoSuite) TestListWithFilters() {
 		search      string
 		groupID     int64
 		privacyMode string
+		planType    string
 		wantCount   int
 		validate    func(accounts []service.Account)
 	}{
@@ -407,6 +408,26 @@ func (s *AccountRepoSuite) TestListWithFilters() {
 				s.ElementsMatch([]string{"privacy-unset", "privacy-empty"}, names)
 			},
 		},
+		{
+			name: "filter_by_multi_plan_and_not_rate_limited",
+			setup: func(client *dbent.Client) {
+				mustCreateAccount(s.T(), client, &service.Account{Name: "plus-ok", Credentials: map[string]any{"plan_type": "plus"}})
+				mustCreateAccount(s.T(), client, &service.Account{Name: "team-ok", Credentials: map[string]any{"plan_type": "team"}})
+				rateLimited := mustCreateAccount(s.T(), client, &service.Account{Name: "pro-limited", Credentials: map[string]any{"plan_type": "pro"}})
+				err := client.Account.UpdateOneID(rateLimited.ID).
+					SetRateLimitResetAt(time.Now().Add(10 * time.Minute)).
+					Exec(context.Background())
+				s.Require().NoError(err)
+				mustCreateAccount(s.T(), client, &service.Account{Name: "free-ok", Credentials: map[string]any{"plan_type": "free"}})
+			},
+			status:    "not_rate_limited",
+			planType:  "plus,team,pro",
+			wantCount: 2,
+			validate: func(accounts []service.Account) {
+				names := []string{accounts[0].Name, accounts[1].Name}
+				s.ElementsMatch([]string{"plus-ok", "team-ok"}, names)
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -419,7 +440,7 @@ func (s *AccountRepoSuite) TestListWithFilters() {
 
 			tt.setup(client)
 
-			accounts, _, err := repo.ListWithFilters(ctx, pagination.PaginationParams{Page: 1, PageSize: 10}, tt.platform, tt.accType, tt.status, tt.search, tt.groupID, tt.privacyMode)
+			accounts, _, err := repo.ListWithFilters(ctx, pagination.PaginationParams{Page: 1, PageSize: 10}, tt.platform, tt.accType, tt.status, tt.search, tt.groupID, tt.privacyMode, tt.planType)
 			s.Require().NoError(err)
 			s.Require().Len(accounts, tt.wantCount)
 			if tt.validate != nil {
@@ -486,7 +507,7 @@ func (s *AccountRepoSuite) TestPreload_And_VirtualFields() {
 	s.Require().Len(got.Groups, 1, "expected Groups to be populated")
 	s.Require().Equal(group.ID, got.Groups[0].ID)
 
-	accounts, page, err := s.repo.ListWithFilters(s.ctx, pagination.PaginationParams{Page: 1, PageSize: 10}, "", "", "", "acc", 0, "")
+	accounts, page, err := s.repo.ListWithFilters(s.ctx, pagination.PaginationParams{Page: 1, PageSize: 10}, "", "", "", "acc", 0, "", "")
 	s.Require().NoError(err, "ListWithFilters")
 	s.Require().Equal(int64(1), page.Total)
 	s.Require().Len(accounts, 1)

@@ -844,7 +844,7 @@ func TestNormalizeCodexModel_RemovedModelsFallbackToSupportedTargets(t *testing.
 	}
 }
 
-func TestApplyCodexOAuthTransform_PreservesBareSparkModel(t *testing.T) {
+func TestApplyCodexOAuthTransform_RewritesBareSparkModelForChatGPTCodex(t *testing.T) {
 	reqBody := map[string]any{
 		"model": "gpt-5.3-codex-spark",
 		"input": []any{},
@@ -852,14 +852,18 @@ func TestApplyCodexOAuthTransform_PreservesBareSparkModel(t *testing.T) {
 
 	result := applyCodexOAuthTransform(reqBody, false, false)
 
-	require.Equal(t, "gpt-5.3-codex-spark", reqBody["model"])
-	require.Equal(t, "gpt-5.3-codex-spark", result.NormalizedModel)
+	require.Equal(t, "gpt-5.3-codex", reqBody["model"])
+	require.Equal(t, "gpt-5.3-codex", result.NormalizedModel)
+	require.True(t, result.ForceCodexCLI)
 	store, ok := reqBody["store"].(bool)
 	require.True(t, ok)
 	require.False(t, store)
+	reasoning, ok := reqBody["reasoning"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "medium", reasoning["effort"])
 }
 
-func TestApplyCodexOAuthTransform_TrimmedModelWithoutPolicyRewrite(t *testing.T) {
+func TestApplyCodexOAuthTransform_TrimmedSparkModelRewritesForChatGPTCodex(t *testing.T) {
 	reqBody := map[string]any{
 		"model": "  gpt-5.3-codex-spark  ",
 		"input": []any{},
@@ -867,9 +871,125 @@ func TestApplyCodexOAuthTransform_TrimmedModelWithoutPolicyRewrite(t *testing.T)
 
 	result := applyCodexOAuthTransform(reqBody, false, false)
 
-	require.Equal(t, "gpt-5.3-codex-spark", reqBody["model"])
-	require.Equal(t, "gpt-5.3-codex-spark", result.NormalizedModel)
+	require.Equal(t, "gpt-5.3-codex", reqBody["model"])
+	require.Equal(t, "gpt-5.3-codex", result.NormalizedModel)
+	require.True(t, result.ForceCodexCLI)
 	require.True(t, result.Modified)
+}
+
+func TestApplyCodexOAuthTransform_DefaultsCodexReasoningEffort(t *testing.T) {
+	tests := []struct {
+		name  string
+		model string
+	}{
+		{name: "codex", model: "gpt-5.3-codex"},
+		{name: "spark", model: "gpt-5.3-codex-spark"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reqBody := map[string]any{
+				"model": tt.model,
+				"input": []any{},
+			}
+
+			result := applyCodexOAuthTransform(reqBody, false, false)
+
+			require.True(t, result.Modified)
+			reasoning, ok := reqBody["reasoning"].(map[string]any)
+			require.True(t, ok)
+			require.Equal(t, "medium", reasoning["effort"])
+		})
+	}
+}
+
+func TestApplyCodexOAuthTransform_NormalizesCodexReasoningEffort(t *testing.T) {
+	tests := []struct {
+		name        string
+		reqBody     map[string]any
+		wantEffort  string
+		wantFlatKey bool
+	}{
+		{
+			name: "spark none uses default",
+			reqBody: map[string]any{
+				"model":     "gpt-5.3-codex-spark",
+				"input":     []any{},
+				"reasoning": map[string]any{"effort": "none"},
+			},
+			wantEffort: "medium",
+		},
+		{
+			name: "spark minimal uses default",
+			reqBody: map[string]any{
+				"model":     "gpt-5.3-codex-spark",
+				"input":     []any{},
+				"reasoning": map[string]any{"effort": "minimal"},
+			},
+			wantEffort: "medium",
+		},
+		{
+			name: "spark keeps supported effort",
+			reqBody: map[string]any{
+				"model":     "gpt-5.3-codex-spark",
+				"input":     []any{},
+				"reasoning": map[string]any{"effort": "x-high"},
+			},
+			wantEffort: "xhigh",
+		},
+		{
+			name: "flat effort moves to reasoning",
+			reqBody: map[string]any{
+				"model":            "gpt-5.3-codex-spark",
+				"input":            []any{},
+				"reasoning_effort": "low",
+			},
+			wantEffort: "low",
+		},
+		{
+			name: "model suffix supplies effort",
+			reqBody: map[string]any{
+				"model": "gpt-5.3-codex-spark-high",
+				"input": []any{},
+			},
+			wantEffort: "high",
+		},
+		{
+			name: "model suffix none uses default",
+			reqBody: map[string]any{
+				"model": "gpt-5.3-codex-spark-none",
+				"input": []any{},
+			},
+			wantEffort: "medium",
+		},
+		{
+			name: "invalid effort stays untouched",
+			reqBody: map[string]any{
+				"model":            "gpt-5.3-codex-spark",
+				"input":            []any{},
+				"reasoning_effort": "turbo",
+			},
+			wantFlatKey: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			applyCodexOAuthTransform(tt.reqBody, false, false)
+
+			if tt.wantFlatKey {
+				require.Equal(t, "turbo", tt.reqBody["reasoning_effort"])
+				_, ok := tt.reqBody["reasoning"]
+				require.False(t, ok)
+				return
+			}
+
+			reasoning, ok := tt.reqBody["reasoning"].(map[string]any)
+			require.True(t, ok)
+			require.Equal(t, tt.wantEffort, reasoning["effort"])
+			require.NotContains(t, tt.reqBody, "reasoning_effort")
+		})
+	}
 }
 
 func TestApplyCodexOAuthTransform_CodexCLI_PreservesExistingInstructions(t *testing.T) {

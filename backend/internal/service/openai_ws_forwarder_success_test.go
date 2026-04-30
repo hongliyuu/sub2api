@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -180,6 +181,58 @@ func requestToJSONString(payload map[string]any) string {
 		return "{}"
 	}
 	return string(b)
+}
+
+func TestBuildOpenAIWSCreatePayload_OAuthSparkReasoningDefault(t *testing.T) {
+	svc := &OpenAIGatewayService{}
+	account := &Account{ID: 170, Type: AccountTypeOAuth}
+
+	t.Run("explicit none uses spark default", func(t *testing.T) {
+		payload := svc.buildOpenAIWSCreatePayload(map[string]any{
+			"model":     "gpt-5.3-codex-spark",
+			"stream":    false,
+			"input":     []any{},
+			"reasoning": map[string]any{"effort": "none"},
+		}, account)
+
+		require.Equal(t, "medium", gjson.Get(requestToJSONString(payload), "reasoning.effort").String())
+	})
+
+	t.Run("missing effort uses spark default", func(t *testing.T) {
+		payload := svc.buildOpenAIWSCreatePayload(map[string]any{
+			"model":  "gpt-5.3-codex-spark",
+			"stream": false,
+			"input":  []any{},
+		}, account)
+
+		require.Equal(t, "medium", gjson.Get(requestToJSONString(payload), "reasoning.effort").String())
+	})
+}
+
+func TestNormalizeOpenAIWSCodexReasoningPayloadRaw_OAuthSpark(t *testing.T) {
+	account := &Account{ID: 170, Type: AccountTypeOAuth}
+
+	t.Run("direct ws none uses spark default", func(t *testing.T) {
+		payload := []byte(`{"type":"response.create","model":"gpt-5.3-codex-spark","reasoning":{"effort":"none"},"input":[]}`)
+
+		got, modified, err := normalizeOpenAIWSCodexReasoningPayloadRaw(payload, "gpt-5.3-codex-spark", account)
+
+		require.NoError(t, err)
+		require.True(t, modified)
+		require.Equal(t, "gpt-5.3-codex", gjson.GetBytes(got, "model").String())
+		require.Equal(t, "medium", gjson.GetBytes(got, "reasoning.effort").String())
+	})
+
+	t.Run("direct ws missing effort uses spark default", func(t *testing.T) {
+		payload := []byte(`{"type":"response.create","model":"gpt-5.3-codex-spark","input":[]}`)
+
+		got, modified, err := normalizeOpenAIWSCodexReasoningPayloadRaw(payload, "gpt-5.3-codex-spark", account)
+
+		require.NoError(t, err)
+		require.True(t, modified)
+		require.Equal(t, "gpt-5.3-codex", gjson.GetBytes(got, "model").String())
+		require.Equal(t, "medium", gjson.GetBytes(got, "reasoning.effort").String())
+	})
 }
 
 func TestLogOpenAIWSBindResponseAccountWarn(t *testing.T) {
@@ -468,11 +521,13 @@ func TestOpenAIGatewayService_Forward_WSv2_OAuthOriginatorCompatibility(t *testi
 		name           string
 		userAgent      string
 		originator     string
+		requestModel   string
 		wantOriginator string
 	}{
 		{name: "desktop originator preserved", originator: "Codex Desktop", wantOriginator: "Codex Desktop"},
 		{name: "vscode originator preserved", originator: "codex_vscode", wantOriginator: "codex_vscode"},
 		{name: "official ua fallback to codex_cli_rs", userAgent: "Codex Desktop/1.2.3", wantOriginator: "codex_cli_rs"},
+		{name: "spark forces codex cli originator", userAgent: "claude-cli/2.1.92 (external, cli)", requestModel: "gpt-5.3-codex-spark", wantOriginator: "codex_cli_rs"},
 	}
 
 	for _, tt := range tests {
@@ -532,11 +587,19 @@ func TestOpenAIGatewayService_Forward_WSv2_OAuthOriginatorCompatibility(t *testi
 				},
 			}
 
-			body := []byte(`{"model":"gpt-5.1","stream":false,"input":[{"type":"input_text","text":"hello"}]}`)
+			requestModel := tt.requestModel
+			if requestModel == "" {
+				requestModel = "gpt-5.1"
+			}
+			body := []byte(fmt.Sprintf(`{"model":%q,"stream":false,"input":[{"type":"input_text","text":"hello"}]}`, requestModel))
 			result, err := svc.Forward(context.Background(), c, account, body)
 			require.NoError(t, err)
 			require.NotNil(t, result)
 			require.Equal(t, tt.wantOriginator, captureDialer.lastHeaders.Get("originator"))
+			if requestModel == "gpt-5.3-codex-spark" {
+				require.Equal(t, codexCLIUserAgent, captureDialer.lastHeaders.Get("user-agent"))
+				require.Equal(t, "gpt-5.3-codex", captureConn.lastWrite["model"])
+			}
 		})
 	}
 }

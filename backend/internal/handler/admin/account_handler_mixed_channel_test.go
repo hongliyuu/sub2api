@@ -197,7 +197,7 @@ func TestAccountHandlerBulkUpdateMixedChannelConfirmSkips(t *testing.T) {
 	require.Equal(t, float64(0), data["failed"])
 }
 
-func TestBulkUpdateAcceptsFilterTargetRequest(t *testing.T) {
+func TestBulkUpdateRejectsFilterTargetRequest(t *testing.T) {
 	adminSvc := newStubAdminService()
 	router := setupAccountMixedChannelRouter(adminSvc)
 
@@ -217,8 +217,9 @@ func TestBulkUpdateAcceptsFilterTargetRequest(t *testing.T) {
 	req.Header.Set("Content-Type", "application/json")
 	router.ServeHTTP(rec, req)
 
-	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, http.StatusBadRequest, rec.Code)
 	var resp map[string]any
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
-	require.Equal(t, float64(0), resp["code"])
+	require.Contains(t, rec.Body.String(), "account_ids is required")
+	require.Equal(t, 0, adminSvc.bulkUpdateCalls)
 }
