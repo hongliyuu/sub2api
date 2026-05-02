@@ -202,7 +202,7 @@
             <span class="inline-flex items-center rounded-md bg-blue-100 px-2 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">{{ getTypeLabel(row.type) }}</span>
           </template>
           <template #cell-plan_type="{ row }">
-            <span v-if="row.plan_type" class="inline-flex items-center rounded-md bg-purple-100 px-2 py-1 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">{{ row.plan_type }}</span>
+            <span v-if="hasAccountPlan(row)" :class="getAccountPlanBadgeClass(row)">{{ getAccountPlanLabel(row) }}</span>
             <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
           </template>
           <template #cell-subscription_status="{ row }">
@@ -371,6 +371,7 @@ import Icon from '@/components/icons/Icon.vue'
 import ErrorPassthroughRulesModal from '@/components/admin/ErrorPassthroughRulesModal.vue'
 import TLSFingerprintProfilesModal from '@/components/admin/TLSFingerprintProfilesModal.vue'
 import { buildOpenAIUsageRefreshKey } from '@/utils/accountUsageRefresh'
+import { getAccountPlanBadgeClass, getAccountPlanLabel, hasAccountPlan } from '@/utils/accountPlan'
 import { formatDateTime, formatRelativeTime } from '@/utils/format'
 import type { Account, AccountPlatform, AccountType, Proxy as AccountProxy, AdminGroup, WindowStats, ClaudeModel } from '@/types'
 
