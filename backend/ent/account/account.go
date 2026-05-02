@@ -29,6 +29,12 @@ const (
 	FieldPlatform = "platform"
 	// FieldType holds the string denoting the type field in the database.
 	FieldType = "type"
+	// FieldPlanType holds the string denoting the plan_type field in the database.
+	FieldPlanType = "plan_type"
+	// FieldSubscriptionStatus holds the string denoting the subscription_status field in the database.
+	FieldSubscriptionStatus = "subscription_status"
+	// FieldSubscriptionExpiresAt holds the string denoting the subscription_expires_at field in the database.
+	FieldSubscriptionExpiresAt = "subscription_expires_at"
 	// FieldCredentials holds the string denoting the credentials field in the database.
 	FieldCredentials = "credentials"
 	// FieldExtra holds the string denoting the extra field in the database.
@@ -119,6 +125,9 @@ var Columns = []string{
 	FieldNotes,
 	FieldPlatform,
 	FieldType,
+	FieldPlanType,
+	FieldSubscriptionStatus,
+	FieldSubscriptionExpiresAt,
 	FieldCredentials,
 	FieldExtra,
 	FieldProxyID,
@@ -178,6 +187,10 @@ var (
 	PlatformValidator func(string) error
 	// TypeValidator is a validator for the "type" field. It is called by the builders before save.
 	TypeValidator func(string) error
+	// PlanTypeValidator is a validator for the "plan_type" field. It is called by the builders before save.
+	PlanTypeValidator func(string) error
+	// SubscriptionStatusValidator is a validator for the "subscription_status" field. It is called by the builders before save.
+	SubscriptionStatusValidator func(string) error
 	// DefaultCredentials holds the default value on creation for the "credentials" field.
 	DefaultCredentials func() map[string]interface{}
 	// DefaultExtra holds the default value on creation for the "extra" field.
@@ -241,6 +254,21 @@ func ByPlatform(opts ...sql.OrderTermOption) OrderOption {
 // ByType orders the results by the type field.
 func ByType(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldType, opts...).ToFunc()
+}
+
+// ByPlanType orders the results by the plan_type field.
+func ByPlanType(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldPlanType, opts...).ToFunc()
+}
+
+// BySubscriptionStatus orders the results by the subscription_status field.
+func BySubscriptionStatus(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSubscriptionStatus, opts...).ToFunc()
+}
+
+// BySubscriptionExpiresAt orders the results by the subscription_expires_at field.
+func BySubscriptionExpiresAt(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSubscriptionExpiresAt, opts...).ToFunc()
 }
 
 // ByProxyID orders the results by the proxy_id field.

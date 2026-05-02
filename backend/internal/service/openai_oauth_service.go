@@ -123,6 +123,7 @@ type OpenAITokenInfo struct {
 	ChatGPTUserID         string `json:"chatgpt_user_id,omitempty"`
 	OrganizationID        string `json:"organization_id,omitempty"`
 	PlanType              string `json:"plan_type,omitempty"`
+	SubscriptionStatus    string `json:"subscription_status,omitempty"`
 	SubscriptionExpiresAt string `json:"subscription_expires_at,omitempty"`
 	PrivacyMode           string `json:"privacy_mode,omitempty"`
 }
@@ -198,6 +199,8 @@ func (s *OpenAIOAuthService) ExchangeCode(ctx context.Context, input *OpenAIExch
 		tokenInfo.ChatGPTUserID = userInfo.ChatGPTUserID
 		tokenInfo.OrganizationID = userInfo.OrganizationID
 		tokenInfo.PlanType = userInfo.PlanType
+		tokenInfo.SubscriptionStatus = userInfo.SubscriptionStatus
+		tokenInfo.SubscriptionExpiresAt = userInfo.SubscriptionExpiresAt
 	}
 
 	s.enrichTokenInfo(ctx, tokenInfo, proxyURL)
@@ -245,6 +248,8 @@ func (s *OpenAIOAuthService) RefreshTokenWithClientID(ctx context.Context, refre
 		tokenInfo.ChatGPTUserID = userInfo.ChatGPTUserID
 		tokenInfo.OrganizationID = userInfo.OrganizationID
 		tokenInfo.PlanType = userInfo.PlanType
+		tokenInfo.SubscriptionStatus = userInfo.SubscriptionStatus
+		tokenInfo.SubscriptionExpiresAt = userInfo.SubscriptionExpiresAt
 	}
 
 	s.enrichTokenInfo(ctx, tokenInfo, proxyURL)
@@ -270,6 +275,9 @@ func (s *OpenAIOAuthService) enrichTokenInfo(ctx context.Context, tokenInfo *Ope
 	if info := fetchChatGPTAccountInfo(ctx, s.privacyClientFactory, tokenInfo.AccessToken, proxyURL, orgID); info != nil {
 		if info.PlanType != "" {
 			tokenInfo.PlanType = info.PlanType
+		}
+		if info.SubscriptionStatus != "" {
+			tokenInfo.SubscriptionStatus = info.SubscriptionStatus
 		}
 		if info.SubscriptionExpiresAt != "" {
 			tokenInfo.SubscriptionExpiresAt = info.SubscriptionExpiresAt
@@ -297,15 +305,17 @@ func (s *OpenAIOAuthService) RefreshAccountToken(ctx context.Context, account *A
 		accessToken := account.GetCredential("access_token")
 		if accessToken != "" {
 			tokenInfo := &OpenAITokenInfo{
-				AccessToken:      accessToken,
-				RefreshToken:     "",
-				IDToken:          account.GetCredential("id_token"),
-				ClientID:         account.GetCredential("client_id"),
-				Email:            account.GetCredential("email"),
-				ChatGPTAccountID: account.GetCredential("chatgpt_account_id"),
-				ChatGPTUserID:    account.GetCredential("chatgpt_user_id"),
-				OrganizationID:   account.GetCredential("organization_id"),
-				PlanType:         account.GetCredential("plan_type"),
+				AccessToken:           accessToken,
+				RefreshToken:          "",
+				IDToken:               account.GetCredential("id_token"),
+				ClientID:              account.GetCredential("client_id"),
+				Email:                 account.GetCredential("email"),
+				ChatGPTAccountID:      account.GetCredential("chatgpt_account_id"),
+				ChatGPTUserID:         account.GetCredential("chatgpt_user_id"),
+				OrganizationID:        account.GetCredential("organization_id"),
+				PlanType:              account.GetCredential("plan_type"),
+				SubscriptionStatus:    account.GetCredential("subscription_status"),
+				SubscriptionExpiresAt: account.GetCredential("subscription_expires_at"),
 			}
 			if expiresAt := account.GetCredentialAsTime("expires_at"); expiresAt != nil {
 				tokenInfo.ExpiresAt = expiresAt.Unix()
@@ -358,6 +368,9 @@ func (s *OpenAIOAuthService) BuildAccountCredentials(tokenInfo *OpenAITokenInfo)
 	}
 	if tokenInfo.PlanType != "" {
 		creds["plan_type"] = tokenInfo.PlanType
+	}
+	if tokenInfo.SubscriptionStatus != "" {
+		creds["subscription_status"] = tokenInfo.SubscriptionStatus
 	}
 	if tokenInfo.SubscriptionExpiresAt != "" {
 		creds["subscription_expires_at"] = tokenInfo.SubscriptionExpiresAt

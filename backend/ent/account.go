@@ -33,6 +33,12 @@ type Account struct {
 	Platform string `json:"platform,omitempty"`
 	// Type holds the value of the "type" field.
 	Type string `json:"type,omitempty"`
+	// PlanType holds the value of the "plan_type" field.
+	PlanType *string `json:"plan_type,omitempty"`
+	// SubscriptionStatus holds the value of the "subscription_status" field.
+	SubscriptionStatus *string `json:"subscription_status,omitempty"`
+	// SubscriptionExpiresAt holds the value of the "subscription_expires_at" field.
+	SubscriptionExpiresAt *time.Time `json:"subscription_expires_at,omitempty"`
 	// Credentials holds the value of the "credentials" field.
 	Credentials map[string]interface{} `json:"credentials,omitempty"`
 	// Extra holds the value of the "extra" field.
@@ -147,9 +153,9 @@ func (*Account) scanValues(columns []string) ([]any, error) {
 			values[i] = new(sql.NullFloat64)
 		case account.FieldID, account.FieldProxyID, account.FieldConcurrency, account.FieldLoadFactor, account.FieldPriority:
 			values[i] = new(sql.NullInt64)
-		case account.FieldName, account.FieldNotes, account.FieldPlatform, account.FieldType, account.FieldStatus, account.FieldErrorMessage, account.FieldTempUnschedulableReason, account.FieldSessionWindowStatus:
+		case account.FieldName, account.FieldNotes, account.FieldPlatform, account.FieldType, account.FieldPlanType, account.FieldSubscriptionStatus, account.FieldStatus, account.FieldErrorMessage, account.FieldTempUnschedulableReason, account.FieldSessionWindowStatus:
 			values[i] = new(sql.NullString)
-		case account.FieldCreatedAt, account.FieldUpdatedAt, account.FieldDeletedAt, account.FieldLastUsedAt, account.FieldExpiresAt, account.FieldRateLimitedAt, account.FieldRateLimitResetAt, account.FieldOverloadUntil, account.FieldTempUnschedulableUntil, account.FieldSessionWindowStart, account.FieldSessionWindowEnd:
+		case account.FieldCreatedAt, account.FieldUpdatedAt, account.FieldDeletedAt, account.FieldSubscriptionExpiresAt, account.FieldLastUsedAt, account.FieldExpiresAt, account.FieldRateLimitedAt, account.FieldRateLimitResetAt, account.FieldOverloadUntil, account.FieldTempUnschedulableUntil, account.FieldSessionWindowStart, account.FieldSessionWindowEnd:
 			values[i] = new(sql.NullTime)
 		default:
 			values[i] = new(sql.UnknownType)
@@ -215,6 +221,27 @@ func (_m *Account) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field type", values[i])
 			} else if value.Valid {
 				_m.Type = value.String
+			}
+		case account.FieldPlanType:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field plan_type", values[i])
+			} else if value.Valid {
+				_m.PlanType = new(string)
+				*_m.PlanType = value.String
+			}
+		case account.FieldSubscriptionStatus:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field subscription_status", values[i])
+			} else if value.Valid {
+				_m.SubscriptionStatus = new(string)
+				*_m.SubscriptionStatus = value.String
+			}
+		case account.FieldSubscriptionExpiresAt:
+			if value, ok := values[i].(*sql.NullTime); !ok {
+				return fmt.Errorf("unexpected type %T for field subscription_expires_at", values[i])
+			} else if value.Valid {
+				_m.SubscriptionExpiresAt = new(time.Time)
+				*_m.SubscriptionExpiresAt = value.Time
 			}
 		case account.FieldCredentials:
 			if value, ok := values[i].(*[]byte); !ok {
@@ -439,6 +466,21 @@ func (_m *Account) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("type=")
 	builder.WriteString(_m.Type)
+	builder.WriteString(", ")
+	if v := _m.PlanType; v != nil {
+		builder.WriteString("plan_type=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.SubscriptionStatus; v != nil {
+		builder.WriteString("subscription_status=")
+		builder.WriteString(*v)
+	}
+	builder.WriteString(", ")
+	if v := _m.SubscriptionExpiresAt; v != nil {
+		builder.WriteString("subscription_expires_at=")
+		builder.WriteString(v.Format(time.ANSIC))
+	}
 	builder.WriteString(", ")
 	builder.WriteString("credentials=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Credentials))

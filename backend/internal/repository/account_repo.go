@@ -15,6 +15,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -86,6 +87,9 @@ func (r *accountRepository) Create(ctx context.Context, account *service.Account
 		SetNillableNotes(account.Notes).
 		SetPlatform(account.Platform).
 		SetType(account.Type).
+		SetNillablePlanType(account.PlanType).
+		SetNillableSubscriptionStatus(account.SubscriptionStatus).
+		SetNillableSubscriptionExpiresAt(account.SubscriptionExpiresAt).
 		SetCredentials(normalizeJSONMap(account.Credentials)).
 		SetExtra(normalizeJSONMap(account.Extra)).
 		SetConcurrency(account.Concurrency).
@@ -323,6 +327,9 @@ func (r *accountRepository) Update(ctx context.Context, account *service.Account
 		SetNillableNotes(account.Notes).
 		SetPlatform(account.Platform).
 		SetType(account.Type).
+		SetNillablePlanType(account.PlanType).
+		SetNillableSubscriptionStatus(account.SubscriptionStatus).
+		SetNillableSubscriptionExpiresAt(account.SubscriptionExpiresAt).
 		SetCredentials(normalizeJSONMap(account.Credentials)).
 		SetExtra(normalizeJSONMap(account.Extra)).
 		SetConcurrency(account.Concurrency).
@@ -339,6 +346,15 @@ func (r *accountRepository) Update(ctx context.Context, account *service.Account
 		builder.SetLoadFactor(*account.LoadFactor)
 	} else {
 		builder.ClearLoadFactor()
+	}
+	if account.PlanType == nil {
+		builder.ClearPlanType()
+	}
+	if account.SubscriptionStatus == nil {
+		builder.ClearSubscriptionStatus()
+	}
+	if account.SubscriptionExpiresAt == nil {
+		builder.ClearSubscriptionExpiresAt()
 	}
 
 	if account.ProxyID != nil {
@@ -405,9 +421,10 @@ func (r *accountRepository) Update(ctx context.Context, account *service.Account
 }
 
 func (r *accountRepository) UpdateCredentials(ctx context.Context, id int64, credentials map[string]any) error {
-	_, err := r.client.Account.UpdateOneID(id).
-		SetCredentials(normalizeJSONMap(credentials)).
-		Save(ctx)
+	update := r.client.Account.UpdateOneID(id).
+		SetCredentials(normalizeJSONMap(credentials))
+	applyAccountSubscriptionFieldsToUpdate(update, extractAccountSubscriptionFields(credentials))
+	_, err := update.Save(ctx)
 	if err != nil {
 		return translatePersistenceError(err, service.ErrAccountNotFound, nil)
 	}
@@ -1727,6 +1744,9 @@ func accountEntityToService(m *dbent.Account) *service.Account {
 		Notes:                   m.Notes,
 		Platform:                m.Platform,
 		Type:                    m.Type,
+		PlanType:                m.PlanType,
+		SubscriptionStatus:      m.SubscriptionStatus,
+		SubscriptionExpiresAt:   m.SubscriptionExpiresAt,
 		Credentials:             copyJSONMap(m.Credentials),
 		Extra:                   copyJSONMap(m.Extra),
 		ProxyID:                 m.ProxyID,
@@ -1758,6 +1778,122 @@ func normalizeJSONMap(in map[string]any) map[string]any {
 		return map[string]any{}
 	}
 	return in
+}
+
+type accountSubscriptionFields struct {
+	planType              *string
+	subscriptionStatus    *string
+	subscriptionExpiresAt *time.Time
+}
+
+func extractAccountSubscriptionFields(credentials map[string]any) accountSubscriptionFields {
+	return accountSubscriptionFields{
+		planType:              stringPtrFromMap(credentials, "plan_type"),
+		subscriptionStatus:    stringPtrFromMap(credentials, "subscription_status"),
+		subscriptionExpiresAt: timePtrFromMap(credentials, "subscription_expires_at"),
+	}
+}
+
+func applyAccountSubscriptionFieldsToUpdate(update *dbent.AccountUpdateOne, fields accountSubscriptionFields) {
+	if fields.planType != nil {
+		update.SetPlanType(*fields.planType)
+	} else {
+		update.ClearPlanType()
+	}
+	if fields.subscriptionStatus != nil {
+		update.SetSubscriptionStatus(*fields.subscriptionStatus)
+	} else {
+		update.ClearSubscriptionStatus()
+	}
+	if fields.subscriptionExpiresAt != nil {
+		update.SetSubscriptionExpiresAt(*fields.subscriptionExpiresAt)
+	} else {
+		update.ClearSubscriptionExpiresAt()
+	}
+}
+
+func stringPtrFromMap(values map[string]any, key string) *string {
+	if values == nil {
+		return nil
+	}
+	raw, ok := values[key]
+	if !ok || raw == nil {
+		return nil
+	}
+	value := strings.TrimSpace(anyToString(raw))
+	if value == "" {
+		return nil
+	}
+	return &value
+}
+
+func timePtrFromMap(values map[string]any, key string) *time.Time {
+	if values == nil {
+		return nil
+	}
+	raw, ok := values[key]
+	if !ok || raw == nil {
+		return nil
+	}
+	switch v := raw.(type) {
+	case time.Time:
+		return &v
+	case string:
+		return parseTimePtr(v)
+	case json.Number:
+		return unixTimePtr(v.String())
+	case int64:
+		return unixTimeFromIntPtr(v)
+	case int:
+		return unixTimeFromIntPtr(int64(v))
+	case float64:
+		return unixTimeFromIntPtr(int64(v))
+	default:
+		return parseTimePtr(anyToString(v))
+	}
+}
+
+func parseTimePtr(value string) *time.Time {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	if t, err := time.Parse(time.RFC3339Nano, value); err == nil {
+		return &t
+	}
+	return unixTimePtr(value)
+}
+
+func unixTimePtr(value string) *time.Time {
+	unix, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64)
+	if err != nil || unix <= 0 {
+		return nil
+	}
+	return unixTimeFromIntPtr(unix)
+}
+
+func unixTimeFromIntPtr(value int64) *time.Time {
+	if value <= 0 {
+		return nil
+	}
+	if value > 1000000000000 {
+		value = value / 1000
+	}
+	t := time.Unix(value, 0)
+	return &t
+}
+
+func anyToString(v any) string {
+	switch t := v.(type) {
+	case string:
+		return t
+	case fmt.Stringer:
+		return t.String()
+	case json.Number:
+		return t.String()
+	default:
+		return strings.TrimSpace(fmt.Sprint(t))
+	}
 }
 
 func copyJSONMap(in map[string]any) map[string]any {

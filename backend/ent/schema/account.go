@@ -71,6 +71,19 @@ func (Account) Fields() []ent.Field {
 			MaxLen(20).
 			NotEmpty(),
 
+		field.String("plan_type").
+			Optional().
+			Nillable().
+			MaxLen(100),
+		field.String("subscription_status").
+			Optional().
+			Nillable().
+			MaxLen(100),
+		field.Time("subscription_expires_at").
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "timestamptz"}),
+
 		// credentials: 认证凭证，以 JSONB 格式存储
 		// 结构取决于 type 字段：
 		// - api_key: {"api_key": "sk-xxx"}

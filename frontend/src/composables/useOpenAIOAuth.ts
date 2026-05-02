@@ -17,6 +17,8 @@ export interface OpenAITokenInfo {
   name?: string
   plan_type?: string
   privacy_mode?: string
+  subscription_status?: string
+  subscription_expires_at?: string
   // OpenAI specific IDs (extracted from ID Token)
   chatgpt_account_id?: string
   chatgpt_user_id?: string
@@ -196,6 +198,12 @@ export function useOpenAIOAuth() {
     }
     if (tokenInfo.plan_type) {
       creds.plan_type = tokenInfo.plan_type
+    }
+    if (tokenInfo.subscription_status) {
+      creds.subscription_status = tokenInfo.subscription_status
+    }
+    if (tokenInfo.subscription_expires_at) {
+      creds.subscription_expires_at = tokenInfo.subscription_expires_at
     }
     if (tokenInfo.client_id) {
       creds.client_id = tokenInfo.client_id

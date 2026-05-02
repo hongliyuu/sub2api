@@ -119,6 +119,66 @@ func (_u *AccountUpdate) SetNillableType(v *string) *AccountUpdate {
 	return _u
 }
 
+// SetPlanType sets the "plan_type" field.
+func (_u *AccountUpdate) SetPlanType(v string) *AccountUpdate {
+	_u.mutation.SetPlanType(v)
+	return _u
+}
+
+// SetNillablePlanType sets the "plan_type" field if the given value is not nil.
+func (_u *AccountUpdate) SetNillablePlanType(v *string) *AccountUpdate {
+	if v != nil {
+		_u.SetPlanType(*v)
+	}
+	return _u
+}
+
+// ClearPlanType clears the value of the "plan_type" field.
+func (_u *AccountUpdate) ClearPlanType() *AccountUpdate {
+	_u.mutation.ClearPlanType()
+	return _u
+}
+
+// SetSubscriptionStatus sets the "subscription_status" field.
+func (_u *AccountUpdate) SetSubscriptionStatus(v string) *AccountUpdate {
+	_u.mutation.SetSubscriptionStatus(v)
+	return _u
+}
+
+// SetNillableSubscriptionStatus sets the "subscription_status" field if the given value is not nil.
+func (_u *AccountUpdate) SetNillableSubscriptionStatus(v *string) *AccountUpdate {
+	if v != nil {
+		_u.SetSubscriptionStatus(*v)
+	}
+	return _u
+}
+
+// ClearSubscriptionStatus clears the value of the "subscription_status" field.
+func (_u *AccountUpdate) ClearSubscriptionStatus() *AccountUpdate {
+	_u.mutation.ClearSubscriptionStatus()
+	return _u
+}
+
+// SetSubscriptionExpiresAt sets the "subscription_expires_at" field.
+func (_u *AccountUpdate) SetSubscriptionExpiresAt(v time.Time) *AccountUpdate {
+	_u.mutation.SetSubscriptionExpiresAt(v)
+	return _u
+}
+
+// SetNillableSubscriptionExpiresAt sets the "subscription_expires_at" field if the given value is not nil.
+func (_u *AccountUpdate) SetNillableSubscriptionExpiresAt(v *time.Time) *AccountUpdate {
+	if v != nil {
+		_u.SetSubscriptionExpiresAt(*v)
+	}
+	return _u
+}
+
+// ClearSubscriptionExpiresAt clears the value of the "subscription_expires_at" field.
+func (_u *AccountUpdate) ClearSubscriptionExpiresAt() *AccountUpdate {
+	_u.mutation.ClearSubscriptionExpiresAt()
+	return _u
+}
+
 // SetCredentials sets the "credentials" field.
 func (_u *AccountUpdate) SetCredentials(v map[string]interface{}) *AccountUpdate {
 	_u.mutation.SetCredentials(v)
@@ -650,6 +710,16 @@ func (_u *AccountUpdate) check() error {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "Account.type": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.PlanType(); ok {
+		if err := account.PlanTypeValidator(v); err != nil {
+			return &ValidationError{Name: "plan_type", err: fmt.Errorf(`ent: validator failed for field "Account.plan_type": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.SubscriptionStatus(); ok {
+		if err := account.SubscriptionStatusValidator(v); err != nil {
+			return &ValidationError{Name: "subscription_status", err: fmt.Errorf(`ent: validator failed for field "Account.subscription_status": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Status(); ok {
 		if err := account.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Account.status": %w`, err)}
@@ -698,6 +768,24 @@ func (_u *AccountUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.GetType(); ok {
 		_spec.SetField(account.FieldType, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PlanType(); ok {
+		_spec.SetField(account.FieldPlanType, field.TypeString, value)
+	}
+	if _u.mutation.PlanTypeCleared() {
+		_spec.ClearField(account.FieldPlanType, field.TypeString)
+	}
+	if value, ok := _u.mutation.SubscriptionStatus(); ok {
+		_spec.SetField(account.FieldSubscriptionStatus, field.TypeString, value)
+	}
+	if _u.mutation.SubscriptionStatusCleared() {
+		_spec.ClearField(account.FieldSubscriptionStatus, field.TypeString)
+	}
+	if value, ok := _u.mutation.SubscriptionExpiresAt(); ok {
+		_spec.SetField(account.FieldSubscriptionExpiresAt, field.TypeTime, value)
+	}
+	if _u.mutation.SubscriptionExpiresAtCleared() {
+		_spec.ClearField(account.FieldSubscriptionExpiresAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.Credentials(); ok {
 		_spec.SetField(account.FieldCredentials, field.TypeJSON, value)
@@ -1043,6 +1131,66 @@ func (_u *AccountUpdateOne) SetNillableType(v *string) *AccountUpdateOne {
 	if v != nil {
 		_u.SetType(*v)
 	}
+	return _u
+}
+
+// SetPlanType sets the "plan_type" field.
+func (_u *AccountUpdateOne) SetPlanType(v string) *AccountUpdateOne {
+	_u.mutation.SetPlanType(v)
+	return _u
+}
+
+// SetNillablePlanType sets the "plan_type" field if the given value is not nil.
+func (_u *AccountUpdateOne) SetNillablePlanType(v *string) *AccountUpdateOne {
+	if v != nil {
+		_u.SetPlanType(*v)
+	}
+	return _u
+}
+
+// ClearPlanType clears the value of the "plan_type" field.
+func (_u *AccountUpdateOne) ClearPlanType() *AccountUpdateOne {
+	_u.mutation.ClearPlanType()
+	return _u
+}
+
+// SetSubscriptionStatus sets the "subscription_status" field.
+func (_u *AccountUpdateOne) SetSubscriptionStatus(v string) *AccountUpdateOne {
+	_u.mutation.SetSubscriptionStatus(v)
+	return _u
+}
+
+// SetNillableSubscriptionStatus sets the "subscription_status" field if the given value is not nil.
+func (_u *AccountUpdateOne) SetNillableSubscriptionStatus(v *string) *AccountUpdateOne {
+	if v != nil {
+		_u.SetSubscriptionStatus(*v)
+	}
+	return _u
+}
+
+// ClearSubscriptionStatus clears the value of the "subscription_status" field.
+func (_u *AccountUpdateOne) ClearSubscriptionStatus() *AccountUpdateOne {
+	_u.mutation.ClearSubscriptionStatus()
+	return _u
+}
+
+// SetSubscriptionExpiresAt sets the "subscription_expires_at" field.
+func (_u *AccountUpdateOne) SetSubscriptionExpiresAt(v time.Time) *AccountUpdateOne {
+	_u.mutation.SetSubscriptionExpiresAt(v)
+	return _u
+}
+
+// SetNillableSubscriptionExpiresAt sets the "subscription_expires_at" field if the given value is not nil.
+func (_u *AccountUpdateOne) SetNillableSubscriptionExpiresAt(v *time.Time) *AccountUpdateOne {
+	if v != nil {
+		_u.SetSubscriptionExpiresAt(*v)
+	}
+	return _u
+}
+
+// ClearSubscriptionExpiresAt clears the value of the "subscription_expires_at" field.
+func (_u *AccountUpdateOne) ClearSubscriptionExpiresAt() *AccountUpdateOne {
+	_u.mutation.ClearSubscriptionExpiresAt()
 	return _u
 }
 
@@ -1590,6 +1738,16 @@ func (_u *AccountUpdateOne) check() error {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "Account.type": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.PlanType(); ok {
+		if err := account.PlanTypeValidator(v); err != nil {
+			return &ValidationError{Name: "plan_type", err: fmt.Errorf(`ent: validator failed for field "Account.plan_type": %w`, err)}
+		}
+	}
+	if v, ok := _u.mutation.SubscriptionStatus(); ok {
+		if err := account.SubscriptionStatusValidator(v); err != nil {
+			return &ValidationError{Name: "subscription_status", err: fmt.Errorf(`ent: validator failed for field "Account.subscription_status": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.Status(); ok {
 		if err := account.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Account.status": %w`, err)}
@@ -1655,6 +1813,24 @@ func (_u *AccountUpdateOne) sqlSave(ctx context.Context) (_node *Account, err er
 	}
 	if value, ok := _u.mutation.GetType(); ok {
 		_spec.SetField(account.FieldType, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.PlanType(); ok {
+		_spec.SetField(account.FieldPlanType, field.TypeString, value)
+	}
+	if _u.mutation.PlanTypeCleared() {
+		_spec.ClearField(account.FieldPlanType, field.TypeString)
+	}
+	if value, ok := _u.mutation.SubscriptionStatus(); ok {
+		_spec.SetField(account.FieldSubscriptionStatus, field.TypeString, value)
+	}
+	if _u.mutation.SubscriptionStatusCleared() {
+		_spec.ClearField(account.FieldSubscriptionStatus, field.TypeString)
+	}
+	if value, ok := _u.mutation.SubscriptionExpiresAt(); ok {
+		_spec.SetField(account.FieldSubscriptionExpiresAt, field.TypeTime, value)
+	}
+	if _u.mutation.SubscriptionExpiresAtCleared() {
+		_spec.ClearField(account.FieldSubscriptionExpiresAt, field.TypeTime)
 	}
 	if value, ok := _u.mutation.Credentials(); ok {
 		_spec.SetField(account.FieldCredentials, field.TypeJSON, value)

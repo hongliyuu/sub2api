@@ -195,23 +195,22 @@
             <span v-if="value" :title="value" class="block max-w-xs truncate text-sm text-gray-600 dark:text-gray-300">{{ value }}</span>
             <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
           </template>
-          <template #cell-platform_type="{ row }">
-            <div class="flex flex-wrap items-center gap-1">
-              <PlatformTypeBadge :platform="row.platform" :type="row.type" :plan-type="row.credentials?.plan_type" :privacy-mode="row.extra?.privacy_mode" :subscription-expires-at="row.credentials?.subscription_expires_at" />
-              <span
-                v-if="getOpenAICompactLabel(row)"
-                :class="['inline-block rounded px-1.5 py-0.5 text-[10px] font-medium', getOpenAICompactClass(row)]"
-                :title="getOpenAICompactTitle(row)"
-              >
-                {{ getOpenAICompactLabel(row) }}
-              </span>
-              <span
-                v-if="getAntigravityTierLabel(row)"
-                :class="['inline-block rounded px-1.5 py-0.5 text-[10px] font-medium', getAntigravityTierClass(row)]"
-              >
-                {{ getAntigravityTierLabel(row) }}
-              </span>
-            </div>
+          <template #cell-platform="{ row }">
+            <span class="inline-flex items-center rounded-md bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 dark:bg-dark-700 dark:text-dark-200">{{ getPlatformLabel(row.platform) }}</span>
+          </template>
+          <template #cell-access_type="{ row }">
+            <span class="inline-flex items-center rounded-md bg-blue-100 px-2 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">{{ getTypeLabel(row.type) }}</span>
+          </template>
+          <template #cell-plan_type="{ row }">
+            <span v-if="row.plan_type" class="inline-flex items-center rounded-md bg-purple-100 px-2 py-1 text-xs font-medium text-purple-700 dark:bg-purple-900/30 dark:text-purple-300">{{ row.plan_type }}</span>
+            <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
+          </template>
+          <template #cell-subscription_status="{ row }">
+            <span v-if="row.subscription_status" class="inline-flex items-center rounded-md bg-emerald-100 px-2 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">{{ row.subscription_status }}</span>
+            <span v-else class="text-sm text-gray-400 dark:text-dark-500">-</span>
+          </template>
+          <template #cell-subscription_expires_at="{ row }">
+            <span class="text-sm text-gray-500 dark:text-dark-400">{{ formatSubscriptionExpiresAt(row.subscription_expires_at) }}</span>
           </template>
           <template #cell-capacity="{ row }">
             <AccountCapacityCell :account="row" />
@@ -368,7 +367,6 @@ import AccountUsageCell from '@/components/account/AccountUsageCell.vue'
 import AccountTodayStatsCell from '@/components/account/AccountTodayStatsCell.vue'
 import AccountGroupsCell from '@/components/account/AccountGroupsCell.vue'
 import AccountCapacityCell from '@/components/account/AccountCapacityCell.vue'
-import PlatformTypeBadge from '@/components/common/PlatformTypeBadge.vue'
 import Icon from '@/components/icons/Icon.vue'
 import ErrorPassthroughRulesModal from '@/components/admin/ErrorPassthroughRulesModal.vue'
 import TLSFingerprintProfilesModal from '@/components/admin/TLSFingerprintProfilesModal.vue'
@@ -455,8 +453,8 @@ const exportingData = ref(false)
 const showColumnDropdown = ref(false)
 const columnDropdownRef = ref<HTMLElement | null>(null)
 const hiddenColumns = reactive<Set<string>>(new Set())
-const DEFAULT_HIDDEN_COLUMNS = ['today_stats', 'proxy', 'notes', 'priority', 'rate_multiplier']
-const HIDDEN_COLUMNS_KEY = 'account-hidden-columns'
+const DEFAULT_HIDDEN_COLUMNS = ['access_type', 'subscription_status', 'today_stats', 'proxy', 'notes', 'priority', 'rate_multiplier']
+const HIDDEN_COLUMNS_KEY = 'account-hidden-columns-v2'
 
 // Sorting settings
 const ACCOUNT_SORT_STORAGE_KEY = 'account-table-sort'
@@ -959,74 +957,21 @@ const { pause: pauseAutoRefresh, resume: resumeAutoRefresh } = useIntervalFn(
   { immediate: false }
 )
 
-// Antigravity 订阅等级辅助函数
-function getAntigravityTierFromRow(row: any): string | null {
-  if (row.platform !== 'antigravity') return null
-  const extra = row.extra as Record<string, unknown> | undefined
-  if (!extra) return null
-  const lca = extra.load_code_assist as Record<string, unknown> | undefined
-  if (!lca) return null
-  const paid = lca.paidTier as Record<string, unknown> | undefined
-  if (paid && typeof paid.id === 'string') return paid.id
-  const current = lca.currentTier as Record<string, unknown> | undefined
-  if (current && typeof current.id === 'string') return current.id
-  return null
+function getPlatformLabel(platform: AccountPlatform): string {
+  if (platform === 'anthropic') return 'Anthropic'
+  if (platform === 'openai') return 'OpenAI'
+  if (platform === 'antigravity') return 'Antigravity'
+  return 'Gemini'
 }
 
-function getAntigravityTierLabel(row: any): string | null {
-  const tier = getAntigravityTierFromRow(row)
-  switch (tier) {
-    case 'free-tier': return t('admin.accounts.tier.free')
-    case 'g1-pro-tier': return t('admin.accounts.tier.pro')
-    case 'g1-ultra-tier': return t('admin.accounts.tier.ultra')
-    default: return null
-  }
-}
-
-function getOpenAICompactState(row: any): 'supported' | 'unsupported' | 'unknown' | null {
-  if (row.platform !== 'openai' || (row.type !== 'oauth' && row.type !== 'apikey')) return null
-  const extra = row.extra as Record<string, unknown> | undefined
-  const mode = typeof extra?.openai_compact_mode === 'string' ? extra.openai_compact_mode : 'auto'
-  if (mode === 'force_on') return 'supported'
-  if (mode === 'force_off') return 'unsupported'
-  if (typeof extra?.openai_compact_supported === 'boolean') {
-    return extra.openai_compact_supported ? 'supported' : 'unsupported'
-  }
-  return 'unknown'
-}
-
-function getOpenAICompactLabel(row: any): string | null {
-  switch (getOpenAICompactState(row)) {
-    case 'supported': return t('admin.accounts.openai.compactSupported')
-    case 'unsupported': return t('admin.accounts.openai.compactUnsupported')
-    case 'unknown': return t('admin.accounts.openai.compactUnknown')
-    default: return null
-  }
-}
-
-function getOpenAICompactClass(row: any): string {
-  switch (getOpenAICompactState(row)) {
-    case 'supported': return 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-    case 'unsupported': return 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300'
-    case 'unknown': return 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300'
-    default: return ''
-  }
-}
-
-function getOpenAICompactTitle(row: any): string {
-  const extra = row.extra as Record<string, unknown> | undefined
-  const checkedAt = typeof extra?.openai_compact_checked_at === 'string' ? extra.openai_compact_checked_at : ''
-  if (!checkedAt) return getOpenAICompactLabel(row) || ''
-  return `${getOpenAICompactLabel(row)} | ${t('admin.accounts.openai.compactLastChecked')}: ${formatDateTime(new Date(checkedAt))}`
-}
-
-function getAntigravityTierClass(row: any): string {
-  const tier = getAntigravityTierFromRow(row)
-  switch (tier) {
-    case 'free-tier': return 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
-    case 'g1-pro-tier': return 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-300'
-    case 'g1-ultra-tier': return 'bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-300'
-    default: return ''
+function getTypeLabel(type: AccountType): string {
+  switch (type) {
+    case 'oauth': return 'OAuth'
+    case 'setup-token': return 'Token'
+    case 'apikey': return 'Key'
+    case 'bedrock': return 'AWS'
+    case 'service_account': return 'Vertex'
+    default: return type
   }
 }
 
@@ -1035,7 +980,11 @@ const allColumns = computed(() => {
   const c = [
     { key: 'select', label: '', sortable: false },
     { key: 'name', label: t('admin.accounts.columns.name'), sortable: true },
-    { key: 'platform_type', label: t('admin.accounts.columns.platformType'), sortable: false },
+    { key: 'platform', label: t('admin.accounts.columns.platform'), sortable: false },
+    { key: 'access_type', label: t('admin.accounts.columns.accessType'), sortable: false },
+    { key: 'plan_type', label: t('admin.accounts.columns.planType'), sortable: false },
+    { key: 'subscription_status', label: t('admin.accounts.columns.subscriptionStatus'), sortable: false },
+    { key: 'subscription_expires_at', label: t('admin.accounts.columns.subscriptionExpiresAt'), sortable: false },
     { key: 'capacity', label: t('admin.accounts.columns.capacity'), sortable: false },
     { key: 'status', label: t('admin.accounts.columns.status'), sortable: true },
     { key: 'schedulable', label: t('admin.accounts.columns.schedulable'), sortable: true },
@@ -1546,6 +1495,31 @@ const formatExpiresAt = (value: number | null) => {
     'sv-SE'
   )
 }
+const formatSubscriptionExpiresAt = (value?: string | null) => {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  const dateText = formatDateTime(
+    date,
+    {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      timeZone: 'UTC'
+    },
+    'sv-SE'
+  )
+  const days = getSubscriptionRemainingDays(date)
+  if (days === null) return dateText
+  return `${dateText} (${days}天)`
+}
+
+const getSubscriptionRemainingDays = (date: Date) => {
+  const diff = date.getTime() - Date.now()
+  if (diff < 0) return null
+  return Math.ceil(diff / (1000 * 60 * 60 * 24))
+}
+
 const isExpired = (value: number | null) => {
   if (!value) return false
   return value * 1000 <= Date.now()

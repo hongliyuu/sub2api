@@ -771,6 +771,9 @@ export interface Account {
   notes?: string | null
   platform: AccountPlatform
   type: AccountType
+  plan_type?: string | null
+  subscription_status?: string | null
+  subscription_expires_at?: string | null
   credentials?: Record<string, unknown>
   // Extra fields including Codex usage, OpenAI compact capability, and model-level rate limits.
   extra?: (CodexUsageSnapshot & OpenAICompactState & {

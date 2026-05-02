@@ -99,6 +99,48 @@ func (_c *AccountCreate) SetType(v string) *AccountCreate {
 	return _c
 }
 
+// SetPlanType sets the "plan_type" field.
+func (_c *AccountCreate) SetPlanType(v string) *AccountCreate {
+	_c.mutation.SetPlanType(v)
+	return _c
+}
+
+// SetNillablePlanType sets the "plan_type" field if the given value is not nil.
+func (_c *AccountCreate) SetNillablePlanType(v *string) *AccountCreate {
+	if v != nil {
+		_c.SetPlanType(*v)
+	}
+	return _c
+}
+
+// SetSubscriptionStatus sets the "subscription_status" field.
+func (_c *AccountCreate) SetSubscriptionStatus(v string) *AccountCreate {
+	_c.mutation.SetSubscriptionStatus(v)
+	return _c
+}
+
+// SetNillableSubscriptionStatus sets the "subscription_status" field if the given value is not nil.
+func (_c *AccountCreate) SetNillableSubscriptionStatus(v *string) *AccountCreate {
+	if v != nil {
+		_c.SetSubscriptionStatus(*v)
+	}
+	return _c
+}
+
+// SetSubscriptionExpiresAt sets the "subscription_expires_at" field.
+func (_c *AccountCreate) SetSubscriptionExpiresAt(v time.Time) *AccountCreate {
+	_c.mutation.SetSubscriptionExpiresAt(v)
+	return _c
+}
+
+// SetNillableSubscriptionExpiresAt sets the "subscription_expires_at" field if the given value is not nil.
+func (_c *AccountCreate) SetNillableSubscriptionExpiresAt(v *time.Time) *AccountCreate {
+	if v != nil {
+		_c.SetSubscriptionExpiresAt(*v)
+	}
+	return _c
+}
+
 // SetCredentials sets the "credentials" field.
 func (_c *AccountCreate) SetCredentials(v map[string]interface{}) *AccountCreate {
 	_c.mutation.SetCredentials(v)
@@ -536,6 +578,16 @@ func (_c *AccountCreate) check() error {
 			return &ValidationError{Name: "type", err: fmt.Errorf(`ent: validator failed for field "Account.type": %w`, err)}
 		}
 	}
+	if v, ok := _c.mutation.PlanType(); ok {
+		if err := account.PlanTypeValidator(v); err != nil {
+			return &ValidationError{Name: "plan_type", err: fmt.Errorf(`ent: validator failed for field "Account.plan_type": %w`, err)}
+		}
+	}
+	if v, ok := _c.mutation.SubscriptionStatus(); ok {
+		if err := account.SubscriptionStatusValidator(v); err != nil {
+			return &ValidationError{Name: "subscription_status", err: fmt.Errorf(`ent: validator failed for field "Account.subscription_status": %w`, err)}
+		}
+	}
 	if _, ok := _c.mutation.Credentials(); !ok {
 		return &ValidationError{Name: "credentials", err: errors.New(`ent: missing required field "Account.credentials"`)}
 	}
@@ -624,6 +676,18 @@ func (_c *AccountCreate) createSpec() (*Account, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.GetType(); ok {
 		_spec.SetField(account.FieldType, field.TypeString, value)
 		_node.Type = value
+	}
+	if value, ok := _c.mutation.PlanType(); ok {
+		_spec.SetField(account.FieldPlanType, field.TypeString, value)
+		_node.PlanType = &value
+	}
+	if value, ok := _c.mutation.SubscriptionStatus(); ok {
+		_spec.SetField(account.FieldSubscriptionStatus, field.TypeString, value)
+		_node.SubscriptionStatus = &value
+	}
+	if value, ok := _c.mutation.SubscriptionExpiresAt(); ok {
+		_spec.SetField(account.FieldSubscriptionExpiresAt, field.TypeTime, value)
+		_node.SubscriptionExpiresAt = &value
 	}
 	if value, ok := _c.mutation.Credentials(); ok {
 		_spec.SetField(account.FieldCredentials, field.TypeJSON, value)
@@ -891,6 +955,60 @@ func (u *AccountUpsert) SetType(v string) *AccountUpsert {
 // UpdateType sets the "type" field to the value that was provided on create.
 func (u *AccountUpsert) UpdateType() *AccountUpsert {
 	u.SetExcluded(account.FieldType)
+	return u
+}
+
+// SetPlanType sets the "plan_type" field.
+func (u *AccountUpsert) SetPlanType(v string) *AccountUpsert {
+	u.Set(account.FieldPlanType, v)
+	return u
+}
+
+// UpdatePlanType sets the "plan_type" field to the value that was provided on create.
+func (u *AccountUpsert) UpdatePlanType() *AccountUpsert {
+	u.SetExcluded(account.FieldPlanType)
+	return u
+}
+
+// ClearPlanType clears the value of the "plan_type" field.
+func (u *AccountUpsert) ClearPlanType() *AccountUpsert {
+	u.SetNull(account.FieldPlanType)
+	return u
+}
+
+// SetSubscriptionStatus sets the "subscription_status" field.
+func (u *AccountUpsert) SetSubscriptionStatus(v string) *AccountUpsert {
+	u.Set(account.FieldSubscriptionStatus, v)
+	return u
+}
+
+// UpdateSubscriptionStatus sets the "subscription_status" field to the value that was provided on create.
+func (u *AccountUpsert) UpdateSubscriptionStatus() *AccountUpsert {
+	u.SetExcluded(account.FieldSubscriptionStatus)
+	return u
+}
+
+// ClearSubscriptionStatus clears the value of the "subscription_status" field.
+func (u *AccountUpsert) ClearSubscriptionStatus() *AccountUpsert {
+	u.SetNull(account.FieldSubscriptionStatus)
+	return u
+}
+
+// SetSubscriptionExpiresAt sets the "subscription_expires_at" field.
+func (u *AccountUpsert) SetSubscriptionExpiresAt(v time.Time) *AccountUpsert {
+	u.Set(account.FieldSubscriptionExpiresAt, v)
+	return u
+}
+
+// UpdateSubscriptionExpiresAt sets the "subscription_expires_at" field to the value that was provided on create.
+func (u *AccountUpsert) UpdateSubscriptionExpiresAt() *AccountUpsert {
+	u.SetExcluded(account.FieldSubscriptionExpiresAt)
+	return u
+}
+
+// ClearSubscriptionExpiresAt clears the value of the "subscription_expires_at" field.
+func (u *AccountUpsert) ClearSubscriptionExpiresAt() *AccountUpsert {
+	u.SetNull(account.FieldSubscriptionExpiresAt)
 	return u
 }
 
@@ -1388,6 +1506,69 @@ func (u *AccountUpsertOne) SetType(v string) *AccountUpsertOne {
 func (u *AccountUpsertOne) UpdateType() *AccountUpsertOne {
 	return u.Update(func(s *AccountUpsert) {
 		s.UpdateType()
+	})
+}
+
+// SetPlanType sets the "plan_type" field.
+func (u *AccountUpsertOne) SetPlanType(v string) *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetPlanType(v)
+	})
+}
+
+// UpdatePlanType sets the "plan_type" field to the value that was provided on create.
+func (u *AccountUpsertOne) UpdatePlanType() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdatePlanType()
+	})
+}
+
+// ClearPlanType clears the value of the "plan_type" field.
+func (u *AccountUpsertOne) ClearPlanType() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearPlanType()
+	})
+}
+
+// SetSubscriptionStatus sets the "subscription_status" field.
+func (u *AccountUpsertOne) SetSubscriptionStatus(v string) *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetSubscriptionStatus(v)
+	})
+}
+
+// UpdateSubscriptionStatus sets the "subscription_status" field to the value that was provided on create.
+func (u *AccountUpsertOne) UpdateSubscriptionStatus() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateSubscriptionStatus()
+	})
+}
+
+// ClearSubscriptionStatus clears the value of the "subscription_status" field.
+func (u *AccountUpsertOne) ClearSubscriptionStatus() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearSubscriptionStatus()
+	})
+}
+
+// SetSubscriptionExpiresAt sets the "subscription_expires_at" field.
+func (u *AccountUpsertOne) SetSubscriptionExpiresAt(v time.Time) *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetSubscriptionExpiresAt(v)
+	})
+}
+
+// UpdateSubscriptionExpiresAt sets the "subscription_expires_at" field to the value that was provided on create.
+func (u *AccountUpsertOne) UpdateSubscriptionExpiresAt() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateSubscriptionExpiresAt()
+	})
+}
+
+// ClearSubscriptionExpiresAt clears the value of the "subscription_expires_at" field.
+func (u *AccountUpsertOne) ClearSubscriptionExpiresAt() *AccountUpsertOne {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearSubscriptionExpiresAt()
 	})
 }
 
@@ -2110,6 +2291,69 @@ func (u *AccountUpsertBulk) SetType(v string) *AccountUpsertBulk {
 func (u *AccountUpsertBulk) UpdateType() *AccountUpsertBulk {
 	return u.Update(func(s *AccountUpsert) {
 		s.UpdateType()
+	})
+}
+
+// SetPlanType sets the "plan_type" field.
+func (u *AccountUpsertBulk) SetPlanType(v string) *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetPlanType(v)
+	})
+}
+
+// UpdatePlanType sets the "plan_type" field to the value that was provided on create.
+func (u *AccountUpsertBulk) UpdatePlanType() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdatePlanType()
+	})
+}
+
+// ClearPlanType clears the value of the "plan_type" field.
+func (u *AccountUpsertBulk) ClearPlanType() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearPlanType()
+	})
+}
+
+// SetSubscriptionStatus sets the "subscription_status" field.
+func (u *AccountUpsertBulk) SetSubscriptionStatus(v string) *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetSubscriptionStatus(v)
+	})
+}
+
+// UpdateSubscriptionStatus sets the "subscription_status" field to the value that was provided on create.
+func (u *AccountUpsertBulk) UpdateSubscriptionStatus() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateSubscriptionStatus()
+	})
+}
+
+// ClearSubscriptionStatus clears the value of the "subscription_status" field.
+func (u *AccountUpsertBulk) ClearSubscriptionStatus() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearSubscriptionStatus()
+	})
+}
+
+// SetSubscriptionExpiresAt sets the "subscription_expires_at" field.
+func (u *AccountUpsertBulk) SetSubscriptionExpiresAt(v time.Time) *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.SetSubscriptionExpiresAt(v)
+	})
+}
+
+// UpdateSubscriptionExpiresAt sets the "subscription_expires_at" field to the value that was provided on create.
+func (u *AccountUpsertBulk) UpdateSubscriptionExpiresAt() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.UpdateSubscriptionExpiresAt()
+	})
+}
+
+// ClearSubscriptionExpiresAt clears the value of the "subscription_expires_at" field.
+func (u *AccountUpsertBulk) ClearSubscriptionExpiresAt() *AccountUpsertBulk {
+	return u.Update(func(s *AccountUpsert) {
+		s.ClearSubscriptionExpiresAt()
 	})
 }
 

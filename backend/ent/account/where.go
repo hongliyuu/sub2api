@@ -90,6 +90,21 @@ func Type(v string) predicate.Account {
 	return predicate.Account(sql.FieldEQ(FieldType, v))
 }
 
+// PlanType applies equality check predicate on the "plan_type" field. It's identical to PlanTypeEQ.
+func PlanType(v string) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldPlanType, v))
+}
+
+// SubscriptionStatus applies equality check predicate on the "subscription_status" field. It's identical to SubscriptionStatusEQ.
+func SubscriptionStatus(v string) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldSubscriptionStatus, v))
+}
+
+// SubscriptionExpiresAt applies equality check predicate on the "subscription_expires_at" field. It's identical to SubscriptionExpiresAtEQ.
+func SubscriptionExpiresAt(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldSubscriptionExpiresAt, v))
+}
+
 // ProxyID applies equality check predicate on the "proxy_id" field. It's identical to ProxyIDEQ.
 func ProxyID(v int64) predicate.Account {
 	return predicate.Account(sql.FieldEQ(FieldProxyID, v))
@@ -583,6 +598,206 @@ func TypeEqualFold(v string) predicate.Account {
 // TypeContainsFold applies the ContainsFold predicate on the "type" field.
 func TypeContainsFold(v string) predicate.Account {
 	return predicate.Account(sql.FieldContainsFold(FieldType, v))
+}
+
+// PlanTypeEQ applies the EQ predicate on the "plan_type" field.
+func PlanTypeEQ(v string) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldPlanType, v))
+}
+
+// PlanTypeNEQ applies the NEQ predicate on the "plan_type" field.
+func PlanTypeNEQ(v string) predicate.Account {
+	return predicate.Account(sql.FieldNEQ(FieldPlanType, v))
+}
+
+// PlanTypeIn applies the In predicate on the "plan_type" field.
+func PlanTypeIn(vs ...string) predicate.Account {
+	return predicate.Account(sql.FieldIn(FieldPlanType, vs...))
+}
+
+// PlanTypeNotIn applies the NotIn predicate on the "plan_type" field.
+func PlanTypeNotIn(vs ...string) predicate.Account {
+	return predicate.Account(sql.FieldNotIn(FieldPlanType, vs...))
+}
+
+// PlanTypeGT applies the GT predicate on the "plan_type" field.
+func PlanTypeGT(v string) predicate.Account {
+	return predicate.Account(sql.FieldGT(FieldPlanType, v))
+}
+
+// PlanTypeGTE applies the GTE predicate on the "plan_type" field.
+func PlanTypeGTE(v string) predicate.Account {
+	return predicate.Account(sql.FieldGTE(FieldPlanType, v))
+}
+
+// PlanTypeLT applies the LT predicate on the "plan_type" field.
+func PlanTypeLT(v string) predicate.Account {
+	return predicate.Account(sql.FieldLT(FieldPlanType, v))
+}
+
+// PlanTypeLTE applies the LTE predicate on the "plan_type" field.
+func PlanTypeLTE(v string) predicate.Account {
+	return predicate.Account(sql.FieldLTE(FieldPlanType, v))
+}
+
+// PlanTypeContains applies the Contains predicate on the "plan_type" field.
+func PlanTypeContains(v string) predicate.Account {
+	return predicate.Account(sql.FieldContains(FieldPlanType, v))
+}
+
+// PlanTypeHasPrefix applies the HasPrefix predicate on the "plan_type" field.
+func PlanTypeHasPrefix(v string) predicate.Account {
+	return predicate.Account(sql.FieldHasPrefix(FieldPlanType, v))
+}
+
+// PlanTypeHasSuffix applies the HasSuffix predicate on the "plan_type" field.
+func PlanTypeHasSuffix(v string) predicate.Account {
+	return predicate.Account(sql.FieldHasSuffix(FieldPlanType, v))
+}
+
+// PlanTypeIsNil applies the IsNil predicate on the "plan_type" field.
+func PlanTypeIsNil() predicate.Account {
+	return predicate.Account(sql.FieldIsNull(FieldPlanType))
+}
+
+// PlanTypeNotNil applies the NotNil predicate on the "plan_type" field.
+func PlanTypeNotNil() predicate.Account {
+	return predicate.Account(sql.FieldNotNull(FieldPlanType))
+}
+
+// PlanTypeEqualFold applies the EqualFold predicate on the "plan_type" field.
+func PlanTypeEqualFold(v string) predicate.Account {
+	return predicate.Account(sql.FieldEqualFold(FieldPlanType, v))
+}
+
+// PlanTypeContainsFold applies the ContainsFold predicate on the "plan_type" field.
+func PlanTypeContainsFold(v string) predicate.Account {
+	return predicate.Account(sql.FieldContainsFold(FieldPlanType, v))
+}
+
+// SubscriptionStatusEQ applies the EQ predicate on the "subscription_status" field.
+func SubscriptionStatusEQ(v string) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldSubscriptionStatus, v))
+}
+
+// SubscriptionStatusNEQ applies the NEQ predicate on the "subscription_status" field.
+func SubscriptionStatusNEQ(v string) predicate.Account {
+	return predicate.Account(sql.FieldNEQ(FieldSubscriptionStatus, v))
+}
+
+// SubscriptionStatusIn applies the In predicate on the "subscription_status" field.
+func SubscriptionStatusIn(vs ...string) predicate.Account {
+	return predicate.Account(sql.FieldIn(FieldSubscriptionStatus, vs...))
+}
+
+// SubscriptionStatusNotIn applies the NotIn predicate on the "subscription_status" field.
+func SubscriptionStatusNotIn(vs ...string) predicate.Account {
+	return predicate.Account(sql.FieldNotIn(FieldSubscriptionStatus, vs...))
+}
+
+// SubscriptionStatusGT applies the GT predicate on the "subscription_status" field.
+func SubscriptionStatusGT(v string) predicate.Account {
+	return predicate.Account(sql.FieldGT(FieldSubscriptionStatus, v))
+}
+
+// SubscriptionStatusGTE applies the GTE predicate on the "subscription_status" field.
+func SubscriptionStatusGTE(v string) predicate.Account {
+	return predicate.Account(sql.FieldGTE(FieldSubscriptionStatus, v))
+}
+
+// SubscriptionStatusLT applies the LT predicate on the "subscription_status" field.
+func SubscriptionStatusLT(v string) predicate.Account {
+	return predicate.Account(sql.FieldLT(FieldSubscriptionStatus, v))
+}
+
+// SubscriptionStatusLTE applies the LTE predicate on the "subscription_status" field.
+func SubscriptionStatusLTE(v string) predicate.Account {
+	return predicate.Account(sql.FieldLTE(FieldSubscriptionStatus, v))
+}
+
+// SubscriptionStatusContains applies the Contains predicate on the "subscription_status" field.
+func SubscriptionStatusContains(v string) predicate.Account {
+	return predicate.Account(sql.FieldContains(FieldSubscriptionStatus, v))
+}
+
+// SubscriptionStatusHasPrefix applies the HasPrefix predicate on the "subscription_status" field.
+func SubscriptionStatusHasPrefix(v string) predicate.Account {
+	return predicate.Account(sql.FieldHasPrefix(FieldSubscriptionStatus, v))
+}
+
+// SubscriptionStatusHasSuffix applies the HasSuffix predicate on the "subscription_status" field.
+func SubscriptionStatusHasSuffix(v string) predicate.Account {
+	return predicate.Account(sql.FieldHasSuffix(FieldSubscriptionStatus, v))
+}
+
+// SubscriptionStatusIsNil applies the IsNil predicate on the "subscription_status" field.
+func SubscriptionStatusIsNil() predicate.Account {
+	return predicate.Account(sql.FieldIsNull(FieldSubscriptionStatus))
+}
+
+// SubscriptionStatusNotNil applies the NotNil predicate on the "subscription_status" field.
+func SubscriptionStatusNotNil() predicate.Account {
+	return predicate.Account(sql.FieldNotNull(FieldSubscriptionStatus))
+}
+
+// SubscriptionStatusEqualFold applies the EqualFold predicate on the "subscription_status" field.
+func SubscriptionStatusEqualFold(v string) predicate.Account {
+	return predicate.Account(sql.FieldEqualFold(FieldSubscriptionStatus, v))
+}
+
+// SubscriptionStatusContainsFold applies the ContainsFold predicate on the "subscription_status" field.
+func SubscriptionStatusContainsFold(v string) predicate.Account {
+	return predicate.Account(sql.FieldContainsFold(FieldSubscriptionStatus, v))
+}
+
+// SubscriptionExpiresAtEQ applies the EQ predicate on the "subscription_expires_at" field.
+func SubscriptionExpiresAtEQ(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldEQ(FieldSubscriptionExpiresAt, v))
+}
+
+// SubscriptionExpiresAtNEQ applies the NEQ predicate on the "subscription_expires_at" field.
+func SubscriptionExpiresAtNEQ(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldNEQ(FieldSubscriptionExpiresAt, v))
+}
+
+// SubscriptionExpiresAtIn applies the In predicate on the "subscription_expires_at" field.
+func SubscriptionExpiresAtIn(vs ...time.Time) predicate.Account {
+	return predicate.Account(sql.FieldIn(FieldSubscriptionExpiresAt, vs...))
+}
+
+// SubscriptionExpiresAtNotIn applies the NotIn predicate on the "subscription_expires_at" field.
+func SubscriptionExpiresAtNotIn(vs ...time.Time) predicate.Account {
+	return predicate.Account(sql.FieldNotIn(FieldSubscriptionExpiresAt, vs...))
+}
+
+// SubscriptionExpiresAtGT applies the GT predicate on the "subscription_expires_at" field.
+func SubscriptionExpiresAtGT(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldGT(FieldSubscriptionExpiresAt, v))
+}
+
+// SubscriptionExpiresAtGTE applies the GTE predicate on the "subscription_expires_at" field.
+func SubscriptionExpiresAtGTE(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldGTE(FieldSubscriptionExpiresAt, v))
+}
+
+// SubscriptionExpiresAtLT applies the LT predicate on the "subscription_expires_at" field.
+func SubscriptionExpiresAtLT(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldLT(FieldSubscriptionExpiresAt, v))
+}
+
+// SubscriptionExpiresAtLTE applies the LTE predicate on the "subscription_expires_at" field.
+func SubscriptionExpiresAtLTE(v time.Time) predicate.Account {
+	return predicate.Account(sql.FieldLTE(FieldSubscriptionExpiresAt, v))
+}
+
+// SubscriptionExpiresAtIsNil applies the IsNil predicate on the "subscription_expires_at" field.
+func SubscriptionExpiresAtIsNil() predicate.Account {
+	return predicate.Account(sql.FieldIsNull(FieldSubscriptionExpiresAt))
+}
+
+// SubscriptionExpiresAtNotNil applies the NotNil predicate on the "subscription_expires_at" field.
+func SubscriptionExpiresAtNotNil() predicate.Account {
+	return predicate.Account(sql.FieldNotNull(FieldSubscriptionExpiresAt))
 }
 
 // ProxyIDEQ applies the EQ predicate on the "proxy_id" field.

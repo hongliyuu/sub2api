@@ -149,9 +149,12 @@ type Account struct {
 	ID                 int64          `json:"id"`
 	Name               string         `json:"name"`
 	Notes              *string        `json:"notes"`
-	Platform           string         `json:"platform"`
-	Type               string         `json:"type"`
-	Credentials        map[string]any `json:"credentials"`
+	Platform              string         `json:"platform"`
+	Type                  string         `json:"type"`
+	PlanType              *string        `json:"plan_type,omitempty"`
+	SubscriptionStatus    *string        `json:"subscription_status,omitempty"`
+	SubscriptionExpiresAt *time.Time     `json:"subscription_expires_at,omitempty"`
+	Credentials           map[string]any `json:"credentials"`
 	Extra              map[string]any `json:"extra"`
 	ProxyID            *int64         `json:"proxy_id"`
 	Concurrency        int            `json:"concurrency"`

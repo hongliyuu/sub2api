@@ -2282,6 +2282,9 @@ type AccountMutation struct {
 	notes                     *string
 	platform                  *string
 	_type                     *string
+	plan_type                 *string
+	subscription_status       *string
+	subscription_expires_at   *time.Time
 	credentials               *map[string]interface{}
 	extra                     *map[string]interface{}
 	concurrency               *int
@@ -2694,6 +2697,153 @@ func (m *AccountMutation) OldType(ctx context.Context) (v string, err error) {
 // ResetType resets all changes to the "type" field.
 func (m *AccountMutation) ResetType() {
 	m._type = nil
+}
+
+// SetPlanType sets the "plan_type" field.
+func (m *AccountMutation) SetPlanType(s string) {
+	m.plan_type = &s
+}
+
+// PlanType returns the value of the "plan_type" field in the mutation.
+func (m *AccountMutation) PlanType() (r string, exists bool) {
+	v := m.plan_type
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldPlanType returns the old "plan_type" field's value of the Account entity.
+// If the Account object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountMutation) OldPlanType(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldPlanType is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldPlanType requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldPlanType: %w", err)
+	}
+	return oldValue.PlanType, nil
+}
+
+// ClearPlanType clears the value of the "plan_type" field.
+func (m *AccountMutation) ClearPlanType() {
+	m.plan_type = nil
+	m.clearedFields[account.FieldPlanType] = struct{}{}
+}
+
+// PlanTypeCleared returns if the "plan_type" field was cleared in this mutation.
+func (m *AccountMutation) PlanTypeCleared() bool {
+	_, ok := m.clearedFields[account.FieldPlanType]
+	return ok
+}
+
+// ResetPlanType resets all changes to the "plan_type" field.
+func (m *AccountMutation) ResetPlanType() {
+	m.plan_type = nil
+	delete(m.clearedFields, account.FieldPlanType)
+}
+
+// SetSubscriptionStatus sets the "subscription_status" field.
+func (m *AccountMutation) SetSubscriptionStatus(s string) {
+	m.subscription_status = &s
+}
+
+// SubscriptionStatus returns the value of the "subscription_status" field in the mutation.
+func (m *AccountMutation) SubscriptionStatus() (r string, exists bool) {
+	v := m.subscription_status
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubscriptionStatus returns the old "subscription_status" field's value of the Account entity.
+// If the Account object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountMutation) OldSubscriptionStatus(ctx context.Context) (v *string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubscriptionStatus is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubscriptionStatus requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubscriptionStatus: %w", err)
+	}
+	return oldValue.SubscriptionStatus, nil
+}
+
+// ClearSubscriptionStatus clears the value of the "subscription_status" field.
+func (m *AccountMutation) ClearSubscriptionStatus() {
+	m.subscription_status = nil
+	m.clearedFields[account.FieldSubscriptionStatus] = struct{}{}
+}
+
+// SubscriptionStatusCleared returns if the "subscription_status" field was cleared in this mutation.
+func (m *AccountMutation) SubscriptionStatusCleared() bool {
+	_, ok := m.clearedFields[account.FieldSubscriptionStatus]
+	return ok
+}
+
+// ResetSubscriptionStatus resets all changes to the "subscription_status" field.
+func (m *AccountMutation) ResetSubscriptionStatus() {
+	m.subscription_status = nil
+	delete(m.clearedFields, account.FieldSubscriptionStatus)
+}
+
+// SetSubscriptionExpiresAt sets the "subscription_expires_at" field.
+func (m *AccountMutation) SetSubscriptionExpiresAt(t time.Time) {
+	m.subscription_expires_at = &t
+}
+
+// SubscriptionExpiresAt returns the value of the "subscription_expires_at" field in the mutation.
+func (m *AccountMutation) SubscriptionExpiresAt() (r time.Time, exists bool) {
+	v := m.subscription_expires_at
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldSubscriptionExpiresAt returns the old "subscription_expires_at" field's value of the Account entity.
+// If the Account object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *AccountMutation) OldSubscriptionExpiresAt(ctx context.Context) (v *time.Time, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldSubscriptionExpiresAt is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldSubscriptionExpiresAt requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldSubscriptionExpiresAt: %w", err)
+	}
+	return oldValue.SubscriptionExpiresAt, nil
+}
+
+// ClearSubscriptionExpiresAt clears the value of the "subscription_expires_at" field.
+func (m *AccountMutation) ClearSubscriptionExpiresAt() {
+	m.subscription_expires_at = nil
+	m.clearedFields[account.FieldSubscriptionExpiresAt] = struct{}{}
+}
+
+// SubscriptionExpiresAtCleared returns if the "subscription_expires_at" field was cleared in this mutation.
+func (m *AccountMutation) SubscriptionExpiresAtCleared() bool {
+	_, ok := m.clearedFields[account.FieldSubscriptionExpiresAt]
+	return ok
+}
+
+// ResetSubscriptionExpiresAt resets all changes to the "subscription_expires_at" field.
+func (m *AccountMutation) ResetSubscriptionExpiresAt() {
+	m.subscription_expires_at = nil
+	delete(m.clearedFields, account.FieldSubscriptionExpiresAt)
 }
 
 // SetCredentials sets the "credentials" field.
@@ -3871,7 +4021,7 @@ func (m *AccountMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *AccountMutation) Fields() []string {
-	fields := make([]string, 0, 28)
+	fields := make([]string, 0, 31)
 	if m.created_at != nil {
 		fields = append(fields, account.FieldCreatedAt)
 	}
@@ -3892,6 +4042,15 @@ func (m *AccountMutation) Fields() []string {
 	}
 	if m._type != nil {
 		fields = append(fields, account.FieldType)
+	}
+	if m.plan_type != nil {
+		fields = append(fields, account.FieldPlanType)
+	}
+	if m.subscription_status != nil {
+		fields = append(fields, account.FieldSubscriptionStatus)
+	}
+	if m.subscription_expires_at != nil {
+		fields = append(fields, account.FieldSubscriptionExpiresAt)
 	}
 	if m.credentials != nil {
 		fields = append(fields, account.FieldCredentials)
@@ -3978,6 +4137,12 @@ func (m *AccountMutation) Field(name string) (ent.Value, bool) {
 		return m.Platform()
 	case account.FieldType:
 		return m.GetType()
+	case account.FieldPlanType:
+		return m.PlanType()
+	case account.FieldSubscriptionStatus:
+		return m.SubscriptionStatus()
+	case account.FieldSubscriptionExpiresAt:
+		return m.SubscriptionExpiresAt()
 	case account.FieldCredentials:
 		return m.Credentials()
 	case account.FieldExtra:
@@ -4043,6 +4208,12 @@ func (m *AccountMutation) OldField(ctx context.Context, name string) (ent.Value,
 		return m.OldPlatform(ctx)
 	case account.FieldType:
 		return m.OldType(ctx)
+	case account.FieldPlanType:
+		return m.OldPlanType(ctx)
+	case account.FieldSubscriptionStatus:
+		return m.OldSubscriptionStatus(ctx)
+	case account.FieldSubscriptionExpiresAt:
+		return m.OldSubscriptionExpiresAt(ctx)
 	case account.FieldCredentials:
 		return m.OldCredentials(ctx)
 	case account.FieldExtra:
@@ -4142,6 +4313,27 @@ func (m *AccountMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetType(v)
+		return nil
+	case account.FieldPlanType:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetPlanType(v)
+		return nil
+	case account.FieldSubscriptionStatus:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubscriptionStatus(v)
+		return nil
+	case account.FieldSubscriptionExpiresAt:
+		v, ok := value.(time.Time)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetSubscriptionExpiresAt(v)
 		return nil
 	case account.FieldCredentials:
 		v, ok := value.(map[string]interface{})
@@ -4377,6 +4569,15 @@ func (m *AccountMutation) ClearedFields() []string {
 	if m.FieldCleared(account.FieldNotes) {
 		fields = append(fields, account.FieldNotes)
 	}
+	if m.FieldCleared(account.FieldPlanType) {
+		fields = append(fields, account.FieldPlanType)
+	}
+	if m.FieldCleared(account.FieldSubscriptionStatus) {
+		fields = append(fields, account.FieldSubscriptionStatus)
+	}
+	if m.FieldCleared(account.FieldSubscriptionExpiresAt) {
+		fields = append(fields, account.FieldSubscriptionExpiresAt)
+	}
 	if m.FieldCleared(account.FieldProxyID) {
 		fields = append(fields, account.FieldProxyID)
 	}
@@ -4435,6 +4636,15 @@ func (m *AccountMutation) ClearField(name string) error {
 		return nil
 	case account.FieldNotes:
 		m.ClearNotes()
+		return nil
+	case account.FieldPlanType:
+		m.ClearPlanType()
+		return nil
+	case account.FieldSubscriptionStatus:
+		m.ClearSubscriptionStatus()
+		return nil
+	case account.FieldSubscriptionExpiresAt:
+		m.ClearSubscriptionExpiresAt()
 		return nil
 	case account.FieldProxyID:
 		m.ClearProxyID()
@@ -4503,6 +4713,15 @@ func (m *AccountMutation) ResetField(name string) error {
 		return nil
 	case account.FieldType:
 		m.ResetType()
+		return nil
+	case account.FieldPlanType:
+		m.ResetPlanType()
+		return nil
+	case account.FieldSubscriptionStatus:
+		m.ResetSubscriptionStatus()
+		return nil
+	case account.FieldSubscriptionExpiresAt:
+		m.ResetSubscriptionExpiresAt()
 		return nil
 	case account.FieldCredentials:
 		m.ResetCredentials()
